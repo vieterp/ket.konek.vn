@@ -1,0 +1,175 @@
+name: Release
+
+# Phát hành bản cài desktop khi phiên bản phần mềm đổi trên master.
+#
+# Vì sao kích hoạt theo **phiên bản đổi** chứ không theo tag đẩy tay: số phiên
+# bản nằm trong chính PR, nên người review thấy được "PR này cắt bản mới" cùng
+# lúc với thấy mã. Đẩy tag là một bước rời nằm ngoài lịch sử review, và tag lệch
+# số trong tệp là lỗi kinh điển của kiểu đó.
+#
+# Nguồn số phiên bản: `client/src-tauri/tauri.conf.json` — nó là tệp quyết định
+# tên bộ cài và số ghi trong `latest.json`. Năm tệp khai phiên bản phải khớp
+# nhau; `.github/scripts/check_version_consistency.py` canh việc đó và chạy như cổng
+# đầu tiên ở đây (và trong CI của mọi PR).
+#
+# Release tạo ra ở dạng **nháp**: bản dựng chưa ký chứng thư Apple/Windows nên
+# phải có người xem sản phẩm trước khi công bố. Bản `0.x` tự đánh dấu prerelease.
+#
+# CHỮ KÝ UPDATER: gói được ký bằng khóa minisign trong GitHub Secrets
+# (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`); khóa công
+# khai nằm trong `tauri.conf.json`. Đây **không phải** chữ ký chứng thư hệ điều
+# hành — macOS Gatekeeper và Windows SmartScreen vẫn cảnh báo cho tới khi có
+# Apple Developer ID / chứng thư Authenticode (blocker đã ghi ở phase 11).
+#
+# Chồng lấn với `ci.yml`: lần merge nào ĐỔI phiên bản sẽ dựng bộ cài desktop hai
+# lần (job `desktop-bundle` của CI và job `bundle` ở đây). Chấp nhận có chủ đích
+# — chuyện đó chỉ xảy ra đúng vào lần cắt bản, và đổi lại `ci.yml` giữ được ý
+# nghĩa độc lập "master còn đóng gói được không".
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Dựng lại kể cả khi phiên bản đã có release (dùng khi build hỏng vì hạ tầng)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # tạo tag + release, tải sản phẩm lên
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Quyết định có phát hành không. ~20 giây, cắt được hai runner đắt tiền.
+  # ---------------------------------------------------------------------------
+  decide:
+    name: Phiên bản có đổi không
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Năm tệp phiên bản phải khớp
+        run: python3 .github/scripts/check_version_consistency.py
+
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version=$(python3 -c "import json;print(json.load(open('client/src-tauri/tauri.conf.json'))['version'])")
+          tag="v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # `0.x` = chưa cam kết tương thích → prerelease.
+          case "$version" in
+            0.*) echo "prerelease=true"  >> "$GITHUB_OUTPUT" ;;
+            *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+          # So với TAG chứ không với release mới nhất: release nháp có thể bị xóa
+          # tay, còn tag thì ở lại — và tag mới là thứ quyết định `tauri-action`
+          # ghi đè hay tạo mới.
+          if [ "$FORCE" = "true" ]; then
+            echo "Chạy tay có ép buộc → dựng lại $tag"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "$tag đã tồn tại → không phát hành lại"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$tag chưa có → phát hành"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Dựng bộ cài + ký gói cập nhật cho hai nền tảng của v1 (LD-02).
+  #
+  # `tauri-action` tự làm ba việc mà viết tay rất dễ sai: tạo/ghi đè release theo
+  # tag, tải đúng bộ sản phẩm của từng nền tảng lên, và gộp `latest.json` từ các
+  # tệp `.sig` sau khi CẢ HAI nền tảng xong.
+  # ---------------------------------------------------------------------------
+  bundle:
+    name: Đóng gói ${{ matrix.os }}
+    needs: decide
+    if: needs.decide.outputs.should_release == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: ""
+          - os: macos-latest
+            # macOS runner là arm64; bản universal chạy được cả máy Intel cũ,
+            # đổi lại build lâu hơn. Khách hàng còn dùng MacBook Intel nên đây là
+            # đánh đổi đúng.
+            args: "--target universal-apple-darwin"
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client/src-tauri -> target
+
+      - name: Cài phụ thuộc
+        run: pnpm install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Ký gói cập nhật. Thiếu hai biến này thì `createUpdaterArtifacts`
+          # làm build ĐỎ — đúng ý: một bản phát hành không ký là bản mà mọi máy
+          # đã cài sẽ từ chối cập nhật, và ta chỉ biết điều đó ở lần sau.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: client
+          tagName: v${{ needs.decide.outputs.version }}
+          releaseName: Konek Két v${{ needs.decide.outputs.version }}
+          releaseBody: |
+            Bộ cài desktop Konek Két v${{ needs.decide.outputs.version }}.
+
+            **Chưa ký chứng thư hệ điều hành.** macOS: chuột phải → Mở, hoặc
+            `xattr -dr com.apple.quarantine /Applications/Ket.app`.
+            Windows: SmartScreen → Thông tin thêm → Vẫn chạy.
+
+            App server (FastAPI + PostgreSQL 16) chưa có bộ cài riêng — đóng gói
+            thuộc spike S4 / phase 11.
+          releaseDraft: true
+          prerelease: ${{ needs.decide.outputs.prerelease }}
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}
