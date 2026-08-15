@@ -1,4 +1,9 @@
-# Kiến trúc hệ thống kế toán Konek (v1)
+# Kiến trúc hệ thống Konek Két (v1)
+
+> **Tài liệu này mô tả kiến trúc ĐÍCH của cả v1**, phần lớn chưa dựng. Phần đã
+> chạy thật tới hôm nay xem §1b; chi tiết mã nguồn hiện có xem
+> `docs/codebase-summary.md`. Đọc nhầm tài liệu này thành "hệ thống hiện tại" là
+> hiểu sai khoảng 90% nội dung.
 
 ## 1. Mục tiêu & bối cảnh
 
@@ -8,6 +13,25 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 1. **Đúng số liệu** (FR-NFR-001..007) — sai số liệu thì mọi ưu điểm khác vô nghĩa.
 2. **Cấu hình thay vì sửa code** (FR-NFR-055, N7) — khi thông tư thay đổi, kích hoạt gói cấu hình, không sửa mã nguồn.
 3. **Không phải viết lại** (N1, LD-03) — khi thêm phân hệ, thêm báo cáo, nối nhiều bản cài → kiến trúc lõi chịu được.
+
+---
+
+## 1b. Trạng thái hiện thực hóa (2026-08-15)
+
+| Thành phần | Trạng thái |
+| --- | --- |
+| Vai trò DB `ket_owner` / `ket_app`, tách quyền sở hữu | ✅ chạy thật |
+| Schema-per-dataset: schema điều khiển, provisioning, định tuyến `search_path` | ✅ chạy thật |
+| Migration `0001` — 11 bảng nền (RBAC, settings, audit, idempotency, jobs, numbering, branches) | ✅ chạy thật |
+| RLS cô lập chi nhánh theo GUC `ket.branch_ids` | ✅ chạy thật (trên `audit_log`, `jobs`) |
+| Nhật ký bất biến ghi cùng transaction | ✅ chạy thật |
+| `ket.kernel.money` — Decimal, ROUND_HALF_UP | ✅ chạy thật |
+| Kiểm phiên bản schema lúc khởi động (LD-05) | ✅ chạy thật |
+| Auth / RBAC enforcement / 2FA · idempotency · worker + reaper · RFC 7807 · sinh type OpenAPI | ⏳ phase 2 lát 2B |
+| Client (design system, layout, đăng nhập, handshake, i18n) · spike S1/S3/S4 | ⏳ phase 2 lát 2C |
+| Posting engine, báo cáo, và toàn bộ phân hệ nghiệp vụ | ⏳ phase 4 trở đi |
+
+Bảng còn lại trong §11 và phần lớn §12 là **thiết kế đích**, chưa có mã.
 
 ---
 

@@ -1,4 +1,4 @@
-# Lộ trình dự án Konek v1 (12 mục phase, 11 mốc đánh số, ~70 dev-week)
+# Lộ trình dự án Konek Két v1 (12 mục phase, 11 mốc đánh số, ~70 dev-week)
 
 **Ghi chú:** Phase 10 tách thành 10a + 10b (RT-20) → 12 mục; mốc đánh số tới 11 do 11 phase gốc.
 
@@ -6,8 +6,8 @@
 
 | Phase | Tên | Ưu tiên | Phụ thuộc | Effort | Đầu ra chốt | Trạng thái |
 | --- | --- | --- | --- | --- | --- | --- |
-| **1** | [Kiến trúc tổng thể & ADR](../plans/260814-2204-accounting-system-architecture/phase-01-ki-n-tr-c-t-ng-th-adr.md) | P1 | — | 2w | 19 ADR; `docs/system-architecture.md`; khung repo rỗng chạy được | Pending |
-| **2** | [Nền tảng kỹ thuật 3-tier](../plans/260814-2204-accounting-system-architecture/phase-02-n-n-t-ng-k-thu-t-3-tier.md) | P1 | 1 | 5w | FastAPI + SQLAlchemy + Alembic; schema-per-dataset routing; RBAC + RLS + audit owner-split; Tauri+React shell; handshake schema-version (LD-05); **S1, S3, S4** | Pending |
+| **1** | [Kiến trúc tổng thể & ADR](../plans/260814-2204-accounting-system-architecture/phase-01-ki-n-tr-c-t-ng-th-adr.md) | P1 | — | 2w | 19 ADR; `docs/system-architecture.md`; khung repo rỗng chạy được | **Xong** (2026-08-15) |
+| **2** | [Nền tảng kỹ thuật 3-tier](../plans/260814-2204-accounting-system-architecture/phase-02-n-n-t-ng-k-thu-t-3-tier.md) | P1 | 1 | 5w | FastAPI + SQLAlchemy + Alembic; schema-per-dataset routing; RBAC + RLS + audit owner-split; Tauri+React shell; handshake schema-version (LD-05); **S1, S3, S4** | **Đang làm** — lát 2A (nền dữ liệu & bảo mật) xong 2026-08-15; còn 2B (API) + 2C (client, spike) |
 | **3** | [Shared kernel nghiệp vụ](../plans/260814-2204-accounting-system-architecture/phase-03-shared-kernel-nghi-p-v.md) | P1 | 2 | 5w | Danh mục, chiều phân tích (6 cột + mở rộng), đa tiền tệ, kỳ, chi nhánh, đánh số, import Excel | Pending |
 | **4** | [Posting engine & sổ cái 2 sổ](../plans/260814-2204-accounting-system-architecture/phase-04-posting-engine-s-c-i-hai-s.md) | P1 | 3 | 6w | `gl_postings` append-only, state machine, snapshot số dư (khóa compact), khóa kỳ, integrity checker; **S5 set-based recalc** | Pending |
 | **5** | [Hạ tầng báo cáo & gói config TT200/TT133](../plans/260814-2204-accounting-system-architecture/phase-05-h-t-ng-b-o-c-o-g-i-c-u-h-nh-tt200-tt133.md) | P1 | 4 | 6w | Report engine metadata-driven; WeasyPrint + openpyxl sandbox; gói config ký số; **S2 go/no-go renderer cuối phase** | Pending |
