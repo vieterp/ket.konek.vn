@@ -1,12 +1,13 @@
 """FastAPI app factory.
 
 Đã dựng: nền dữ liệu và bảo mật (engine + pool, schema-per-dataset, vai trò DB
-tách đôi, RLS, nhật ký bất biến, `Decimal`), và **danh tính** — đăng nhập, phiên
-thu hồi được, 2FA, hợp đồng lỗi RFC 7807.
+tách đôi, RLS, nhật ký bất biến, `Decimal`), **danh tính** (đăng nhập, phiên thu
+hồi được, 2FA, hợp đồng lỗi RFC 7807) và **phân quyền** — định tuyến dataset
+theo header mỗi request, RBAC tới cấp `{module}.{chứng từ}.{hành vi}`, phạm vi
+chi nhánh cho RLS.
 
-Còn lại của phase 2: RBAC + định tuyến dataset theo request (lát 2B-1b),
-idempotency + optimistic locking + hàng đợi job (2B-2), client + bắt tay
-schema-version (2C).
+Còn lại của phase 2: idempotency + optimistic locking + hàng đợi job (2B-2),
+client + bắt tay schema-version (2C).
 
 Luồng nghiệp vụ đi qua REST + OpenAPI (LD-03). Client **không bao giờ** nối
 thẳng PostgreSQL và **không** dùng API Tauri cho nghiệp vụ — giữ đường mở lên
@@ -25,6 +26,7 @@ from ket import __version__
 from ket.api.middleware.problem_details import register_problem_handlers
 from ket.api.middleware.request_context import RequestContextMiddleware
 from ket.api.routers.auth import router as auth_router
+from ket.api.routers.system import router as system_router
 from ket.kernel.datasets.bootstrap import verify_control_schema
 from ket.kernel.datasets.provisioning import find_alembic_config, verify_dataset_schema_version
 from ket.kernel.datasets.service import list_datasets
@@ -133,6 +135,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(RequestContextMiddleware)
     register_problem_handlers(app)
     app.include_router(auth_router)
+    app.include_router(system_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

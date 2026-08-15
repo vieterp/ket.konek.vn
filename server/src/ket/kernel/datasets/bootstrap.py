@@ -41,63 +41,110 @@ from ket.kernel.security.dataset_roles import (
     revoke_legacy_login_role_grants,
 )
 from ket.kernel.security.grants import APP_ROLE, grant_append_only, serial_sequence_name
+from ket.kernel.security.role_service import seed_registered_datasets
 
-CONTROL_SCHEMA_VERSION = "2"
+CONTROL_SCHEMA_VERSION = "3"
 """Tăng khi DDL của schema điều khiển đổi — **kèm** một bước nâng cấp tường minh
 trong `_UPGRADE_STEPS`. Tăng hằng số mà không viết bước nâng cấp sẽ làm app từ
 chối khởi động trên mọi cụm đã cài (`_stamp_version`), đúng như mong muốn.
 
 Lịch sử: `1` = ba bảng nền (lát 2A). `2` = nhật ký điều khiển + phiên đăng nhập
-+ cột danh tính (lát 2B-1a, quyết định D1)."""
-
-CONTROL_GRANTEES: tuple[str, ...] = (APP_ROLE, CONTROL_GROUP_ROLE)
-"""Hai bên nhận quyền trên bảng điều khiển, và lý do phải có cả hai (D3):
-
-* `ket_app` — đường **trước khi chọn dataset**: đăng nhập, liệt kê dữ liệu kế
-  toán. Lúc đó chưa `SET ROLE` được vì chưa biết chọn vai trò nào.
-* `ket_control` — đường **sau khi `SET ROLE ds_<mã>_app`**: `current_user` đã
-  đổi, nên quyền cấp thẳng cho `ket_app` không còn áp dụng; vai trò dataset lấy
-  quyền này qua kế thừa nhóm.
-
-`ket_app` là `NOINHERIT` nên nó **không** lấy được quyền qua đường nhóm — hai
-lần cấp không thừa nhau.
-"""
++ cột danh tính (lát 2B-1a, quyết định D1). `3` = phạm vi phiên
+(`auth_sessions.scope`, lát 2B-1b quyết định E2)."""
 
 
-def control_table_grants(grantee: str) -> tuple[str, ...]:
-    """Quyền trên bảng điều khiển cho một bên nhận.
+def app_login_table_grants() -> tuple[str, ...]:
+    """Quyền của `ket_app` — vai trò **đăng nhập** của app server.
 
-    Sinh từ **một** danh sách rồi áp cho từng bên nhận, thay vì hai danh sách
-    song song: thêm bảng điều khiển mà chỉ sửa một trong hai danh sách là loại
-    lỗi chỉ lộ ra ở đúng một trong hai đường (trước / sau khi chọn dataset), tức
-    là loại lỗi lọt qua phần lớn bộ test.
+    Đây là đường chạy **trước khi chọn dataset**: kiểm mật khẩu, cấp/thu hồi
+    phiên, ghi nhật ký điều khiển, liệt kê dữ liệu kế toán để định tuyến. Lúc đó
+    chưa `SET ROLE` được vì chưa biết chọn vai trò nào, nên toàn bộ danh tính
+    phải nằm trong tầm với của vai trò đăng nhập.
     """
     return (
         # `users`: runtime phải sửa được (đổi mật khẩu, đánh dấu phải đổi mật
         # khẩu, bật/tắt tài khoản, đếm lần đăng nhập sai). Không cho DELETE —
         # xóa người dùng làm mất dấu vết `audit_log.user_id`; vô hiệu hóa
         # (`is_active`) mới là thao tác đúng.
-        f"GRANT SELECT, INSERT, UPDATE ON public.{User.__tablename__} TO {grantee}",
-        f"GRANT USAGE, SELECT ON SEQUENCE public.{User.__tablename__}_id_seq TO {grantee}",
+        f"GRANT SELECT, INSERT, UPDATE ON public.{User.__tablename__} TO {APP_ROLE}",
+        f"GRANT USAGE, SELECT ON SEQUENCE public.{User.__tablename__}_id_seq TO {APP_ROLE}",
         # `datasets`: runtime chỉ đọc để định tuyến. Tạo dữ liệu kế toán là thao
         # tác đặc quyền chạy bằng `ket_owner` (FR-SYS-001).
-        f"GRANT SELECT ON public.{Dataset.__tablename__} TO {grantee}",
-        f"GRANT SELECT ON public.{SystemMetadata.__tablename__} TO {grantee}",
+        f"GRANT SELECT ON public.{Dataset.__tablename__} TO {APP_ROLE}",
+        f"GRANT SELECT ON public.{SystemMetadata.__tablename__} TO {APP_ROLE}",
         # `auth_sessions`: cấp phiên, chạm `last_seen_at`, thu hồi. Không DELETE
         # — thu hồi là đánh dấu `revoked_at`, và "phiên này sống từ lúc nào tới
         # lúc nào" phải trả lời được sau sự cố. Dọn phiên hết hạn là việc của
         # một job ở lát sau, chạy bằng `ket_owner`.
-        f"GRANT SELECT, INSERT, UPDATE ON public.{SESSION_TABLE_NAME} TO {grantee}",
-        f"GRANT USAGE, SELECT ON SEQUENCE public.{SESSION_TABLE_NAME}_id_seq TO {grantee}",
+        f"GRANT SELECT, INSERT, UPDATE ON public.{SESSION_TABLE_NAME} TO {APP_ROLE}",
+        f"GRANT USAGE, SELECT ON SEQUENCE public.{SESSION_TABLE_NAME}_id_seq TO {APP_ROLE}",
         # `control_audit_log`: chỉ-thêm, cùng khuôn RT-02 với `audit_log` của
         # dataset. Dùng lại `grant_append_only` chứ không viết tay lệnh GRANT —
         # bài học C1: hai đường cấp quyền chép rời nhau thì một đường sẽ trôi.
         *grant_append_only(
             CONTROL_AUDIT_TABLE_NAME,
-            grantee=grantee,
+            grantee=APP_ROLE,
             sequence=serial_sequence_name(CONTROL_AUDIT_TABLE_NAME),
             schema=CONTROL_SCHEMA,
         ),
+    )
+
+
+def control_group_table_grants() -> tuple[str, ...]:
+    """Quyền của `ket_control` — nhóm mà **mọi** vai trò dataset kế thừa.
+
+    Danh sách này ngắn có chủ đích, và ngắn đi so với lát trước. Cấp gì ở đây là
+    cấp cho `ds_<mã>_app`, tức là cho vai trò đang có hiệu lực trong **mọi truy
+    vấn nghiệp vụ**. Một lỗ tiêm SQL ở bất kỳ báo cáo nào cũng chạy dưới vai trò
+    đó, nên mỗi quyền thừa ở đây là một nấc leo thang sẵn có:
+
+    * `INSERT ON auth_sessions` → tự cấp phiên dưới danh nghĩa bất kỳ ai;
+    * `UPDATE ON users` → đổi mật khẩu người khác, tắt cờ 2FA của họ.
+
+    Cả hai đều **không cần thiết**: đường danh tính không bao giờ chạy dưới vai
+    trò dataset (`persistence.session.control_session` cố ý không `SET ROLE`), và
+    cờ `totp_required` được đặt ở transaction điều khiển riêng, trước khi ghi
+    vai trò (xem `security.role_service.grant_role`).
+
+    Còn lại đúng hai bảng chỉ-đọc, không chứa bí mật nào: sổ đăng ký dữ liệu kế
+    toán và phiên bản schema. Chúng ở đây vì handshake và đường kiểm phiên bản
+    đọc được từ một phiên đã `SET ROLE`.
+    """
+    return (
+        f"GRANT SELECT ON public.{Dataset.__tablename__} TO {CONTROL_GROUP_ROLE}",
+        f"GRANT SELECT ON public.{SystemMetadata.__tablename__} TO {CONTROL_GROUP_ROLE}",
+    )
+
+
+def control_group_revokes() -> tuple[str, ...]:
+    """Thu hồi quyền mà **phiên bản trước** đã cấp cho `ket_control`.
+
+    Cần vì cùng lý do với `dataset_roles.revoke_legacy_login_role_grants`: cụm
+    đã cài bằng mã cũ giữ nguyên `GRANT … TO ket_control` trên `users`,
+    `auth_sessions` và `control_audit_log`, và không có bước nâng cấp nào gỡ
+    chúng ra. Trên cụm đó, mọi vai trò dataset vẫn giả mạo được phiên đăng nhập
+    trong khi bộ test — chạy trên cụm dựng mới — vẫn xanh.
+
+    Chạy mỗi lần `ensure_control_schema`, ngay **trước** phần cấp: thu hồi rồi
+    cấp lại đúng danh sách hiện hành là cách duy nhất để danh sách trong mã là
+    nguồn sự thật, thay vì là phần bù của những gì đã từng cấp.
+    """
+    return tuple(
+        f"REVOKE ALL ON public.{table} FROM {CONTROL_GROUP_ROLE}"
+        for table in (
+            User.__tablename__,
+            SESSION_TABLE_NAME,
+            CONTROL_AUDIT_TABLE_NAME,
+            Dataset.__tablename__,
+            SystemMetadata.__tablename__,
+        )
+    ) + tuple(
+        f"REVOKE ALL ON SEQUENCE public.{sequence} FROM {CONTROL_GROUP_ROLE}"
+        for sequence in (
+            serial_sequence_name(User.__tablename__),
+            serial_sequence_name(SESSION_TABLE_NAME),
+            serial_sequence_name(CONTROL_AUDIT_TABLE_NAME),
+        )
     )
 
 
@@ -150,8 +197,42 @@ def _upgrade_1_to_2(connection: Connection) -> None:
         connection.exec_driver_sql(statement)
 
 
+def _upgrade_2_to_3(connection: Connection) -> None:
+    """Lát 2B-1b: phạm vi phiên (`auth_sessions.scope`, quyết định E2).
+
+    `DEFAULT 'full'` cho cả cột mới **và** cho dòng đã có: mọi phiên đang mở lúc
+    nâng cấp là phiên đăng nhập bình thường, và biến chúng thành phiên hạn chế
+    sẽ đuổi cả văn phòng ra ngoài giữa buổi làm việc.
+
+    Ràng buộc `CHECK` thêm riêng vì `ADD COLUMN … CHECK` không có dạng
+    `IF NOT EXISTS`; bọc trong khối điều kiện để bước này chạy lại được sau một
+    lần nâng cấp bị ngắt.
+    """
+    for statement in (
+        "ALTER TABLE public.auth_sessions "
+        "ADD COLUMN IF NOT EXISTS scope VARCHAR(20) NOT NULL DEFAULT 'full'",
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'ck_auth_sessions_scope_known'
+                  AND conrelid = 'public.auth_sessions'::regclass
+            ) THEN
+                ALTER TABLE public.auth_sessions
+                    ADD CONSTRAINT ck_auth_sessions_scope_known
+                    CHECK (scope IN ('full', 'totp_enrollment'));
+            END IF;
+        END
+        $$
+        """,
+    ):
+        connection.exec_driver_sql(statement)
+
+
 _UPGRADE_STEPS: Final[tuple[_UpgradeStep, ...]] = (
     _UpgradeStep(source="1", target="2", apply=_upgrade_1_to_2),
+    _UpgradeStep(source="2", target="3", apply=_upgrade_2_to_3),
 )
 """Chuỗi bước nâng cấp, theo thứ tự. Thêm bước = thêm một phần tử **và** tăng
 `CONTROL_SCHEMA_VERSION`."""
@@ -231,9 +312,14 @@ def ensure_control_schema(owner_engine: Engine) -> None:
     if found is not None and found != CONTROL_SCHEMA_VERSION:
         _apply_upgrades(owner_engine, found)
     with owner_engine.begin() as connection:
-        for grantee in CONTROL_GRANTEES:
-            for statement in control_table_grants(grantee):
-                connection.exec_driver_sql(statement)
+        for statement in app_login_table_grants():
+            connection.exec_driver_sql(statement)
+        # Thu hồi **trước** khi cấp: danh sách trong mã phải là toàn bộ quyền
+        # của nhóm, không phải phần thêm vào những gì cụm đang có.
+        for statement in control_group_revokes():
+            connection.exec_driver_sql(statement)
+        for statement in control_group_table_grants():
+            connection.exec_driver_sql(statement)
     _stamp_version(owner_engine)
 
 
@@ -301,7 +387,12 @@ def ensure_cluster(owner_engine: Engine) -> None:
     dựng trước bằng superuser — xem `ensure_database_roles`.
     """
     ensure_control_schema(owner_engine)
-    ensure_dataset_roles(owner_engine)
+    schemas = ensure_dataset_roles(owner_engine)
+    # Gieo mầm **sau** vai trò và quyền bảng: nó ghi vào bảng của từng schema.
+    # Chạy mỗi lần vì registry mã quyền lớn dần theo từng phase — dữ liệu kế
+    # toán tạo từ phiên bản trước phải nhận được mã quyền của loại chứng từ mới,
+    # nếu không quản trị viên của nó không mở được màn hình vừa thêm.
+    seed_registered_datasets(owner_engine, schemas)
 
 
 def _stamp_version(owner_engine: Engine) -> None:

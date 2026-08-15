@@ -1,4 +1,4 @@
-"""Nâng cấp schema điều khiển 1→2 — diễn tập trên một cụm **đã có dữ liệu**.
+"""Nâng cấp schema điều khiển — diễn tập trên một cụm **đã có dữ liệu**.
 
 Vì sao phải diễn tập thật thay vì tin vào `create_all`: `create_all` tạo bảng
 còn thiếu nhưng **không sửa bảng đã có**. Một cụm phiên bản 1 gặp binary phiên
@@ -144,8 +144,13 @@ def _tables(engine: Engine) -> set[str]:
 
 
 def test_upgrade_path_covers_every_released_version() -> None:
-    """Mọi phiên bản đã phát hành phải có đường đi lên phiên bản hiện tại."""
-    assert [step.source for step in _upgrade_path("1")] == ["1"]
+    """Mọi phiên bản đã phát hành phải có đường đi lên phiên bản hiện tại.
+
+    Cụm v1 phải đi được **hết** chuỗi, không dừng ở nửa đường: một bản cài bỏ
+    qua vài lần nâng cấp là chuyện bình thường ở khách hàng chạy offline.
+    """
+    assert [step.source for step in _upgrade_path("1")] == ["1", "2"]
+    assert [step.source for step in _upgrade_path("2")] == ["2"]
     assert _upgrade_path(CONTROL_SCHEMA_VERSION) == ()
 
 
@@ -269,3 +274,120 @@ def test_an_unknown_version_refuses_to_be_relabelled(probe_owner_engine: Engine)
 
     with pytest.raises(SchemaVersionMismatchError):
         ensure_control_schema(probe_owner_engine)
+
+
+VERSION_3_NEW_COLUMNS = frozenset({"scope"})
+"""Cột `auth_sessions.scope` — phạm vi phiên (lát 2B-1b, quyết định E2)."""
+
+
+def _downgrade_to_version_2(engine: Engine) -> int:
+    """Đưa cụm về hình dạng lát 2B-1a, kèm một phiên đang mở. Trả id phiên đó.
+
+    Phiên đang mở là phần quan trọng: nâng cấp mà biến mọi phiên đầy đủ thành
+    phiên hạn chế sẽ đuổi cả văn phòng ra ngoài giữa buổi làm việc — đúng loại
+    hỏng mà một `DEFAULT` thiếu sẽ gây ra và không test cấu trúc nào bắt được.
+    """
+    with engine.begin() as connection:
+        for column in sorted(VERSION_3_NEW_COLUMNS):
+            connection.exec_driver_sql(
+                f"ALTER TABLE public.{SESSION_TABLE_NAME} DROP COLUMN IF EXISTS {column}"
+            )
+        connection.exec_driver_sql(
+            f"ALTER TABLE public.{SESSION_TABLE_NAME} "
+            "DROP CONSTRAINT IF EXISTS ck_auth_sessions_scope_known"
+        )
+        session_id = connection.execute(
+            text(
+                f"INSERT INTO public.{SESSION_TABLE_NAME} "
+                "(token_hash, user_id, expires_at) "
+                "VALUES (decode('00ff', 'hex'), 1, now() + interval '1 day') RETURNING id"
+            )
+        ).scalar_one()
+        connection.execute(
+            text(
+                "UPDATE public.system_metadata SET value = '2' WHERE key = 'control_schema_version'"
+            )
+        )
+    return int(session_id)
+
+
+def test_a_version_2_cluster_gains_session_scope_without_locking_anyone_out(
+    probe_owner_engine: Engine,
+) -> None:
+    """Diễn tập 2 → 3: cột mới có, và phiên đang mở vẫn là phiên **đầy đủ**."""
+    ensure_control_schema(probe_owner_engine)
+    session_id = _downgrade_to_version_2(probe_owner_engine)
+
+    assert control_schema_version(probe_owner_engine) == "2"
+    assert "scope" not in _columns_of(probe_owner_engine, SESSION_TABLE_NAME)
+
+    ensure_control_schema(probe_owner_engine)
+
+    assert control_schema_version(probe_owner_engine) == CONTROL_SCHEMA_VERSION
+    assert "scope" in _columns_of(probe_owner_engine, SESSION_TABLE_NAME)
+
+    with probe_owner_engine.connect() as connection:
+        scope = connection.execute(
+            text(f"SELECT scope FROM public.{SESSION_TABLE_NAME} WHERE id = :id"),
+            {"id": session_id},
+        ).scalar_one()
+        constrained = connection.execute(
+            text(
+                "SELECT count(*) FROM pg_constraint WHERE conname = 'ck_auth_sessions_scope_known'"
+            )
+        ).scalar_one()
+    assert scope == "full"
+    # Ràng buộc `CHECK` là thứ chặn một giá trị phạm vi bịa lọt vào cột.
+    assert constrained == 1
+
+
+LEGACY_CONTROL_GROUP_GRANTS = (
+    "GRANT SELECT, INSERT, UPDATE ON public.users TO ket_control",
+    "GRANT USAGE, SELECT ON SEQUENCE public.users_id_seq TO ket_control",
+    "GRANT SELECT, INSERT, UPDATE ON public.auth_sessions TO ket_control",
+    "GRANT USAGE, SELECT ON SEQUENCE public.auth_sessions_id_seq TO ket_control",
+    "GRANT INSERT, SELECT ON public.control_audit_log TO ket_control",
+)
+"""Đúng những lệnh mà lát 2B-1a cấp cho nhóm `ket_control`.
+
+Chép cứng như một mẩu lịch sử, không sinh lại từ mã hiện tại: đây là hình dạng
+của **cụm khách hàng đã cài**, và nếu sinh từ mã thì test sẽ tự đổi theo mã và
+không còn kiểm gì."""
+
+
+def test_an_installed_cluster_loses_the_identity_grants_it_used_to_have(
+    probe_owner_engine: Engine,
+) -> None:
+    """Nâng cấp phải **thu hồi** quyền cũ, không chỉ ngừng cấp quyền mới.
+
+    Bất biến "vai trò dataset không với được bảng danh tính" trên cụm dựng mới
+    đúng vì quyền chưa bao giờ được cấp. Trên cụm **đã cài bằng mã cũ** thì quyền
+    còn nguyên, và không có `0002` nào gỡ chúng ra — nên nếu `ensure_control_schema`
+    không thu hồi, mọi vai trò dataset vẫn `INSERT` được vào `auth_sessions`, tức
+    là tự cấp được phiên dưới danh nghĩa bất kỳ ai. Test dựng mới **không** thấy
+    điều đó; đây là chỗ duy nhất thấy.
+    """
+    ensure_control_schema(probe_owner_engine)
+    with probe_owner_engine.begin() as connection:
+        for statement in LEGACY_CONTROL_GROUP_GRANTS:
+            connection.exec_driver_sql(statement)
+
+    assert _control_group_privileges(probe_owner_engine) != set()
+
+    ensure_control_schema(probe_owner_engine)
+
+    remaining = _control_group_privileges(probe_owner_engine)
+    # Chỉ còn quyền đọc hai bảng định tuyến; không còn gì trên bảng danh tính.
+    assert remaining == {("datasets", "SELECT"), ("system_metadata", "SELECT")}
+
+
+def _control_group_privileges(engine: Engine) -> set[tuple[str, str]]:
+    """Quyền bảng mà nhóm `ket_control` đang giữ, đo từ `information_schema`."""
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT table_name, privilege_type FROM information_schema.table_privileges "
+                "WHERE grantee = 'ket_control' AND table_schema = 'public'"
+            )
+        ).all()
+    return {(row[0], row[1]) for row in rows}

@@ -21,11 +21,7 @@ from sqlalchemy.orm import Session
 
 from ket.kernel.auditing.control_log import ControlAuditAction, record_control_action
 from ket.kernel.datasets.models import User
-from ket.kernel.errors import (
-    InvalidCredentialsError,
-    UserAlreadyExistsError,
-    UserNotFoundError,
-)
+from ket.kernel.errors import UserAlreadyExistsError, UserNotFoundError
 from ket.kernel.security import passwords, totp
 from ket.kernel.security.keystore import SecretBox
 
@@ -124,24 +120,26 @@ def reset_password(
     )
 
 
-def change_own_password(
+def set_own_password(
     session: Session,
     *,
     user: User,
-    current_password: str,
     new_password: str,
     correlation_id: UUID | None = None,
     client_info: str | None = None,
 ) -> None:
-    """Chủ tài khoản tự đổi mật khẩu — phải chứng minh mật khẩu hiện tại.
+    """Ghi mật khẩu mới do **chính chủ tài khoản** đặt.
+
+    **Điều kiện tiên quyết:** người gọi đã chứng minh mật khẩu hiện tại bằng
+    `auth_service.verify_current_password`. Việc kiểm nằm ở đó chứ không ở đây
+    vì nó phải tăng bộ đếm khóa và ghi `control_audit_log` — hai việc cần khóa
+    dòng `users` và cần commit **cả khi kết quả là lỗi**, tức là một transaction
+    riêng với vòng đời khác hẳn thao tác ghi này.
 
     Chứng minh lại dù đã có phiên hợp lệ: một máy trạm bỏ quên không khóa màn
     hình là kịch bản thật trong văn phòng, và đổi mật khẩu là thao tác chiếm
     được tài khoản vĩnh viễn.
     """
-    if not passwords.verify_password(user.password_hash, current_password):
-        raise InvalidCredentialsError("Mật khẩu hiện tại không đúng")
-
     passwords.validate_policy(new_password, username=user.username)
     user.password_hash = passwords.hash_password(new_password)
     user.must_change_password = False
@@ -226,9 +224,10 @@ def disable_totp(
     Giữ lại bí mật cũ để "bật lại cho nhanh" là giữ một bí mật mà chủ tài khoản
     không còn kiểm soát thiết bị chứa nó.
 
-    **Không** đụng tới `totp_required`: cờ đó do vai trò quyết định (lát 2B-1b).
-    Nếu tài khoản vẫn thuộc diện bắt buộc, lần đăng nhập kế tiếp sẽ dừng ở
-    `TotpEnrollmentRequiredError` và buộc đăng ký thiết bị mới — đúng ý muốn.
+    **Không** đụng tới `totp_required`: cờ đó do vai trò quyết định
+    (`role_service.grant_role`). Nếu tài khoản vẫn thuộc diện bắt buộc, lần đăng
+    nhập kế tiếp cấp một **phiên hạn chế** chỉ dùng để đăng ký thiết bị mới —
+    đúng ý muốn, và không cần ai can thiệp tại máy chủ.
     """
     user.totp_secret_enc = None
     user.totp_enrolled_at = None

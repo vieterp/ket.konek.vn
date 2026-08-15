@@ -112,14 +112,15 @@ def test_dataset_session_still_reads_its_own_tables(
         assert session.execute(text("SELECT count(*) FROM branches")).scalar_one() >= 0
 
 
-def test_dataset_session_still_reads_control_tables(
+def test_dataset_session_reads_only_the_routing_control_tables(
     session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
 ) -> None:
-    """Sau `SET ROLE`, bảng điều khiển vẫn đọc được — qua nhóm `ket_control`.
+    """Sau `SET ROLE`, chỉ hai bảng điều khiển chỉ-đọc còn với tới được.
 
-    Quên cấp cho nhóm thì mọi đường nghiệp vụ cần biết người dùng là ai sẽ hỏng,
-    nhưng chỉ hỏng **sau** khi chọn dataset — tức là không hỏng ở luồng đăng
-    nhập, nơi test dễ nhìn thấy nhất.
+    `datasets` và `system_metadata` cần cho định tuyến và handshake nên vẫn đọc
+    được qua nhóm `ket_control`. Quên cấp cho nhóm thì đường đó hỏng **sau** khi
+    chọn dataset — tức là không hỏng ở luồng đăng nhập, nơi test dễ nhìn thấy
+    nhất.
     """
     with dataset_session(
         session_factory,
@@ -127,7 +128,36 @@ def test_dataset_session_still_reads_control_tables(
         branch_ids=(),
         audit=ACTOR,
     ) as session:
-        assert session.execute(text("SELECT count(*) FROM public.users")).scalar_one() >= 0
+        assert session.execute(text("SELECT count(*) FROM public.datasets")).scalar_one() >= 1
+        assert (
+            session.execute(text("SELECT count(*) FROM public.system_metadata")).scalar_one() >= 1
+        )
+
+
+@pytest.mark.parametrize("table", ["users", "auth_sessions", "control_audit_log"])
+def test_dataset_role_cannot_touch_identity_tables(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef, table: str
+) -> None:
+    """Vai trò dataset **không** với được bảng danh tính — kể cả để đọc.
+
+    Đây là chiều leo thang đã đóng: mọi truy vấn nghiệp vụ chạy dưới
+    `ds_<mã>_app`, nên một lỗ tiêm SQL ở bất kỳ báo cáo nào cũng chạy dưới vai
+    trò đó. Còn `INSERT ON auth_sessions` thì lỗ đó tự cấp được phiên dưới danh
+    nghĩa bất kỳ ai; còn `UPDATE ON users` thì nó đổi được mật khẩu và tắt được
+    cờ 2FA của người khác.
+
+    Đường danh tính không bao giờ chạy dưới vai trò dataset (`control_session`
+    cố ý không `SET ROLE`), nên không mất gì.
+    """
+    with dataset_session(
+        session_factory,
+        dataset_schema=dataset_alpha.schema_name,
+        branch_ids=(),
+        audit=ACTOR,
+    ) as session:
+        with pytest.raises(ProgrammingError) as error:
+            session.execute(text(f"SELECT count(*) FROM public.{table}"))
+        assert "permission denied" in str(error.value)
 
 
 # --------------------------------------------------------------------------

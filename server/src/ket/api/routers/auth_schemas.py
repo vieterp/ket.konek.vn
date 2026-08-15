@@ -12,6 +12,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, SecretStr
 
+from ket.kernel.security.auth_models import SessionScope
+
 
 class LoginRequest(BaseModel):
     """Đăng nhập. `totp_code` chỉ cần cho tài khoản bắt buộc 2FA.
@@ -33,18 +35,28 @@ class LoginResponse(BaseModel):
     expires_at: datetime
     must_change_password: bool
     """`True` → client phải đưa thẳng người dùng tới màn hình đổi mật khẩu.
-    Ép ở server (chặn các endpoint khác) là việc của lát 2B-1b, khi đã có
-    `require_permission` để gắn ngoại lệ vào."""
+    Server **cũng** ép: mọi endpoint khác ngoài đổi mật khẩu / me / logout trả
+    `auth.password_change_required`."""
+
+    session_scope: SessionScope
+    """`totp_enrollment` → phiên này chỉ mở đúng đường đăng ký thiết bị 2FA;
+    client phải đưa người dùng tới màn hình quét mã QR. Xảy ra khi tài khoản
+    thuộc diện bắt buộc 2FA (vai trò nhạy cảm) mà chưa đăng ký thiết bị."""
 
 
 class MeResponse(BaseModel):
-    """Danh tính của phiên hiện tại. Chưa có vai trò/quyền — chúng per-dataset."""
+    """Danh tính của phiên hiện tại. Chưa có vai trò/quyền — chúng per-dataset.
+
+    Quyền trả riêng theo dataset ở `GET /api/v1/system/access`, vì cùng một
+    người có vai trò khác nhau ở mỗi dữ liệu kế toán.
+    """
 
     user_id: int
     username: str
     locale: str
     must_change_password: bool
     expires_at: datetime
+    session_scope: SessionScope
 
 
 class ChangePasswordRequest(BaseModel):

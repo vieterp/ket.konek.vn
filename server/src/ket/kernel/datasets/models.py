@@ -20,7 +20,11 @@ phục một doanh nghiệp" (RT-03) trở thành thao tác trên **một** sche
 Thêm bảng điều khiển mới thì phải chạm ba chỗ, nếu không nó sẽ vắng mặt ở đúng
 một trong ba: `model_registry` (để `create_all` thấy), bước nâng cấp trong
 `bootstrap._UPGRADE_STEPS` (để cụm đã cài có nó) và
-`bootstrap.control_table_grants` (để vai trò runtime dùng được nó).
+`bootstrap.app_login_table_grants` (để vai trò runtime dùng được nó).
+
+Bảng mới **mặc định không** vào `bootstrap.control_group_table_grants`: nhóm
+`ket_control` là thứ mọi vai trò dataset kế thừa, nên mỗi quyền ở đó là quyền có
+hiệu lực trong mọi truy vấn nghiệp vụ.
 """
 
 from __future__ import annotations

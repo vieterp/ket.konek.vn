@@ -21,6 +21,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import Connection, Engine, create_engine, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
@@ -199,11 +200,15 @@ def _drop_ket_roles(connection: Connection) -> None:
 
 
 @pytest.fixture(scope="session")
-def test_settings(postgres_available: bool) -> Settings:
+def test_settings(postgres_available: bool, app_key: str) -> Settings:
     """Cấu hình trỏ vào database test, dựng sẵn vai trò + schema điều khiển.
 
     Dựng lại database từ đầu mỗi phiên: test kiểm cấu trúc và quyền, nên dữ
     liệu sót lại từ phiên trước có thể làm một test xanh vì lý do sai.
+
+    `app_key` truyền thẳng vào cấu hình thay vì để app đọc OS keystore: test
+    không được phép ghi vào Keychain/Credential Manager của người đang chạy nó,
+    nhưng luồng 2FA qua HTTP thì vẫn phải kiểm được đầu-cuối.
     """
     if not postgres_available:
         message = f"Không kết nối được PostgreSQL tại {_admin_dsn()}"
@@ -233,6 +238,7 @@ def test_settings(postgres_available: bool) -> Settings:
         database_url=_dsn_for("ket_app"),
         owner_database_url=_dsn_for("ket_owner"),
         verify_schema_on_startup=False,
+        app_key=SecretStr(app_key),
     )
 
     superuser_engine = create_engine(

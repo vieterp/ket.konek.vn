@@ -1,6 +1,6 @@
 # Tóm tắt mã nguồn — Konek Két
 
-**Cập nhật:** 2026-08-15 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A (nền dữ liệu), 2B-0 (cô lập dataset + release pipeline), 2B-1a (danh tính lõi).
+**Cập nhật:** 2026-08-15 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A (nền dữ liệu), 2B-0 (cô lập dataset + release pipeline), 2B-1a (danh tính lõi), 2B-1b (phân quyền & định tuyến request).
 
 Tài liệu này mô tả **thứ đang có thật trong repo**. Kiến trúc đích của cả v1
 nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó chưa dựng.
@@ -15,14 +15,16 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 
 | Có thật | Chưa có |
 | --- | --- |
-| Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | **RBAC enforcement** (`require_permission`), định tuyến dataset theo request |
-| Schema-per-dataset + provisioning + `ensure_cluster` + `repair_dataset_privileges_statements` | API nghiệp vụ (mới có `/health` + `/api/v1/auth/*`) |
-| **Đăng nhập Argon2id, phiên lưu DB thu hồi được ngay, 2FA TOTP chống phát lại, khóa tạm khi dò mật khẩu** | Bảng chứng từ / `gl_postings` / số dư |
-| **Khóa mã hóa từ OS keystore** (fail-closed) — `totp_secret` không bao giờ ở dạng rõ trong DB/backup | Dịch vụ idempotency, worker chạy job |
-| **Hợp đồng lỗi RFC 7807** + mã tương quan mỗi request | Client (mới là bộ khung rỗng) |
-| 13 bảng nền + 2 bảng điều khiển mới, migration `0001`, **schema điều khiển có bước nâng cấp tường minh (v2)** | Bộ cài app server (S4/phase 11); ký chứng thư OS |
+| Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | Bảng chứng từ / `gl_postings` / số dư |
+| **RBAC tới cấp `{module}.{chứng từ}.{hành vi}`** + `require_permission`, **định tuyến dataset theo header `X-Dataset`**, phạm vi chi nhánh cho RLS | Dịch vụ idempotency, optimistic locking, worker chạy job |
+| Schema-per-dataset + provisioning + `ensure_cluster` + `repair_dataset_privileges_statements` + **gieo mã quyền/vai trò `admin`** | API nghiệp vụ (mới có `/health`, `/api/v1/auth/*`, `/api/v1/system/*`) |
+| **Đăng nhập Argon2id (có trần đồng thời), phiên lưu DB thu hồi được ngay, 2FA TOTP chống phát lại, khóa tạm khi dò mật khẩu** | Client (mới là bộ khung rỗng) |
+| **Phiên hạn chế `totp_enrollment`** — tài khoản bị bắt bật 2FA tự đăng ký thiết bị được, không cần ai chạm máy chủ | Bắt tay schema-version với client |
+| **Khóa mã hóa từ OS keystore** (fail-closed) — `totp_secret` không bao giờ ở dạng rõ trong DB/backup | Bộ cài app server (S4/phase 11); ký chứng thư OS |
+| **Hợp đồng lỗi RFC 7807** + mã tương quan mỗi request (mã HTTP khai ở lớp lỗi) | — |
+| 13 bảng nền + 2 bảng điều khiển mới, migration `0001`, **schema điều khiển có bước nâng cấp tường minh (v3)** | — |
 | `money` (Decimal, ROUND_HALF_UP) + **luật cứng quét AST cấm tiêm SQL không tham số** | — |
-| **`python -m ket.admin`**: ensure-cluster · create-user · reset-password · reset-totp · generate-app-key | — |
+| **`python -m ket.admin`**: ensure-cluster · create-user · reset-password · reset-totp · **grant-role · grant-branch** · generate-app-key | — |
 | **PostgreSQL 16** là phiên bản đích; kiểm lúc khởi động, tắt cổng thì có cảnh báo trong log | — |
 | Kênh phát hành `release.yml` (Win msi+nsis, macOS dmg, ký gói updater) — **đã dựng, chưa chạy lần nào** | — |
 
@@ -40,9 +42,9 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | `kernel/money.py` | `round_money`, `multiply_money`, `sum_money`, `convert_currency` | Mọi phép tính tiền |
 | `kernel/errors.py` | `DomainError` + mã lỗi ổn định | Thêm lỗi nghiệp vụ |
 | `kernel/persistence/` | `base` (2 `MetaData`), `engine`, `session`, `unit_of_work`, `types` | Chạm tầng lưu trữ |
-| `api/` | Tầng HTTP: `middleware/{request_context,problem_details}`, `dependencies` (principal, khóa app), `routers/auth` (+ `auth_schemas`). **`kernel` không được import tầng này** (contract C1) | Thêm endpoint, đổi hợp đồng lỗi |
+| `api/` | Tầng HTTP: `middleware/{request_context,problem_details}`, `dependencies` (principal theo trạng thái phiên, dataset, quyền, `require_permission`), `routers/{auth,system}` (+ `*_schemas`). **`kernel` không được import tầng này** (contract C1) | Thêm endpoint, đổi hợp đồng lỗi |
 | `admin/` | `python -m ket.admin` — lệnh chạy tại máy chủ, không qua HTTP | Khởi tạo cụm, tài khoản phá-kính |
-| `kernel/security/` | `rls`, `tenant` (GUC chi nhánh), `grants`, **`dataset_roles`**, `roles.sql`, `models` (RBAC + `branches` + `settings`); **`passwords` (Argon2id), `totp` (chống phát lại), `keystore` (Fernet + OS keystore), `auth_models` (`auth_sessions`), `auth_service` (đăng nhập/phiên), `account_service` (vòng đời tài khoản)** | Chạm phân quyền hoặc danh tính |
+| `kernel/security/` | `rls`, `tenant` (GUC chi nhánh), `grants`, `dataset_roles`, `roles.sql`, `models` (RBAC + `branches` + `settings`); `passwords` (Argon2id + trần đồng thời), `totp`, `keystore`, `auth_models` (`auth_sessions` + `SessionScope`), `auth_service` (đăng nhập/phiên/kiểm mật khẩu hiện tại), `account_service`; **`permissions` (registry loại chứng từ → mã quyền), `authorization` (quyền hiệu lực, cấm thắng cho phép), `role_service` (gieo mầm + gán vai trò/chi nhánh)** | Chạm phân quyền hoặc danh tính |
 | `kernel/auditing/` | `models` (`audit_log` của dataset), `listener` (4 móc `Session`), **`control_log` (`control_audit_log` — sự kiện tài khoản, ghi tường minh vì `User` không đi qua listener)** | Hiểu vì sao mọi thay đổi đều có vết |
 | `kernel/datasets/` | `naming` (trần 60→56 ký tự), `models` (schema điều khiển), **`bootstrap` (`ensure_control_schema`, `ensure_dataset_roles`, `ensure_cluster`), `provisioning` (`assert_dataset_role_administrable`)**, `service` | Tạo/định tuyến dữ liệu kế toán |
 | `kernel/{jobs,idempotency,numbering}/models.py` | Bảng đã dựng, **dịch vụ chưa viết** (lát 2B/phase 3) | — |
@@ -58,9 +60,9 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 
 ---
 
-## 3. Năm cơ chế phải hiểu trước khi sửa bất cứ thứ gì
+## 3. Sáu cơ chế phải hiểu trước khi sửa bất cứ thứ gì
 
-Cả năm đều hỏng **âm thầm** nếu làm sai — không có thông báo lỗi nào chỉ đúng chỗ.
+Cả sáu đều hỏng **âm thầm** nếu làm sai — không có thông báo lỗi nào chỉ đúng chỗ.
 
 **1. Một dữ liệu kế toán = một PG schema** (ADR-017). Mỗi transaction mở bằng
 `SET LOCAL search_path TO "ds_<mã>", public, pg_temp`. Schema đích **chỉ** lấy từ
@@ -103,6 +105,31 @@ khóa tài khoản, bước thời gian TOTP đã dùng) nên câu truy vấn ph
 mọi test tuần tự vẫn xanh** — đo được: 10 lần sai đồng thời để lại
 `failed_login_count = 1` thay vì khóa tài khoản.
 
+**6. Quyền là per-dataset; request phải khai dataset, và mặc định của mọi cổng là CHẶN.**
+Mã quyền `{module}.{chứng từ}.{hành vi}` **sinh từ registry** (`kernel/security/permissions.py`),
+không gõ tay — thêm loại chứng từ mới không phải đụng schema quyền. Phân giải
+quyền đọc `user_roles → role_permissions`, và **cấm tường minh thắng cho phép**
+(`allow = false` thắng mọi vai trò khác). Không có vai trò nào trong dataset =
+`dataset.access_denied`, không phải "tập quyền rỗng".
+
+Ba trạng thái phiên đều **đóng theo mặc định**: thiếu header `X-Dataset` → 400 (không
+có mặc định "dataset đầu tiên" — đoán sai là ghi sổ nhầm doanh nghiệp); phiên
+`totp_enrollment` chỉ mở đúng đường đăng ký 2FA; `must_change_password` chặn mọi
+endpoint trừ đổi mật khẩu/`me`/`logout`. Endpoint mới không khai gì sẽ bị chặn cả ba
+— hướng mặc định phải là như vậy.
+
+Cờ `users.totp_required` là **toàn cục** còn vai trò là per-dataset, nên gán một vai
+trò nhạy cảm chạm hai schema và không thể nguyên tử. Thứ tự bắt buộc: **bật cờ trước,
+ghi vai trò sau** (`role_service.grant_role`). Đảo lại là tạo ra tài khoản quản trị
+không bị đòi lớp thứ hai, im lặng.
+
+Và phạm vi chi nhánh **không tự nới được**: qua HTTP, chỉ gán/thu được chi nhánh mà
+chính người thực hiện đang thấy. Không có luật đó thì ai nắm `system.user.edit` cũng
+tự cấp mình mọi chi nhánh còn lại trong một request — và dòng nhật ký của thao tác ấy
+mang chi nhánh **đích**, tức là vô hình với chính người vừa bị vượt qua. Đường CLI
+(`actor_branch_ids=None`) là phá-kính có chủ đích: lúc dựng bản cài chưa ai thấy chi
+nhánh nào.
+
 ---
 
 ## 4. Chạy tại máy
@@ -136,7 +163,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 
 ---
 
-## 5. Bộ test (**203 case**: 140 cần PostgreSQL 16, 63 không)
+## 5. Bộ test (**265 case**: 185 cần PostgreSQL 16, 80 không)
 
 | Tệp | Chứng minh điều gì |
 | --- | --- |
@@ -147,7 +174,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_dataset_routing.py` (21) | Hai dataset không thấy dữ liệu/đánh số/nhật ký của nhau; whitelist tên schema |
 | `test_search_path_shadowing.py` (4) | Không che được bảng thật bằng `pg_temp` (kiểm **từng lớp** phòng thủ riêng) |
 | `test_startup_schema_version_gate.py` (8) | App khởi động được khi đã có dataset; lệch revision **hoặc** PostgreSQL cũ hơn phiên bản đích → **từ chối khởi động** |
-| `test_dataset_role_isolation.py` (15) | **Mới**: `ket_app` trần không đọc được bảng dataset nào; phiên đã bind `ds_alpha` bị từ chối khi ghi rõ `ds_beta.x`; hình dạng vai trò (NOINHERIT, không LOGIN, không ACL cho `ket_app`); dựng lại vai trò sau khôi phục; từ chối vai trò không quản trị được |
+| `test_dataset_role_isolation.py` (22) | **Mới**: `ket_app` trần không đọc được bảng dataset nào; phiên đã bind `ds_alpha` bị từ chối khi ghi rõ `ds_beta.x`; hình dạng vai trò (NOINHERIT, không LOGIN, không ACL cho `ket_app`); dựng lại vai trò sau khôi phục; từ chối vai trò không quản trị được |
 | `test_alembic_offline_sql.py` (1) | **Mới**: `alembic upgrade --sql` chạy được không cần DB — migration lấy schema từ `Config.attributes` chứ không hỏi `current_schema()` |
 | `test_no_sql_string_interpolation.py` (4) | **Mới**: quét AST, cấm f-string/chuỗi nối trong `text()`/`exec_driver_sql()`; năm tệp sinh DDL identifier miễn trừ kèm lý do |
 | `test_transaction_scope_does_not_leak_through_pool.py` (2) | **Mới**: trên `QueuePool` một connection, transaction kế tiếp phải sạch cả vai trò, GUC chi nhánh lẫn `search_path` |
@@ -156,14 +183,18 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_no_float_in_domain.py` (4) | Không `float` trong `src/ket` **và** trong `migrations/` |
 | `test_app_smoke.py` (2) | Khung app dựng được, OpenAPI sinh được |
 | `test_control_audit_immutability.py` (9) | **Mới**: `control_audit_log` chỉ-thêm ép ở tầng DB (5 đường sửa/xóa/DDL đều bị từ chối; quyền đo được đúng `INSERT,SELECT`); `public` chỉ hợp lệ ở đường cấp quyền, đường định tuyến vẫn từ chối |
-| `test_control_schema_upgrade.py` (8) | **Mới**: diễn tập nâng cấp v1→v2 trên database dùng một lần **có dữ liệu**; chạy lại được; bảng mới được cấp quyền trên cụm đã nâng cấp; hai đường dán nhãn phiên bản khống đều bị chặn |
-| `test_auth_login_flow.py` (18) | **Mới**: cấp phiên, chỉ lưu băm token, đường sai vẫn commit vết + bộ đếm, khóa tạm và tự hết khóa, vô hiệu hóa tài khoản giết phiên ngay, vòng đời 2FA, bí mật không bao giờ ở dạng rõ |
-| `test_auth_concurrency.py` (2) | **Mới**: 10 lần sai **đồng thời** vẫn khóa tài khoản; một mã TOTP chỉ đổi được đúng một phiên |
+| `test_control_schema_upgrade.py` (10) | Diễn tập nâng cấp v1→v2 **và** v2→v3 trên database dùng một lần **có dữ liệu**; chạy lại được; bảng mới được cấp quyền trên cụm đã nâng cấp; phiên đang mở không bị hạ thành phiên hạn chế; hai đường dán nhãn phiên bản khống đều bị chặn |
+| `test_auth_login_flow.py` (22) | **Mới**: cấp phiên, chỉ lưu băm token, đường sai vẫn commit vết + bộ đếm, khóa tạm và tự hết khóa, vô hiệu hóa tài khoản giết phiên ngay, vòng đời 2FA, bí mật không bao giờ ở dạng rõ |
+| `test_auth_concurrency.py` (2) | 10 lần sai **đồng thời** vẫn khóa tài khoản; một mã TOTP chỉ đổi được đúng một phiên |
+| `test_authorization_concurrency.py` (3) | **Mới**: gán vai trò / gán chi nhánh / gieo mầm chạy **song song** không sinh `UniqueViolation` (tức không thành HTTP 500 cho thao tác đã hứa là idempotent) |
 | `test_auth_api_contract.py` (13) | **Mới**: hợp đồng HTTP + RFC 7807 — mã lỗi, `correlation_id`, token rác là 401 chứ không 500, 500 không lộ traceback |
-| `test_admin_cli.py` (10) | **Mới**: từng lệnh `ket.admin` chạy đúng cách người vận hành gọi; lỗi nghiệp vụ in một dòng, không traceback |
-| `test_password_policy.py` (11) | **Mới**: chính sách mật khẩu; hash giả của đường chống liệt kê người dùng phải **thật** và đúng tham số |
+| `test_admin_cli.py` (13) | **Mới**: từng lệnh `ket.admin` chạy đúng cách người vận hành gọi; lỗi nghiệp vụ in một dòng, không traceback |
+| `test_password_policy.py` (13) | **Mới**: chính sách mật khẩu; hash giả của đường chống liệt kê người dùng phải **thật** và đúng tham số |
 | `test_totp_second_factor.py` (9) | **Mới**: cửa sổ chấp nhận và chống dùng lại mã |
-| `test_keystore_secret_box.py` (8) | **Mới**: thiếu khóa/sai khóa/keystore hỏng đều fail-closed, không rơi về lưu dạng rõ |
+| `test_keystore_secret_box.py` (8) | Thiếu khóa/sai khóa/keystore hỏng đều fail-closed, không rơi về lưu dạng rõ |
+| `test_permission_registry.py` (15) | **Mới**: thêm loại chứng từ mới **không** phải đụng schema quyền; mã quyền đúng ba phần; nhật ký không có mã ghi |
+| `test_authorization_access.py` (14) | **Mới**: cấm thắng cho phép; không vai trò = `dataset.access_denied`; gieo mầm chạy lại được và cấp mã quyền mới cho `admin`; **thứ tự fail-safe** — ghi vai trò hỏng vẫn để lại cờ 2FA đã bật |
+| `test_api_authorization.py` (16) | **Mới**: chuỗi định tuyến đầu-cuối qua HTTP; thiếu/sai `X-Dataset`; thiếu quyền nêu đúng mã còn thiếu; **RLS cắt `/system/audit-log` dù câu truy vấn không lọc chi nhánh**; mật khẩu tạm và phiên hạn chế chặn ở server; vòng đăng ký 2FA đi trọn bằng HTTP |
 
 Độ phủ **92%** trên `src/ket`. Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
 
@@ -171,8 +202,8 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 
 ## 6. Việc tiếp theo
 
-Lát **2B-1** (tiếp): nhật ký thay đổi tài khoản → `public.control_audit_log`.
-Lát **2B-2**: vai trò `ket_worker` riêng, worker claim rồi mới đặt GUC.
+Lát **2B-2**: idempotency (RT-12), optimistic locking, hàng đợi job + vai trò
+`ket_worker` riêng (worker claim rồi mới đặt GUC), sinh OpenAPI → type TS.
 Lát **2C**: client + ba spike S1/S3/S4.
 
 **Còn mở:**
@@ -184,3 +215,9 @@ Lát **2C**: client + ba spike S1/S3/S4.
 2. Độ phủ có đặt ngưỡng chặn không — hiện 92%, CI mới chỉ **báo cáo**.
 3. Đường build Windows và bộ cài chưa ký chứng thư OS — xác minh ở lần chạy
    `release.yml` đầu tiên.
+4. `auth_sessions` chỉ thêm, chưa có job dọn phiên hết hạn (~18k dòng/năm với 50
+   người dùng). Khi làm phải chạy bằng `ket_owner` — vai trò runtime cố ý không có
+   `DELETE`. Thuộc lát 2B-2 (cùng hàng đợi job).
+5. Giới hạn tần suất đầy đủ (rate limit) chưa có; lát 2B-1b mới đặt **trần số lần
+   băm Argon2id đồng thời**. Middleware `rate_limit` mà plan khai vẫn chưa có bước
+   nào sở hữu.

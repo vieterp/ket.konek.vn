@@ -17,14 +17,58 @@ from __future__ import annotations
 import hashlib
 import secrets
 from datetime import datetime
+from enum import StrEnum
 from typing import Final
 
-from sqlalchemy import BigInteger, DateTime, Index, Integer, LargeBinary, String, func
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ket.kernel.persistence.base import ControlBase
 
 SESSION_TABLE_NAME = "auth_sessions"
+
+
+class SessionScope(StrEnum):
+    """Phiên này dùng được cho việc gì.
+
+    `TOTP_ENROLLMENT` gỡ một điểm chặn có thật: tài khoản bị bắt bật 2FA mà chưa
+    đăng ký thiết bị thì không đăng nhập được, mà không đăng nhập được thì cũng
+    không gọi được endpoint đăng ký. Trước lát này, đường thoát duy nhất là một
+    lệnh chạy tại máy chủ — nghĩa là mỗi lần gán vai trò nhạy cảm là một cuộc gọi
+    hỗ trợ.
+
+    Phiên hạn chế **không** phải phiên đầy đủ có cờ: nó là một giá trị trong cột,
+    và mọi dependency đọc cột đó. Khác biệt quan trọng vì mặc định phải là "chặn"
+    — thêm endpoint mới mà quên nghĩ tới 2FA thì endpoint đó bị chặn, chứ không
+    phải mở.
+    """
+
+    FULL = "full"
+    TOTP_ENROLLMENT = "totp_enrollment"
+
+
+def session_scope_of(raw: str) -> SessionScope:
+    """Chuỗi trong cột → `SessionScope`; giá trị lạ hạ về phiên **hạn chế**.
+
+    Hạ xuống chứ không nâng lên: hướng hỏng phải là chặn. Giá trị lạ không lọt
+    qua được ràng buộc `CHECK` của bảng, nên đường duy nhất tới đây là một bản
+    khôi phục từ dump thiếu ràng buộc hoặc một lần sửa tay — đúng những lúc
+    không nên tin dữ liệu.
+    """
+    try:
+        return SessionScope(raw)
+    except ValueError:
+        return SessionScope.TOTP_ENROLLMENT
+
 
 TOKEN_BYTES: Final[int] = 32
 """256 bit entropy. Token là bí mật mang toàn quyền của một người dùng trong
@@ -59,7 +103,13 @@ class AuthSession(ControlBase):
     """Một phiên đăng nhập đang sống hoặc đã kết thúc."""
 
     __tablename__ = SESSION_TABLE_NAME
-    __table_args__ = (Index("ix_auth_sessions_user", "user_id", "expires_at"),)
+    __table_args__ = (
+        Index("ix_auth_sessions_user", "user_id", "expires_at"),
+        CheckConstraint(
+            "scope IN (" + ", ".join(f"'{scope.value}'" for scope in SessionScope) + ")",
+            name="scope_known",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
@@ -87,3 +137,11 @@ class AuthSession(ControlBase):
     không trả lời được."""
 
     client_info: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    scope: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=SessionScope.FULL.value, server_default="full"
+    )
+    """Xem `SessionScope`. `server_default` để phiên đã cấp trước khi có cột này
+    (cụm nâng cấp từ phiên bản schema điều khiển 2) không trở thành phiên hạn
+    chế sau một lần nâng cấp — đuổi cả văn phòng ra ngoài vì một cột mới là cái
+    giá không tương xứng."""

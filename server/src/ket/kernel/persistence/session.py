@@ -81,10 +81,15 @@ def control_session(factory: sessionmaker[Session]) -> Iterator[Session]:
     (và không được phép đoán) họ sắp mở doanh nghiệp nào.
 
     An toàn không đến từ `SET ROLE` ở đây mà từ chỗ khác: `ket_app` được cấp
-    quyền trên **đúng bốn bảng điều khiển** (`bootstrap.control_table_grants`),
-    trong đó `control_audit_log` là chỉ-thêm. Bảng nghiệp vụ của mọi dataset nằm
-    ngoài tầm với vì quyền của chúng thuộc `ds_<mã>_app`, và phiên này chưa
-    `SET ROLE` sang vai trò nào cả.
+    quyền trên **đúng năm bảng điều khiển** (`bootstrap.app_login_table_grants`
+    — `users`, `datasets`, `system_metadata`, `auth_sessions`,
+    `control_audit_log`), trong đó `control_audit_log` là chỉ-thêm. Bảng nghiệp
+    vụ của mọi dataset nằm ngoài tầm với vì quyền của chúng thuộc `ds_<mã>_app`,
+    và phiên này chưa `SET ROLE` sang vai trò nào cả.
+
+    Chiều ngược lại cũng đã đóng: vai trò dataset **không** với được `users` hay
+    `auth_sessions` (`bootstrap.control_group_table_grants`), nên một lỗ tiêm SQL
+    trong truy vấn nghiệp vụ không leo thang thành tự cấp phiên.
 
     Commit khi thoát sạch, rollback khi có ngoại lệ — cùng hợp đồng với
     `unit_of_work`. Nhật ký điều khiển vì thế đi cùng chuyến với thay đổi nó mô
