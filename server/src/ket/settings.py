@@ -59,6 +59,22 @@ class Settings(BaseSettings):
     """Ghi đè đường dẫn `alembic.ini` khi chạy từ thư mục khác hoặc từ bản đóng
     gói (S4/phase 11). `None` = suy từ vị trí gói."""
 
+    minimum_postgres_version: int = 16
+    """Phiên bản PostgreSQL tối thiểu của bản cài (quyết định D4 của phase 2).
+
+    Ghim để dev, CI và máy khách chạy **cùng một** bộ hành vi: RLS, quy tắc
+    `CREATEROLE`, `MERGE`, `NULLS NOT DISTINCT` đều khác nhau giữa các phiên
+    bản, và đây là những thứ cơ chế cô lập dữ liệu dựa vào. Kiểm lúc khởi động
+    thay vì để một câu lệnh của phase 3 nổ giữa kỳ khóa sổ ở nơi cài đặt."""
+
+    verify_postgres_version_on_startup: bool = True
+    """Bật cổng `minimum_postgres_version` lúc khởi động.
+
+    Cờ **riêng**, không gộp vào `verify_schema_on_startup`: hai cổng canh hai thứ
+    khác nhau — phiên bản của **cụm** so với phiên bản của **schema**. Gộp lại thì
+    một bản cài tắt kiểm schema (đang khôi phục, đang gỡ rối) cũng tắt luôn cổng
+    phiên bản cụm mà không ai chủ ý làm thế."""
+
     verify_schema_on_startup: bool = True
     """Chặn khởi động khi schema DB lệch phiên bản migration (LD-05,
     FR-NFR-054). Chỉ đặt `False` cho test/CI không có PostgreSQL."""

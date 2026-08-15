@@ -1,6 +1,6 @@
 [project]
 name = "ket-server"
-version = "0.2.0"
+version = "0.2.1"
 description = "Konek Két — app server phần mềm kế toán VN (TT200/TT133), chạy LAN hoặc offline một máy"
 requires-python = "==3.12.*"
 license = { text = "Proprietary" }
@@ -26,6 +26,7 @@ dev = [
     "ruff>=0.16",
     "mypy>=2.3",
     "import-linter>=2.13",
+    "pytest-cov>=7.1",
 ]
 
 [build-system]
@@ -113,4 +114,28 @@ markers = [
     # CI chạy nhóm này trong job riêng có service PostgreSQL; job đa-OS chạy
     # `-m 'not db'` vì service container chỉ có trên runner Linux.
     "db: cần PostgreSQL thật (bỏ qua khi không kết nối được)",
+]
+
+# ---------------------------------------------------------------------------
+# coverage — báo cáo trong PR (không phải cổng chặn)
+#
+# Đo trên `src/ket`: đây là mã nghiệp vụ. Migration KHÔNG đo — nó chạy đúng một
+# lần cho mỗi schema và độ phủ của nó là câu hỏi khác (bảng có được tạo đúng
+# không), đã có `test_migrations_match_models` canh.
+#
+# Con số chỉ có nghĩa khi gộp cả hai nhóm test: phần lớn `kernel/security` và
+# `kernel/datasets` chỉ chạy trong nhóm `db`. Đo riêng nhóm không-DB sẽ cho ra
+# một con số thấp gây hiểu nhầm.
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["ket"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
 ]

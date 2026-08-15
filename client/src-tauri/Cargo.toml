@@ -1,6 +1,6 @@
 [package]
 name = "ket"
-version = "0.2.0"
+version = "0.2.1"
 description = "Konek Két — desktop shell"
 edition = "2024"
 rust-version = "1.85"
@@ -15,8 +15,15 @@ tauri-build = { version = "2", features = [] }
 
 # Shell chỉ giữ đúng bốn việc: cập nhật, in ấn, chọn/lưu tệp, giữ phiên.
 # KHÔNG có logic nghiệp vụ ở tầng Rust — mọi phép tính tiền ở app server.
-# Plugin updater thêm ở phase 11 (cần cặp khóa ký + endpoint phát hành thật);
-# thêm sớm chỉ tạo cấu hình giả.
+# Plugin updater (mã Rust chạy lúc runtime: hỏi server có bản mới không, tải,
+# cài) thêm ở phase 2C bước 18 / phase 11 — nó cần endpoint đặt lúc chạy, vì
+# địa chỉ app server là của từng bản cài chứ không biết lúc build.
+#
+# Phần **đóng gói** thì đã bật từ bây giờ: `bundle.createUpdaterArtifacts` +
+# `plugins.updater.pubkey` trong `tauri.conf.json`, và workflow `release.yml`
+# ký gói bằng khóa trong GitHub Secrets rồi sinh `latest.json`. Tách hai phần
+# như vậy để kênh phát hành có sản phẩm ký đúng ngay từ bản 0.x, thay vì tới
+# lúc bật updater mới phát hiện mọi bản cũ đều không cập nhật được.
 #
 # `tauri-plugin-fs` cố tình KHÔNG có ở phase 1: chưa luồng nào đọc/ghi tệp, và
 # quyền fs tương ứng cũng chưa cấp trong `capabilities/default.json`. Thêm ở
@@ -25,3 +32,10 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+
+# `tauri::generate_context!` sinh mã đọc khối `plugins` của `tauri.conf.json`
+# thành `serde_json::Value`, nên crate này bắt buộc có mặt từ lúc khối đó tồn
+# tại — kể cả khi plugin tương ứng chưa được nạp ở tầng Rust. Không có nó,
+# build đỏ với "could not find `serde_json`", một thông điệp không hề nhắc tới
+# tệp cấu hình vừa sửa.
+serde_json = "1"

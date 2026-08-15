@@ -1,6 +1,9 @@
-scripts/
-plans/
-.claude/
+# Neo về gốc: mẫu không có `/` đầu khớp thư mục CÙNG TÊN ở MỌI cấp, nên
+# `scripts/` từng nuốt luôn `.github/scripts/` — nơi chứa script mà CI bắt buộc
+# phải có. Ba thư mục dưới đây chỉ tồn tại ở gốc repo.
+/scripts/
+/plans/
+/.claude/
 
 # --- Server (Python) ---
 server/.venv/

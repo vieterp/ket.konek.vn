@@ -23,9 +23,28 @@ CONTROL_SCHEMA: Final[str] = "public"
 
 DATASET_SCHEMA_PREFIX: Final[str] = "ds_"
 
+DATASET_ROLE_SUFFIX: Final[str] = "_app"
+"""Hậu tố tên vai trò DB của một dataset: schema `ds_alpha` → vai trò
+`ds_alpha_app` (ADR-017 §Consequences, quyết định D3 của phase 2).
+
+Vai trò suy từ **tên schema** chứ không từ mã dataset: schema là thứ đã đi qua
+`validate_schema_name` và cũng là thứ migration nhìn thấy, nên hai bên không thể
+lệch nhau."""
+
 MAX_IDENTIFIER_LENGTH: Final[int] = 63
 """Trần identifier của PostgreSQL. Vượt quá thì PG **cắt bớt âm thầm** — hai
 dataset khác mã có thể trỏ về cùng một schema."""
+
+MAX_DATASET_CODE_LENGTH: Final[int] = (
+    MAX_IDENTIFIER_LENGTH - len(DATASET_SCHEMA_PREFIX) - len(DATASET_ROLE_SUFFIX)
+)
+"""Trần mã dataset = 56 ký tự.
+
+Trừ **cả hai** phần nối thêm, không chỉ tiền tố schema: mã dài 60 ký tự vẫn cho
+ra tên schema hợp lệ (63) nhưng tên vai trò 67 ký tự thì PostgreSQL cắt còn 63.
+Hai dataset chỉ khác nhau ở bốn ký tự cuối sẽ dùng **chung một vai trò** — tức
+là mất đúng cơ chế cô lập mà vai trò per-dataset sinh ra để dựng, mà không có
+thông báo lỗi nào."""
 
 _SCHEMA_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[a-z_][a-z0-9_]*$")
 
@@ -62,10 +81,9 @@ def validate_dataset_code(code: str) -> str:
             "bắt đầu bằng chữ hoặc số",
             code=code,
         )
-    if len(code) > MAX_IDENTIFIER_LENGTH - len(DATASET_SCHEMA_PREFIX):
+    if len(code) > MAX_DATASET_CODE_LENGTH:
         raise InvalidSchemaNameError(
-            f"Mã dữ liệu kế toán dài quá "
-            f"{MAX_IDENTIFIER_LENGTH - len(DATASET_SCHEMA_PREFIX)} ký tự",
+            f"Mã dữ liệu kế toán dài quá {MAX_DATASET_CODE_LENGTH} ký tự",
             code=code,
             length=len(code),
         )
@@ -75,3 +93,21 @@ def validate_dataset_code(code: str) -> str:
 def schema_name_for(code: str) -> str:
     """Mã dữ liệu kế toán → tên schema (`kt2026` → `ds_kt2026`)."""
     return validate_schema_name(f"{DATASET_SCHEMA_PREFIX}{validate_dataset_code(code)}")
+
+
+def role_name_for_schema(schema: str) -> str:
+    """Tên schema → tên vai trò DB của dataset đó (`ds_kt2026` → `ds_kt2026_app`).
+
+    Kiểm lại độ dài tại đây chứ không tin vào `validate_dataset_code`: hàm này
+    cũng nhận schema đến từ bảng đăng ký và từ `migrations/env.py`, những đường
+    không đi qua bước kiểm mã. Cắt tên âm thầm ở đây nghĩa là hai dataset dùng
+    chung một vai trò.
+    """
+    role = f"{validate_schema_name(schema)}{DATASET_ROLE_SUFFIX}"
+    if len(role) > MAX_IDENTIFIER_LENGTH:
+        raise InvalidSchemaNameError(
+            f"Tên vai trò dataset dài quá {MAX_IDENTIFIER_LENGTH} ký tự",
+            schema=schema,
+            length=len(role),
+        )
+    return role

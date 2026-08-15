@@ -40,7 +40,9 @@ Các cách tiếp cận:
      không restore được sang cụm khác, đúng vào lúc cần nó nhất (RT-03/RT-14).
 
 2. **Routing schema ở tầng session**:
-   - Mỗi transaction bắt đầu bằng `SET LOCAL search_path TO "ds_<mã>", public`.
+   - Mỗi transaction bắt đầu bằng `SET LOCAL ROLE ds_<mã>_app` (quyền), rồi
+     `SET LOCAL search_path TO "ds_<mã>", public, pg_temp` (tầm nhìn). Xem §Consequences
+     để biết vì sao cần cả hai — `search_path` một mình không cấm được gì.
    - Mọi query sau đó tự động hoạt động trên schema đó (không cần `dataset_id` WHERE clause).
    - `LOCAL` là bắt buộc: connection quay lại pool phải sạch, nếu không request kế tiếp
      kế thừa dataset của request trước.
@@ -99,19 +101,56 @@ Các cách tiếp cận:
 
 ### Tiêu cực / Đánh đổi
 
-- **⚠ Cô lập dataset hiện dựa vào `search_path`, chưa dựa vào quyền** (trạng thái sau
-  phase 2 slice 2A). `ket_app` được `GRANT USAGE` trên **mọi** schema dataset, nên một
-  câu truy vấn ghi rõ tên schema (`SELECT … FROM ds_beta.gl_postings`) vẫn đọc được
-  dataset khác. Trên thực tế không đường mã nào sinh ra tên schema có định danh ngoài
-  `SET LOCAL search_path` (đã qua whitelist), nên chỉ một lỗi SQL injection trong câu
-  truy vấn mới khai thác được — nhưng đây **vẫn là cô lập yếu hơn** mức ADR này đặt ra
-  ban đầu ("REVOKE USAGE trên schema khác").
-  Đường siết đã khảo sát: mỗi dataset một vai trò DB (`ds_<mã>_app`) chỉ có USAGE trên
-  schema của nó, `ket_app` khai `NOINHERIT` và `SET LOCAL ROLE` mỗi transaction. Vướng
-  mắc phải giải trước khi làm: bảng điều khiển (`public.users`) cũng phải cấp quyền cho
-  từng vai trò dataset, và luồng đăng nhập chạy **trước** khi chọn dataset. Vì nó gắn
-  chặt với tầng xác thực chưa dựng, quyết định để mở — **chốt trước phase 3**, khi đó
-  còn rẻ; sau phase 4 thì phải cấp lại quyền cho toàn bộ bảng phát sinh.
+- **⚠ GIẢI MỘT PHẦN (phase 2 slice 2B-0, 2026-08-15) — cô lập nay dựa vào quyền, nhưng
+  KHÔNG chặn được tiêm SQL nhiều câu lệnh.** Trạng thái cũ: `ket_app` có `GRANT USAGE`
+  trên **mọi** schema dataset, nên câu truy vấn ghi rõ tên schema
+  (`SELECT … FROM ds_beta.gl_postings`) vẫn đọc được dataset khác.
+
+  **Ranh giới thật, đã đo trên PostgreSQL 16.15** (đọc kỹ trước khi dựa vào cơ chế này —
+  nhất là phase 5, nơi report engine ghép SQL):
+
+  | Loại tiêm | Trước 2B-0 | Sau 2B-0 |
+  | --- | --- | --- |
+  | Một câu lệnh, ghi rõ `ds_beta.x` | đọc được | **bị chặn** (`42501`, chặn ngay lúc lập kế hoạch) |
+  | Một câu lệnh + `set_config('role', …)` trong subquery/CTE | — | **bị chặn** |
+  | Nhiều câu lệnh ngăn bằng `;` | đọc được | **VẪN đọc và ghi được** |
+
+  Vì sao vế cuối không chặn được: `SET ROLE` xét tư cách thành viên của **`session_user`**
+  (`ket_app`), không xét vai trò đang có hiệu lực. Mà `ket_app` buộc phải là thành viên của
+  mọi `ds_*_app` — đó chính là điều kiện để `SET LOCAL ROLE` chạy được. Nên từ một phiên đã
+  bind `ds_alpha`, một câu `; SET ROLE ds_beta_app;` là đủ. `WITH SET FALSE` của PG16 không
+  dùng được vì cơ chế này cần đúng quyền `SET`.
+
+  **Đường siết triệt để duy nhất trên PG16**: vai trò dataset là vai trò **ĐĂNG NHẬP** riêng
+  + connection pool riêng mỗi dataset — không còn tư cách thành viên thì không `SET ROLE`
+  được. Đánh đổi: N pool, quản lý mật khẩu cho từng vai trò, `pg_hba` dài hơn.
+
+  **Luật bắt buộc chừng nào chưa siết** (phase 5 trở đi): mọi `text()` chạy chuỗi có phần do
+  người dùng ảnh hưởng **phải** kèm tham số ràng buộc — psycopg khi đó dùng extended
+  protocol, và extended protocol không cho nhiều câu lệnh trong một lần gửi.
+
+  Cơ chế đã dựng (`kernel/security/dataset_roles.py`):
+
+  ```
+  ket_app        LOGIN, NOINHERIT     -- không có USAGE trên schema dataset nào
+  ket_control    NOLOGIN (nhóm)       -- quyền trên 3 bảng schema điều khiển
+  ds_<mã>_app    NOLOGIN, INHERIT     -- thành viên ket_control; giữ quyền bảng schema mình
+  ```
+
+  `GRANT ds_<mã>_app TO ket_app` để app **chuyển được** vai trò; `NOINHERIT` để nó
+  **không tự động có** quyền của các vai trò đó — thiếu vế nào cũng mất tác dụng. Mỗi
+  transaction mở bằng `SET LOCAL ROLE` → `SET LOCAL search_path` → `set_config` GUC chi
+  nhánh (`persistence/session.bind_transaction_scope`).
+
+  Hai vướng mắc nêu ở bản trước được giải thế này: bảng điều khiển cấp quyền cho **nhóm**
+  `ket_control` (vai trò dataset kế thừa) **và** cấp thẳng cho `ket_app` (đường đăng nhập,
+  chạy trước khi chọn dataset — `ket_app` NOINHERIT nên hai lần cấp không thừa nhau).
+
+  Hệ quả kèm theo: `ket_owner` cần `CREATEROLE` để tạo vai trò lúc provision; trần mã
+  dataset hạ xuống **56** ký tự (63 − `ds_` − `_app`) vì tên vai trò dài quá bị PostgreSQL
+  cắt âm thầm, khiến hai dataset dùng chung một vai trò.
+
+  Test canh: `server/tests/test_dataset_role_isolation.py`.
 - **Danh mục chia sẻ**: TK kế toán, hàng hóa, đối tác có thể chung (nếu multi-tenant thật) → phải replicate vào mỗi schema hoặc generic schema (phải quản lý sync).
 - **Connection pool**: mỗi connection phải biết dataset → Middleware phức tạp hơn.
 - **Migration logic**: Alembic phải chạy trên mỗi schema (hoặc dùng script wrapper).

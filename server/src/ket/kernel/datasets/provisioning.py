@@ -18,12 +18,13 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import Engine, select, text
+from sqlalchemy import Connection, Engine, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ket.kernel.datasets.models import Dataset
 from ket.kernel.datasets.naming import (
+    role_name_for_schema,
     schema_name_for,
     validate_dataset_code,
     validate_schema_name,
@@ -31,9 +32,15 @@ from ket.kernel.datasets.naming import (
 from ket.kernel.errors import (
     DatasetAlreadyExistsError,
     DatasetNotFoundError,
+    DatasetRoleNotAdministrableError,
     SchemaVersionMismatchError,
 )
-from ket.kernel.security.grants import APP_ROLE, OWNER_ROLE
+from ket.kernel.security.dataset_roles import (
+    create_dataset_role_statements,
+    drop_dataset_role_statements,
+    set_local_role_statement,
+)
+from ket.kernel.security.grants import OWNER_ROLE
 
 ALEMBIC_SCHEMA_ATTRIBUTE = "dataset_schema"
 """Khóa truyền schema đích cho `migrations/env.py` qua `Config.attributes`.
@@ -81,9 +88,18 @@ def head_revision(config: Config) -> str:
 
 
 def current_revision(engine: Engine, schema: str) -> str | None:
-    """Revision **DB** đang ở, đọc từ `alembic_version` của chính schema đó."""
+    """Revision **DB** đang ở, đọc từ `alembic_version` của chính schema đó.
+
+    Chuyển sang vai trò của dataset trước khi đọc (D3): từ khi quyền trên schema
+    dataset thuộc về `ds_<mã>_app`, vai trò đăng nhập `ket_app` không còn cả
+    `USAGE` trên schema đó. Đây chính là chỗ lỗi B1 của lát 2A từng xảy ra —
+    app server chạy tốt trên máy lập trình rồi chết ở nơi cài đặt ngay sau khi
+    có dữ liệu kế toán đầu tiên — nên nó phải nằm trong đường kiểm khởi động,
+    không phải được phát hiện lại lần nữa.
+    """
     validate_schema_name(schema)
-    with engine.connect() as connection:
+    with engine.begin() as connection:
+        connection.exec_driver_sql(set_local_role_statement(schema))
         exists = connection.execute(
             text("SELECT to_regclass(:name)"), {"name": f"{schema}.alembic_version"}
         ).scalar_one_or_none()
@@ -119,7 +135,41 @@ def upgrade_dataset_schema(engine: Engine, schema: str, config: Config | None = 
         # toán đầu tiên là không khởi động lại được — và chỉ hỏng ở nơi cài đặt,
         # không hỏng trên máy lập trình.
         # Chỉ SELECT: ghi phiên bản là việc của `ket_owner`.
-        connection.exec_driver_sql(f'GRANT SELECT ON "{schema}".alembic_version TO {APP_ROLE}')
+        #
+        # Bên nhận là vai trò của chính dataset này (D3), không phải `ket_app`:
+        # phiên đọc `alembic_version` là phiên đã `SET ROLE` vào dataset đó.
+        connection.exec_driver_sql(
+            f'GRANT SELECT ON "{schema}".alembic_version TO {role_name_for_schema(schema)}'
+        )
+
+
+def assert_dataset_role_administrable(connection: Connection, schema: str) -> None:
+    """Chặn sớm khi vai trò của dataset tồn tại nhưng `ket_owner` không quản trị được.
+
+    Vai trò chưa tồn tại thì không có gì để kiểm — `ket_owner` tạo nó và tự có
+    ADMIN. Vai trò do **superuser** tạo (khôi phục `pg_dumpall --globals-only`,
+    cài lại owner) thì `ALTER ROLE`/`GRANT` phía sau sẽ đổ với *permission denied
+    to alter role*, ở giữa chuỗi DDL, sau khi `CREATE SCHEMA` đã chạy.
+    """
+    role = role_name_for_schema(schema)
+    exists, administrable = connection.execute(
+        text(
+            "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :role), "
+            "EXISTS (SELECT 1 FROM pg_auth_members m "
+            "  JOIN pg_roles r ON r.oid = m.roleid "
+            "  JOIN pg_roles g ON g.oid = m.member "
+            "  WHERE r.rolname = :role AND g.rolname = :owner AND m.admin_option)"
+        ),
+        {"role": role, "owner": OWNER_ROLE},
+    ).one()
+
+    if exists and not administrable:
+        raise DatasetRoleNotAdministrableError(
+            f"Vai trò {role} đã tồn tại nhưng {OWNER_ROLE} không có ADMIN OPTION trên nó. "
+            f"Chạy bằng superuser: GRANT {role} TO {OWNER_ROLE} WITH ADMIN OPTION;",
+            role=role,
+            schema=schema,
+        )
 
 
 def provision_dataset(
@@ -149,9 +199,14 @@ def provision_dataset(
             raise DatasetAlreadyExistsError("Mã dữ liệu kế toán đã tồn tại", code=code)
 
     with owner_engine.begin() as connection:
+        assert_dataset_role_administrable(connection, schema)
         connection.exec_driver_sql(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
         connection.exec_driver_sql(f'ALTER SCHEMA "{schema}" OWNER TO {OWNER_ROLE}')
-        connection.exec_driver_sql(f'GRANT USAGE ON SCHEMA "{schema}" TO {APP_ROLE}')
+        # Vai trò phải có TRƯỚC migration: migration cấp quyền từng bảng cho nó
+        # ngay cạnh `create_table` (`grants.py`), nên nó phải tồn tại từ lệnh
+        # `create_table` đầu tiên.
+        for statement in create_dataset_role_statements(schema):
+            connection.exec_driver_sql(statement)
 
     upgrade_dataset_schema(owner_engine, schema, config)
 
@@ -187,8 +242,14 @@ def drop_dataset_schema(owner_engine: Engine, code: str) -> None:
 
     # Xóa schema TRƯỚC, gỡ đăng ký SAU. Thứ tự ngược lại để lại một schema đầy
     # sổ sách mà không còn con trỏ nào tới nó nếu lệnh DROP hỏng.
+    #
+    # Vai trò xóa sau schema: `DROP ROLE` bị từ chối chừng nào vai trò còn quyền
+    # trên đối tượng đang tồn tại. Vai trò sót lại còn nguy hơn — mã dataset
+    # dùng lại sau này sẽ trúng một vai trò mang quyền cũ.
     with owner_engine.begin() as connection:
         connection.exec_driver_sql(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        for statement in drop_dataset_role_statements(schema):
+            connection.exec_driver_sql(statement)
 
     with Session(owner_engine) as session, session.begin():
         registered = session.scalar(select(Dataset).where(Dataset.code == code))

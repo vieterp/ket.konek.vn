@@ -23,6 +23,7 @@ from ket import __version__
 from ket.kernel.datasets.bootstrap import verify_control_schema
 from ket.kernel.datasets.provisioning import find_alembic_config, verify_dataset_schema_version
 from ket.kernel.datasets.service import list_datasets
+from ket.kernel.errors import UnsupportedPostgresVersionError
 from ket.kernel.logging_setup import configure_logging, get_logger
 from ket.kernel.persistence.engine import create_app_engine
 from ket.kernel.persistence.session import create_session_factory
@@ -37,6 +38,24 @@ class HealthResponse(BaseModel):
     status: Literal["ok"]
     version: str
     deployment_mode: str
+
+
+def verify_postgres_version(engine: Engine, settings: Settings) -> None:
+    """Từ chối khởi động trên cụm PostgreSQL cũ hơn phiên bản đích (D4).
+
+    Đọc `server_version_num` (số nguyên dạng `160004`) chứ không phân tích chuỗi
+    `version()`: chuỗi đó khác nhau giữa bản Homebrew, Debian và container, và
+    đã có tiền lệ dự án khác vấp vì so sánh chuỗi.
+    """
+    with engine.connect() as connection:
+        raw = connection.exec_driver_sql("SHOW server_version_num").scalar_one()
+    major = int(raw) // 10000
+    if major < settings.minimum_postgres_version:
+        raise UnsupportedPostgresVersionError(
+            "Cụm PostgreSQL cũ hơn phiên bản đích của bản cài",
+            expected=settings.minimum_postgres_version,
+            found=major,
+        )
 
 
 def verify_schema_versions(engine: Engine, settings: Settings) -> None:
@@ -60,6 +79,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_app_engine(settings)
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
+
+    if settings.verify_postgres_version_on_startup:
+        verify_postgres_version(engine, settings)
+        logger.info("postgres_version_verified")
 
     if settings.verify_schema_on_startup:
         verify_schema_versions(engine, settings)

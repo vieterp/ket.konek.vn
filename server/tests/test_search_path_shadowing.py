@@ -17,6 +17,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import ProgrammingError
 
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.security.dataset_roles import set_local_role_statement
 from ket.kernel.security.rls import set_search_path_statement
 
 pytestmark = pytest.mark.db
@@ -74,7 +75,10 @@ def test_writes_land_in_the_real_audit_table_even_if_a_temp_one_exists(
         )
         connection.commit()
 
-    with app_engine.connect() as connection:
+    # Chuyển vai trò trước khi đọc: từ D3, `ket_app` trần không có quyền trên
+    # schema dataset — đó là chủ đích, và cũng là lý do bước này không thể bỏ.
+    with app_engine.begin() as connection:
+        connection.exec_driver_sql(set_local_role_statement(dataset_alpha.schema_name))
         landed = connection.execute(
             text(
                 f'SELECT count(*) FROM "{dataset_alpha.schema_name}".audit_log '

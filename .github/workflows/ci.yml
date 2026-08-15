@@ -63,6 +63,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Năm tệp khai phiên bản phải khớp nhau. Kiểm ở đây vì job này chạy trên
+      # MỌI thay đổi, kể cả PR chỉ đụng tài liệu: một PR sửa `tauri.conf.json`
+      # mà quên `pyproject.toml` sẽ khiến `release.yml` phát hành bộ cài mang số
+      # khác với số mà `/health` báo. Rẻ (~1 giây) và bắt đúng lúc còn sửa được.
+      - name: Phiên bản nhất quán giữa server và client
+        run: python3 .github/scripts/check_version_consistency.py
+
       - id: filter
         shell: bash
         run: |
@@ -213,6 +220,12 @@ jobs:
     if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Chỉ job này được ghi vào PR (bình luận độ phủ). Quyền cấp ở mức job chứ
+    # không ở mức workflow: các job còn lại — gồm cả job dựng Rust kéo về hàng
+    # trăm crate — không có lý do gì cần quyền ghi.
+    permissions:
+      contents: read
+      pull-requests: write
     defaults:
       run:
         working-directory: server
@@ -242,6 +255,10 @@ jobs:
     env:
       # Không có DB thì job này phải ĐỎ, không được "xanh vì bỏ qua".
       KET_TEST_REQUIRE_DB: "1"
+      # Nhóm `db` xóa/dựng lại vai trò ở phạm vi cụm — an toàn ở đây vì service
+      # container dùng một lần, nhưng phải khẳng định tường minh (xem
+      # `tests/conftest.py::_drop_ket_roles`).
+      KET_TEST_DESTRUCTIVE_CLUSTER: "1"
       KET_TEST_ADMIN_DSN: postgresql+psycopg://postgres@localhost:5432/postgres
       KET_TEST_KET_OWNER_DSN: postgresql+psycopg://ket_owner@localhost:5432/ket_test
       KET_TEST_KET_APP_DSN: postgresql+psycopg://ket_app@localhost:5432/ket_test
@@ -257,8 +274,69 @@ jobs:
       - name: Đồng bộ phụ thuộc
         run: uv sync --python ${{ env.PYTHON_VERSION }}
 
-      - name: pytest (nhóm cần PostgreSQL)
-        run: uv run pytest -m db
+      # Chạy TOÀN BỘ bộ test ở đây, không chỉ nhóm `db`, để con số độ phủ có
+      # nghĩa: phần lớn `kernel/security` và `kernel/datasets` chỉ chạy được khi
+      # có PostgreSQL, nên đo riêng nhóm không-DB sẽ cho ra một con số thấp giả.
+      # Nhóm không-DB vẫn chạy riêng ở job `server-tests` — ở đó câu hỏi khác:
+      # "còn chạy đúng trên Windows/macOS không".
+      - name: pytest toàn bộ + đo độ phủ
+        run: uv run pytest --cov --cov-report=term-missing
+
+      - name: Tổng hợp độ phủ
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          total=$(uv run coverage report --format=total)
+          {
+            echo "## Độ phủ test: **${total}%**"
+            echo
+            echo "Đo trên \`server/src/ket\` với toàn bộ bộ test (gồm nhóm cần PostgreSQL)."
+            echo "Tệp phủ 100% được ẩn cho gọn."
+            echo
+            uv run coverage report --format=markdown --skip-covered
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "COVERAGE_TOTAL=$total" >> "$GITHUB_ENV"
+
+      # Dán vào PR dưới dạng **một** bình luận được cập nhật tại chỗ, không phải
+      # một bình luận mới mỗi lần push — mốc HTML ẩn ở đầu thân bình luận là thứ
+      # để tìm lại nó. Dùng `gh api` thay vì action bên thứ ba: ít một mắt xích
+      # trong chuỗi cung ứng cho một việc chỉ có hai lệnh gọi.
+      - name: Dán độ phủ vào PR
+        if: always() && github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          marker='<!-- ket-coverage -->'
+          {
+            echo "$marker"
+            echo "### Độ phủ test: **${COVERAGE_TOTAL}%**"
+            echo
+            echo "<details><summary>Chi tiết theo tệp (ẩn tệp phủ 100%)</summary>"
+            echo
+            uv run coverage report --format=markdown --skip-covered
+            echo
+            echo "</details>"
+            echo
+            echo "_Đo trên \`server/src/ket\`, toàn bộ bộ test. Cập nhật ở mỗi lần push._"
+          } > /tmp/coverage-comment.md
+
+          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq "[.[] | select(.body | startswith(\"$marker\")) | .id] | first // empty")
+
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$existing" \
+              -F body=@/tmp/coverage-comment.md >/dev/null
+            echo "Đã cập nhật bình luận $existing"
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" \
+              -F body=@/tmp/coverage-comment.md >/dev/null
+            echo "Đã tạo bình luận độ phủ"
+          fi
 
   # ---------------------------------------------------------------------------
   # Web UI. Bundle web không phụ thuộc HĐH → một lần trên Linux là đủ.
@@ -367,7 +445,17 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       # Bao luôn `tsc --noEmit` + `vite build` qua `beforeBuildCommand`.
+      #
+      # Cần khóa ký updater y như `release.yml`: từ khi `tauri.conf.json` bật
+      # `createUpdaterArtifacts`, **mọi** `tauri build` đều sinh gói cập nhật và
+      # đổ nếu thiếu khóa ("A public key has been found, but no private key").
+      # Truyền secret ở đây không phải để phát hành — job này không tải gì lên —
+      # mà để nó dựng đúng **cùng một đường** với bản phát hành thật. Một job
+      # đóng gói chạy đường khác với đường phát hành thì nó canh nhầm thứ.
       - name: tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm exec tauri build
 
   # ---------------------------------------------------------------------------
