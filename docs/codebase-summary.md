@@ -1,6 +1,6 @@
 # Tóm tắt mã nguồn — Konek Két
 
-**Cập nhật:** 2026-08-15 · **Trạng thái:** phase 1 xong, phase 2 lát 2B-0 xong (cô lập dataset + release pipeline).
+**Cập nhật:** 2026-08-15 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A (nền dữ liệu), 2B-0 (cô lập dataset + release pipeline), 2B-1a (danh tính lõi).
 
 Tài liệu này mô tả **thứ đang có thật trong repo**. Kiến trúc đích của cả v1
 nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó chưa dựng.
@@ -9,18 +9,22 @@ nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó ch�
 
 ## 1. Đang có gì
 
-`server/src/ket` ≈ **2.700 dòng Python**, tất cả là **hạ tầng**: định tuyến dữ
-liệu, phân quyền tầng DB, nhật ký, phép tính tiền. **Chưa có một nghiệp vụ kế
-toán nào** — không chứng từ, không sổ cái, không báo cáo.
+`server/src/ket` ≈ **4.500 dòng Python**, tất cả là **hạ tầng**: định tuyến dữ
+liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính. **Chưa có một
+nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, không báo cáo.
 
 | Có thật | Chưa có |
 | --- | --- |
-| Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | Đăng nhập, RBAC enforcement, 2FA |
-| Schema-per-dataset + provisioning + `ensure_cluster` + `repair_dataset_privileges_statements` | API nghiệp vụ (mới chỉ có `/health`) |
-| 11 bảng nền, migration `0001` + kiểm offline migration không cần DB | Bảng chứng từ / `gl_postings` / số dư |
-| `money` (Decimal, ROUND_HALF_UP) + **luật cứng quét AST cấm tiêm SQL không tham số** | Dịch vụ idempotency, worker chạy job |
-| **PostgreSQL 16** là phiên bản đích; kiểm lúc khởi động | Client (mới là bộ khung rỗng) |
-| Kênh phát hành `release.yml` (Win msi+nsis, macOS dmg, ký gói updater) — **đã dựng, chưa chạy lần nào** | Bộ cài app server (S4/phase 11); ký chứng thư OS |
+| Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | **RBAC enforcement** (`require_permission`), định tuyến dataset theo request |
+| Schema-per-dataset + provisioning + `ensure_cluster` + `repair_dataset_privileges_statements` | API nghiệp vụ (mới có `/health` + `/api/v1/auth/*`) |
+| **Đăng nhập Argon2id, phiên lưu DB thu hồi được ngay, 2FA TOTP chống phát lại, khóa tạm khi dò mật khẩu** | Bảng chứng từ / `gl_postings` / số dư |
+| **Khóa mã hóa từ OS keystore** (fail-closed) — `totp_secret` không bao giờ ở dạng rõ trong DB/backup | Dịch vụ idempotency, worker chạy job |
+| **Hợp đồng lỗi RFC 7807** + mã tương quan mỗi request | Client (mới là bộ khung rỗng) |
+| 13 bảng nền + 2 bảng điều khiển mới, migration `0001`, **schema điều khiển có bước nâng cấp tường minh (v2)** | Bộ cài app server (S4/phase 11); ký chứng thư OS |
+| `money` (Decimal, ROUND_HALF_UP) + **luật cứng quét AST cấm tiêm SQL không tham số** | — |
+| **`python -m ket.admin`**: ensure-cluster · create-user · reset-password · reset-totp · generate-app-key | — |
+| **PostgreSQL 16** là phiên bản đích; kiểm lúc khởi động, tắt cổng thì có cảnh báo trong log | — |
+| Kênh phát hành `release.yml` (Win msi+nsis, macOS dmg, ký gói updater) — **đã dựng, chưa chạy lần nào** | — |
 
 ---
 
@@ -36,8 +40,10 @@ toán nào** — không chứng từ, không sổ cái, không báo cáo.
 | `kernel/money.py` | `round_money`, `multiply_money`, `sum_money`, `convert_currency` | Mọi phép tính tiền |
 | `kernel/errors.py` | `DomainError` + mã lỗi ổn định | Thêm lỗi nghiệp vụ |
 | `kernel/persistence/` | `base` (2 `MetaData`), `engine`, `session`, `unit_of_work`, `types` | Chạm tầng lưu trữ |
-| `kernel/security/` | `rls` (sinh policy + `search_path`), `tenant` (đặt GUC), `grants` (cấp quyền bảng), **`dataset_roles` (tạo/xóa `ds_*_app`, `SET LOCAL ROLE`, `repair_dataset_privileges_statements`)**, `roles.sql`, `models` (RBAC + `branches` + `settings`) | Chạm phân quyền |
-| `kernel/auditing/` | `models` (`audit_log`), `listener` (4 móc `Session`) | Hiểu vì sao mọi thay đổi đều có vết |
+| `api/` | Tầng HTTP: `middleware/{request_context,problem_details}`, `dependencies` (principal, khóa app), `routers/auth` (+ `auth_schemas`). **`kernel` không được import tầng này** (contract C1) | Thêm endpoint, đổi hợp đồng lỗi |
+| `admin/` | `python -m ket.admin` — lệnh chạy tại máy chủ, không qua HTTP | Khởi tạo cụm, tài khoản phá-kính |
+| `kernel/security/` | `rls`, `tenant` (GUC chi nhánh), `grants`, **`dataset_roles`**, `roles.sql`, `models` (RBAC + `branches` + `settings`); **`passwords` (Argon2id), `totp` (chống phát lại), `keystore` (Fernet + OS keystore), `auth_models` (`auth_sessions`), `auth_service` (đăng nhập/phiên), `account_service` (vòng đời tài khoản)** | Chạm phân quyền hoặc danh tính |
+| `kernel/auditing/` | `models` (`audit_log` của dataset), `listener` (4 móc `Session`), **`control_log` (`control_audit_log` — sự kiện tài khoản, ghi tường minh vì `User` không đi qua listener)** | Hiểu vì sao mọi thay đổi đều có vết |
 | `kernel/datasets/` | `naming` (trần 60→56 ký tự), `models` (schema điều khiển), **`bootstrap` (`ensure_control_schema`, `ensure_dataset_roles`, `ensure_cluster`), `provisioning` (`assert_dataset_role_administrable`)**, `service` | Tạo/định tuyến dữ liệu kế toán |
 | `kernel/{jobs,idempotency,numbering}/models.py` | Bảng đã dựng, **dịch vụ chưa viết** (lát 2B/phase 3) | — |
 | `modules/*`, `posting/`, `reporting/`, `worker/` | Chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase sau | — |
@@ -52,9 +58,9 @@ toán nào** — không chứng từ, không sổ cái, không báo cáo.
 
 ---
 
-## 3. Bốn cơ chế phải hiểu trước khi sửa bất cứ thứ gì
+## 3. Năm cơ chế phải hiểu trước khi sửa bất cứ thứ gì
 
-Cả bốn đều hỏng **âm thầm** nếu làm sai — không có thông báo lỗi nào chỉ đúng chỗ.
+Cả năm đều hỏng **âm thầm** nếu làm sai — không có thông báo lỗi nào chỉ đúng chỗ.
 
 **1. Một dữ liệu kế toán = một PG schema** (ADR-017). Mỗi transaction mở bằng
 `SET LOCAL search_path TO "ds_<mã>", public, pg_temp`. Schema đích **chỉ** lấy từ
@@ -79,6 +85,23 @@ không rò dòng nào.
 đổi mà transaction không khai người thực hiện → **chặn thao tác**.
 ⚠️ `Query.update()/delete()` hàng loạt và SQL text đi thẳng **không** qua
 listener — đường ghi set-based của phase 4/8 phải tự gọi `record_action()`.
+Bảng schema **điều khiển** (`users`, `auth_sessions`) cũng không đi qua listener
+(nó chỉ biết `DatasetBase`): sự kiện tài khoản ghi tường minh bằng
+`record_control_action()` vào `public.control_audit_log`, cùng transaction.
+
+**5. Đăng nhập chạy TRƯỚC khi chọn dữ liệu kế toán.** Nhóm `/api/v1/auth` dùng
+`control_session` — không `SET ROLE`, không `search_path`, không GUC chi nhánh —
+vì lúc kiểm mật khẩu chưa biết người dùng sắp mở doanh nghiệp nào. Hệ quả kéo
+theo: quyền là per-dataset nhưng **cờ bắt buộc 2FA phải toàn cục**
+(`users.totp_required`), và nhật ký sự kiện tài khoản phải nằm ở schema điều
+khiển chứ không ở dataset nào. An toàn của đường này không đến từ `SET ROLE` mà
+từ chỗ `ket_app` chỉ được cấp quyền trên đúng năm bảng điều khiển.
+
+Hai cơ chế của luồng đăng nhập là **đọc–sửa–ghi** trên một dòng `users` (bộ đếm
+khóa tài khoản, bước thời gian TOTP đã dùng) nên câu truy vấn phải giữ
+`with_for_update()`. Bỏ nó ra thì cả hai vô hiệu dưới truy cập song song **mà
+mọi test tuần tự vẫn xanh** — đo được: 10 lần sai đồng thời để lại
+`failed_login_count = 1` thay vì khóa tài khoản.
 
 ---
 
@@ -105,16 +128,15 @@ thể làm một test xanh vì lý do sai. Để xóa vai trò cụm cần `KET_
 Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 `KET_TEST_ADMIN_DSN`, `KET_TEST_KET_OWNER_DSN`, `KET_TEST_KET_APP_DSN`.
 
-> **Chưa có lệnh khởi tạo cụm.** `ensure_control_schema()` và
-> `provision_dataset()` mới là **hàm Python**, chưa có CLI hay endpoint gọi
-> chúng — bộ test tự gọi trực tiếp. Khởi động app server trên một database chỉ
-> mới chạy `roles.sql` sẽ bị chặn đúng như thiết kế:
-> `SchemaVersionMismatchError: Chưa dựng schema điều khiển`. CLI quản trị thuộc
-> lát 2B; installer thuộc phase 11.
+> **Khởi tạo cụm bằng CLI**: `uv run python -m ket.admin ensure-cluster` rồi
+> `create-user`. Khởi động app server trên một database chỉ mới chạy `roles.sql`
+> vẫn bị chặn đúng như thiết kế: `SchemaVersionMismatchError: Chưa dựng schema
+> điều khiển`. `provision_dataset()` còn là **hàm Python** (chưa có lệnh) —
+> endpoint tạo dữ liệu kế toán thuộc lát sau; installer thuộc phase 11.
 
 ---
 
-## 5. Bộ test (**106 case**: 75 cần PostgreSQL 16, 31 không)
+## 5. Bộ test (**203 case**: 140 cần PostgreSQL 16, 63 không)
 
 | Tệp | Chứng minh điều gì |
 | --- | --- |
@@ -133,6 +155,15 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_money_rounding.py` (20) | Bảng giá trị biên: nửa lên, số âm, làm tròn một lần ở cuối |
 | `test_no_float_in_domain.py` (4) | Không `float` trong `src/ket` **và** trong `migrations/` |
 | `test_app_smoke.py` (2) | Khung app dựng được, OpenAPI sinh được |
+| `test_control_audit_immutability.py` (9) | **Mới**: `control_audit_log` chỉ-thêm ép ở tầng DB (5 đường sửa/xóa/DDL đều bị từ chối; quyền đo được đúng `INSERT,SELECT`); `public` chỉ hợp lệ ở đường cấp quyền, đường định tuyến vẫn từ chối |
+| `test_control_schema_upgrade.py` (8) | **Mới**: diễn tập nâng cấp v1→v2 trên database dùng một lần **có dữ liệu**; chạy lại được; bảng mới được cấp quyền trên cụm đã nâng cấp; hai đường dán nhãn phiên bản khống đều bị chặn |
+| `test_auth_login_flow.py` (18) | **Mới**: cấp phiên, chỉ lưu băm token, đường sai vẫn commit vết + bộ đếm, khóa tạm và tự hết khóa, vô hiệu hóa tài khoản giết phiên ngay, vòng đời 2FA, bí mật không bao giờ ở dạng rõ |
+| `test_auth_concurrency.py` (2) | **Mới**: 10 lần sai **đồng thời** vẫn khóa tài khoản; một mã TOTP chỉ đổi được đúng một phiên |
+| `test_auth_api_contract.py` (13) | **Mới**: hợp đồng HTTP + RFC 7807 — mã lỗi, `correlation_id`, token rác là 401 chứ không 500, 500 không lộ traceback |
+| `test_admin_cli.py` (10) | **Mới**: từng lệnh `ket.admin` chạy đúng cách người vận hành gọi; lỗi nghiệp vụ in một dòng, không traceback |
+| `test_password_policy.py` (11) | **Mới**: chính sách mật khẩu; hash giả của đường chống liệt kê người dùng phải **thật** và đúng tham số |
+| `test_totp_second_factor.py` (9) | **Mới**: cửa sổ chấp nhận và chống dùng lại mã |
+| `test_keystore_secret_box.py` (8) | **Mới**: thiếu khóa/sai khóa/keystore hỏng đều fail-closed, không rơi về lưu dạng rõ |
 
 Độ phủ **92%** trên `src/ket`. Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
 

@@ -72,6 +72,37 @@ def bind_transaction_scope(
 
 
 @contextmanager
+def control_session(factory: sessionmaker[Session]) -> Iterator[Session]:
+    """Transaction trên **schema điều khiển**: đăng nhập, phiên, danh tính.
+
+    Không `SET ROLE`, không `search_path`, không GUC chi nhánh — và đó không
+    phải thiếu sót. Ba lệnh đó chọn *một dữ liệu kế toán*, còn đường này chạy
+    **trước khi** người dùng chọn dataset: lúc kiểm mật khẩu, hệ thống chưa biết
+    (và không được phép đoán) họ sắp mở doanh nghiệp nào.
+
+    An toàn không đến từ `SET ROLE` ở đây mà từ chỗ khác: `ket_app` được cấp
+    quyền trên **đúng bốn bảng điều khiển** (`bootstrap.control_table_grants`),
+    trong đó `control_audit_log` là chỉ-thêm. Bảng nghiệp vụ của mọi dataset nằm
+    ngoài tầm với vì quyền của chúng thuộc `ds_<mã>_app`, và phiên này chưa
+    `SET ROLE` sang vai trò nào cả.
+
+    Commit khi thoát sạch, rollback khi có ngoại lệ — cùng hợp đồng với
+    `unit_of_work`. Nhật ký điều khiển vì thế đi cùng chuyến với thay đổi nó mô
+    tả.
+    """
+    session = factory()
+    try:
+        session.begin()
+        yield session
+        session.commit()
+    except BaseException:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+@contextmanager
 def dataset_session(
     factory: sessionmaker[Session],
     *,

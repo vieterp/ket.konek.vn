@@ -9,7 +9,7 @@ eSign) KHÔNG lấy từ đây ở môi trường thật** — chúng nằm tron
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DeploymentMode = Literal["standalone", "lan"]
@@ -78,6 +78,25 @@ class Settings(BaseSettings):
     verify_schema_on_startup: bool = True
     """Chặn khởi động khi schema DB lệch phiên bản migration (LD-05,
     FR-NFR-054). Chỉ đặt `False` cho test/CI không có PostgreSQL."""
+
+    # --- Danh tính & bí mật (ADR-019, RT-05)
+    keyring_service: str = "ket"
+    """Tên dịch vụ trong OS keystore. Đổi khi cần chạy hai bản cài trên cùng một
+    máy (dev + demo) mà không để chúng dùng chung khóa mã hóa."""
+
+    app_key: SecretStr | None = None
+    """Khóa Fernet dạng rõ, **ghi đè** OS keystore. Chỉ dùng cho test/CI và bản
+    cài container — nơi keystore không có, hoặc thuộc về người dùng khác với
+    người chạy dịch vụ. Trên máy khách thật, để trống và dùng
+    `python -m ket.admin generate-app-key`."""
+
+    session_ttl_minutes: int = 720
+    """Tuổi thọ tuyệt đối của một phiên đăng nhập (12 giờ).
+
+    Phủ trọn một ngày làm việc kể cả ca dài, nên người dùng bình thường không
+    bao giờ bị đá ra giữa chừng; máy trạm bỏ quên qua đêm thì sáng hôm sau phải
+    đăng nhập lại. Không có gia hạn trượt: gia hạn theo hoạt động nghĩa là một
+    phiên bị chiếm sẽ tự nuôi mình sống mãi."""
 
     # --- Vận hành
     debug: bool = False

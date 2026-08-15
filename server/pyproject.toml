@@ -1,6 +1,6 @@
 [project]
 name = "ket-server"
-version = "0.2.1"
+version = "0.3.0"
 description = "Konek Két — app server phần mềm kế toán VN (TT200/TT133), chạy LAN hoặc offline một máy"
 requires-python = "==3.12.*"
 license = { text = "Proprietary" }
@@ -17,6 +17,11 @@ dependencies = [
     "alembic>=1.19",
     "psycopg[binary]>=3.3",
     "structlog>=26.1",
+    # Danh tính (lát 2B-1a). Bốn thư viện, mỗi thư viện một việc không nên tự viết:
+    "argon2-cffi>=25.1",   # băm mật khẩu Argon2id (FR-NFR-010)
+    "cryptography>=46",    # Fernet cho bí mật lưu trong DB (ADR-019, RT-05)
+    "pyotp>=2.9",          # TOTP RFC 6238 (FR-NFR-016)
+    "keyring>=25.6",       # OS keystore: Keychain / Credential Manager (ADR-019)
 ]
 
 [dependency-groups]
@@ -75,7 +80,9 @@ ignore = [
 # S608: test phải ghép tên schema vào SQL để kiểm chính cơ chế định tuyến schema
 # và quyền trên `alembic_version` — tên schema đến từ fixture, không từ dữ liệu
 # ngoài. Trong `src/` thì luật này vẫn bật.
-"tests/**" = ["S101", "S608"]
+# S105/S106: test danh tính phải có mật khẩu dạng chữ trong mã — đó chính là dữ
+# liệu đầu vào của nó. Bí mật thật không bao giờ nằm trong repo (ADR-019).
+"tests/**" = ["S101", "S105", "S106", "S608"]
 
 [tool.ruff.lint.flake8-annotations]
 # `self`/`cls` không cần annotation; mọi thứ còn lại phải có.

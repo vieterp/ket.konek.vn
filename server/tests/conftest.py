@@ -16,8 +16,9 @@ lập (`alpha`, `beta`) để kiểm cô lập dữ liệu giữa các doanh ngh
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import Connection, Engine, create_engine, text
@@ -26,10 +27,13 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool, QueuePool
 
 from ket.kernel.datasets.bootstrap import ensure_control_schema, ensure_database_roles
+from ket.kernel.datasets.models import User
 from ket.kernel.datasets.provisioning import DatasetRef, provision_dataset
-from ket.kernel.persistence.session import create_session_factory
+from ket.kernel.persistence.session import control_session, create_session_factory
+from ket.kernel.security.account_service import create_user
 from ket.kernel.security.dataset_roles import CONTROL_GROUP_ROLE
 from ket.kernel.security.grants import APP_ROLE, OWNER_ROLE
+from ket.kernel.security.keystore import SecretBox, generate_app_key
 from ket.kernel.security.rls import validate_identifier
 from ket.settings import Settings
 
@@ -66,6 +70,46 @@ def _dsn_for(role: str) -> str:
     if override:
         return override
     return f"postgresql+psycopg://{role}@localhost/{TEST_DATABASE}"
+
+
+@pytest.fixture(scope="session")
+def admin_dsn() -> str:
+    """DSN superuser tới database `postgres` của cụm test.
+
+    Lộ ra cho test cần **tạo database riêng** — diễn tập nâng cấp schema điều
+    khiển phải chạy trên một database dùng một lần, vì nó hạ cấp rồi nâng lại
+    chính `public`. Làm việc đó trên database test dùng chung sẽ xóa cột của các
+    bảng mà test khác đang dựa vào.
+    """
+    return _admin_dsn()
+
+
+@pytest.fixture(scope="session")
+def owner_dsn() -> str:
+    """DSN của `ket_owner` tới database test.
+
+    Test dựng database dùng một lần lấy DSN này rồi **đổi tên database** ở cuối
+    chuỗi, thay vì tự ghép từ `admin_dsn`: DSN của CI mang theo tên đăng nhập
+    (`postgres@localhost`), nên ghép tay sẽ cho ra `ket_owner@postgres@localhost`
+    — hỏng ở CI mà xanh trên máy lập trình.
+    """
+    return _dsn_for("ket_owner")
+
+
+@pytest.fixture(scope="session")
+def app_key() -> str:
+    """Khóa Fernet dùng chung cho test cần mã hóa bí mật (ADR-019).
+
+    Sinh trong bộ nhớ, không đụng OS keystore: test không được phép ghi vào
+    Keychain/Credential Manager của người đang chạy nó.
+    """
+    return generate_app_key()
+
+
+@pytest.fixture(scope="session")
+def secret_box(app_key: str) -> SecretBox:
+    """Hộp mã hóa dùng chung cho test 2FA."""
+    return SecretBox(app_key.encode("ascii"))
 
 
 @pytest.fixture(scope="session")
@@ -268,6 +312,49 @@ def dataset_alpha(owner_engine: Engine) -> DatasetRef:
 def dataset_beta(owner_engine: Engine) -> DatasetRef:
     """Dataset thứ hai — tồn tại để chứng minh hai doanh nghiệp không thấy nhau."""
     return provision_dataset(owner_engine, code="beta", name="Công ty Beta", scheme="TT133")
+
+
+TEST_PASSWORD = "Ph1eu#Thu2026"
+"""Mật khẩu đạt chính sách, dùng chung cho test danh tính."""
+
+
+@pytest.fixture(scope="session")
+def test_password() -> str:
+    """Mật khẩu mặc định của `user_factory`, lộ ra dưới dạng fixture.
+
+    Fixture chứ không phải import từ `conftest`: thư mục `tests` không phải một
+    gói Python (không có `__init__.py`), nên `from tests.conftest import …` chỉ
+    chạy được tùy cách gọi pytest.
+    """
+    return TEST_PASSWORD
+
+
+@pytest.fixture
+def user_factory(session_factory: sessionmaker[Session]) -> Callable[..., User]:
+    """Tạo người dùng test với tên **duy nhất** cho mỗi lần gọi.
+
+    Tên duy nhất chứ không phải dọn bảng sau mỗi test: `users` là bảng điều
+    khiển toàn cục và `control_audit_log` chỉ-thêm tham chiếu tới nó, nên xóa
+    người dùng giữa các test sẽ để lại nhật ký trỏ vào hư không — đúng thứ bảng
+    nhật ký sinh ra để tránh.
+    """
+
+    def make(prefix: str = "user", *, password: str = TEST_PASSWORD, **kwargs: object) -> User:
+        username = f"{prefix}_{uuid4().hex[:10]}"
+        with control_session(session_factory) as session:
+            user = create_user(
+                session,
+                username=username,
+                password=password,
+                must_change_password=False,
+                client_info="pytest",
+            )
+            for field, value in kwargs.items():
+                setattr(user, field, value)
+            session.flush()
+            return user
+
+    return make
 
 
 @pytest.fixture(scope="session")
