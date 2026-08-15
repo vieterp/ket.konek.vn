@@ -445,7 +445,17 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       # Bao luôn `tsc --noEmit` + `vite build` qua `beforeBuildCommand`.
+      #
+      # Cần khóa ký updater y như `release.yml`: từ khi `tauri.conf.json` bật
+      # `createUpdaterArtifacts`, **mọi** `tauri build` đều sinh gói cập nhật và
+      # đổ nếu thiếu khóa ("A public key has been found, but no private key").
+      # Truyền secret ở đây không phải để phát hành — job này không tải gì lên —
+      # mà để nó dựng đúng **cùng một đường** với bản phát hành thật. Một job
+      # đóng gói chạy đường khác với đường phát hành thì nó canh nhầm thứ.
       - name: tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm exec tauri build
 
   # ---------------------------------------------------------------------------

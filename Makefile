@@ -96,8 +96,21 @@ shell-fmt: ## cargo fmt --check
 shell-lint: ## cargo clippy, warning = lỗi
 	cd $(CLIENT)/src-tauri && cargo clippy --all-targets -- -D warnings
 
-tauri-build: ## Đóng gói desktop (chậm — tải và biên dịch crate)
-	cd $(CLIENT) && pnpm exec tauri build
+# `createUpdaterArtifacts` trong tauri.conf.json khiến mọi lần build đều sinh gói
+# cập nhật và ĐỔ nếu thiếu khóa ký. Khóa nằm ngoài repo (~/.konek/), giống hệt
+# cách CI lấy nó từ GitHub Secrets.
+KET_UPDATER_KEY ?= $(HOME)/.konek/ket-updater.key
+
+tauri-build: ## Đóng gói desktop (chậm — tải và biên dịch crate; cần khóa ký updater)
+	@test -f "$(KET_UPDATER_KEY)" || { \
+		echo "Thiếu khóa ký updater tại $(KET_UPDATER_KEY)."; \
+		echo "Sinh mới: cd client && pnpm exec tauri signer generate -w $(KET_UPDATER_KEY)"; \
+		echo "(khóa công khai trong tauri.conf.json phải khớp, nếu không bản cũ sẽ từ chối cập nhật)"; \
+		exit 1; }
+	cd $(CLIENT) && \
+		TAURI_SIGNING_PRIVATE_KEY="$$(cat $(KET_UPDATER_KEY))" \
+		TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$$(cat $(KET_UPDATER_KEY).password 2>/dev/null || cat $(HOME)/.konek/ket-updater.password)" \
+		pnpm exec tauri build
 
 # --- tiện ích -------------------------------------------------------------
 
