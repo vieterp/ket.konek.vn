@@ -23,12 +23,11 @@ from ket.kernel.errors import (
     InvalidCredentialsError,
     NotAuthenticatedError,
     TotpCodeReusedError,
-    TotpEnrollmentRequiredError,
     TotpRequiredError,
 )
 from ket.kernel.persistence.session import control_session
 from ket.kernel.security import account_service, auth_service, totp
-from ket.kernel.security.auth_models import AuthSession, token_digest
+from ket.kernel.security.auth_models import AuthSession, SessionScope, token_digest
 from ket.kernel.security.keystore import SecretBox
 
 pytestmark = pytest.mark.db
@@ -286,7 +285,12 @@ def test_unknown_expired_and_revoked_tokens_are_all_rejected(
 
     with control_session(session_factory) as session:
         principal = auth_service.resolve_session(session, issued.token)
-        auth_service.revoke_session(session, session_id=principal.session_id, actor_user_id=user.id)
+        auth_service.revoke_session(
+            session,
+            session_id=principal.session_id,
+            expected_user_id=user.id,
+            actor_user_id=user.id,
+        )
 
     with control_session(session_factory) as session, pytest.raises(NotAuthenticatedError):
         auth_service.resolve_session(session, issued.token)
@@ -302,7 +306,12 @@ def test_logout_leaves_a_trace(
 
     with control_session(session_factory) as session:
         principal = auth_service.resolve_session(session, issued.token)
-        auth_service.revoke_session(session, session_id=principal.session_id, actor_user_id=user.id)
+        auth_service.revoke_session(
+            session,
+            session_id=principal.session_id,
+            expected_user_id=user.id,
+            actor_user_id=user.id,
+        )
 
     assert _audit_actions(session_factory, user.id)[-1] == ControlAuditAction.LOGOUT.value
 
@@ -332,10 +341,9 @@ def test_changing_password_revokes_every_other_session(
 
     with control_session(session_factory) as session:
         kept = auth_service.resolve_session(session, second.token)
-        account_service.change_own_password(
+        account_service.set_own_password(
             session,
             user=account_service.find_user(session, user.username),
-            current_password=PASSWORD,
             new_password="Moi#MatKhau2026",
         )
         auth_service.revoke_other_sessions(
@@ -351,20 +359,28 @@ def test_changing_password_revokes_every_other_session(
 def test_two_factor_is_required_enforced_and_replay_protected(
     session_factory: sessionmaker[Session], user_factory: UserFactory, secret_box: SecretBox
 ) -> None:
-    """Vòng đời 2FA đầy đủ: bắt buộc → chưa đăng ký → đăng ký → ép mã → chống dùng lại."""
+    """Vòng đời 2FA đầy đủ: bắt buộc → chưa đăng ký → đăng ký → ép mã → chống dùng lại.
+
+    Trạng thái "bắt buộc nhưng chưa đăng ký thiết bị" cấp một **phiên hạn chế**
+    thay vì từ chối (E2): từ chối ở đây khóa người dùng ra ngoài vĩnh viễn, vì
+    muốn đăng ký thì phải gọi được endpoint đăng ký, mà muốn gọi được thì phải
+    đăng nhập được.
+    """
     user = user_factory("haitang", totp_required=True)
 
-    with pytest.raises(TotpEnrollmentRequiredError):
-        _login(session_factory, user.username, secret_box=secret_box)
+    limited = _login(session_factory, user.username, secret_box=secret_box)
+    assert limited.scope is SessionScope.TOTP_ENROLLMENT
 
     with control_session(session_factory) as session:
         enrolling = account_service.find_user(session, user.username)
         uri = account_service.begin_totp_enrollment(session, user=enrolling, secret_box=secret_box)
     secret = uri.split("secret=")[1].split("&")[0]
 
-    # Chưa xác nhận thì vẫn coi như chưa đăng ký.
-    with pytest.raises(TotpEnrollmentRequiredError):
-        _login(session_factory, user.username, secret_box=secret_box)
+    # Chưa xác nhận thì vẫn coi như chưa đăng ký — vẫn là phiên hạn chế.
+    assert (
+        _login(session_factory, user.username, secret_box=secret_box).scope
+        is SessionScope.TOTP_ENROLLMENT
+    )
 
     with control_session(session_factory) as session:
         account_service.confirm_totp_enrollment(
@@ -414,3 +430,97 @@ def test_secret_is_never_stored_in_readable_form(
 def _code(secret: str, moment: datetime | None = None) -> str:
     generator = pyotp.TOTP(secret, digits=totp.DIGITS, interval=totp.PERIOD_SECONDS)
     return generator.at(moment if moment is not None else datetime.now(UTC))
+
+
+def test_revoking_a_session_that_belongs_to_someone_else_is_refused(
+    session_factory: sessionmaker[Session], user_factory: UserFactory
+) -> None:
+    """Bẫy đang chờ màn hình "quản trị thu hồi phiên": `session_id` từ URL.
+
+    Hôm nay mọi lời gọi đều lấy `session_id` từ chính `Principal` nên không thể
+    sai. Kiểm ở nơi biết sự thật rẻ hơn nhớ kiểm ở mọi nơi gọi — và rẻ hơn nhiều
+    so với việc phát hiện ra sau khi màn hình đó đã tồn tại.
+    """
+    owner = user_factory("chuphien")
+    intruder = user_factory("kekhac")
+    issued = _login(session_factory, owner.username)
+
+    with control_session(session_factory) as session:
+        principal = auth_service.resolve_session(session, issued.token)
+        with pytest.raises(NotAuthenticatedError):
+            auth_service.revoke_session(
+                session,
+                session_id=principal.session_id,
+                expected_user_id=intruder.id,
+                actor_user_id=intruder.id,
+            )
+
+    # Phiên vẫn sống — lời gọi sai không được có tác dụng một phần.
+    with control_session(session_factory) as session:
+        assert auth_service.resolve_session(session, issued.token).user_id == owner.id
+
+
+def test_checking_the_current_password_counts_failures_and_leaves_a_trace(
+    session_factory: sessionmaker[Session], user_factory: UserFactory
+) -> None:
+    """Cửa sau (đổi mật khẩu, đăng ký 2FA) phải được canh như cửa trước.
+
+    Trước lát này hai đường đó gọi thẳng `verify_password` rồi ném lỗi: không
+    tăng bộ đếm, không ghi nhật ký, và vì lỗi ném từ trong transaction nên vết
+    cũng rollback theo. Ai chiếm được một token phiên dò được mật khẩu **không
+    giới hạn số lần và không dấu vết**.
+    """
+    user = user_factory("kiemmatkhau")
+
+    with pytest.raises(InvalidCredentialsError):
+        auth_service.verify_current_password(
+            session_factory, username=user.username, password=WRONG_PASSWORD
+        )
+
+    assert _reload(session_factory, user.id).failed_login_count == 1
+    assert ControlAuditAction.LOGIN_FAILED.value in _audit_actions(session_factory, user.id)
+
+    # Mật khẩu đúng thì bộ đếm về 0 — nếu không, mười lần gõ nhầm rải rác trong
+    # tháng sẽ khóa một tài khoản đang dùng bình thường.
+    auth_service.verify_current_password(session_factory, username=user.username, password=PASSWORD)
+    assert _reload(session_factory, user.id).failed_login_count == 0
+
+
+def test_the_current_password_check_respects_the_lockout(
+    session_factory: sessionmaker[Session], user_factory: UserFactory
+) -> None:
+    """Chạm ngưỡng ở cửa sau cũng khóa tài khoản, và khóa có hiệu lực ngay tại đó."""
+    user = user_factory("khoacuasau")
+
+    for _ in range(auth_service.LOCKOUT_THRESHOLD):
+        with pytest.raises(InvalidCredentialsError):
+            auth_service.verify_current_password(
+                session_factory, username=user.username, password=WRONG_PASSWORD
+            )
+
+    with pytest.raises(AccountLockedError):
+        auth_service.verify_current_password(
+            session_factory, username=user.username, password=PASSWORD
+        )
+
+
+def test_checking_the_current_password_of_an_unknown_user_still_pays_for_a_hash(
+    session_factory: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hàm dùng chung nên nhánh rẻ ở đây sẽ thành máy đo sự tồn tại tài khoản.
+
+    Qua HTTP thì nhánh này không tới được (phiên hợp lệ thì tài khoản tồn tại),
+    nhưng `verify_current_password` là hàm dùng chung — lời gọi tiếp theo có thể
+    đến từ một đường không có phiên.
+    """
+    called: list[str] = []
+    monkeypatch.setattr(
+        "ket.kernel.security.passwords.verify_dummy", lambda password: called.append(password)
+    )
+
+    with pytest.raises(InvalidCredentialsError):
+        auth_service.verify_current_password(
+            session_factory, username="khong_ton_tai_kiem_mat_khau", password=PASSWORD
+        )
+
+    assert called == [PASSWORD]

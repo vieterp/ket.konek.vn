@@ -10,10 +10,12 @@ tức là khôi phục đúng kênh rò mà `verify_dummy` sinh ra để bịt.
 
 from __future__ import annotations
 
+import threading
+
 import pytest
 from argon2 import PasswordHasher
 
-from ket.kernel.errors import WeakPasswordError
+from ket.kernel.errors import AuthThrottledError, WeakPasswordError
 from ket.kernel.security import passwords
 
 GOOD_PASSWORD = "Ph1eu#Thu2026"
@@ -83,3 +85,44 @@ def test_dummy_hash_matches_current_parameters() -> None:
 def test_verify_dummy_never_raises() -> None:
     """Nó nằm trên đường đăng nhập thất bại — ném ở đó là biến 401 thành 500."""
     passwords.verify_dummy("bất kỳ thứ gì")
+
+
+# --------------------------------------------------------------------------
+# Hàng đợi băm — trần bộ nhớ của đường xác thực
+# --------------------------------------------------------------------------
+
+
+def test_hashing_is_capped_and_refuses_instead_of_queueing_forever(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hết suất băm → 503 ngay, không xếp hàng vô hạn.
+
+    Hai nửa của cùng một cơ chế. Không có trần: 40 luồng threadpool × 64 MiB
+    ≈ 2,5 GB trên đúng cái máy chạy PostgreSQL ở chế độ một-máy, và không cần
+    tài khoản hợp lệ mới ép được (nhánh "không có tài khoản" cũng băm). Có trần
+    mà chờ vô hạn: đổi cạn bộ nhớ lấy cạn luồng, và mọi endpoint đồng bộ khác —
+    tức gần như toàn bộ API — đứng theo.
+    """
+    monkeypatch.setattr(passwords, "_HASH_SLOTS", threading.BoundedSemaphore(1))
+    monkeypatch.setattr(passwords, "HASH_WAIT_SECONDS", 0)
+    passwords._HASH_SLOTS.acquire()
+
+    with pytest.raises(AuthThrottledError) as error:
+        passwords.hash_password(GOOD_PASSWORD)
+    assert error.value.http_status == 503
+
+    # Nhánh tài khoản-không-tồn-tại đi qua **cùng** hàng đợi: nếu không, trần
+    # chỉ ràng buộc được tài khoản có thật.
+    with pytest.raises(AuthThrottledError):
+        passwords.verify_dummy(GOOD_PASSWORD)
+
+
+def test_a_failed_verification_gives_its_slot_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rò suất là DoS tự gây: vài lần sai mật khẩu và server ngừng xác thực được."""
+    monkeypatch.setattr(passwords, "_HASH_SLOTS", threading.BoundedSemaphore(1))
+    monkeypatch.setattr(passwords, "HASH_WAIT_SECONDS", 0)
+
+    assert passwords.verify_password("không-phải-hash", GOOD_PASSWORD) is False
+    assert passwords.verify_password(passwords.hash_password(GOOD_PASSWORD), "sai") is False
+    # Suất vẫn còn: lần băm kế tiếp không bị từ chối.
+    assert passwords.hash_password(GOOD_PASSWORD)

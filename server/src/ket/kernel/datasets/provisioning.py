@@ -41,6 +41,7 @@ from ket.kernel.security.dataset_roles import (
     set_local_role_statement,
 )
 from ket.kernel.security.grants import OWNER_ROLE
+from ket.kernel.security.role_service import ensure_admin_role
 
 ALEMBIC_SCHEMA_ATTRIBUTE = "dataset_schema"
 """Khóa truyền schema đích cho `migrations/env.py` qua `Config.attributes`.
@@ -58,6 +59,10 @@ class DatasetRef:
     code: str
     schema_name: str
     scheme: str
+    name: str = ""
+    """Tên hiển thị. Mặc định rỗng vì đường provisioning dựng `DatasetRef` từ
+    đối tượng vừa ghi, còn màn hình chọn dataset thì đọc qua
+    `datasets.service`."""
 
 
 def find_alembic_config(explicit_path: Path | None = None) -> Config:
@@ -209,6 +214,13 @@ def provision_dataset(
             connection.exec_driver_sql(statement)
 
     upgrade_dataset_schema(owner_engine, schema, config)
+
+    # Gieo mã quyền + vai trò `admin` ngay sau migration, trước dòng đăng ký:
+    # một dữ liệu kế toán không có vai trò nào là cái hộp không ai mở được, và
+    # nếu bước này hỏng thì trạng thái dở dang vẫn là "schema có nhưng chưa đăng
+    # ký" — vô hình với ứng dụng, dọn được.
+    with owner_engine.begin() as connection:
+        ensure_admin_role(connection, schema)
 
     try:
         with Session(owner_engine) as session, session.begin():

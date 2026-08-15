@@ -17,11 +17,17 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ket.admin.cli import main
 from ket.kernel.auditing.control_log import ControlAuditAction, ControlAuditLog
+from ket.kernel.auditing.listener import AuditContext
 from ket.kernel.datasets.models import User
+from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.errors import NotAuthenticatedError
-from ket.kernel.persistence.session import control_session
+from ket.kernel.persistence.session import control_session, dataset_session
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security import auth_service, passwords
+from ket.kernel.security.authorization import resolve_access
 from ket.kernel.security.keystore import SecretBox
+from ket.kernel.security.models import Branch
+from ket.kernel.security.permissions import SYSTEM_MODULE, Action, permission_code
 from ket.settings import Settings
 
 pytestmark = pytest.mark.db
@@ -266,3 +272,108 @@ def test_ensure_cluster_runs_and_is_repeatable(
 
 def _no_key_needed() -> SecretBox:
     raise AssertionError("tài khoản không bật 2FA thì không được chạm tới khóa mã hóa")
+
+
+def test_grant_role_opens_a_brand_new_dataset_for_the_first_user(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Đường phá-kính thật sự cần thiết: chưa ai có `system.role.edit`.
+
+    Không có lệnh này thì một dữ liệu kế toán vừa tạo là cái hộp không ai mở
+    được — gán vai trò qua HTTP đòi quyền mà chưa ai được cấp.
+    """
+    user = user_factory("cli_gan_vaitro")
+
+    assert (
+        _run(
+            "grant-role",
+            user.username,
+            "--dataset",
+            dataset_alpha.code,
+            "--role",
+            "admin",
+            monkeypatch=monkeypatch,
+        )
+        == 0
+    )
+
+    with dataset_session(
+        session_factory,
+        dataset_schema=dataset_alpha.schema_name,
+        branch_ids=(),
+        audit=AuditContext(user_id=user.id),
+    ) as session:
+        access = resolve_access(session, user_id=user.id)
+    assert permission_code(SYSTEM_MODULE, "role", Action.EDIT) in access.permissions
+
+    # Vai trò `admin` mang quyền nhạy cảm → cờ 2FA phải bật, kể cả qua CLI.
+    reloaded = _user(session_factory, user.username)
+    assert reloaded is not None
+    assert reloaded.totp_required is True
+
+
+def test_grant_role_refuses_an_unknown_role_with_a_readable_message(
+    dataset_alpha: DatasetRef, user_factory: UserFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Người đọc là quản trị viên máy chủ — một dòng, không phải 30 dòng stack."""
+    user = user_factory("cli_vaitro_la")
+    assert (
+        _run(
+            "grant-role",
+            user.username,
+            "--dataset",
+            dataset_alpha.code,
+            "--role",
+            "khong_ton_tai",
+            monkeypatch=monkeypatch,
+        )
+        == 1
+    )
+
+
+def test_grant_branch_puts_a_user_inside_the_rls_scope(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Chưa gán chi nhánh = không thấy dòng nào — nên đây là bước bắt buộc."""
+    user = user_factory("cli_gan_chinhanh")
+    scope = RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=user.id, branch_ids=())
+    with unit_of_work(session_factory, scope) as session:
+        if session.scalar(select(Branch.id).where(Branch.code == "CN_CLI")) is None:
+            session.add(Branch(code="CN_CLI", name="Chi nhánh CLI"))
+
+    _run(
+        "grant-role",
+        user.username,
+        "--dataset",
+        dataset_alpha.code,
+        "--role",
+        "admin",
+        monkeypatch=monkeypatch,
+    )
+    assert (
+        _run(
+            "grant-branch",
+            user.username,
+            "--dataset",
+            dataset_alpha.code,
+            "--branch",
+            "CN_CLI",
+            monkeypatch=monkeypatch,
+        )
+        == 0
+    )
+
+    with dataset_session(
+        session_factory,
+        dataset_schema=dataset_alpha.schema_name,
+        branch_ids=(),
+        audit=AuditContext(user_id=user.id),
+    ) as session:
+        access = resolve_access(session, user_id=user.id)
+    assert len(access.branch_ids) == 1

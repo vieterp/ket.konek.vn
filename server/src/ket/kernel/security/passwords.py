@@ -11,12 +11,15 @@ một dòng diff có người đọc.
 
 from __future__ import annotations
 
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Final
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
-from ket.kernel.errors import WeakPasswordError
+from ket.kernel.errors import AuthThrottledError, WeakPasswordError
 
 _HASHER: Final = PasswordHasher(
     time_cost=3,
@@ -64,9 +67,46 @@ _hash` khẳng định đường đăng nhập **có gọi** hàm này.
 Mật khẩu gốc không có ý nghĩa và không dùng ở đâu khác."""
 
 
+MAX_CONCURRENT_HASHES: Final[int] = 4
+"""Số lần băm Argon2id được chạy cùng lúc trong một tiến trình.
+
+Không phải con số cho đẹp: 64 MiB × số luồng threadpool của Starlette (mặc định
+40) ≈ 2,5 GB bộ nhớ, trên đúng cái máy chạy PostgreSQL ở chế độ một-máy. Và
+không cần tài khoản hợp lệ mới ép được — nhánh "không có tài khoản" cũng băm,
+theo đúng thiết kế của `verify_dummy`.
+
+4 × 64 MiB = 256 MiB là trần chấp nhận được, và với ~100 ms mỗi lần băm nó vẫn
+phục vụ ~40 lần đăng nhập mỗi giây — xa hơn nhu cầu của 50 người dùng nhiều bậc."""
+
+HASH_WAIT_SECONDS: Final[int] = 5
+"""Chờ tối đa bao lâu để tới lượt băm, trước khi từ chối bằng 503.
+
+Có trần chứ không chờ vô hạn, và đây là nửa thứ hai của cơ chế: chờ vô hạn chỉ
+đổi cạn bộ nhớ lấy cạn **luồng** — 40 luồng threadpool xếp hàng chờ băm thì mọi
+endpoint đồng bộ khác (tức là gần như toàn bộ API) cũng đứng theo. Từ chối nhanh
+giữ cho phần còn lại của hệ thống vẫn phục vụ được."""
+
+_HASH_SLOTS: Final = threading.BoundedSemaphore(MAX_CONCURRENT_HASHES)
+
+
+@contextmanager
+def _hash_slot() -> Iterator[None]:
+    """Giữ một suất băm, hoặc từ chối request."""
+    if not _HASH_SLOTS.acquire(timeout=HASH_WAIT_SECONDS):
+        raise AuthThrottledError(
+            "Máy chủ đang xử lý quá nhiều yêu cầu xác thực — thử lại sau ít giây",
+            retry_after_seconds=HASH_WAIT_SECONDS,
+        )
+    try:
+        yield
+    finally:
+        _HASH_SLOTS.release()
+
+
 def hash_password(password: str) -> str:
     """Băm mật khẩu. Không kiểm chính sách ở đây — xem `validate_policy`."""
-    return _HASHER.hash(password)
+    with _hash_slot():
+        return _HASHER.hash(password)
 
 
 def verify_password(password_hash: str, password: str) -> bool:
@@ -79,10 +119,11 @@ def verify_password(password_hash: str, password: str) -> bool:
     hash** bằng ASCII (đúng theo đặc tả định dạng) và ném thẳng lỗi mã hóa khi
     gặp ký tự ngoài ASCII — một nhánh mà `InvalidHashError` không phủ.
     """
-    try:
-        return _HASHER.verify(password_hash, password)
-    except (VerifyMismatchError, VerificationError, InvalidHashError, UnicodeEncodeError):
-        return False
+    with _hash_slot():
+        try:
+            return _HASHER.verify(password_hash, password)
+        except (VerifyMismatchError, VerificationError, InvalidHashError, UnicodeEncodeError):
+            return False
 
 
 def verify_dummy(password: str) -> None:
@@ -91,11 +132,16 @@ def verify_dummy(password: str) -> None:
     Thiếu bước này thì thời gian phản hồi tự nó là một API: tên đăng nhập có
     thật mất ~80 ms (có băm), tên bịa mất ~2 ms (thoát sớm). Ai cũng liệt kê
     được danh sách nhân sự của doanh nghiệp bằng một vòng lặp.
+
+    Đi qua cùng hàng đợi băm với `verify_password`: nếu nhánh này không bị giới
+    hạn thì trần bộ nhớ chỉ ràng buộc được tài khoản có thật, còn kẻ tấn công
+    dùng tên bịa vẫn ép được máy chủ băm không giới hạn.
     """
-    try:
-        _HASHER.verify(_DUMMY_HASH, password)
-    except (VerifyMismatchError, VerificationError, InvalidHashError, UnicodeEncodeError):
-        return
+    with _hash_slot():
+        try:
+            _HASHER.verify(_DUMMY_HASH, password)
+        except (VerifyMismatchError, VerificationError, InvalidHashError, UnicodeEncodeError):
+            return
 
 
 def needs_rehash(password_hash: str) -> bool:

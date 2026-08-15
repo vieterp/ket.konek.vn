@@ -102,12 +102,17 @@ Hỏi mật khẩu hai lần (hoặc `--password-stdin` cho script cài đặt �
 trong `ps` và lịch sử shell, nên **không** truyền mật khẩu qua đó). Tài khoản tạo ra bắt
 buộc đổi mật khẩu ở lần đăng nhập đầu.
 
-Hai lệnh phá-kính khác, chạy tại máy chủ khi không còn đường nào qua HTTP:
+Các lệnh phá-kính khác, chạy tại máy chủ khi không còn đường nào qua HTTP:
 
 | Lệnh | Dùng khi | Hệ quả |
 | --- | --- | --- |
 | `reset-password <tên>` | Quên mật khẩu, không có quản trị viên khác | Đặt lại mật khẩu, mở khóa tài khoản, **thu hồi mọi phiên đang mở** |
-| `reset-totp <tên>` | Mất điện thoại sinh mã 2FA | Xóa bí mật + cờ bắt buộc để người dùng đăng ký lại thiết bị |
+| `reset-totp <tên>` | Mất điện thoại sinh mã 2FA | Xóa bí mật **và cờ bắt buộc** để người dùng đăng ký lại thiết bị |
+| `grant-role <tên> --dataset <mã> --role admin` | Người **đầu tiên** của một dữ liệu kế toán | Gán vai trò; vai trò nhạy cảm bật luôn cờ bắt buộc 2FA |
+| `grant-branch <tên> --dataset <mã> --branch <mã CN>` | Sau khi tạo tài khoản | Chưa gán chi nhánh nào = **không thấy dòng nào**, không phải "thấy tất" |
+
+Hai lệnh cuối tồn tại vì lý do vòng: gán vai trò qua HTTP đòi quyền `system.role.edit`,
+mà chưa ai được cấp quyền đó trên một dữ liệu kế toán vừa tạo.
 
 ### 2.3 Tạo một dữ liệu kế toán
 
@@ -117,7 +122,25 @@ from ket.kernel.datasets.provisioning import provision_dataset
 provision_dataset(owner, code="kt2026", name="Công ty A", scheme="TT200")
 ```
 
-Tạo schema `ds_kt2026`, vai trò `ds_kt2026_app`, chạy toàn bộ migration lên schema đó.
+Tạo schema `ds_kt2026`, vai trò `ds_kt2026_app`, chạy toàn bộ migration lên schema đó,
+rồi **gieo mã quyền + vai trò hệ thống `admin`** (đủ mọi quyền đã đăng ký).
+
+### 2.4 Cho người đầu tiên vào làm việc
+
+```bash
+cd server
+uv run python -m ket.admin grant-role ketoantruong --dataset kt2026 --role admin
+uv run python -m ket.admin grant-branch ketoantruong --dataset kt2026 --branch CN01
+```
+
+`admin` mang quyền nhạy cảm (`system.user.*`, `system.role.*`) nên lệnh đầu **bật luôn
+cờ bắt buộc 2FA**. Lần đăng nhập kế tiếp vì thế trả về một **phiên hạn chế**
+(`session_scope = "totp_enrollment"`): nó chỉ dùng được cho `/api/v1/auth/totp/enroll`
+và `/totp/confirm`. Người dùng tự quét mã QR, xác nhận, rồi đăng nhập lại kèm mã — không
+cần ai chạm máy chủ. `reset-totp` chỉ dành cho trường hợp **mất thiết bị**.
+
+Chi nhánh (`CN01` ở trên) phải tồn tại trước; nó được tạo qua
+`POST /api/v1/system/branches` bởi một tài khoản có `system.branch.create`.
 
 ---
 
@@ -286,3 +309,6 @@ Chạy cục bộ: `make version-check`.
 | 3 | **Plugin updater runtime chưa dựng** | Bộ cài chưa tự kiểm tra bản mới. Endpoint là địa chỉ app server của từng bản cài nên không biết lúc build — thuộc lát 2C / phase 11 |
 | 4 | **Chưa có bộ cài app server** | Server chạy từ mã nguồn (`uv run uvicorn`). Đóng gói Python + native deps là spike S4 |
 | 5 | Cụm dev đã tạo dataset bằng mã **trước** lát 2B-0 còn quyền bảng cấp thẳng cho `ket_app` | Chạy `python -m ket.admin ensure-cluster` một lần để thu hồi |
+| 6 | Cụm cài bằng mã **trước** lát 2B-1b còn cấp `INSERT/UPDATE` trên `users` và `auth_sessions` cho nhóm `ket_control` (tức mọi vai trò dataset) | `ensure-cluster` thu hồi. Chạy nó sau **mọi** lần nâng cấp — đây là đường leo thang từ một lỗ tiêm SQL bất kỳ tới việc tự cấp phiên |
+| 7 | Chưa có job dọn `auth_sessions` hết hạn (bảng chỉ thêm, ~18k dòng/năm với 50 người dùng) | Chưa gấp; khi làm phải chạy bằng `ket_owner` — vai trò runtime cố ý không có `DELETE` |
+| 8 | Chưa có giới hạn tần suất (rate limit) đầy đủ | Lát 2B-1b mới đặt **trần 4 lần băm Argon2id đồng thời**, hết suất thì trả `503 auth.throttled`. Đủ chặn cạn bộ nhớ, chưa chặn được dò mật khẩu chậm rãi |

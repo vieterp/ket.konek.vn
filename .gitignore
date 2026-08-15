@@ -41,3 +41,4 @@ client/src-tauri/gen/
 # --- Rác công cụ (không thuộc sản phẩm) ---
 .playwright-mcp/
 ket-page*.yml
+server/.claude/

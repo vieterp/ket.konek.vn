@@ -184,17 +184,6 @@ class TotpRequiredError(DomainError):
     http_status: ClassVar[int] = 401
 
 
-class TotpEnrollmentRequiredError(DomainError):
-    """Tài khoản bắt buộc 2FA nhưng chưa đăng ký thiết bị sinh mã.
-
-    Không cấp phiên trong trạng thái này: cấp phiên rồi mới đòi đăng ký sẽ tạo
-    ra một cửa sổ mà tài khoản nhạy cảm chạy **không có** lớp thứ hai.
-    """
-
-    error_code: ClassVar[str] = "auth.totp_enrollment_required"
-    http_status: ClassVar[int] = 403
-
-
 class InvalidTotpCodeError(DomainError):
     """Mã 2FA sai hoặc đã hết cửa sổ hiệu lực."""
 
@@ -240,3 +229,101 @@ class UserAlreadyExistsError(DomainError):
 
     error_code: ClassVar[str] = "auth.user_already_exists"
     http_status: ClassVar[int] = 409
+
+
+class AuthThrottledError(DomainError):
+    """Quá nhiều lần băm mật khẩu cùng lúc — máy chủ từ chối để tự bảo vệ.
+
+    Băm Argon2id tốn 64 MiB mỗi lần. FastAPI chạy handler đồng bộ trong
+    threadpool (mặc định 40 luồng), nên không có hàng rào nào thì 40 lần đăng
+    nhập song song đòi ~2,5 GB trên đúng cái máy đang chạy PostgreSQL ở chế độ
+    một-máy — và không cần tài khoản hợp lệ, vì nhánh "không có tài khoản" cũng
+    băm (`passwords.verify_dummy`).
+
+    503 chứ không 401: đây không phải câu trả lời về danh tính. Người dùng thật
+    thử lại sau vài giây là được.
+    """
+
+    error_code: ClassVar[str] = "auth.throttled"
+    http_status: ClassVar[int] = 503
+
+
+class SessionScopeLimitedError(DomainError):
+    """Phiên hiện tại chỉ dùng được cho một việc, và đây không phải việc đó.
+
+    Phiên `totp_enrollment` được cấp cho người bắt buộc 2FA mà chưa đăng ký
+    thiết bị: không có nó thì họ không đăng nhập được, mà không đăng nhập được
+    thì cũng không đăng ký được — tự khóa mình ra ngoài. Phiên đó **chỉ** mở
+    đúng các endpoint đăng ký thiết bị; mọi đường khác dừng ở đây.
+    """
+
+    error_code: ClassVar[str] = "auth.session_scope_limited"
+    http_status: ClassVar[int] = 403
+
+
+class PasswordChangeRequiredError(DomainError):
+    """Tài khoản đang mang mật khẩu tạm, phải đổi trước khi làm việc khác.
+
+    Ép ở **server** chứ không chỉ báo cho client (FR-SYS-075): mật khẩu tạm do
+    người khác đặt và đã đi qua một kênh nào đó, nên nó không còn là bí mật của
+    riêng chủ tài khoản. Một client tự viết bỏ qua cờ này là chuyện của mười
+    dòng mã.
+    """
+
+    error_code: ClassVar[str] = "auth.password_change_required"
+    http_status: ClassVar[int] = 403
+
+
+class DatasetHeaderMissingError(DomainError):
+    """Endpoint nghiệp vụ nhưng request không nói đang mở dữ liệu kế toán nào.
+
+    Không có mặc định "dataset đầu tiên": đoán sai nghĩa là ghi sổ nhầm doanh
+    nghiệp, và đó là loại sai không ai phát hiện cho tới kỳ quyết toán.
+    """
+
+    error_code: ClassVar[str] = "dataset.header_missing"
+    http_status: ClassVar[int] = 400
+
+
+class DatasetAccessDeniedError(DomainError):
+    """Người dùng không có vai trò nào trong dữ liệu kế toán này.
+
+    Khác `PermissionDeniedError` ở chỗ nó trả lời câu hỏi lớn hơn: không phải
+    "thiếu một quyền" mà là "không thuộc về doanh nghiệp này". Client dùng nó để
+    ẩn hẳn dataset khỏi danh sách chọn thay vì hiện rồi báo lỗi ở từng màn hình.
+    """
+
+    error_code: ClassVar[str] = "dataset.access_denied"
+    http_status: ClassVar[int] = 403
+
+
+class PermissionDeniedError(DomainError):
+    """Thiếu quyền cho hành vi này (FR-NFR-011, FR-SYS-071).
+
+    `details.permission` nêu **mã quyền** còn thiếu — quản trị viên đọc thông
+    điệp là biết phải cấp gì, thay vì phải dò trong bảng phân quyền.
+    """
+
+    error_code: ClassVar[str] = "auth.permission_denied"
+    http_status: ClassVar[int] = 403
+
+
+class BranchNotInScopeError(DomainError):
+    """Chi nhánh đang thao tác nằm ngoài phạm vi được gán (FR-SYS-072)."""
+
+    error_code: ClassVar[str] = "auth.branch_not_in_scope"
+    http_status: ClassVar[int] = 403
+
+
+class RoleNotFoundError(DomainError):
+    """Không có vai trò với mã này trong dữ liệu kế toán đang mở."""
+
+    error_code: ClassVar[str] = "auth.role_not_found"
+    http_status: ClassVar[int] = 404
+
+
+class BranchNotFoundError(DomainError):
+    """Không có chi nhánh với mã này trong dữ liệu kế toán đang mở."""
+
+    error_code: ClassVar[str] = "org.branch_not_found"
+    http_status: ClassVar[int] = 404

@@ -33,12 +33,18 @@ from ket.kernel.errors import (
     DomainError,
     InvalidCredentialsError,
     NotAuthenticatedError,
-    TotpEnrollmentRequiredError,
     TotpRequiredError,
 )
 from ket.kernel.persistence.session import control_session
+from ket.kernel.persistence.types import AuditValues
 from ket.kernel.security import passwords, totp
-from ket.kernel.security.auth_models import AuthSession, new_session_token, token_digest
+from ket.kernel.security.auth_models import (
+    AuthSession,
+    SessionScope,
+    new_session_token,
+    session_scope_of,
+    token_digest,
+)
 from ket.kernel.security.keystore import SecretBox
 
 SecretBoxProvider = Callable[[], SecretBox]
@@ -64,8 +70,10 @@ theo một request ghi."""
 class Principal:
     """Người dùng đứng sau một request đã xác thực.
 
-    Chưa có vai trò/quyền: chúng là thứ **per-dataset** và chỉ phân giải được sau
-    khi request chọn dữ liệu kế toán (lát 2B-1b).
+    Cố ý **không** mang vai trò/quyền: chúng là thứ per-dataset, chỉ phân giải
+    được sau khi request nói đang mở dữ liệu kế toán nào — xem
+    `security/authorization.py`. Gộp hai thứ vào một đối tượng sẽ buộc luồng
+    đăng nhập phải đoán trước dataset, đúng điều nó không được phép làm.
     """
 
     user_id: int
@@ -74,6 +82,7 @@ class Principal:
     session_id: int
     must_change_password: bool
     expires_at: datetime
+    scope: SessionScope = SessionScope.FULL
 
 
 @dataclass(frozen=True)
@@ -84,6 +93,7 @@ class IssuedSession:
     expires_at: datetime
     user_id: int
     must_change_password: bool
+    scope: SessionScope = SessionScope.FULL
 
 
 @dataclass
@@ -144,13 +154,18 @@ def _evaluate_login(
 ) -> _LoginOutcome:
     """Toàn bộ luật đăng nhập, chạy trong transaction của người gọi."""
 
-    def audit(action: ControlAuditAction, user: User | None = None) -> None:
+    def audit(
+        action: ControlAuditAction,
+        user: User | None = None,
+        new_values: AuditValues | None = None,
+    ) -> None:
         record_control_action(
             session,
             action=action,
             actor_user_id=user.id if user is not None else None,
             subject_user_id=user.id if user is not None else None,
             subject_label=username,
+            new_values=new_values,
             correlation_id=correlation_id,
             client_info=client_info,
         )
@@ -201,21 +216,30 @@ def _evaluate_login(
         audit(ControlAuditAction.LOGIN_FAILED, user)
         return _LoginOutcome(error=InvalidCredentialsError("Sai tên đăng nhập hoặc mật khẩu"))
 
+    scope = SessionScope.FULL
     if user.totp_required:
-        outcome = _check_second_factor(
-            user,
-            totp_code=totp_code,
-            secret_box_provider=secret_box_provider,
-            now=now,
-        )
-        if outcome is not None:
-            # `TotpRequiredError` là bước giữa của một lần đăng nhập bình thường
-            # (client chưa kịp hỏi mã), không phải một lần thử sai — không tăng
-            # bộ đếm khóa, không ghi `login_failed`.
-            if not isinstance(outcome, TotpRequiredError):
-                _register_failure(user, now)
-                audit(ControlAuditAction.LOGIN_FAILED, user)
-            return _LoginOutcome(error=outcome)
+        if user.totp_secret_enc is None or user.totp_enrolled_at is None:
+            # Bắt buộc 2FA nhưng chưa có thiết bị sinh mã. Từ chối ở đây là khóa
+            # người dùng ra ngoài vĩnh viễn: muốn đăng ký thiết bị thì phải gọi
+            # được `/auth/totp/enroll`, mà muốn gọi được thì phải đăng nhập
+            # được. Cấp một phiên **chỉ dùng để đăng ký** (E2) là đường thoát
+            # duy nhất không cần người quản trị máy chủ can thiệp.
+            scope = SessionScope.TOTP_ENROLLMENT
+        else:
+            outcome = _check_second_factor(
+                user,
+                totp_code=totp_code,
+                secret_box_provider=secret_box_provider,
+                now=now,
+            )
+            if outcome is not None:
+                # `TotpRequiredError` là bước giữa của một lần đăng nhập bình
+                # thường (client chưa kịp hỏi mã), không phải một lần thử sai —
+                # không tăng bộ đếm khóa, không ghi `login_failed`.
+                if not isinstance(outcome, TotpRequiredError):
+                    _register_failure(user, now)
+                    audit(ControlAuditAction.LOGIN_FAILED, user)
+                return _LoginOutcome(error=outcome)
 
     if passwords.needs_rehash(user.password_hash):
         # Lần duy nhất có mật khẩu dạng rõ trong tay — nâng tham số băm mà không
@@ -226,9 +250,13 @@ def _evaluate_login(
     user.locked_until = None
 
     issued = _issue_session(
-        session, user, session_ttl=session_ttl, client_info=client_info, now=now
+        session, user, session_ttl=session_ttl, client_info=client_info, now=now, scope=scope
     )
-    audit(ControlAuditAction.LOGIN_SUCCEEDED, user)
+    # Vẫn là `login_succeeded` — mật khẩu đã đúng, và một hành vi mới chỉ để
+    # phân biệt phạm vi sẽ phải kèm sửa ràng buộc `CHECK` của bảng nhật ký.
+    # Phạm vi ghi vào `new_values` để câu hỏi "phiên này làm được gì" trả lời
+    # được từ nhật ký.
+    audit(ControlAuditAction.LOGIN_SUCCEEDED, user, {"session_scope": scope.value})
     return _LoginOutcome(issued=issued)
 
 
@@ -239,15 +267,17 @@ def _check_second_factor(
     secret_box_provider: SecretBoxProvider,
     now: datetime,
 ) -> DomainError | None:
-    """Kiểm lớp thứ hai. Trả `None` khi đạt, trả lỗi khi không — không ném.
+    """Kiểm lớp thứ hai cho tài khoản **đã đăng ký thiết bị**.
 
-    Không ném để người gọi quyết định việc ghi vết và tăng bộ đếm; ném từ đây sẽ
-    kéo cả transaction (gồm vết) xuống.
+    Trả `None` khi đạt, trả lỗi khi không — không ném. Không ném để người gọi
+    quyết định việc ghi vết và tăng bộ đếm; ném từ đây sẽ kéo cả transaction
+    (gồm vết) xuống.
+
+    Ca "chưa đăng ký thiết bị" **không** vào đây: nó được người gọi xử lý bằng
+    một phiên hạn chế, không phải bằng một lỗi.
     """
-    if user.totp_secret_enc is None or user.totp_enrolled_at is None:
-        return TotpEnrollmentRequiredError(
-            "Tài khoản bắt buộc xác thực hai lớp nhưng chưa đăng ký thiết bị sinh mã"
-        )
+    if user.totp_secret_enc is None:  # pragma: no cover - người gọi đã lọc
+        raise ValueError("_check_second_factor gọi cho tài khoản chưa có bí mật TOTP")
     if not totp_code:
         return TotpRequiredError("Cần mã xác thực hai lớp")
 
@@ -279,6 +309,7 @@ def _issue_session(
     session_ttl: timedelta,
     client_info: str | None,
     now: datetime,
+    scope: SessionScope = SessionScope.FULL,
 ) -> IssuedSession:
     """Sinh token, lưu **băm** của nó, trả token dạng rõ đúng một lần."""
     token = new_session_token()
@@ -290,6 +321,7 @@ def _issue_session(
         last_seen_at=now,
         expires_at=expires_at,
         client_info=client_info,
+        scope=scope.value,
     )
     session.add(row)
     session.flush()
@@ -298,7 +330,77 @@ def _issue_session(
         expires_at=expires_at,
         user_id=user.id,
         must_change_password=user.must_change_password,
+        scope=scope,
     )
+
+
+def verify_current_password(
+    factory: sessionmaker[Session],
+    *,
+    username: str,
+    password: str,
+    correlation_id: UUID | None = None,
+    client_info: str | None = None,
+    now: datetime | None = None,
+) -> None:
+    """Kiểm mật khẩu hiện tại của một tài khoản **đã có phiên**. Sai → ném lỗi.
+
+    Tồn tại vì hai cửa sau: đổi mật khẩu và bắt đầu đăng ký 2FA đều đòi nhập lại
+    mật khẩu, và trước lát này cả hai tự gọi `passwords.verify_password` rồi ném
+    lỗi ngay. Hậu quả đo được: không tăng bộ đếm khóa, không ghi
+    `control_audit_log`, và vì lỗi ném từ trong `control_session` nên transaction
+    rollback — kể cả vết cũng không còn. Ai chiếm được một token phiên bỏ quên
+    trên máy trạm vì thế dò được mật khẩu của chính tài khoản đó **không giới
+    hạn số lần và không để lại dấu vết** (mật khẩu dùng lại giữa các hệ thống là
+    chuyện thật trong doanh nghiệp 5–50 người).
+
+    Cùng khuôn với `authenticate`: khóa dòng `users` để bộ đếm đúng dưới truy
+    cập song song, dựng lỗi rồi ném **sau khi** transaction đã commit.
+
+    Đây là một transaction riêng, tách khỏi thao tác đi sau nó. Khoảng hở giữa
+    "kiểm xong" và "đổi xong" không mở ra gì mới: người duy nhất chen vào được là
+    người đã biết mật khẩu hiện tại.
+    """
+    moment = now if now is not None else datetime.now(UTC)
+    error: DomainError | None = None
+
+    with control_session(factory) as session:
+        user = session.scalars(
+            select(User).where(User.username == username).with_for_update()
+        ).one_or_none()
+
+        def audit(action: ControlAuditAction) -> None:
+            record_control_action(
+                session,
+                action=action,
+                actor_user_id=user.id if user is not None else None,
+                subject_user_id=user.id if user is not None else None,
+                subject_label=username,
+                correlation_id=correlation_id,
+                client_info=client_info,
+            )
+
+        if user is None:
+            # Không xảy ra qua HTTP (phiên hợp lệ thì tài khoản tồn tại), nhưng
+            # vẫn băm: hàm này là hàm dùng chung, và nhánh rẻ hơn ở đây sẽ thành
+            # một máy đo sự tồn tại tài khoản ở lời gọi tiếp theo.
+            passwords.verify_dummy(password)
+            error = InvalidCredentialsError("Mật khẩu hiện tại không đúng")
+        elif user.locked_until is not None and user.locked_until > moment:
+            audit(ControlAuditAction.LOGIN_BLOCKED)
+            error = AccountLockedError(
+                "Tài khoản tạm khóa do nhập sai nhiều lần — thử lại sau ít phút",
+                locked_until=user.locked_until.isoformat(),
+            )
+        elif not passwords.verify_password(user.password_hash, password):
+            _register_failure(user, moment)
+            audit(ControlAuditAction.LOGIN_FAILED)
+            error = InvalidCredentialsError("Mật khẩu hiện tại không đúng")
+        else:
+            user.failed_login_count = 0
+
+    if error is not None:
+        raise error
 
 
 def resolve_session(session: Session, token: str, *, now: datetime | None = None) -> Principal:
@@ -331,6 +433,7 @@ def resolve_session(session: Session, token: str, *, now: datetime | None = None
         session_id=row.id,
         must_change_password=user.must_change_password,
         expires_at=row.expires_at,
+        scope=session_scope_of(row.scope),
     )
 
 
@@ -338,16 +441,30 @@ def revoke_session(
     session: Session,
     *,
     session_id: int,
+    expected_user_id: int,
     actor_user_id: int,
     correlation_id: UUID | None = None,
     client_info: str | None = None,
     now: datetime | None = None,
 ) -> None:
-    """Đăng xuất: đánh dấu thu hồi, không xóa dòng (xem `AuthSession.revoked_at`)."""
+    """Đăng xuất: đánh dấu thu hồi, không xóa dòng (xem `AuthSession.revoked_at`).
+
+    `expected_user_id` là chủ phiên mà **người gọi tin rằng** mình đang thu hồi;
+    `actor_user_id` là người bấm nút. Hai tham số vì chúng khác nhau ở màn hình
+    quản trị ("thu hồi phiên của nhân viên vừa nghỉ việc") và bằng nhau ở đăng
+    xuất thường.
+
+    Tách ra thay vì tin vào người gọi: hôm nay `session_id` luôn đến từ chính
+    `Principal` nên không thể sai, nhưng đúng vào ngày có màn hình quản trị
+    phiên, một `session_id` đọc từ tham số URL sẽ đi thẳng vào đây và thu hồi
+    phiên của người khác. Kiểm ở nơi biết sự thật rẻ hơn nhớ kiểm ở mọi nơi gọi.
+    """
     moment = now if now is not None else datetime.now(UTC)
     row = session.get(AuthSession, session_id)
     if row is None or row.revoked_at is not None:
         return
+    if row.user_id != expected_user_id:
+        raise NotAuthenticatedError("Phiên đăng nhập không hợp lệ hoặc đã hết hạn")
     row.revoked_at = moment
     record_control_action(
         session,

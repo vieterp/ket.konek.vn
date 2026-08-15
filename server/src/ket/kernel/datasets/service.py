@@ -23,6 +23,7 @@ def _to_ref(dataset: Dataset) -> DatasetRef:
         code=dataset.code,
         schema_name=dataset.schema_name,
         scheme=dataset.scheme,
+        name=dataset.name,
     )
 
 

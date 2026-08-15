@@ -18,8 +18,10 @@ from datetime import timedelta
 from fastapi import APIRouter, Request, status
 
 from ket.api.dependencies import (
+    AnyStatePrincipal,
     AppSettings,
-    CurrentPrincipal,
+    EnrollingPrincipal,
+    PasswordChangePrincipal,
     SecretBoxes,
     SessionFactory,
 )
@@ -33,9 +35,9 @@ from ket.api.routers.auth_schemas import (
     TotpEnrollRequest,
     TotpEnrollResponse,
 )
-from ket.kernel.errors import InvalidCredentialsError
 from ket.kernel.persistence.session import control_session
-from ket.kernel.security import account_service, auth_service, passwords
+from ket.kernel.security import account_service, auth_service
+from ket.kernel.security.auth_models import SessionScope
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -68,20 +70,26 @@ def login(
         token=issued.token,
         expires_at=issued.expires_at,
         must_change_password=issued.must_change_password,
+        session_scope=issued.scope,
     )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
     request: Request,
-    principal: CurrentPrincipal,
+    principal: AnyStatePrincipal,
     factory: SessionFactory,
 ) -> None:
-    """Thu hồi phiên đang dùng. Gọi lại với token đã thu hồi trả 401."""
+    """Thu hồi phiên đang dùng. Gọi lại với token đã thu hồi trả 401.
+
+    Làm được ở **mọi** trạng thái phiên: một người đang kẹt ở màn hình đăng ký
+    2FA hay màn hình đổi mật khẩu tạm vẫn phải đăng xuất được.
+    """
     with control_session(factory) as session:
         auth_service.revoke_session(
             session,
             session_id=principal.session_id,
+            expected_user_id=principal.user_id,
             actor_user_id=principal.user_id,
             correlation_id=correlation_id_of(request),
             client_info=client_info_of(request),
@@ -89,14 +97,19 @@ def logout(
 
 
 @router.get("/me", response_model=MeResponse)
-def me(principal: CurrentPrincipal) -> MeResponse:
-    """Danh tính của phiên hiện tại — client gọi lúc khởi động để khôi phục phiên."""
+def me(principal: AnyStatePrincipal) -> MeResponse:
+    """Danh tính của phiên hiện tại — client gọi lúc khởi động để khôi phục phiên.
+
+    `session_scope` và `must_change_password` cho client biết phải đưa người
+    dùng tới màn hình nào trước khi cho vào phần nghiệp vụ.
+    """
     return MeResponse(
         user_id=principal.user_id,
         username=principal.username,
         locale=principal.locale,
         must_change_password=principal.must_change_password,
         expires_at=principal.expires_at,
+        session_scope=principal.scope,
     )
 
 
@@ -104,20 +117,29 @@ def me(principal: CurrentPrincipal) -> MeResponse:
 def change_password(
     payload: ChangePasswordRequest,
     request: Request,
-    principal: CurrentPrincipal,
+    principal: PasswordChangePrincipal,
     factory: SessionFactory,
 ) -> None:
     """Chủ tài khoản tự đổi mật khẩu; mọi phiên **khác** bị thu hồi.
 
+    Hai transaction: kiểm mật khẩu hiện tại (có bộ đếm khóa + nhật ký, commit cả
+    khi sai — xem `auth_service.verify_current_password`), rồi mới ghi.
+
     Thu hồi phiên khác là phần không được quên: người ta đổi mật khẩu chính vì
     nghi nó đã lộ, và một phiên mở sẵn trên máy khác vẫn sống nếu không đuổi.
     """
+    auth_service.verify_current_password(
+        factory,
+        username=principal.username,
+        password=payload.current_password.get_secret_value(),
+        correlation_id=correlation_id_of(request),
+        client_info=client_info_of(request),
+    )
     with control_session(factory) as session:
         user = account_service.find_user(session, principal.username)
-        account_service.change_own_password(
+        account_service.set_own_password(
             session,
             user=user,
-            current_password=payload.current_password.get_secret_value(),
             new_password=payload.new_password.get_secret_value(),
             correlation_id=correlation_id_of(request),
             client_info=client_info_of(request),
@@ -135,15 +157,26 @@ def change_password(
 @router.post("/totp/enroll", response_model=TotpEnrollResponse)
 def enroll_totp(
     payload: TotpEnrollRequest,
-    principal: CurrentPrincipal,
+    request: Request,
+    principal: EnrollingPrincipal,
     factory: SessionFactory,
     secret_boxes: SecretBoxes,
 ) -> TotpEnrollResponse:
-    """Sinh bí mật 2FA mới và trả URI dựng mã QR. Chưa có hiệu lực tới khi xác nhận."""
+    """Sinh bí mật 2FA mới và trả URI dựng mã QR. Chưa có hiệu lực tới khi xác nhận.
+
+    Gọi được bằng **phiên hạn chế** — đó là toàn bộ lý do phiên hạn chế tồn tại:
+    tài khoản bị bắt bật 2FA mà chưa có thiết bị thì đây là endpoint duy nhất nó
+    còn dùng được.
+    """
+    auth_service.verify_current_password(
+        factory,
+        username=principal.username,
+        password=payload.password.get_secret_value(),
+        correlation_id=correlation_id_of(request),
+        client_info=client_info_of(request),
+    )
     with control_session(factory) as session:
         user = account_service.find_user(session, principal.username)
-        if not passwords.verify_password(user.password_hash, payload.password.get_secret_value()):
-            raise InvalidCredentialsError("Mật khẩu không đúng")
         uri = account_service.begin_totp_enrollment(session, user=user, secret_box=secret_boxes())
     return TotpEnrollResponse(provisioning_uri=uri)
 
@@ -152,11 +185,17 @@ def enroll_totp(
 def confirm_totp(
     payload: TotpConfirmRequest,
     request: Request,
-    principal: CurrentPrincipal,
+    principal: EnrollingPrincipal,
     factory: SessionFactory,
     secret_boxes: SecretBoxes,
 ) -> None:
-    """Xác nhận thiết bị sinh mã hoạt động — từ đây 2FA mới chặn được đăng nhập."""
+    """Xác nhận thiết bị sinh mã hoạt động — từ đây 2FA mới chặn được đăng nhập.
+
+    Thu hồi luôn phiên đang dùng khi nó là phiên hạn chế: phiên đó được cấp cho
+    một tài khoản **chưa** qua lớp thứ hai, nên nó không được tự nâng cấp thành
+    phiên đầy đủ. Người dùng đăng nhập lại và lần này nhập mã — đó cũng là lần
+    thử thật đầu tiên của thiết bị vừa đăng ký.
+    """
     with control_session(factory) as session:
         user = account_service.find_user(session, principal.username)
         account_service.confirm_totp_enrollment(
@@ -167,3 +206,12 @@ def confirm_totp(
             correlation_id=correlation_id_of(request),
             client_info=client_info_of(request),
         )
+        if principal.scope is not SessionScope.FULL:
+            auth_service.revoke_session(
+                session,
+                session_id=principal.session_id,
+                expected_user_id=principal.user_id,
+                actor_user_id=principal.user_id,
+                correlation_id=correlation_id_of(request),
+                client_info=client_info_of(request),
+            )

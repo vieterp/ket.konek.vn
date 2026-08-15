@@ -7,16 +7,20 @@ khôi phục sau sự cố. Một điểm vào có thật thì `mypy`, `ruff` v�
 
 Những việc chỉ làm được **tại máy chủ**, không qua HTTP, và đó là chủ đích:
 
-* `ensure-cluster` — dựng/nâng cấp bảng điều khiển + vai trò từng dataset. Chạy
-  bằng `ket_owner`; API không bao giờ được mang quyền đó.
+* `ensure-cluster` — dựng/nâng cấp bảng điều khiển + vai trò từng dataset + đồng
+  bộ mã quyền và vai trò `admin` cho mọi dataset. Chạy bằng `ket_owner`; API
+  không bao giờ được mang quyền đó.
 * `create-user` / `reset-password` / `reset-totp` — đường phá-kính. Tài khoản
   **đầu tiên** phải tạo được khi chưa có ai đăng nhập; một quản trị viên tự khóa
   mình ra ngoài — quên mật khẩu, hoặc mất điện thoại sinh mã 2FA — phải mở lại
   được mà không cần một tài khoản khác. Ai chạm được máy chủ thì đã chạm được
   DB, nên đây không phải một lỗ hổng mới, mà là thừa nhận thực tế.
+* `grant-role` / `grant-branch` — cùng lý do phá-kính: chưa ai có
+  `system.role.edit` thì không ai gán được vai trò qua HTTP, và một dữ liệu kế
+  toán vừa tạo là cái hộp không ai mở được.
 * `generate-app-key` — ghi khóa mã hóa vào OS keystore (ADR-019).
 
-`argparse` chứ không Typer/Click: bốn lệnh không đáng thêm một phụ thuộc, và
+`argparse` chứ không Typer/Click: bảy lệnh không đáng thêm một phụ thuộc, và
 `ket.admin` phải chạy được trong bản đóng gói PyInstaller (S4) nơi mỗi phụ thuộc
 là một thứ phải kiểm lại.
 """
@@ -29,11 +33,13 @@ import sys
 from collections.abc import Sequence
 
 from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import Session
 
 from ket.kernel.datasets.bootstrap import ensure_cluster
+from ket.kernel.datasets.service import resolve_dataset
 from ket.kernel.errors import DomainError
 from ket.kernel.persistence.session import control_session, create_session_factory
-from ket.kernel.security import account_service, auth_service
+from ket.kernel.security import account_service, auth_service, role_service
 from ket.kernel.security.keystore import generate_app_key, store_app_key
 from ket.settings import Settings, get_settings
 
@@ -162,6 +168,91 @@ def command_reset_totp(args: argparse.Namespace, settings: Settings) -> None:
     )
 
 
+def _resolve_actor_and_target(
+    session: Session, *, username: str, actor_username: str | None
+) -> tuple[int, int]:
+    """`(user_id, actor_user_id)` cho một lệnh phân quyền chạy tại máy chủ.
+
+    Thao tác qua HTTP luôn có người bấm nút; lệnh tại máy chủ thì không. Mặc
+    định ghi chính người bị tác động làm người thực hiện — vì tài khoản **đầu
+    tiên** của một bản cài được cấp quyền khi chưa có ai khác tồn tại — còn
+    `--actor` để quản trị viên đã có tài khoản ghi đúng tên mình. Cả hai đường
+    đều kèm `client_info="ket.admin"`, và đó mới là thứ phân biệt "chạy tại máy
+    chủ" với "bấm trên màn hình".
+    """
+    user = account_service.find_user(session, username)
+    if actor_username is None:
+        return user.id, user.id
+    return user.id, account_service.find_user(session, actor_username).id
+
+
+def command_grant_role(args: argparse.Namespace, settings: Settings) -> None:
+    """Gán vai trò cho người dùng trong một dữ liệu kế toán (FR-SYS-071).
+
+    Đường phá-kính cho **lần đầu**: chưa ai có `system.role.edit` thì không ai
+    gán được vai trò qua HTTP, và dữ liệu kế toán vừa tạo là cái hộp không ai
+    mở được. Vai trò `admin` do provisioning gieo sẵn.
+    """
+    engine = _app_engine(settings)
+    try:
+        factory = create_session_factory(engine)
+        dataset = resolve_dataset(engine, args.dataset)
+        with control_session(factory) as session:
+            user_id, actor_user_id = _resolve_actor_and_target(
+                session, username=args.username, actor_username=args.actor
+            )
+        changed = role_service.grant_role(
+            factory,
+            dataset_schema=dataset.schema_name,
+            user_id=user_id,
+            role_code=args.role,
+            actor_user_id=actor_user_id,
+            client_info="ket.admin",
+        )
+    finally:
+        engine.dispose()
+    if changed:
+        print(f"Đã gán vai trò {args.role} cho {args.username} tại {args.dataset}.")  # noqa: T201
+    else:
+        print(f"{args.username} đã có vai trò {args.role} tại {args.dataset}.")  # noqa: T201
+
+
+def command_grant_branch(args: argparse.Namespace, settings: Settings) -> None:
+    """Cho người dùng thấy một chi nhánh (FR-SYS-072).
+
+    Không gán chi nhánh nào = **không thấy dòng nào** có `branch_id`, chứ không
+    phải "thấy tất". Đó là hướng hỏng đã chọn cho toàn bộ cơ chế RLS, nên lệnh
+    này là bước bắt buộc sau khi tạo tài khoản, không phải tùy chọn.
+
+    `actor_branch_ids=None`: đường HTTP chỉ gán được chi nhánh mà chính người
+    thực hiện đang thấy (chống tự nới phạm vi), nhưng lúc dựng bản cài thì chưa
+    ai thấy chi nhánh nào — đòi hỏi đó sẽ khóa mọi người ra ngoài. Đây là lý do
+    lệnh tồn tại, và nó chỉ chạy được bởi người đã chạm được máy chủ.
+    """
+    engine = _app_engine(settings)
+    try:
+        factory = create_session_factory(engine)
+        dataset = resolve_dataset(engine, args.dataset)
+        with control_session(factory) as session:
+            user_id, actor_user_id = _resolve_actor_and_target(
+                session, username=args.username, actor_username=args.actor
+            )
+        changed = role_service.assign_branch(
+            factory,
+            dataset_schema=dataset.schema_name,
+            user_id=user_id,
+            branch_code=args.branch,
+            actor_user_id=actor_user_id,
+            actor_branch_ids=None,
+        )
+    finally:
+        engine.dispose()
+    if changed:
+        print(f"Đã gán chi nhánh {args.branch} cho {args.username} tại {args.dataset}.")  # noqa: T201
+    else:
+        print(f"{args.username} đã thấy chi nhánh {args.branch} tại {args.dataset}.")  # noqa: T201
+
+
 def command_generate_app_key(_args: argparse.Namespace, settings: Settings) -> None:
     """Sinh khóa mã hóa và ghi vào OS keystore (ADR-019).
 
@@ -219,6 +310,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reset_totp.add_argument("username")
     reset_totp.set_defaults(handler=command_reset_totp)
+
+    grant_role = subparsers.add_parser(
+        "grant-role", help="Gán vai trò cho người dùng trong một dữ liệu kế toán"
+    )
+    grant_role.add_argument("username")
+    grant_role.add_argument("--dataset", required=True, help="Mã dữ liệu kế toán")
+    grant_role.add_argument("--role", required=True, help="Mã vai trò, ví dụ 'admin'")
+    grant_role.add_argument("--actor", default=None, help="Người thực hiện (mặc định: chính họ)")
+    grant_role.set_defaults(handler=command_grant_role)
+
+    grant_branch = subparsers.add_parser(
+        "grant-branch", help="Cho người dùng thấy một chi nhánh trong dữ liệu kế toán"
+    )
+    grant_branch.add_argument("username")
+    grant_branch.add_argument("--dataset", required=True, help="Mã dữ liệu kế toán")
+    grant_branch.add_argument("--branch", required=True, help="Mã chi nhánh")
+    grant_branch.add_argument("--actor", default=None, help="Người thực hiện (mặc định: chính họ)")
+    grant_branch.set_defaults(handler=command_grant_branch)
 
     app_key = subparsers.add_parser(
         "generate-app-key", help="Sinh khóa mã hóa ứng dụng và ghi vào OS keystore"
