@@ -98,7 +98,16 @@ jobs:
         # Ghim phiên bản: hành vi RLS/quyền phải giống bản khách hàng chạy.
         image: postgres:16
         env:
-          POSTGRES_PASSWORD: postgres
+          # Bộ test tự tạo `konek_owner`/`konek_app` **không mật khẩu** (bản cài
+          # thật đặt mật khẩu từ OS keystore — ADR-019). Để hai vai trò đó đăng
+          # nhập được trong CI, dùng đúng công tắc mà image hỗ trợ thay vì sửa
+          # `pg_hba.conf` bằng `docker exec`: `pg_ctl reload` chạy dưới root và
+          # PostgreSQL từ chối chạy bằng root.
+          #
+          # `trust` chỉ áp cho container CI dùng một lần, không lộ ra ngoài
+          # runner. Bản cài khách hàng đi đường ngược lại — `scram-sha-256` +
+          # `pg_hba` cứng (RT-06, phase 11).
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: postgres
         ports:
           - 5432:5432
@@ -113,7 +122,7 @@ jobs:
       # cụm). Chỉ DSN superuser là phải cấp từ ngoài.
       # Không có DB thì job này phải ĐỎ, không được "xanh vì bỏ qua".
       KONEK_TEST_REQUIRE_DB: "1"
-      KONEK_TEST_ADMIN_DSN: postgresql+psycopg://postgres:postgres@localhost:5432/postgres
+      KONEK_TEST_ADMIN_DSN: postgresql+psycopg://postgres@localhost:5432/postgres
       KONEK_TEST_KONEK_OWNER_DSN: postgresql+psycopg://konek_owner@localhost:5432/konek_test
       KONEK_TEST_KONEK_APP_DSN: postgresql+psycopg://konek_app@localhost:5432/konek_test
 
@@ -127,16 +136,6 @@ jobs:
 
       - name: Đồng bộ phụ thuộc (Python 3.12)
         run: uv sync --python 3.12
-
-      # Vai trò test đăng nhập không mật khẩu; image postgres mặc định dùng
-      # `scram-sha-256` cho kết nối host nên phải mở `trust` cho riêng container
-      # CI này. Bản cài thật làm ngược lại — xem `security/roles.sql` và RT-06.
-      - name: Cho phép đăng nhập không mật khẩu trong container CI
-        run: |
-          docker exec $(docker ps -qf ancestor=postgres:16) bash -c \
-            "echo 'host all all all trust' > /var/lib/postgresql/data/pg_hba.conf && \
-             echo 'local all all trust' >> /var/lib/postgresql/data/pg_hba.conf"
-          docker exec $(docker ps -qf ancestor=postgres:16) pg_ctl reload -D /var/lib/postgresql/data
 
       - name: pytest (nhóm cần PostgreSQL)
         run: uv run pytest -m db
