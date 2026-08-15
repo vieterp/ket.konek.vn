@@ -1,24 +1,120 @@
 name: CI
 
+# Hai câu hỏi khác nhau, hai mức chi phí khác nhau:
+#
+#   PR vào master  → "thay đổi này có làm hỏng gì không?"  → phải NHANH, chạy mọi lần
+#   Merge vào master → "bản dựng còn đóng gói và chạy được trên máy khách không?"
+#                      → được phép CHẬM, chạy mỗi lần merge
+#
+# Nguyên tắc cắt trùng lặp:
+#   1. Kiểm tra KHÔNG phụ thuộc HĐH (ruff, mypy, import-linter, eslint, tsc, vite)
+#      chạy ĐÚNG MỘT LẦN trên Linux. Chạy chúng ba lần cho ba HĐH không phát hiện
+#      thêm gì — nó chỉ nhân ba thời gian chờ.
+#   2. Kiểm tra CÓ phụ thuộc HĐH (pytest: mã hóa ký tự, đường dẫn, locale) chạy
+#      trên nền tảng đích thật. Windows là nền tảng khách hàng chính (LD-02) nên
+#      nằm trong cổng PR; macOS là máy của đội phát triển nên để lại lúc merge.
+#   3. `tauri build` tự chạy `pnpm build` (xem `beforeBuildCommand`), nên job
+#      `client` và job đóng gói KHÔNG cùng chạy trên một PR — nếu không, cùng một
+#      bundle web bị dựng lại tới năm lần cho mỗi lần chạy.
+#   4. Job chỉ chạy khi vùng mã tương ứng có thay đổi. PR chỉ sửa tài liệu hoặc
+#      chỉ sửa server thì không đụng tới toolchain Rust.
+#
+# Cổng bắt buộc cho branch protection là **một** job: `CI`. Nó tổng hợp kết quả
+# nên các job con được phép bỏ qua mà không chặn PR.
+
 on:
-  push:
-    branches: [main, master]
   pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  # Bắt trôi phụ thuộc: crate, SDK, image runner cập nhật có thể làm hỏng bản
+  # dựng dù mã của ta không đổi dòng nào. Rẻ hơn nhiều so với dựng lại mọi lần
+  # merge, mà vẫn phát hiện trong vòng một tuần. 03:00 thứ Hai giờ Việt Nam.
+  schedule:
+    - cron: "0 20 * * 0"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10"
+
 jobs:
-  # Cổng phía server: kiểu tĩnh + luật phụ thuộc + cấm float trong code nghiệp vụ.
-  # Chạy trên cả ba OS vì đội phát triển trên macOS còn khách hàng chạy Windows.
-  server:
-    name: server (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+  # ---------------------------------------------------------------------------
+  # Xác định vùng nào thay đổi. ~15 giây, nhưng cắt được cả một job Rust vài phút.
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Phạm vi thay đổi
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      client: ${{ steps.filter.outputs.client }}
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          fi
+
+          # `workflow_dispatch`, nhánh mới, hoặc lịch sử bị cắt → không so sánh
+          # được thì chạy TẤT CẢ. Thà chạy thừa còn hơn bỏ sót một cổng.
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            changed="__ALL__"
+          else
+            changed=$(git diff --name-only "$(git merge-base "$base" "$head")" "$head")
+          fi
+
+          echo "Tệp thay đổi:"
+          echo "$changed"
+
+          has() { [ "$changed" = "__ALL__" ] || echo "$changed" | grep -Eq "$1"; }
+
+          server=false; client=false; rust=false
+          has '^server/'            && server=true
+          has '^client/'            && client=true
+          has '^client/src-tauri/'  && rust=true
+          # Đổi chính CI hoặc Makefile thì kiểm lại mọi thứ — đó là lúc dễ tự
+          # tay làm hỏng cổng chất lượng nhất.
+          if has '^\.github/workflows/' || has '^Makefile$'; then
+            server=true; client=true; rust=true
+          fi
+
+          {
+            echo "server=$server"
+            echo "client=$client"
+            echo "rust=$rust"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # Kiểm tra tĩnh phía server — không phụ thuộc HĐH nên chạy đúng một lần.
+  # ---------------------------------------------------------------------------
+  server-quality:
+    name: server · kiểu & luật phụ thuộc
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: server
@@ -30,65 +126,93 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Đồng bộ phụ thuộc (Python 3.12)
-        run: uv sync --python 3.12
+      - name: Đồng bộ phụ thuộc
+        run: uv sync --python ${{ env.PYTHON_VERSION }}
 
-      - name: ruff
+      - name: ruff (lint)
         run: uv run ruff check .
+
+      - name: ruff (format)
+        run: uv run ruff format --check .
 
       - name: mypy --strict
         run: uv run mypy
 
-      # import-linter mở file .ini bằng encoding mặc định của locale (xem
-      # adapters/filesystem.py: `open(file_name, encoding=None)`), nên trên
-      # Windows là cp1252 và tiếng Việt trong importlinter.ini làm nó chết với
-      # UnicodeDecodeError. Bật UTF-8 mode cho riêng bước này để `open()` mặc
-      # định là UTF-8.
-      #
-      # Chỉ đặt ở bước này, không đặt cho cả job: pytest phải chạy đúng locale
-      # thật của Windows, nếu không CI sẽ xanh trong khi máy khách hàng lỗi.
-      - name: import-linter (luật phụ thuộc — ADR-004)
-        env:
-          PYTHONUTF8: "1"
+      # Luật phụ thuộc là thuộc tính của đồ thị import, giống hệt trên mọi HĐH.
+      # (Ghi chú lịch sử: import-linter từng chết trên Windows vì đọc file .ini
+      # bằng locale cp1252 — nay không còn chạy ở đó nữa nên vấn đề tự hết.)
+      - name: import-linter (ADR-004)
         run: uv run lint-imports --config importlinter.ini
 
-      # Nhóm `db` cần service container PostgreSQL — chỉ chạy được trên runner
-      # Linux, nên nó có job riêng bên dưới. Ở đây loại trừ tường minh thay vì
-      # để nó tự bỏ qua: một bộ test "xanh vì không kết nối được DB" là tín
-      # hiệu tệ hơn không có tín hiệu.
-      - name: pytest (không cần DB)
-        run: uv run pytest -m "not db"
-
       # mypy strict là hàng rào duy nhất bù cho việc Python không kiểm kiểu lúc
-      # biên dịch (ADR-015). Đếm số `# type: ignore` mỗi lần chạy để thấy nó
-      # trôi dần, thay vì phát hiện sau sáu tháng.
+      # biên dịch (ADR-015). Đếm mỗi lần chạy để thấy nó trôi dần, thay vì phát
+      # hiện sau sáu tháng. Nới ngưỡng phải sửa file này trong PR — đó chính là
+      # điểm kiểm soát ta muốn.
       #
-      # `grep` trả exit 1 khi KHÔNG tìm thấy gì — tức đúng lúc repo sạch nhất.
-      # GitHub Actions chạy `bash -eo pipefail` nên phải chặn exit đó, nếu không
-      # cổng bị lật ngược: chỉ xanh khi có ai đó THÊM `# type: ignore`.
-      #
-      # Ngưỡng là cổng thật, không phải dòng log. Nới ngưỡng phải sửa file này
-      # trong PR và nêu lý do — đó chính là điểm kiểm soát ta muốn.
+      # `grep` trả exit 1 khi KHÔNG tìm thấy gì — tức đúng lúc repo sạch nhất —
+      # nên phải chặn exit đó, nếu không cổng bị lật ngược.
       - name: "Đếm `# type: ignore` (ngưỡng ADR-015)"
-        if: runner.os == 'Linux'
         shell: bash
         env:
           MAX_TYPE_IGNORE: 0
         run: |
           count=$(grep -rn "type: ignore" src/ | wc -l | tr -d ' ') || count=0
-          echo "Số \`# type: ignore\` trong src/: $count (ngưỡng: $MAX_TYPE_IGNORE)"
           echo "\`# type: ignore\`: $count / ngưỡng $MAX_TYPE_IGNORE" >> "$GITHUB_STEP_SUMMARY"
           if [ "$count" -gt "$MAX_TYPE_IGNORE" ]; then
             echo "::error::Vượt ngưỡng \`# type: ignore\` ($count > $MAX_TYPE_IGNORE) — xem ADR-015"
             exit 1
           fi
 
+  # ---------------------------------------------------------------------------
+  # Test server KHÔNG cần DB — chạy trên nền tảng đích thật.
+  # PR: Linux + Windows (Windows là nền tảng khách hàng chính, LD-02).
+  # Merge: thêm macOS. Đội phát triển chạy macOS hằng ngày nên nó là nền tảng
+  # ít rủi ro nhất; để lại lúc merge thay vì bắt mọi PR chờ.
+  # ---------------------------------------------------------------------------
+  server-tests:
+    name: server · test (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: >-
+          ${{ fromJSON(github.event_name == 'pull_request'
+              && '["ubuntu-latest","windows-latest"]'
+              || '["ubuntu-latest","windows-latest","macos-latest"]') }}
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Đồng bộ phụ thuộc
+        run: uv sync --python ${{ env.PYTHON_VERSION }}
+
+      # Nhóm `db` có job riêng (cần service container, chỉ chạy trên Linux).
+      # Loại trừ tường minh chứ không để nó tự bỏ qua: một bộ test "xanh vì
+      # không kết nối được DB" là tín hiệu tệ hơn không có tín hiệu.
+      - name: pytest (không cần DB)
+        run: uv run pytest -m "not db"
+
+  # ---------------------------------------------------------------------------
   # Cổng bảo mật dữ liệu: RLS cô lập chi nhánh (RT-04), nhật ký bất biến bằng
-  # tách quyền sở hữu (RT-02), cô lập schema-per-dataset (RT-17). Không mô
-  # phỏng được — chúng là hành vi của PostgreSQL, nên job này chạy DB thật.
+  # tách quyền sở hữu (RT-02), cô lập schema-per-dataset (RT-17). Không mô phỏng
+  # được — chúng là hành vi của PostgreSQL, nên job này chạy DB thật.
+  # ---------------------------------------------------------------------------
   server-db:
-    name: server-db (postgres)
+    name: server · test có PostgreSQL
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: server
@@ -99,14 +223,12 @@ jobs:
         image: postgres:16
         env:
           # Bộ test tự tạo `konek_owner`/`konek_app` **không mật khẩu** (bản cài
-          # thật đặt mật khẩu từ OS keystore — ADR-019). Để hai vai trò đó đăng
-          # nhập được trong CI, dùng đúng công tắc mà image hỗ trợ thay vì sửa
-          # `pg_hba.conf` bằng `docker exec`: `pg_ctl reload` chạy dưới root và
-          # PostgreSQL từ chối chạy bằng root.
+          # thật đặt mật khẩu từ OS keystore — ADR-019). Dùng đúng công tắc mà
+          # image hỗ trợ, thay vì sửa `pg_hba.conf` qua `docker exec`:
+          # `pg_ctl reload` khi đó chạy dưới root và PostgreSQL từ chối.
           #
-          # `trust` chỉ áp cho container CI dùng một lần, không lộ ra ngoài
-          # runner. Bản cài khách hàng đi đường ngược lại — `scram-sha-256` +
-          # `pg_hba` cứng (RT-06, phase 11).
+          # `trust` chỉ áp cho container CI dùng một lần. Bản cài khách hàng đi
+          # đường ngược lại: `scram-sha-256` + `pg_hba` cứng (RT-06, phase 11).
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: postgres
         ports:
@@ -118,8 +240,6 @@ jobs:
           --health-retries 10
 
     env:
-      # Vai trò `konek_owner`/`konek_app` do chính bộ test tạo (bootstrap dựng
-      # cụm). Chỉ DSN superuser là phải cấp từ ngoài.
       # Không có DB thì job này phải ĐỎ, không được "xanh vì bỏ qua".
       KONEK_TEST_REQUIRE_DB: "1"
       KONEK_TEST_ADMIN_DSN: postgresql+psycopg://postgres@localhost:5432/postgres
@@ -134,19 +254,28 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Đồng bộ phụ thuộc (Python 3.12)
-        run: uv sync --python 3.12
+      - name: Đồng bộ phụ thuộc
+        run: uv sync --python ${{ env.PYTHON_VERSION }}
 
       - name: pytest (nhóm cần PostgreSQL)
         run: uv run pytest -m db
 
+  # ---------------------------------------------------------------------------
+  # Web UI. Bundle web không phụ thuộc HĐH → một lần trên Linux là đủ.
+  #
+  # Chỉ chạy trên PR, và chỉ khi job đóng gói desktop KHÔNG chạy: `tauri build`
+  # gọi `pnpm build` (`tsc --noEmit && vite build`) nên nó đã bao trọn phần việc
+  # này. Hai job cùng chạy = dựng lại y hệt một bundle hai lần.
+  # ---------------------------------------------------------------------------
   client:
-    name: client (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+    name: client · kiểu, lint, build
+    needs: changes
+    if: >-
+      github.event_name == 'pull_request'
+      && needs.changes.outputs.client == 'true'
+      && needs.changes.outputs.rust != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: client
@@ -155,11 +284,11 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           cache-dependency-path: client/pnpm-lock.yaml
 
@@ -175,11 +304,26 @@ jobs:
       - name: vite build
         run: pnpm exec vite build
 
-  # Đóng gói desktop chỉ chạy trên hai nền tảng đích của v1 (LD-02).
-  # Ubuntu không nằm trong phạm vi nên không dựng bản Linux.
-  tauri:
-    name: tauri (${{ matrix.os }})
+  # ---------------------------------------------------------------------------
+  # Đóng gói desktop — job đắt nhất (biên dịch Rust + dựng installer, và runner
+  # macOS tính giá gấp 10 lần Linux). Chỉ chạy khi kết quả có thể khác lần trước:
+  #   * PR có đụng `client/src-tauri/**` — đổi shell thì phải biết còn đóng gói được
+  #   * merge vào master có đụng `client/**` — cổng phát hành thật
+  #   * chạy định kỳ hằng tuần — bắt trôi phụ thuộc (crate/SDK cập nhật làm hỏng
+  #     bản dựng dù mã của ta không đổi dòng nào)
+  #
+  # Merge chỉ đụng server thì KHÔNG dựng lại: bản đóng gói desktop không phụ
+  # thuộc mã server, kết quả sẽ y hệt lần trước.
+  # Chỉ dựng cho hai nền tảng của v1 (LD-02) — Ubuntu không nằm trong phạm vi.
+  # ---------------------------------------------------------------------------
+  desktop-bundle:
+    name: desktop · đóng gói (${{ matrix.os }})
+    needs: changes
+    if: >-
+      needs.changes.outputs.rust == 'true'
+      || (github.event_name != 'pull_request' && needs.changes.outputs.client == 'true')
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -192,11 +336,11 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           cache-dependency-path: client/pnpm-lock.yaml
 
@@ -211,13 +355,49 @@ jobs:
       - name: Cài phụ thuộc
         run: pnpm install --frozen-lockfile
 
+      - name: eslint
+        run: pnpm exec eslint .
+
       - name: cargo fmt --check
         working-directory: client/src-tauri
         run: cargo fmt --check
 
-      - name: cargo clippy
+      - name: cargo clippy (warning = lỗi)
         working-directory: client/src-tauri
         run: cargo clippy --all-targets -- -D warnings
 
+      # Bao luôn `tsc --noEmit` + `vite build` qua `beforeBuildCommand`.
       - name: tauri build
         run: pnpm exec tauri build
+
+  # ---------------------------------------------------------------------------
+  # Cổng duy nhất để đặt vào branch protection.
+  #
+  # Job con dùng `if:` nên có thể bị BỎ QUA; đặt từng job làm required check sẽ
+  # chặn PR không đụng tới vùng đó. Job này tổng hợp: bỏ qua = chấp nhận, đỏ =
+  # chặn. Thêm job mới thì thêm vào `needs` — quên thì nó không được canh.
+  # ---------------------------------------------------------------------------
+  ci-ok:
+    name: CI
+    if: always()
+    needs: [changes, server-quality, server-tests, server-db, client, desktop-bundle]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Tổng hợp kết quả
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '${{ toJSON(needs) }}' > results.json
+          jq -r 'to_entries[] | "\(.value.result)\t\(.key)"' results.json | sort | tee -a "$GITHUB_STEP_SUMMARY"
+
+          failed=$(jq -r '
+            to_entries[]
+            | select(.value.result != "success" and .value.result != "skipped")
+            | .key' results.json)
+
+          if [ -n "$failed" ]; then
+            echo "::error::Job không đạt: $(echo "$failed" | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "Tất cả cổng đã đạt (hoặc được bỏ qua vì không liên quan)."
