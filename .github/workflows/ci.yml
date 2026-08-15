@@ -39,7 +39,17 @@ jobs:
       - name: mypy --strict
         run: uv run mypy
 
+      # import-linter mở file .ini bằng encoding mặc định của locale (xem
+      # adapters/filesystem.py: `open(file_name, encoding=None)`), nên trên
+      # Windows là cp1252 và tiếng Việt trong importlinter.ini làm nó chết với
+      # UnicodeDecodeError. Bật UTF-8 mode cho riêng bước này để `open()` mặc
+      # định là UTF-8.
+      #
+      # Chỉ đặt ở bước này, không đặt cho cả job: pytest phải chạy đúng locale
+      # thật của Windows, nếu không CI sẽ xanh trong khi máy khách hàng lỗi.
       - name: import-linter (luật phụ thuộc — ADR-004)
+        env:
+          PYTHONUTF8: "1"
         run: uv run lint-imports --config importlinter.ini
 
       - name: pytest
