@@ -1,6 +1,6 @@
 # Architectural Decision Records (ADR)
 
-Danh sách ADR cho dự án phần mềm kế toán Konek. Mỗi ADR ghi lại quyết định kiến trúc, ngữ cảnh, hệ quả, và chi phí lật quyết định.
+Danh sách ADR cho dự án phần mềm kế toán **Konek Két**. Mỗi ADR ghi lại quyết định kiến trúc, ngữ cảnh, hệ quả, và chi phí lật quyết định.
 
 ## Danh sách ADR (ADR-001 → ADR-019)
 
@@ -22,7 +22,7 @@ Danh sách ADR cho dự án phần mềm kế toán Konek. Mỗi ADR ghi lại q
 | ADR-014 | Tính khối lượng lớn = set-based SQL; Python điều phối; worker tiến trình riêng với lease/heartbeat/reaper | accepted | LD-14, FR-NFR-041/042 | 2026-08-15 |
 | ADR-015 | Kỷ luật kiểu: mypy strict + Pydantic v2 ở ranh giới; cấm `dict[str, Any]` qua module; cấm `float` (chỉ Decimal) | accepted | LD-13 | 2026-08-15 |
 | ADR-016 | Ký số USB token = dịch vụ esign riêng (client-side Rust `cryptoki`); app server KHÔNG nhúng PKCS#11; ký đồng bộ lúc phát hành; outbox lưu XML đã ký + retry truyền tải | accepted | LD-04, D3, AD-1 (resolved) | 2026-08-15 |
-| ADR-017 | Schema-per-dataset trong 1 PostgreSQL DB; routing schema theo dataset; handshake/đánh số/audit/RLS/backup theo schema | accepted | LD-15, D2, FR-SYS-001, RT-17 | 2026-08-15 |
+| ADR-017 | Schema-per-dataset trong 1 PostgreSQL DB; routing schema theo dataset; handshake/đánh số/audit/RLS/backup theo schema. **Sửa 2026-08-15** theo thứ đã dựng thật ở phase 2A (tên schema `ds_<mã>`, GUC `ket.branch_ids` dạng danh sách, ranh giới Alembic vs bootstrap, `branches` không bật RLS) | accepted | LD-15, D2, FR-SYS-001, RT-17 | 2026-08-15 |
 | ADR-018 | LAN PKI: CA nội bộ enroll vào máy trạm (hỗ trợ chế độ trình duyệt LAN) HOẶC scope chế độ trình duyệt cần cert hợp lệ; ghi trade-off | accepted | RT-08 (chốt, không hoãn) | 2026-08-15 |
 | ADR-019 | Key-management: khóa app ở OS keystore mã hóa `totp_secret`/token eSign/creds DB; chiến lược standalone/LAN/xoay khóa; backup bắt buộc mã hóa | accepted | LD-16, RT-03/05 | 2026-08-15 |
 

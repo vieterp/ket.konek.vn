@@ -8,12 +8,12 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from konek.main import create_app
-from konek.settings import Settings
+from ket.main import create_app
+from ket.settings import Settings
 
 
 def test_health_endpoint_returns_ok() -> None:
-    app = create_app(Settings(deployment_mode="standalone"))
+    app = create_app(Settings(deployment_mode="standalone", verify_schema_on_startup=False))
 
     with TestClient(app) as client:
         response = client.get("/health")
@@ -26,9 +26,9 @@ def test_health_endpoint_returns_ok() -> None:
 
 def test_openapi_schema_generates() -> None:
     """Hợp đồng client↔server sinh từ OpenAPI (LD-03) — schema phải dựng được."""
-    app = create_app(Settings())
+    app = create_app(Settings(verify_schema_on_startup=False))
 
     schema = app.openapi()
 
-    assert schema["info"]["title"] == "Konek Accounting App Server"
+    assert schema["info"]["title"] == "Konek Két — App Server"
     assert "/health" in schema["paths"]

@@ -57,7 +57,7 @@ related: [FR-RPT-001, FR-NFR-044, RT-01, RT-25, "SRS 19 §9 rủi ro #2"]
 - PDF/Excel: dùng library client (PDF.js / SheetJS) → dung lượng bundle tăng
 
 Đảo sang microservice báo cáo riêng:
-- Tách `konek.reporting` → dịch vụ riêng
+- Tách `ket.reporting` → dịch vụ riêng
 - Vận hành phức tạp (2 service, 2 deploy, sync schema)
 - Không có lợi ích gì (vẫn là Python, vẫn WeasyPrint)
 

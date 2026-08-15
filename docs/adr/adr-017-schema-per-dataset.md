@@ -25,21 +25,37 @@ Các cách tiếp cận:
 ## Decision
 
 1. **Một PostgreSQL DB, nhiều schema** (mỗi schema = một dataset kế toán).
-   - Ví dụ: `dataset_1`, `dataset_2`, ... (tên tương ứng ID dataset từ config).
+   - Tên schema: **`ds_<mã dataset>`** (`kt2026` → `ds_ktoan2026`). Mã do người dùng đặt,
+     đi qua whitelist ký tự ở `kernel/datasets/naming.py` trước khi ghép vào SQL —
+     tên schema là identifier nên không tham số hóa được.
+   - Tiền tố `ds_` là thứ khiến mã trùng tên schema hệ thống (`public`, `pg_catalog`)
+     vẫn an toàn: bất biến cần khóa là **kết quả** không bao giờ là tên dành riêng.
    - Mỗi schema chứa toàn bộ bảng: `accounts`, `vouchers`, `gl_postings`, `audit_log`, v.v.
-   - Không bảng shared; nếu cần danh mục shared → replicate vào mỗi schema hoặc generic schema `shared` (read-only từ app).
+   - **Ba bảng nằm ngoài**, ở schema điều khiển `public`: `datasets` (sổ đăng ký),
+     `users` (danh tính đăng nhập toàn cục), `system_metadata`. Quyền của người dùng thì
+     per-dataset (`user_roles`, `user_branches` nằm trong schema dataset) vì vai trò của
+     một người ở mỗi doanh nghiệp là khác nhau.
+   - **Không có khóa ngoại chéo schema**, kể cả tới `public.users`: liên hệ lưu bằng
+     `user_id` trần. Lý do là vận hành — một bản dump per-schema có FK trỏ ra ngoài sẽ
+     không restore được sang cụm khác, đúng vào lúc cần nó nhất (RT-03/RT-14).
 
 2. **Routing schema ở tầng session**:
-   - Khi user đăng nhập → phát session → ghi vào session `search_path = 'dataset_XYZ, shared, public'`.
-   - Mọi query sau đó tự động hoạt động trên dataset_XYZ (không cần `dataset_id` WHERE clause).
-   - FastAPI middleware: extract dataset từ JWT token → `SET search_path` trong connection pool.
+   - Mỗi transaction bắt đầu bằng `SET LOCAL search_path TO "ds_<mã>", public`.
+   - Mọi query sau đó tự động hoạt động trên schema đó (không cần `dataset_id` WHERE clause).
+   - `LOCAL` là bắt buộc: connection quay lại pool phải sạch, nếu không request kế tiếp
+     kế thừa dataset của request trước.
+   - Schema đích chỉ lấy từ **bảng `datasets`** (`kernel/datasets/service.resolve_dataset`),
+     không suy trực tiếp từ mã trong token: một mã bịa phải dừng ở tra cứu, không được
+     biến thành `search_path` trỏ vào hư không.
 
 3. **Handshake lúc đăng nhập**:
-   - Query lấy schema version của dataset → so với client version.
-   - Nếu không match → return 400, yêu cầu nâng cấp client/server.
+   - Query lấy schema version (revision Alembic) của dataset → so với client version.
+   - Không khớp → yêu cầu nâng cấp client/server.
+   - App server cũng **từ chối khởi động** nếu bất kỳ dataset nào lệch revision
+     (`main.verify_schema_versions`) — thà không chạy còn hơn ghi sổ vào cấu trúc cũ.
 
 4. **Đánh số per-dataset**:
-   - Bảng `numbering_counters` nằm trong mỗi schema (không shared).
+   - Bảng `number_sequences` nằm trong mỗi schema (không shared).
    - Mỗi counter độc lập per dataset.
 
 5. **Nhật ký audit per-dataset**:
@@ -47,23 +63,55 @@ Các cách tiếp cận:
 
 6. **RLS (Row-Level Security) per-dataset**:
    - Schema cô lập dataset → RLS chỉ cần cô lập chi nhánh trong dataset.
-   - Policy: `USING (branch_id = current_setting('app.tenant_branch')::int)`.
+   - GUC là **danh sách** chi nhánh, không phải một giá trị: một người dùng thường
+     được gán nhiều chi nhánh.
+   - Policy thực tế:
+     `branch_id = ANY (string_to_array(nullif(current_setting('ket.branch_ids', true), ''), ',')::int[])`.
+     `nullif` giữ tính **fail-closed**: GUC chưa đặt → biểu thức NULL → không dòng nào lọt.
+   - Bảng danh mục `branches` **không** bật RLS: `WITH CHECK` trên chính nó sẽ khiến
+     không ai tạo được chi nhánh mới (id do sequence cấp lúc INSERT, không thể nằm sẵn
+     trong phạm vi người tạo). Ai được xem/sửa danh mục là câu hỏi của RBAC.
+   - `user_branches` cũng không bật RLS: nó là **nguồn** dựng nên phạm vi RLS.
 
 7. **Sao lưu/khôi phục per-dataset**:
-   - `pg_dump --schema=dataset_1` → backup chỉ dataset này.
+   - `pg_dump --schema=ds_<mã>` → backup chỉ dataset này.
    - Restore độc lập, không ảnh hưởng dataset khác.
+
+8. **Alembic quản schema dataset; schema điều khiển dùng DDL bootstrap idempotent**:
+   - Migration chạy **lặp cho từng schema**, `alembic_version` nằm trong chính schema đó.
+   - Để Alembic quản luôn `public` sẽ cần nhánh migration thứ hai với bảng phiên bản
+     riêng — thêm hẳn một chiều phức tạp cho ba bảng gần như không đổi. Đổi lại, schema
+     điều khiển có số phiên bản riêng trong `system_metadata` và **cũng được kiểm** lúc
+     khởi động.
+   - Ngưỡng đảo quyết định: nếu ba bảng điều khiển bắt đầu đổi thường xuyên (khả năng
+     cao nhất là khi thêm SSO hoặc chính sách mật khẩu), chuyển sang nhánh Alembic thứ
+     hai — **không** chồng thêm bước thủ công.
 
 ## Consequences
 
 ### Tích cực
 
-- **Cô lập theo schema**: Nằm ở tầng database (namespace), cùng role `konek_app` nhưng access bị hạn chế bởi `search_path` + `REVOKE USAGE ON SCHEMA` các dataset khác. Điều kiện bắt buộc: phải `REVOKE USAGE` trên schema khác hoặc cấp quyền động theo phiên (không phụ thuộc filter tầng ứng dụng). **Phải thực hiện ở phase 2** (tránh SQL injection thủ công).
+- **Cô lập theo schema**: nằm ở tầng database (namespace), không phụ thuộc `WHERE` do lập
+  trình viên viết.
 - **Backup/restore nhanh**: mỗi dataset độc lập, phục hồi một dataset không ảnh hưởng khác.
 - **Schema migration centralized**: migration chạy trên mọi schema tự động.
 - **Hiệu năng**: index, statistics per-dataset tối ưu hóa.
 
 ### Tiêu cực / Đánh đổi
 
+- **⚠ Cô lập dataset hiện dựa vào `search_path`, chưa dựa vào quyền** (trạng thái sau
+  phase 2 slice 2A). `ket_app` được `GRANT USAGE` trên **mọi** schema dataset, nên một
+  câu truy vấn ghi rõ tên schema (`SELECT … FROM ds_beta.gl_postings`) vẫn đọc được
+  dataset khác. Trên thực tế không đường mã nào sinh ra tên schema có định danh ngoài
+  `SET LOCAL search_path` (đã qua whitelist), nên chỉ một lỗi SQL injection trong câu
+  truy vấn mới khai thác được — nhưng đây **vẫn là cô lập yếu hơn** mức ADR này đặt ra
+  ban đầu ("REVOKE USAGE trên schema khác").
+  Đường siết đã khảo sát: mỗi dataset một vai trò DB (`ds_<mã>_app`) chỉ có USAGE trên
+  schema của nó, `ket_app` khai `NOINHERIT` và `SET LOCAL ROLE` mỗi transaction. Vướng
+  mắc phải giải trước khi làm: bảng điều khiển (`public.users`) cũng phải cấp quyền cho
+  từng vai trò dataset, và luồng đăng nhập chạy **trước** khi chọn dataset. Vì nó gắn
+  chặt với tầng xác thực chưa dựng, quyết định để mở — **chốt trước phase 3**, khi đó
+  còn rẻ; sau phase 4 thì phải cấp lại quyền cho toàn bộ bảng phát sinh.
 - **Danh mục chia sẻ**: TK kế toán, hàng hóa, đối tác có thể chung (nếu multi-tenant thật) → phải replicate vào mỗi schema hoặc generic schema (phải quản lý sync).
 - **Connection pool**: mỗi connection phải biết dataset → Middleware phức tạp hơn.
 - **Migration logic**: Alembic phải chạy trên mỗi schema (hoặc dùng script wrapper).

@@ -1,13 +1,13 @@
 [package]
-name = "konek-accounting"
-version = "0.1.0"
-description = "Konek Kế toán — desktop shell"
-edition = "2021"
-rust-version = "1.77"
+name = "ket"
+version = "0.2.0"
+description = "Konek Két — desktop shell"
+edition = "2024"
+rust-version = "1.85"
 publish = false
 
 [lib]
-name = "konek_accounting_lib"
+name = "ket_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

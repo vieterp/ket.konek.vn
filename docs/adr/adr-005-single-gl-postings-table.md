@@ -15,7 +15,7 @@ Sổ kế toán là trái tim yêu cầu "đúng số liệu" (SRS 19 §1). Đú
 
 ## Decision
 
-**Một bảng `gl_postings` (append-only) lưu tất cả phát sinh**: bất kể từ module nào (cash_book, inventory, sales, ...). Module tạo phát sinh **qua Protocol** gọi `PostingService.post()` ở `konek.posting`, service này duy nhất được `INSERT` vào `gl_postings`.
+**Một bảng `gl_postings` (append-only) lưu tất cả phát sinh**: bất kể từ module nào (cash_book, inventory, sales, ...). Module tạo phát sinh **qua Protocol** gọi `PostingService.post()` ở `ket.posting`, service này duy nhất được `INSERT` vào `gl_postings`.
 
 Schema `gl_postings` cơ bản:
 ```sql

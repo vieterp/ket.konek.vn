@@ -1,4 +1,4 @@
-//! Desktop shell của Konek Kế toán.
+//! Desktop shell của Konek Két.
 //!
 //! Ranh giới kiến trúc (luật phụ thuộc #6, docs/system-architecture.md):
 //! shell **không** tham gia luồng nghiệp vụ. Nó chỉ cung cấp bốn thứ mà trình

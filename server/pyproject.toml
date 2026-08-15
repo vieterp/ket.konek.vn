@@ -1,7 +1,7 @@
 [project]
-name = "konek-accounting-server"
-version = "0.1.0"
-description = "Konek — app server phần mềm kế toán VN (TT200/TT133), chạy LAN hoặc offline một máy"
+name = "ket-server"
+version = "0.2.0"
+description = "Konek Két — app server phần mềm kế toán VN (TT200/TT133), chạy LAN hoặc offline một máy"
 requires-python = "==3.12.*"
 license = { text = "Proprietary" }
 
@@ -9,22 +9,23 @@ license = { text = "Proprietary" }
 # dependency nào chưa dùng"). Thư viện của phase sau (WeasyPrint, openpyxl,
 # lxml…) thêm khi phase đó bắt đầu.
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
-    "pydantic>=2.9",
-    "pydantic-settings>=2.6",
-    "sqlalchemy>=2.0.36",
-    "alembic>=1.14",
-    "psycopg[binary]>=3.2",
+    "fastapi>=0.141",
+    "uvicorn[standard]>=0.52",
+    "pydantic>=2.13",
+    "pydantic-settings>=2.15",
+    "sqlalchemy>=2.0.52",
+    "alembic>=1.19",
+    "psycopg[binary]>=3.3",
+    "structlog>=26.1",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.3",
-    "httpx>=0.28",
-    "ruff>=0.8",
-    "mypy>=1.13",
-    "import-linter>=2.1",
+    "pytest>=9.1",
+    "httpx>=0.28.1",
+    "ruff>=0.16",
+    "mypy>=2.3",
+    "import-linter>=2.13",
 ]
 
 [build-system]
@@ -32,7 +33,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/konek"]
+packages = ["src/ket"]
 
 # ---------------------------------------------------------------------------
 # ruff — lint + format
@@ -70,7 +71,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Test được phép assert và dùng đường dẫn cố định.
-"tests/**" = ["S101"]
+# S608: test phải ghép tên schema vào SQL để kiểm chính cơ chế định tuyến schema
+# và quyền trên `alembic_version` — tên schema đến từ fixture, không từ dữ liệu
+# ngoài. Trong `src/` thì luật này vẫn bật.
+"tests/**" = ["S101", "S608"]
 
 [tool.ruff.lint.flake8-annotations]
 # `self`/`cls` không cần annotation; mọi thứ còn lại phải có.
@@ -84,7 +88,7 @@ mypy-init-return = true
 [tool.mypy]
 python_version = "3.12"
 mypy_path = "src"
-packages = ["konek"]
+packages = ["ket"]
 strict = true
 disallow_untyped_defs = true
 disallow_any_generics = true
@@ -103,3 +107,10 @@ enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q --strict-markers --strict-config"
+markers = [
+    # Cần một PostgreSQL thật (RLS, tách quyền owner/app, định tuyến schema
+    # không mô phỏng được bằng SQLite hay mock). Chạy: `make server-test-db`.
+    # CI chạy nhóm này trong job riêng có service PostgreSQL; job đa-OS chạy
+    # `-m 'not db'` vì service container chỉ có trên runner Linux.
+    "db: cần PostgreSQL thật (bỏ qua khi không kết nối được)",
+]

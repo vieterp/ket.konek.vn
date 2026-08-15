@@ -43,7 +43,7 @@ Cột `ledger ENUM('financial', 'management')` trên:
 
 Đảo từ cột `ledger` sang hai schema/DB riêng:
 - Sửa `gl_postings`, `account_balances`, `opening_balances`: THÊM schema hoặc DB column
-- Sửa `konek.posting.services` logic ghi sổ: INSERT 2 lần (1 mỗi schema)
+- Sửa `ket.posting.services` logic ghi sổ: INSERT 2 lần (1 mỗi schema)
 - Sửa mọi query báo cáo: UNION từ 2 schema hoặc app-level merge
 - Sửa snapshot building: 2 job, 2 lịch
 - Migrate dữ liệu hiện tại: tách posting 2 schema hoặc thêm DB

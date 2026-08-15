@@ -31,7 +31,7 @@ Ký số USB token yêu cầu PKCS#11 driver (chạy kernel-mode), cấp PIN qua
    - Ký định dạng: **PAdES-BES** (PDF), **RFC3161 TSA** (timestamp).
 
 2. **App server (Konek) gọi esign**:
-   - **Không nhúng PKCS#11** vào `server/src/konek`.
+   - **Không nhúng PKCS#11** vào `server/src/ket`.
    - Gọi esign (sidecar local qua **IPC/HTTP**, hoặc tái dùng module `pkcs11`/`tsa`/`cert` từ esign).
    - Ký **đồng bộ** ngay khi phát hành chứng từ (trước enqueue outbox).
    - Nhận XML/PDF **đã ký** từ esign.

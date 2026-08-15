@@ -1,12 +1,101 @@
 /**
- * Lớp nền của design system: nạp Tailwind và gắn token vào phần tử gốc.
- * Component cơ sở (Button, DataGrid, …) dựng từ phase 2 trở đi — phase 1 chỉ
- * chứng minh tokens nạp được và bundle build được.
+ * Lớp nền của design system: nạp Tailwind, khai thang màu/typography của brand,
+ * và gắn token vào phần tử gốc.
+ *
+ * Tailwind 4 bỏ `tailwind.config.js`: theme khai bằng `@theme` ngay trong CSS,
+ * và mỗi khai báo ở đó vừa sinh lớp tiện ích (`bg-navy-700`) vừa là một CSS
+ * variable thật (`var(--color-navy-700)`). Với một design system token-driven
+ * thì đây là mô hình đúng hơn — trước kia thang màu nằm trong JS còn token ngữ
+ * nghĩa nằm trong CSS, hai nguồn phải tự giữ đồng bộ với nhau.
+ *
+ * Thang màu navy/ocean/sky và fontSize chép NGUYÊN VĂN từ brand asset
+ * `uploads/brand-assets/tokens/tailwind.config.js` v1.0 (Claude Design project
+ * 91a2c87a-3304-418f-a296-dc584cd56cfe). **Không chỉnh mã màu ở đây.**
+ * Token ngữ nghĩa (screen/surface/text/border) và dark mode: `tokens.css`.
  */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Dark mode do người dùng chọn tay: `[data-theme="dark"]` trên phần tử gốc,
+   thay cho `darkMode: ['class', …]` của config cũ. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme {
+  /* --- Primary · Navy (brand asset) --- */
+  --color-navy-50: #e8edf4;
+  --color-navy-100: #c5d3e8;
+  --color-navy-200: #a2b9dc;
+  --color-navy-300: #5b7ba3;
+  --color-navy-400: #3d5f89;
+  --color-navy-500: #2d4a6f;
+  --color-navy-600: #234058;
+  --color-navy-700: #1b365d;
+  --color-navy-800: #152b4a;
+  --color-navy-900: #0f1f38;
+
+  /* --- Secondary · Ocean Blue (brand asset) --- */
+  --color-ocean-50: #ebf4fc;
+  --color-ocean-100: #c9e0f5;
+  --color-ocean-200: #a7ccee;
+  --color-ocean-300: #85b8e7;
+  --color-ocean-400: #63a4e0;
+  --color-ocean-500: #4a90d9;
+  --color-ocean-600: #3a7ac4;
+  --color-ocean-700: #2e6db5;
+  --color-ocean-800: #235a96;
+  --color-ocean-900: #1a4777;
+
+  /* --- Accent · Sky Blue (brand asset) --- */
+  --color-sky-50: #f0f7fc;
+  --color-sky-100: #d9ebf7;
+  --color-sky-200: #b3d7ef;
+  --color-sky-300: #8dc3e7;
+  --color-sky-400: #7cb9e8;
+  --color-sky-500: #5ba5de;
+  --color-sky-600: #4891d4;
+  --color-sky-700: #357dca;
+
+  /* --- Trung tính (brand asset) ---
+     Khai tường minh dù Tailwind đã có thang `gray` sẵn: Tailwind 4 đổi bảng
+     mặc định sang oklch(), nên nếu không ghi đè thì mã màu thực tế sẽ lệch nhẹ
+     khỏi con số mà design reference chốt (ví dụ border #E5E7EB). */
+  --color-white: #ffffff;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+
+  /* --- Token ngữ nghĩa: trỏ về biến trong `tokens.css` nên dark mode đổi
+         theo biến, không phải viết lại lớp tiện ích. --- */
+  --color-screen: var(--ds-color-screen);
+  --color-surface: var(--ds-color-surface);
+  --color-text-default: var(--ds-color-text);
+  --color-text-muted: var(--ds-color-text-muted);
+  --color-border-default: var(--ds-color-border);
+
+  /* --- Typography (brand asset) --- */
+  --font-sans: 'Be Vietnam Pro', sans-serif;
+  --font-primary: 'Be Vietnam Pro', sans-serif;
+
+  --text-hero: 3.5rem;
+  --text-hero--line-height: 1.2;
+  --text-hero--font-weight: 700;
+  --text-h1: 2.5rem;
+  --text-h1--line-height: 1.2;
+  --text-h1--font-weight: 700;
+  --text-h2: 2rem;
+  --text-h2--line-height: 1.3;
+  --text-h2--font-weight: 600;
+  --text-h3: 1.5rem;
+  --text-h3--line-height: 1.4;
+  --text-h3--font-weight: 600;
+}
 
 @layer base {
   html {
@@ -15,7 +104,7 @@
 
   body {
     margin: 0;
-    background-color: var(--color-screen);
-    color: var(--color-text);
+    background-color: var(--ds-color-screen);
+    color: var(--ds-color-text);
   }
 }
