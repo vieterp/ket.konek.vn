@@ -22,7 +22,9 @@ Những việc chỉ làm được **tại máy chủ**, không qua HTTP, và đ
 * `prune-sessions` — dọn phiên đã kết thúc. Ở đây chứ không ở API vì vai trò
   runtime cố ý không có `DELETE` trên `auth_sessions`.
 * `prune-idempotency-keys` — dọn khóa hết hạn ở mọi dữ liệu kế toán. Ở CLI vì
-  nó là việc vận hành thường kỳ, không phải thao tác của người dùng nào.
+  nó là việc vận hành thường kỳ, không phải thao tác của người dùng nào. Từ lát
+  2B-2b nó cũng là một loại job (`system.maintenance.prune_idempotency_keys`);
+  hai đường không thừa nhau — CLI chạy được cả khi hàng đợi đang hỏng.
 
 `argparse` chứ không Typer/Click: chín lệnh không đáng thêm một phụ thuộc, và
 `ket.admin` phải chạy được trong bản đóng gói PyInstaller (S4) nơi mỗi phụ thuộc
@@ -297,9 +299,10 @@ def command_prune_sessions(args: argparse.Namespace, settings: Settings) -> None
     không xóa được dấu vết ai đã đăng nhập lúc nào. Việc dọn vì thế phải là một
     thao tác tại máy chủ.
 
-    Không có lịch chạy tự động ở lát này: bảng tăng ~18.000 dòng/năm với 50
-    người dùng, nên chạy tay theo quý là đủ. Khi hàng đợi job có thật (2B-2b),
-    đây là ứng viên đầu tiên để đặt lịch.
+    Từ lát 2B-2b, cùng việc này còn chạy được qua hàng đợi tác vụ nền
+    (`system.maintenance.prune_sessions`) — nhưng **chỉ** khi bản cài khai tường
+    minh một DSN `ket_owner` cho tiến trình worker. Lệnh ở đây vẫn là đường
+    chính, và là đường duy nhất chạy được khi worker chưa cài hoặc đang hỏng.
     """
     engine = _owner_engine(settings)
     try:

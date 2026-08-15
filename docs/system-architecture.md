@@ -33,7 +33,7 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | **Danh tính**: Argon2id, phiên lưu DB thu hồi được ngay, 2FA TOTP chống phát lại, khóa tạm, RFC 7807 | ✅ chạy thật (2B-1a) |
 | **RBAC enforcement** `{module}.{chứng từ}.{hành vi}` sinh từ registry; định tuyến dataset theo header `X-Dataset`; phạm vi chi nhánh cho RLS | ✅ chạy thật (2B-1b) |
 | **Idempotency cùng transaction** (giành khóa → làm việc → điền kết quả); **khóa lạc quan `row_version` hai lớp**; **tùy chọn hai cấp**; **hạn mức request theo người gọi** | ✅ chạy thật (2B-2a) |
-| Worker + reaper (hàng đợi job) · sinh type OpenAPI cho client | ⏳ phase 2 lát 2B-2b |
+| **Tiến trình worker nền** (giành job `FOR UPDATE SKIP LOCKED`, chạy dưới vai trò dataset); **lease/heartbeat/reaper** chống job mồ côi; **vai trò `ket_worker`** (`SELECT` + `UPDATE` theo cột trên `jobs`, có hàng rào lease); **API `/api/v1/jobs` + OpenAPI sinh type TS** | ✅ chạy thật (2B-2b) |
 | Client (design system, layout, đăng nhập, handshake, i18n) · spike S1/S3/S4 | ⏳ phase 2 lát 2C |
 | Posting engine, báo cáo, và toàn bộ phân hệ nghiệp vụ | ⏳ phase 4 trở đi |
 
@@ -270,7 +270,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | `report_definitions` | Báo cáo metadata (layout, tham số, query) | 5 | `reporting` |
 | `number_sequences` | Bộ đếm đánh số chứng từ (`scope_key` gói cả chi nhánh + năm) | 2 (bảng), 3 (cấp số) | `kernel` |
 | `idempotency_keys` | Khóa idempotency + kết quả (TTL, result_ref) | 2 | `kernel` |
-| `jobs` | Tác vụ nền (hàng đợi, tiến độ, lease, reaper) | 2 | `worker` |
+| `jobs` | Tác vụ nền (hàng đợi, tiến độ, lease, reaper); **vai trò `ket_worker` có `SELECT` + `UPDATE` theo cột** — mọi lệnh ghi trạng thái mang số hiệu lượt chạy (`attempt`) làm hàng rào, nên lượt chạy đã bị thu hồi không ghi đè được lượt mới (RT-13) | 2 | `worker` |
 | `periods` | Kỳ kế toán (từ, đến, trạng thái khóa) | 3 | `kernel` |
 | `branches` | Chi nhánh (mã, tên, địa chỉ). **Không bật RLS** — xem ADR-017 §6 | 2 (lõi), 3 (mở rộng) | `kernel` |
 | `accounts` | Tài khoản (mã, tên, loại, nhóm công thức BCTC) | 3 | `kernel` |
@@ -298,7 +298,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | **Kênh app→DB (RT-06)** | TLS verify-full; `scram-sha-256` pg_hba; **cấm superuser làm app login**; creds keystore | FR-NFR-014 | 11 |
 | **Đa ngôn ngữ** | Resource vi/en cho UI + cột `name_en` danh mục & hệ thống TK | FR-NFR-034 | 3, 5 |
 | **Sao lưu/khôi phục (RT-03)** | `pg_dump`/`pg_restore` **per-schema dataset**, theo lịch + yêu cầu, checksum. **Bắt buộc mã hóa** backup chứa PII (khóa OS keystore) | FR-NFR-020..023, FR-NFR-073 | 11 |
-| **Tác vụ nặng (RT-13)** | Hàng đợi job trong DB + **worker tiến trình riêng** (không FastAPI), có tiến độ + hủy + lease/heartbeat/reaper. **Set-based SQL**, Python chỉ điều phối (LD-14) | FR-NFR-042/044 | 2, 8, 9 |
+| **Tác vụ nặng (RT-13)** | Hàng đợi job trong DB + **worker tiến trình riêng** (không FastAPI), có tiến độ + hủy + **lease/heartbeat/reaper chống job mồ côi**. Vai trò `ket_worker` giành việc dưới danh tính của nó, rồi chạy thân job dưới `SET ROLE ds_<mã>_app`. **Set-based SQL**, Python chỉ điều phối (LD-14) | FR-NFR-042/044 | 2, 8, 9 |
 | **Lỗi** | Mã lỗi nghiệp vụ + thông điệp Việt nêu nguyên nhân + cách xử lý; không lộ exception | FR-NFR-050 | 2 |
 | **Đính kèm** | File lưu ngoài DB theo content-hash; DB lưu metadata | FR-NFR-053 | 6 |
 

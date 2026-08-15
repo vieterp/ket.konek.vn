@@ -40,6 +40,11 @@ BEGIN
         CREATE ROLE ket_control NOLOGIN
             NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS INHERIT;
     END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ket_worker') THEN
+        CREATE ROLE ket_worker LOGIN
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOINHERIT;
+    END IF;
 END
 $$;
 
@@ -57,6 +62,23 @@ ALTER ROLE ket_control NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOLOGIN;
 -- một dataset trong suốt transaction đó.
 ALTER ROLE ket_app NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOINHERIT;
 
+-- `ket_worker` — vai trò đăng nhập của tiến trình chạy tác vụ nền (quyết định
+-- D2/F2). Nó KHÔNG phải một `ket_app` thứ hai: quyền của nó trong mỗi schema
+-- dataset dừng ở **đúng bảng `jobs`** (SELECT/UPDATE), đủ để giành việc và báo
+-- tiến độ, không đủ để đọc một dòng sổ nào.
+--
+-- Vì sao worker không `SET ROLE ds_<mã>_app` ngay để giành việc: sau `SET ROLE`,
+-- `current_user` là vai trò dataset nên policy RLS dành cho worker (`TO
+-- ket_worker`, thấy job của mọi chi nhánh) sẽ không bao giờ áp. Muốn worker vẫn
+-- thấy toàn hàng đợi thì phải mở một lỗ do GUC điều khiển ngay trong policy chi
+-- nhánh của `jobs` — tức là làm yếu RLS cho **mọi** truy vấn khác chỉ để phục vụ
+-- một tiến trình. Thay vào đó: giành việc dưới danh nghĩa `ket_worker`, rồi mới
+-- `SET LOCAL ROLE ds_<mã>_app` + đặt `ket.branch_ids` cho **thân** job.
+--
+-- `NOINHERIT` cùng lý do với `ket_app`: nó là thành viên của mọi `ds_*_app` để
+-- chuyển vai trò được, và kế thừa tự động sẽ xóa sạch ranh giới vừa dựng.
+ALTER ROLE ket_worker NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOINHERIT;
+
 -- Tên database chỉ biết lúc chạy nên phải dựng câu lệnh động. Dùng
 -- `quote_ident` + nối chuỗi chứ KHÔNG dùng `format()` với đặc tả identifier:
 -- psycopg quét cả tệp này (kể cả phần chú thích) và coi dấu phần trăm là
@@ -67,6 +89,8 @@ BEGIN
             || quote_ident(current_database()) || ' TO ket_owner';
     EXECUTE 'GRANT CONNECT ON DATABASE '
             || quote_ident(current_database()) || ' TO ket_app';
+    EXECUTE 'GRANT CONNECT ON DATABASE '
+            || quote_ident(current_database()) || ' TO ket_worker';
 END
 $$;
 
@@ -80,6 +104,11 @@ $$;
 GRANT USAGE ON SCHEMA public TO ket_app;
 GRANT USAGE ON SCHEMA public TO ket_control;
 GRANT USAGE, CREATE ON SCHEMA public TO ket_owner;
+
+-- Worker cần `public` để đọc sổ đăng ký dữ liệu kế toán (`datasets`) — nó phải
+-- biết có những schema nào để quét hàng đợi. Quyền trên từng bảng điều khiển do
+-- `bootstrap.worker_login_table_grants` cấp và danh sách đó dừng ở SELECT.
+GRANT USAGE ON SCHEMA public TO ket_worker;
 
 -- Tạo dữ liệu kế toán mới = tạo thêm một vai trò `ds_<mã>_app`, và việc đó chạy
 -- bằng `ket_owner` (xem `datasets/provisioning.py`). Vì vậy owner cần
@@ -113,5 +142,10 @@ BEGIN
             || quote_ident(current_database()) || ' FROM PUBLIC';
     EXECUTE 'REVOKE TEMPORARY ON DATABASE '
             || quote_ident(current_database()) || ' FROM ket_app';
+    -- Cùng thủ thuật che bảng áp được cho worker: nó chạy thân job dưới vai trò
+    -- dataset, nên một `CREATE TEMP TABLE audit_log (…)` trong tiến trình worker
+    -- vô hiệu hóa nhật ký y hệt như trong tiến trình API.
+    EXECUTE 'REVOKE TEMPORARY ON DATABASE '
+            || quote_ident(current_database()) || ' FROM ket_worker';
 END
 $$;

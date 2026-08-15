@@ -39,6 +39,16 @@ class Access:
     permissions: frozenset[str]
     branch_ids: tuple[int, ...]
 
+    def has(self, code: str) -> bool:
+        """Có quyền này không, **không** ném lỗi.
+
+        Dùng cho chỗ lọc danh sách (màn hình chỉ hiện việc người dùng bấm được)
+        chứ không phải chỗ chặn. Hai hàm riêng vì hai hướng mặc định khác nhau:
+        `require` chặn, `has` chỉ trả lời — và dùng `has` ở chỗ đáng lẽ phải
+        chặn là kiểu lỗi mà `require` sinh ra để không xảy ra.
+        """
+        return code in self.permissions
+
     def require(self, code: str) -> None:
         """Chặn khi thiếu quyền. `details.permission` nêu đúng mã còn thiếu."""
         if code not in self.permissions:

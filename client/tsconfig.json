@@ -33,6 +33,10 @@
     // nghĩa. Alias tương ứng ở phía bundler nằm trong `vite.config.ts`.
     "paths": {
       "@/*": ["./src/*"],
+      // Hai mục, không thừa: `@api-types` (không sao) trỏ vào `index.ts` — nơi
+      // gói các alias dùng hằng ngày (`Schemas`, `ProblemDetails`); dạng có sao
+      // để với tới `./schema` khi cần chính bảng `paths`/`operations` thô.
+      "@api-types": ["./packages/api-types/index.ts"],
       "@api-types/*": ["./packages/api-types/*"]
     }
   },

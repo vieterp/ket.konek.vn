@@ -22,13 +22,15 @@ DB_TEST_ENV := \
 	KET_TEST_DESTRUCTIVE_CLUSTER=1 \
 	KET_TEST_ADMIN_DSN=postgresql+psycopg://$(PGHOST):$(PGPORT)/postgres \
 	KET_TEST_KET_OWNER_DSN=postgresql+psycopg://ket_owner@$(PGHOST):$(PGPORT)/ket_test \
-	KET_TEST_KET_APP_DSN=postgresql+psycopg://ket_app@$(PGHOST):$(PGPORT)/ket_test
+	KET_TEST_KET_APP_DSN=postgresql+psycopg://ket_app@$(PGHOST):$(PGPORT)/ket_test \
+	KET_TEST_KET_WORKER_DSN=postgresql+psycopg://ket_worker@$(PGHOST):$(PGPORT)/ket_test
 
 .DEFAULT_GOAL := help
 .PHONY: help install check \
         server-install server-lint server-format server-typecheck server-imports \
         server-test server-test-db server-coverage server-check version-check \
         client-install client-typecheck client-lint client-build client-check \
+        api-types api-types-check \
         shell-fmt shell-lint tauri-build clean
 
 help: ## Liệt kê lệnh
@@ -86,7 +88,35 @@ client-lint: ## eslint
 client-build: ## vite build
 	cd $(CLIENT) && pnpm exec vite build
 
-client-check: client-typecheck client-lint client-build ## Toàn bộ cổng phía client
+client-check: api-types-check client-typecheck client-lint client-build ## Toàn bộ cổng phía client
+
+# --- hợp đồng client↔server (OpenAPI → TypeScript) ------------------------
+#
+# Nguồn sự thật là mã server (LD-03). `openapi.json` và `schema.d.ts` đều được
+# COMMIT, và CI sinh lại rồi so `git diff`: đổi response model mà quên sinh lại
+# thì cổng đỏ, và người review thấy hợp đồng đổi gì ngay trong diff.
+
+API_TYPES_DIR := $(CLIENT)/packages/api-types
+
+api-types: ## Sinh lại type TypeScript từ OpenAPI của server
+	cd $(SERVER) && uv run python scripts/export_openapi.py ../$(API_TYPES_DIR)/openapi.json
+	cd $(CLIENT) && pnpm exec openapi-typescript packages/api-types/openapi.json \
+		-o packages/api-types/schema.d.ts
+
+api-types-check: api-types ## Đỏ nếu type sinh lại khác bản đã commit
+	@# Hai phép kiểm, vì `git diff` có một điểm mù: nó **không thấy tệp chưa được
+	@# theo dõi**. Một `schema.d.ts` chưa từng commit sẽ làm cổng xanh rỗng — đúng
+	@# lúc nó phải đỏ nhất.
+	@test -z "$$(git ls-files --others --exclude-standard -- $(API_TYPES_DIR))" || { \
+		echo "Type sinh cho client chưa được đưa vào git:"; \
+		git ls-files --others --exclude-standard -- $(API_TYPES_DIR); \
+		echo "Chạy \`make api-types\` rồi commit thư mục $(API_TYPES_DIR)."; \
+		exit 1; }
+	@git diff --exit-code -- $(API_TYPES_DIR) || { \
+		echo ""; \
+		echo "Hợp đồng API đã đổi nhưng type sinh cho client chưa được commit."; \
+		echo "Chạy \`make api-types\` rồi commit thư mục $(API_TYPES_DIR)."; \
+		exit 1; }
 
 # --- shell (Tauri / Rust) -------------------------------------------------
 

@@ -22,6 +22,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from psycopg.errors import ForeignKeyViolation, UniqueViolation
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import StaleDataError
 from starlette.requests import Request
@@ -46,6 +47,50 @@ ERROR_TYPE_PREFIX: Final[str] = "https://konek.vn/errors/"
 
 VALIDATION_ERROR_CODE: Final[str] = "request.validation_failed"
 INTERNAL_ERROR_CODE: Final[str] = "system.internal_error"
+
+
+class ProblemDetails(BaseModel):
+    """Thân lỗi RFC 7807 — **hợp đồng công khai** với client.
+
+    Khai thành model (dù handler vẫn dựng `dict` để mang thêm trường tùy lớp
+    lỗi) vì đúng một lý do: nó phải có mặt trong đặc tả OpenAPI, và từ đó có mặt
+    trong type sinh cho client (bước 14). Không khai thì client bắt lỗi bằng
+    `any` — tức là phần *hay xảy ra nhất* của một API lại là phần duy nhất không
+    có kiểu.
+
+    `model_config` cho phép trường thừa: mỗi lớp lỗi được khai thêm trường riêng
+    qua `problem_extra()` (`latest` của xung đột phiên bản, `errors` của lỗi
+    kiểm dữ liệu). Chúng là phần **mở rộng** của hợp đồng, không phải phần vi
+    phạm nó.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    type: str
+    """URI định danh loại lỗi, tiền tố `https://konek.vn/errors/`."""
+
+    title: str
+    status: int
+    detail: str
+    """Câu tiếng Việt cho người vận hành và cho log — **không** phải chuỗi UI in
+    ra. Client dựng thông điệp hiển thị từ `error_code`."""
+
+    error_code: str
+    """Mã ổn định để client và tài liệu đối chiếu. Đổi mã = breaking change."""
+
+    correlation_id: str | None = None
+    details: dict[str, str | int | None] | None = None
+
+    errors: list[dict[str, object]] | None = None
+    """Danh sách lỗi kiểm dữ liệu của Pydantic (`request.validation_failed`).
+
+    Khai tường minh dù `extra="allow"` đã cho nó đi qua: không khai thì type
+    sinh cho client chỉ có `[key: string]: unknown`, tức là **hai thân lỗi hay
+    gặp nhất** của API lại là hai thân duy nhất không có kiểu."""
+
+    latest: dict[str, object] | None = None
+    """Bản ghi mới nhất kèm theo xung đột phiên bản (FR-NFR-005), để màn hình
+    hiện được "người kia vừa đổi gì" thay vì chỉ báo lỗi."""
 
 
 def problem_response(

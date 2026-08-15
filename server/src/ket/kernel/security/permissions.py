@@ -173,3 +173,47 @@ REGISTRY.register(
         module=SYSTEM_MODULE, code="setting", actions=frozenset({Action.VIEW, Action.EDIT})
     )
 )
+REGISTRY.register(
+    DocumentType(
+        module=SYSTEM_MODULE,
+        code="job",
+        # Hàng đợi tác vụ nền: `view` = xem hàng đợi và tiến độ, `create` = xếp
+        # một tác vụ vào hàng, `edit` = yêu cầu hủy. Không `delete`: dòng job là
+        # lịch sử "đã chạy gì lúc nào", và xóa nó đi thì câu hỏi "vì sao số liệu
+        # đổi tối qua" không còn trả lời được.
+        actions=frozenset({Action.VIEW, Action.CREATE, Action.EDIT}),
+    )
+)
+REGISTRY.register(
+    DocumentType(
+        module=SYSTEM_MODULE,
+        code="installation",
+        # Tác vụ chạm **bảng dùng chung cho mọi dữ liệu kế toán** (schema điều
+        # khiển): dọn phiên đăng nhập là ví dụ đầu tiên. Tách khỏi `maintenance`
+        # vì phạm vi khác hẳn nhau, và ranh giới đó đo được: quyền được cấp
+        # **trong một dataset** (bảng `role_permissions` nằm trong schema
+        # dataset), nên một mã quyền dùng chung sẽ cho người chỉ quản trị doanh
+        # nghiệp B chạy được thao tác xóa dữ liệu của cả bản cài.
+        #
+        # Đòi 2FA (FR-SYS-074): đây là quyền duy nhất ở phase 2 mà một dataset
+        # cấp được nhưng hậu quả vượt ra ngoài dataset đó.
+        actions=frozenset({Action.VIEW, Action.CREATE}),
+        requires_second_factor=True,
+    )
+)
+REGISTRY.register(
+    DocumentType(
+        module=SYSTEM_MODULE,
+        code="maintenance",
+        # Tác vụ dọn dẹp chạy tại máy chủ (dọn khóa idempotency, dọn phiên đăng
+        # nhập). Tách khỏi `job` vì hai câu hỏi khác nhau: `job.create` cho phép
+        # chạy tác vụ nghiệp vụ bình thường, còn quyền này cho phép chạy thứ
+        # **xóa dữ liệu** ngoài luồng nghiệp vụ.
+        actions=frozenset({Action.VIEW, Action.CREATE}),
+        # **Không** đòi 2FA, khác `installation`. Quyền này chỉ chạy tác vụ dọn
+        # dẹp **trong phạm vi một dữ liệu kế toán** (khóa idempotency hết hạn):
+        # phạm vi bằng đúng phạm vi nơi nó được cấp, không leo thang được, và
+        # không chạm dữ liệu đang sống. Thao tác vượt ra ngoài dataset thuộc về
+        # `system.installation` ở trên.
+    )
+)

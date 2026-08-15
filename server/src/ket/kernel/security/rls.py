@@ -100,6 +100,45 @@ def enable_branch_rls_statements(
     )
 
 
+WORKER_POLICY_NAME: Final[str] = "p_worker_queue"
+WORKER_UPDATE_POLICY_NAME: Final[str] = "p_worker_queue_write"
+
+
+def worker_queue_policy_statements(table: str, *, worker_role: str) -> tuple[str, ...]:
+    """Policy cho **đúng** vai trò worker thấy toàn bộ hàng đợi (F2, RT-13).
+
+    Vì sao cần: tiến trình chạy tác vụ nền không thuộc chi nhánh nào, nên policy
+    chi nhánh (`p_branch_scope`) sẽ giấu mọi job có `branch_id` khỏi nó —
+    hàng đợi trông như rỗng và không job nào chạy.
+
+    Vì sao **không** nới `p_branch_scope` thay vì thêm policy: chính sách chi
+    nhánh là thứ mọi truy vấn nghiệp vụ đi qua, và một lỗ do GUC điều khiển đặt
+    trong đó sẽ áp cho cả `ket_app` — tức là đổi một cơ chế bảo vệ trung tâm để
+    phục vụ một tiến trình. `TO {worker_role}` giới hạn ngoại lệ đúng vào vai
+    trò đó: sau khi worker `SET LOCAL ROLE ds_<mã>_app` để chạy thân job,
+    `current_user` không còn là worker nên policy này **không** áp nữa, và thân
+    job lại bị RLS chi nhánh chặn như một request bình thường.
+
+    Policy PostgreSQL cộng dồn theo kiểu HOẶC (permissive), nên đây là ngoại lệ
+    thêm vào chứ không phải thay thế.
+    """
+    validate_identifier(table)
+    validate_identifier(worker_role)
+    return (
+        f"DROP POLICY IF EXISTS {WORKER_POLICY_NAME} ON {table}",
+        f"DROP POLICY IF EXISTS {WORKER_UPDATE_POLICY_NAME} ON {table}",
+        # Tách `SELECT` khỏi `UPDATE` thay vì một policy `FOR ALL`: `FOR ALL`
+        # kèm `WITH CHECK (true)` cũng cho phép `INSERT`/`DELETE` nếu một ngày
+        # nào đó quyền bảng bị nới. Hai policy hẹp thì policy là **lớp thứ hai**
+        # thật sự, không phải bản sao của quyền bảng.
+        f"CREATE POLICY {WORKER_POLICY_NAME} ON {table} FOR SELECT TO {worker_role} USING (true)",
+        (
+            f"CREATE POLICY {WORKER_UPDATE_POLICY_NAME} ON {table} "
+            f"FOR UPDATE TO {worker_role} USING (true) WITH CHECK (true)"
+        ),
+    )
+
+
 def set_search_path_statement(schema: str) -> str:
     """`SET LOCAL search_path` cho một transaction.
 

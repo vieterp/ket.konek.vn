@@ -58,6 +58,20 @@ from ket.kernel.security.grants import (
     grant_read_only,
 )
 
+WORKER_ROLE: Final[str] = "ket_worker"
+"""Vai trò **đăng nhập** của tiến trình chạy tác vụ nền (D2/F2).
+
+Quyền của nó trong một schema dataset dừng ở đúng bảng `jobs`; mọi thứ khác
+worker chạm được là nhờ `SET LOCAL ROLE ds_<mã>_app` sau khi đã giành việc — tức
+là dưới đúng bộ quyền và đúng RLS mà một request HTTP phải đi qua."""
+
+WORKER_JOB_TABLE: Final[str] = "jobs"
+"""Bảng duy nhất `ket_worker` chạm được bằng danh nghĩa của chính nó.
+
+Hằng số chứ không chuỗi rời: hai đường cấp quyền (migration lúc tạo bảng, đường
+sửa chữa `ensure_cluster`) phải đọc **cùng một** tên, và bài học của
+`APPEND_ONLY_TABLES` là hai bản chép sẽ trôi."""
+
 CONTROL_GROUP_ROLE: Final[str] = "ket_control"
 """Vai trò nhóm giữ quyền trên bảng schema điều khiển.
 
@@ -114,12 +128,98 @@ def create_dataset_role_statements(schema: str) -> tuple[str, ...]:
         f"ALTER ROLE {role} NOLOGIN INHERIT",
         f"GRANT {CONTROL_GROUP_ROLE} TO {role}",
         f"GRANT {role} TO {APP_ROLE}",
+        # Worker cũng phải `SET ROLE` được sang vai trò dataset — không phải để
+        # giành việc (việc đó làm dưới danh nghĩa `ket_worker`, xem `roles.sql`)
+        # mà để chạy **thân** job dưới đúng bộ quyền và đúng RLS của dataset.
+        # `ket_worker` là `NOINHERIT` nên tư cách thành viên này không tự cho nó
+        # quyền gì; nó chỉ mở đường chuyển vai trò tường minh.
+        f"GRANT {role} TO {WORKER_ROLE}",
         # Owner cũng phải là thành viên để `SET ROLE` được: đường kiểm phiên bản
         # schema lúc khởi động dùng **một** hàm cho cả hai engine, và một hàm
         # rẽ nhánh theo vai trò đang đăng nhập là chỗ để lọt lỗi. Không mất mát
         # bảo mật nào — owner vốn sở hữu toàn bộ schema.
         f"GRANT {role} TO {OWNER_ROLE}",
         f'GRANT USAGE ON SCHEMA "{schema}" TO {role}',
+        # `USAGE` cho worker phải cấp **ở đây**, cùng lúc với việc tạo schema —
+        # không phải trong migration cạnh `GRANT … ON jobs`. Quyền trên bảng mà
+        # thiếu `USAGE` trên schema cho ra lỗi *relation "jobs" does not exist*,
+        # một thông điệp không nhắc gì tới quyền và đủ để mất hàng giờ.
+        f'GRANT USAGE ON SCHEMA "{schema}" TO {WORKER_ROLE}',
+    )
+
+
+WORKER_WRITABLE_COLUMNS: Final[tuple[str, ...]] = (
+    "status",
+    "progress",
+    "message",
+    "result",
+    "started_at",
+    "finished_at",
+    "heartbeat_at",
+    "lease_expires_at",
+    "attempt",
+)
+"""Cột mà một lượt chạy được phép ghi về **chính nó** (H4).
+
+Nguồn sự thật duy nhất cho quyền `UPDATE` theo cột của `ket_worker`. Thêm cột cơ
+chế mới vào `jobs` thì thêm ở đây; thêm một cột **mô tả việc** (loại job, tham
+số, người yêu cầu, chi nhánh) thì **không** — đó chính là ranh giới danh sách
+này dựng lên."""
+
+
+def worker_table_grants(schema: str | None = None) -> tuple[str, ...]:
+    """Quyền của `ket_worker` trong **một** schema dataset (F2).
+
+    Đúng hai thứ, và danh sách này là nơi duy nhất khai chúng:
+
+    * `USAGE` trên schema — không có thì không nhìn thấy bảng nào, kể cả bảng
+      được cấp quyền.
+    * `SELECT` + `UPDATE` **theo cột** trên `jobs` — giành việc (`SELECT … FOR
+      UPDATE SKIP LOCKED` rồi đổi trạng thái), báo tiến độ, gia hạn lease, ghi
+      kết quả. Danh sách cột: `WORKER_WRITABLE_COLUMNS`.
+
+    Cố ý **không** `INSERT`: xếp hàng là việc của người dùng qua API, và một
+    worker tự sinh job cho chính mình là vòng lặp không ai duyệt. Cũng không
+    `DELETE`: dòng job là lịch sử "đã chạy gì lúc nào".
+
+    `schema=None` cho migration (đã có `search_path` đúng), tên đủ điều kiện cho
+    đường sửa chữa chạy ngoài request — cùng khuôn với `grants._qualify`.
+    """
+    if schema is None:
+        qualified = WORKER_JOB_TABLE
+        schema_grant: tuple[str, ...] = ()
+    else:
+        validate_schema_name(schema)
+        qualified = f'"{schema}".{WORKER_JOB_TABLE}'
+        schema_grant = (f'GRANT USAGE ON SCHEMA "{schema}" TO {WORKER_ROLE}',)
+    return (
+        *schema_grant,
+        f"REVOKE ALL ON {qualified} FROM {WORKER_ROLE}",
+        f"GRANT SELECT ON {qualified} TO {WORKER_ROLE}",
+        # `UPDATE` **theo cột**, không phải toàn bảng. Đo được trước khi siết:
+        # với `GRANT UPDATE` trần, một câu lệnh dưới danh nghĩa `ket_worker` đổi
+        # được `type`, `params`, `requested_by`, `branch_id` của một job đang
+        # chờ — và worker không kiểm lại quyền lúc chạy, nên dòng job bị viết
+        # lại sẽ chạy như thật, kể cả loại job cần kết nối đặc quyền. Danh sách
+        # dưới đây là **cột cơ chế**: thứ một lượt chạy được phép ghi về chính
+        # nó. Mọi cột mô tả *việc phải làm* (`type`, `params`) và *ai yêu cầu*
+        # (`requested_by`, `branch_id`, `cancel_requested`) nằm ngoài tầm với.
+        f"GRANT UPDATE ({', '.join(WORKER_WRITABLE_COLUMNS)}) ON {qualified} TO {WORKER_ROLE}",
+    )
+
+
+def revoke_worker_grants(schema: str) -> tuple[str, ...]:
+    """Thu hồi mọi quyền `ket_worker` từng có trong một schema dataset.
+
+    Chạy ở đường sửa chữa ngay **trước** khi cấp lại, cùng lý do với
+    `control_group_revokes`: danh sách trong mã phải là toàn bộ quyền của vai
+    trò, không phải phần thêm vào những gì cụm đang có. Một bảng mà phiên bản
+    trước lỡ cấp cho worker sẽ nằm lại mãi nếu không có bước này.
+    """
+    validate_schema_name(schema)
+    return (
+        f'REVOKE ALL ON ALL TABLES IN SCHEMA "{schema}" FROM {WORKER_ROLE}',
+        f'REVOKE ALL ON ALL SEQUENCES IN SCHEMA "{schema}" FROM {WORKER_ROLE}',
     )
 
 
@@ -160,6 +260,13 @@ def repair_dataset_privileges_statements(
         statements.extend(grant_append_only(table, grantee=role, schema=schema))
     for table in sorted(READ_ONLY_TABLES & set(present_tables)):
         statements.extend(grant_read_only(table, grantee=role, schema=schema))
+    # Quyền của worker cũng phải dựng lại ở đây: `ON ALL TABLES` phía trên chỉ
+    # cấp cho vai trò dataset, còn `ket_worker` là vai trò riêng — một cụm vừa
+    # khôi phục sẽ có đủ bảng, đủ vai trò, mà tiến trình worker vẫn không giành
+    # được việc nào và không có gì báo ngoài dòng log "permission denied".
+    statements.extend(revoke_worker_grants(schema))
+    if WORKER_JOB_TABLE in present_tables:
+        statements.extend(worker_table_grants(schema))
     return tuple(statements)
 
 

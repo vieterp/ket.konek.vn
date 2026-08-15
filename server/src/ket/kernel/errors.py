@@ -472,3 +472,60 @@ class SettingValueInvalidError(DomainError):
     """Giá trị không đúng kiểu đã khai của tùy chọn."""
 
     error_code: ClassVar[str] = "settings.value_invalid"
+
+
+class JobTypeUnknownError(DomainError):
+    """Loại job không có trong registry của tiến trình đang chạy.
+
+    Xảy ra ở hai đầu, và ở đầu thứ hai nó là lỗi vận hành thật: client xếp hàng
+    một loại đã bị gỡ, hoặc **worker chạy binary cũ hơn API** nên không biết loại
+    vừa được thêm. Vì thế nó là lỗi có mã chứ không phải `KeyError` — worker
+    đánh dấu job hỏng với thông điệp chỉ đúng nguyên nhân thay vì lặp lại mãi.
+    """
+
+    error_code: ClassVar[str] = "job.type_unknown"
+    http_status: ClassVar[int] = 422
+
+
+class JobParamsInvalidError(DomainError):
+    """Tham số của job không khớp mô hình mà loại job đó khai.
+
+    Kiểm ở lúc **xếp hàng** chứ không để worker phát hiện sau: một job hỏng vì
+    sai tham số mà chỉ lộ ra sau vài phút trong hàng đợi là phản hồi tệ nhất có
+    thể cho một thao tác người dùng vừa bấm.
+    """
+
+    error_code: ClassVar[str] = "job.params_invalid"
+
+
+class JobNotFoundError(DomainError):
+    """Không có job này trong dữ liệu kế toán đang mở (hoặc ngoài phạm vi chi nhánh)."""
+
+    error_code: ClassVar[str] = "job.not_found"
+    http_status: ClassVar[int] = 404
+
+
+class JobNotCancellableError(DomainError):
+    """Job đã kết thúc — không còn gì để hủy.
+
+    Hủy là **yêu cầu** gửi cho worker, không phải lệnh giết: job đã `done`/
+    `failed`/`cancelled` thì yêu cầu đó không có nơi nhận, và trả `409` trung
+    thực hơn là im lặng gật đầu.
+    """
+
+    error_code: ClassVar[str] = "job.not_cancellable"
+    http_status: ClassVar[int] = 409
+
+
+class JobPrivilegeUnavailableError(DomainError):
+    """Job đòi kết nối đặc quyền mà tiến trình worker không được cấu hình để có.
+
+    Chỉ áp cho loại job khai `JobPrivilege.CONTROL_OWNER` (dọn phiên đăng nhập).
+    Mặc định của bản cài là **không** cấu hình `worker_owner_database_url`, tức
+    là worker không cầm quyền `ket_owner` — hỏng theo hướng đóng, và thông điệp
+    nêu đúng hai đường đi tiếp: cấu hình DSN owner cho worker, hoặc chạy lệnh
+    tương ứng của `python -m ket.admin`.
+    """
+
+    error_code: ClassVar[str] = "job.privilege_unavailable"
+    http_status: ClassVar[int] = 503

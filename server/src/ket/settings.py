@@ -6,10 +6,12 @@ eSign) KHÔNG lấy từ đây ở môi trường thật** — chúng nằm tron
 được nạp ở phase 2 (ADR-019 key-management). Phase 1 chỉ dựng khung cấu hình.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DeploymentMode = Literal["standalone", "lan"]
@@ -122,9 +124,74 @@ class Settings(BaseSettings):
     trạm trong LAN — nơi khóa theo tài khoản không giúp gì nếu kẻ dò rải đều
     qua nhiều tài khoản."""
 
+    # --- Tác vụ nền (ADR-014, RT-13)
+    worker_database_url: str = "postgresql+psycopg://ket_worker@localhost/ket"
+    """DSN của **tiến trình worker**, đăng nhập bằng vai trò `ket_worker`.
+
+    Vai trò riêng chứ không dùng lại `ket_app` (quyết định F2): worker phải thấy
+    job của **mọi** chi nhánh để giành việc, và mở quyền đó cho vai trò runtime
+    của API nghĩa là nới RLS cho mọi request. Quyền của `ket_worker` trong mỗi
+    schema dataset dừng ở đúng bảng `jobs`; thân job chạy sau một
+    `SET LOCAL ROLE ds_<mã>_app`, tức dưới đúng RLS như một request."""
+
+    worker_owner_database_url: str | None = None
+    """DSN `ket_owner` **chỉ** cho loại job khai `JobPrivilege.CONTROL_OWNER`.
+
+    Mặc định `None` = worker **không** cầm quyền owner, và job cần nó (dọn phiên
+    đăng nhập) hỏng với thông điệp chỉ đúng hai đường xử lý. Đó là hướng hỏng đã
+    chọn: `DELETE` trên `auth_sessions` bị thu hồi khỏi vai trò runtime có chủ
+    đích, nên cấp quyền owner cho một tiến trình chạy nền **theo mặc định** sẽ
+    xóa chính bất biến đó. Bản cài nào muốn đặt lịch dọn phiên qua hàng đợi thì
+    khai tường minh biến này."""
+
+    worker_poll_seconds: int = Field(default=2, ge=1)
+    """Nghỉ bao lâu khi mọi dữ liệu kế toán đều hết việc.
+
+    2 giây: độ trễ không ai nhận ra khi bấm một tác vụ, mà vẫn đủ thưa để một
+    bản cài để không cả đêm không tạo ra 40.000 truy vấn rỗng mỗi giờ cho mỗi
+    dataset."""
+
+    job_lease_seconds: int = Field(default=60, ge=5)
+    """Một lần giành việc giữ job bao lâu nếu worker im lặng (RT-13)."""
+
+    job_heartbeat_seconds: int = Field(default=15, ge=1)
+    """Nhịp gia hạn lease trong lúc job chạy. Phải nhỏ hơn hẳn `job_lease_seconds`
+    — kiểm ở `Settings` chứ không để reaper cướp job của một worker đang khỏe."""
+
+    job_max_attempts: int = Field(default=3, ge=1)
+    """Số lần một job được giành trước khi reaper đánh hỏng nó."""
+
+    worker_reap_seconds: int = Field(default=30, ge=1)
+    """Khoảng cách giữa hai lượt quét job hết lease."""
+
+    worker_error_backoff_seconds: int = Field(default=15, ge=1)
+    """Nghỉ bao lâu sau một vòng quét hỏng (DB khởi động lại, mạng chớp).
+
+    Dài hơn nhịp nghỉ thường: nguyên nhân hay gặp nhất là PostgreSQL đang khởi
+    động lại, và thử lại mỗi 2 giây chỉ đổ đầy log rồi vẫn phải chờ đúng ngần ấy
+    thời gian."""
+
     # --- Vận hành
     debug: bool = False
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
+
+    @model_validator(mode="after")
+    def _heartbeat_fits_inside_lease(self) -> Settings:
+        """Nhịp heartbeat phải thưa hơn hẳn lease, nếu không reaper cướp job đang chạy.
+
+        Kiểm ở đây chứ không ở worker: một cấu hình sai kiểu `lease=10,
+        heartbeat=30` cho ra triệu chứng "job chạy mãi không xong, thỉnh thoảng
+        chạy hai lần" — mất hàng giờ để lần ra, trong khi nó là một phép so sánh
+        hai số. Hệ số 3 để một nhịp lỡ (GC, truy vấn nặng) chưa đủ mất lease.
+        """
+        if self.job_heartbeat_seconds * 3 > self.job_lease_seconds:
+            raise ValueError(
+                f"job_heartbeat_seconds={self.job_heartbeat_seconds} quá thưa so với "
+                f"job_lease_seconds={self.job_lease_seconds}: lease phải dài ít nhất "
+                "gấp ba nhịp heartbeat, nếu không tác vụ đang chạy bình thường vẫn bị "
+                "coi là mồ côi và bị xếp lại hàng đợi."
+            )
+        return self
 
 
 def get_settings() -> Settings:

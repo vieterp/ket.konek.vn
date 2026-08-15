@@ -10,8 +10,11 @@ Lát 2B-2a thêm **hợp đồng ghi**: idempotency cùng transaction (FR-NFR-00
 khóa lạc quan bằng `row_version` (FR-NFR-005), tùy chọn hai cấp (FR-SYS-060) và
 hạn mức request.
 
-Còn lại của phase 2: hàng đợi job + worker + sinh type OpenAPI (2B-2b), client
-+ bắt tay schema-version (2C).
+Lát 2B-2b thêm **hàng đợi tác vụ nền**: bảng `jobs` + tiến trình worker riêng
+(`python -m ket.worker`) với lease/heartbeat/reaper (RT-13), và đường ống sinh
+type TypeScript từ OpenAPI cho client.
+
+Còn lại của phase 2: client + bắt tay schema-version (2C).
 
 Luồng nghiệp vụ đi qua REST + OpenAPI (LD-03). Client **không bao giờ** nối
 thẳng PostgreSQL và **không** dùng API Tauri cho nghiệp vụ — giữ đường mở lên
@@ -27,10 +30,11 @@ from pydantic import BaseModel
 from sqlalchemy import Engine
 
 from ket import __version__
-from ket.api.middleware.problem_details import register_problem_handlers
+from ket.api.middleware.problem_details import ProblemDetails, register_problem_handlers
 from ket.api.middleware.rate_limit import RateLimitMiddleware
 from ket.api.middleware.request_context import RequestContextMiddleware
 from ket.api.routers.auth import router as auth_router
+from ket.api.routers.jobs import router as jobs_router
 from ket.api.routers.system import router as system_router
 from ket.api.routers.system_settings import router as settings_router
 from ket.kernel.datasets.bootstrap import verify_control_schema
@@ -132,6 +136,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=__version__,
         lifespan=lifespan,
         debug=resolved.debug,
+        # Hợp đồng lỗi khai **một lần cho mọi endpoint**: RFC 7807 áp cho toàn
+        # API (FR-NFR-050), nên khai theo từng route là chép cùng một dòng vào
+        # hàng trăm chỗ và quên ở chỗ thứ một trăm lẻ một. Nhờ đó `ProblemDetails`
+        # có mặt trong OpenAPI, và client bắt lỗi **có kiểu** thay vì `any`.
+        responses={"default": {"model": ProblemDetails, "description": "Lỗi (RFC 7807)"}},
     )
     app.state.settings = resolved
 
@@ -149,6 +158,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(system_router)
     app.include_router(settings_router)
+    app.include_router(jobs_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

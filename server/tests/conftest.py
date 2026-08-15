@@ -29,10 +29,11 @@ from sqlalchemy.pool import NullPool, QueuePool
 
 from ket.kernel.datasets.bootstrap import ensure_control_schema, ensure_database_roles
 from ket.kernel.datasets.models import User
+from ket.kernel.datasets.naming import validate_schema_name
 from ket.kernel.datasets.provisioning import DatasetRef, provision_dataset
 from ket.kernel.persistence.session import control_session, create_session_factory
 from ket.kernel.security.account_service import create_user
-from ket.kernel.security.dataset_roles import CONTROL_GROUP_ROLE
+from ket.kernel.security.dataset_roles import CONTROL_GROUP_ROLE, WORKER_ROLE
 from ket.kernel.security.grants import APP_ROLE, OWNER_ROLE
 from ket.kernel.security.keystore import SecretBox, generate_app_key
 from ket.kernel.security.rls import validate_identifier
@@ -161,7 +162,7 @@ def _drop_ket_roles(connection: Connection) -> None:
             text("SELECT rolname FROM pg_roles WHERE rolname LIKE 'ds\\_%\\_app'")
         ).all()
     ]
-    roles = [*dataset_roles, APP_ROLE, CONTROL_GROUP_ROLE, OWNER_ROLE]
+    roles = [*dataset_roles, APP_ROLE, WORKER_ROLE, CONTROL_GROUP_ROLE, OWNER_ROLE]
 
     # Biến môi trường trên là lời khẳng định của con người, và `Makefile` đặt sẵn
     # nó — nên nó chỉ chặn được người gõ `pytest -m db` trần. Đây mới là kiểm
@@ -237,6 +238,7 @@ def test_settings(postgres_available: bool, app_key: str) -> Settings:
     settings = Settings(
         database_url=_dsn_for("ket_app"),
         owner_database_url=_dsn_for("ket_owner"),
+        worker_database_url=_dsn_for("ket_worker"),
         verify_schema_on_startup=False,
         app_key=SecretStr(app_key),
     )
@@ -288,6 +290,25 @@ def app_engine(test_settings: Settings) -> Iterator[Engine]:
 
 
 @pytest.fixture(scope="session")
+def worker_engine(test_settings: Settings) -> Iterator[Engine]:
+    """Engine của tiến trình chạy tác vụ nền (`ket_worker`).
+
+    Vai trò riêng chứ không dùng lại `app_engine`: quyền của worker dừng ở đúng
+    bảng `jobs` và nó có một policy RLS riêng — dùng nhầm engine runtime sẽ làm
+    test hàng đợi xanh trong khi worker thật không giành nổi một job nào.
+    """
+    engine = create_engine(test_settings.worker_database_url, poolclass=NullPool)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def worker_session_factory(worker_engine: Engine) -> sessionmaker[Session]:
+    """Nhà máy `Session` cho đường giành việc của worker."""
+    return create_session_factory(worker_engine)
+
+
+@pytest.fixture(scope="session")
 def pooled_app_engine(test_settings: Settings) -> Iterator[Engine]:
     """Engine runtime dùng **pool thật**, đúng một connection.
 
@@ -307,6 +328,26 @@ def pooled_app_engine(test_settings: Settings) -> Iterator[Engine]:
     )
     yield engine
     engine.dispose()
+
+
+@pytest.fixture
+def drain_jobs(owner_engine: Engine) -> Callable[..., None]:
+    """Xóa sạch hàng đợi của một hoặc nhiều dữ liệu kế toán.
+
+    Chạy bằng `ket_owner` chứ không phải vai trò runtime, và đó là điểm quan
+    trọng: vai trò runtime bị RLS chặn theo chi nhánh, nên một `DELETE FROM jobs`
+    với phạm vi rỗng chỉ xóa được dòng `branch_id IS NULL` — job của chi nhánh
+    khác **sống sót** và trở thành job mà `claim_next` (lấy cũ nhất) giành ở test
+    sau. Đó là một giờ đi tìm lý do test đỏ ở chỗ không liên quan.
+    """
+
+    def drain(*datasets: DatasetRef) -> None:
+        with owner_engine.begin() as connection:
+            for dataset in datasets:
+                validate_schema_name(dataset.schema_name)
+                connection.exec_driver_sql(f'DELETE FROM "{dataset.schema_name}".jobs')
+
+    return drain
 
 
 @pytest.fixture(scope="session")

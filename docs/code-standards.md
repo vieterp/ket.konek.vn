@@ -177,7 +177,31 @@ CSP theo cấu hình, không nới về `https:`.
 
 ---
 
-## 8. Lỗi và chuỗi hiển thị
+## 8. Hàng đợi tác vụ nền
+
+| Chủ đề | Quy tắc |
+| --- | --- |
+| Loại job mới | Đăng ký một `JobType` vào `kernel.jobs.registry.REGISTRY`. Bốn thuộc tính **bắt buộc**, không có mặc định cho ba: `code` (`{nhóm}.{việc}`), `permission` (mã quyền cần để xếp hàng), `resume_semantics` (`IDEMPOTENT_RESTART` nếu chạy lại từ đầu an toàn, `CHECKPOINTED` nếu ghi mốc theo lô), `params_model` (Pydantic model của tham số) |
+| Thân job | Chữ ký `(context: JobContext, params: <ParamsModel>) -> JobResult`. **Không** tự `commit()` — transaction do worker mở và đóng, cùng hợp đồng với `unit_of_work` của một request |
+| Hủy | Kiểm `context.progress.cancel_requested()` giữa các **lô**, rồi ném `JobCancelled` — ném để transaction rollback; trả về một giá trị đặc biệt sẽ commit phần việc dở dang |
+| Tiến độ | Báo qua `context.progress.report(...)`. Nó ghi bằng connection riêng (ngoài transaction nghiệp vụ) và gia hạn lease cùng lúc — không tự `UPDATE jobs` |
+| Kết nối đặc quyền | Mặc định `JobPrivilege.DATASET` (chạy dưới `ds_<mã>_app` + RLS chi nhánh). `CONTROL_OWNER` chỉ cho việc chạm bảng schema điều khiển, và chỉ chạy khi bản cài khai `KET_WORKER_OWNER_DATABASE_URL` |
+| Worker vs API | `api` không được import `worker` (import-linter C2): xếp hàng là ghi một dòng, chạy job là việc của tiến trình khác. Tầng API không bao giờ chạy thân job, kể cả job ngắn |
+
+---
+
+## 9. Hợp đồng client↔server (OpenAPI)
+
+| Chủ đề | Quy tắc |
+| --- | --- |
+| Nguồn sự thật | Mã server. `scripts/export_openapi.py` → `client/packages/api-types/openapi.json` → `openapi-typescript` → `schema.d.ts`. **Cả hai tệp sinh đều được commit; không sửa tay** |
+| Sinh lại | `make api-types`. Cổng: `make api-types-check` (job CI `api-types`) sinh lại rồi `git diff --exit-code` — đổi hợp đồng mà quên sinh lại thì đỏ, và diff cho người review thấy đổi gì. `tests/test_openapi_contract.py` canh cùng bất biến ở phía server |
+| Model | Mọi thân request/response là Pydantic v2 **có docstring** (docstring thành `description` trong đặc tả). Không `dict[str, Any]` ở ranh giới API |
+| Lỗi | Hợp đồng RFC 7807 (`ProblemDetails`) khai một lần cho mọi endpoint ở `create_app`, nên client bắt lỗi **có kiểu**. `error_code` là hợp đồng công khai — đổi mã là breaking change |
+
+---
+
+## 10. Lỗi và chuỗi hiển thị
 
 | Chủ đề | Quy tắc |
 | --- | --- |
@@ -188,7 +212,7 @@ CSP theo cấu hình, không nới về `https:`.
 
 ---
 
-## 9. Bí mật
+## 11. Bí mật
 
 Không commit: mật khẩu DB, khóa mã hóa backup, khóa ký gói cấu hình, khóa ký
 bản cập nhật Tauri, `totp_secret`, token eSign, file `.env`. Tất cả nằm ở OS
@@ -196,7 +220,7 @@ keystore hoặc biến môi trường lúc chạy (ADR-019).
 
 ---
 
-## 10. Cổng CI
+## 12. Cổng CI
 
 `make check` chạy đúng bộ CI chạy:
 

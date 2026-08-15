@@ -262,6 +262,10 @@ jobs:
       KET_TEST_ADMIN_DSN: postgresql+psycopg://postgres@localhost:5432/postgres
       KET_TEST_KET_OWNER_DSN: postgresql+psycopg://ket_owner@localhost:5432/ket_test
       KET_TEST_KET_APP_DSN: postgresql+psycopg://ket_app@localhost:5432/ket_test
+      # Vai trò của tiến trình chạy tác vụ nền (lát 2B-2b): quyền của nó dừng ở
+      # đúng bảng `jobs`, nên test hàng đợi phải đăng nhập bằng chính nó — dùng
+      # `ket_app` sẽ xanh trong khi worker thật không giành nổi một job nào.
+      KET_TEST_KET_WORKER_DSN: postgresql+psycopg://ket_worker@localhost:5432/ket_test
 
     steps:
       - uses: actions/checkout@v4
@@ -383,6 +387,49 @@ jobs:
         run: pnpm exec vite build
 
   # ---------------------------------------------------------------------------
+  # Hợp đồng client↔server: type TypeScript phải là bản sinh từ mã server đang
+  # có (bước 14 của phase 2). Job riêng vì nó cần **cả hai** toolchain — Python
+  # để xuất OpenAPI, Node để sinh type — nên nó không thuộc về job `server-*`
+  # hay job `client`.
+  #
+  # Chạy khi một trong hai bên đổi: đổi response model ở server hoặc sửa tay
+  # thư mục `packages/api-types` đều làm hợp đồng lệch.
+  # ---------------------------------------------------------------------------
+  api-types:
+    name: hợp đồng · type sinh từ OpenAPI
+    needs: changes
+    if: needs.changes.outputs.server == 'true' || needs.changes.outputs.client == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+
+      - name: Đồng bộ phụ thuộc
+        run: |
+          cd server && uv sync --python ${{ env.PYTHON_VERSION }}
+          cd ../client && pnpm install --frozen-lockfile
+
+      # Sinh lại rồi so với bản đã commit. Đỏ = đã đổi hợp đồng API mà quên
+      # chạy `make api-types`; diff in ra chỉ đúng chỗ đổi.
+      - name: Type sinh từ OpenAPI đã được cập nhật chưa
+        run: make api-types-check
+
+  # ---------------------------------------------------------------------------
   # Đóng gói desktop — job đắt nhất (biên dịch Rust + dựng installer, và runner
   # macOS tính giá gấp 10 lần Linux). Chỉ chạy khi kết quả có thể khác lần trước:
   #   * PR có đụng `client/src-tauri/**` — đổi shell thì phải biết còn đóng gói được
@@ -468,7 +515,7 @@ jobs:
   ci-ok:
     name: CI
     if: always()
-    needs: [changes, server-quality, server-tests, server-db, client, desktop-bundle]
+    needs: [changes, server-quality, server-tests, server-db, client, api-types, desktop-bundle]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
