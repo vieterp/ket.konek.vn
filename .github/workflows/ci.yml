@@ -55,7 +55,7 @@ jobs:
       #
       # Ngưỡng là cổng thật, không phải dòng log. Nới ngưỡng phải sửa file này
       # trong PR và nêu lý do — đó chính là điểm kiểm soát ta muốn.
-      - name: Đếm `# type: ignore` (ngưỡng ADR-015)
+      - name: "Đếm `# type: ignore` (ngưỡng ADR-015)"
         if: runner.os == 'Linux'
         shell: bash
         env:
