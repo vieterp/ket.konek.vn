@@ -4,10 +4,30 @@
 SERVER := server
 CLIENT := client
 
+# --- PostgreSQL cho nhóm test `db` ----------------------------------------
+#
+# Bản cài đích là PostgreSQL 16 (quyết định D4, phase 2). Nhiều máy lập trình
+# còn cụm 14/15 của dự án khác đang chiếm 5432, nên mặc định ở đây là cụm 16
+# chạy song song trên **5433**:
+#
+#   brew install postgresql@16
+#   # đặt port = 5433 trong /opt/homebrew/var/postgresql@16/postgresql.conf
+#   brew services start postgresql@16
+#
+# Máy nào chạy 16 ngay trên 5432 thì đè lại: `make server-test-db PGPORT=5432`.
+# CI không dùng Makefile — nó truyền thẳng ba biến này trong workflow.
+PGPORT ?= 5433
+PGHOST ?= localhost
+DB_TEST_ENV := \
+	KET_TEST_DESTRUCTIVE_CLUSTER=1 \
+	KET_TEST_ADMIN_DSN=postgresql+psycopg://$(PGHOST):$(PGPORT)/postgres \
+	KET_TEST_KET_OWNER_DSN=postgresql+psycopg://ket_owner@$(PGHOST):$(PGPORT)/ket_test \
+	KET_TEST_KET_APP_DSN=postgresql+psycopg://ket_app@$(PGHOST):$(PGPORT)/ket_test
+
 .DEFAULT_GOAL := help
 .PHONY: help install check \
         server-install server-lint server-format server-typecheck server-imports \
-        server-test server-test-db server-check \
+        server-test server-test-db server-coverage server-check version-check \
         client-install client-typecheck client-lint client-build client-check \
         shell-fmt shell-lint tauri-build clean
 
@@ -39,8 +59,16 @@ server-format: ## ruff format --check
 server-test: ## pytest, nhóm không cần DB (gồm kiểm cấm float trong code nghiệp vụ)
 	cd $(SERVER) && uv run pytest -m "not db"
 
-server-test-db: ## pytest nhóm cần PostgreSQL thật (RLS, nhật ký bất biến, cô lập dataset)
-	cd $(SERVER) && uv run pytest -m db
+server-test-db: ## pytest nhóm cần PostgreSQL 16 thật (RLS, nhật ký bất biến, cô lập dataset)
+	cd $(SERVER) && $(DB_TEST_ENV) uv run pytest -m db
+
+version-check: ## Năm tệp khai phiên bản phải khớp (cổng của release.yml)
+	python3 .github/scripts/check_version_consistency.py
+
+server-coverage: ## pytest TOÀN BỘ + báo cáo độ phủ (con số CI dán vào PR)
+	cd $(SERVER) && $(DB_TEST_ENV) uv run pytest --cov
+	cd $(SERVER) && uv run coverage report --format=total | \
+		xargs -I{} echo "Độ phủ: {}%"
 
 server-check: server-lint server-format server-typecheck server-imports server-test server-test-db ## Toàn bộ cổng phía server
 

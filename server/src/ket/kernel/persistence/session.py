@@ -1,16 +1,21 @@
 """Mở `Session` đã định tuyến đúng dataset và đúng phạm vi chi nhánh.
 
-Ba thứ phải xảy ra **trước câu truy vấn đầu tiên** của mỗi transaction, đúng
-thứ tự này:
+Bốn thứ phải xảy ra **trước câu truy vấn đầu tiên** của mỗi transaction. Ba lệnh
+SQL đầu độc lập nhau về mặt kỹ thuật — thứ tự dưới đây đọc theo tầng ("quyền,
+rồi tầm nhìn, rồi phạm vi dòng") chứ không phải một ràng buộc của PostgreSQL:
 
-1. `SET LOCAL search_path` → chọn schema dataset (ADR-017). Sai bước này là
+1. `SET LOCAL ROLE ds_<mã>_app` → **quyền** chỉ trên dataset này (D3). `search_path`
+   một mình chỉ chọn tầm nhìn, không cấm gì; giới hạn của lớp này (tiêm SQL nhiều
+   câu lệnh vẫn `SET ROLE` sang dataset khác được) ghi trong
+   `kernel/security/dataset_roles.py`.
+2. `SET LOCAL search_path` → chọn schema dataset (ADR-017). Sai bước này là
    ghi sổ nhầm doanh nghiệp.
-2. `set_config('ket.branch_ids', …, local)` → phạm vi RLS (RT-04). Thiếu
+3. `set_config('ket.branch_ids', …, local)` → phạm vi RLS (RT-04). Thiếu
    bước này thì không đọc được gì (fail-closed), chứ không phải đọc được tất.
-3. Gắn `AuditContext` vào `session.info` → nhật ký biết ai đang thao tác.
+4. Gắn `AuditContext` vào `session.info` → nhật ký biết ai đang thao tác.
 
-Cả ba đều `LOCAL`/theo transaction, nên connection quay lại pool là sạch. Đây
-là điều kiện để nhiều người dùng dùng chung một pool mà không kế thừa quyền
+Ba lệnh đầu đều `LOCAL`/theo transaction, nên connection quay lại pool là sạch.
+Đây là điều kiện để nhiều người dùng dùng chung một pool mà không kế thừa quyền
 của nhau.
 """
 
@@ -27,6 +32,7 @@ from ket.kernel.auditing.listener import (
     AuditContext,
     register_audit_listener,
 )
+from ket.kernel.security.dataset_roles import set_local_role_statement
 from ket.kernel.security.rls import set_search_path_statement
 from ket.kernel.security.tenant import set_branch_scope
 
@@ -59,6 +65,7 @@ def bind_transaction_scope(
     """
     if not session.in_transaction():
         raise RuntimeError("bind_transaction_scope phải chạy trong transaction đang mở")
+    session.execute(text(set_local_role_statement(dataset_schema)))
     session.execute(text(set_search_path_statement(dataset_schema)))
     set_branch_scope(session, branch_ids)
     session.info[AUDIT_CONTEXT_KEY] = audit

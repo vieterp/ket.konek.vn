@@ -18,13 +18,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import context, op
 from sqlalchemy.dialects import postgresql
 
 from ket.kernel.auditing.models import AUDIT_TABLE_NAME
+from ket.kernel.datasets.naming import role_name_for_schema
+from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 from ket.kernel.security.grants import (
-    grant_app_append_only,
-    grant_app_read_write,
+    grant_append_only,
+    grant_read_write,
     serial_sequence_name,
 )
 from ket.kernel.security.rls import enable_branch_rls_statements
@@ -277,11 +279,35 @@ def _apply_grants() -> None:
         "number_sequences",
     )
 
+    grantee = _dataset_grantee()
     for table in all_tables:
         sequence = serial_sequence_name(table) if table in tables_with_serial_id else None
-        builder = grant_app_append_only if table in append_only else grant_app_read_write
-        for statement in builder(table, sequence=sequence):
+        builder = grant_append_only if table in append_only else grant_read_write
+        for statement in builder(table, grantee=grantee, sequence=sequence):
             op.execute(statement)
+
+
+def _dataset_grantee() -> str:
+    """Vai trò nhận quyền trên bảng của **schema đang được migrate** (D3).
+
+    Lấy schema từ `Config.attributes` — chỗ mà `migrations/env.py` ghi lại kết
+    quả phân giải của chính nó — chứ không hỏi DB `current_schema()`. Hai lý do:
+
+    * Chế độ offline (`alembic upgrade --sql`) **không có connection thật**;
+      `op.get_bind()` trả `MockConnection` và một lời gọi `exec_driver_sql` ở đây
+      làm vỡ hẳn chế độ sinh SQL — thứ mà DBA của khách hàng dùng để duyệt
+      migration trước khi chạy.
+    * Vẫn chỉ có một nơi phân giải schema (`env.py::_resolve_schema`), nên không
+      mở đường thứ hai để migration của dataset này cấp quyền lên bảng của
+      dataset kia.
+    """
+    schema = context.config.attributes.get(ALEMBIC_SCHEMA_ATTRIBUTE)
+    if not isinstance(schema, str):
+        raise RuntimeError(
+            f"Không xác định được schema đích: `{ALEMBIC_SCHEMA_ATTRIBUTE}` chưa được "
+            "`migrations/env.py` ghi vào Config.attributes"
+        )
+    return role_name_for_schema(schema)
 
 
 def _apply_row_level_security() -> None:

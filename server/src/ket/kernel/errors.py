@@ -59,6 +59,22 @@ class DatasetAlreadyExistsError(DomainError):
     error_code: ClassVar[str] = "dataset.already_exists"
 
 
+class DatasetRoleNotAdministrableError(DomainError):
+    """Vai trò của dataset đã tồn tại nhưng `ket_owner` không quản trị được nó.
+
+    PostgreSQL 16 đòi ADMIN OPTION mới `ALTER`/`GRANT` được một vai trò, và
+    `ket_owner` chỉ có ADMIN với vai trò do **chính nó** tạo. Trạng thái này xuất
+    hiện khi vai trò được dựng bởi superuser — khôi phục `pg_dumpall
+    --globals-only`, hoặc cài lại `ket_owner`.
+
+    Báo lỗi rõ thay vì để `permission denied to alter role` thô nổi lên giữa
+    chừng: cách sửa (`GRANT <role> TO ket_owner WITH ADMIN OPTION` bằng
+    superuser) không hề suy ra được từ thông điệp gốc.
+    """
+
+    error_code: ClassVar[str] = "dataset.role_not_administrable"
+
+
 class AuditContextMissingError(DomainError):
     """Có thay đổi trên bảng cần ghi nhật ký nhưng transaction không khai người thực hiện.
 
@@ -69,6 +85,17 @@ class AuditContextMissingError(DomainError):
     """
 
     error_code: ClassVar[str] = "audit.context_missing"
+
+
+class UnsupportedPostgresVersionError(DomainError):
+    """Cụm PostgreSQL cũ hơn phiên bản đích của bản cài (D4).
+
+    Từ chối khởi động thay vì chạy tiếp: SQL của các phase sau viết theo phiên
+    bản đích, và một câu lệnh không được hỗ trợ sẽ nổ đúng lúc đang chạy — giữa
+    kỳ khóa sổ chẳng hạn — thay vì lúc cài đặt.
+    """
+
+    error_code: ClassVar[str] = "system.postgres_version_unsupported"
 
 
 class SchemaVersionMismatchError(DomainError):

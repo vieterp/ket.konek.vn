@@ -18,8 +18,8 @@ from sqlalchemy import Engine, text
 
 from ket.kernel.datasets.bootstrap import CONTROL_SCHEMA_VERSION, verify_control_schema
 from ket.kernel.datasets.provisioning import DatasetRef, verify_dataset_schema_version
-from ket.kernel.errors import SchemaVersionMismatchError
-from ket.main import create_app, verify_schema_versions
+from ket.kernel.errors import SchemaVersionMismatchError, UnsupportedPostgresVersionError
+from ket.main import create_app, verify_postgres_version, verify_schema_versions
 from ket.settings import Settings
 
 pytestmark = pytest.mark.db
@@ -72,6 +72,51 @@ def test_version_mismatch_refuses_startup(
             connection.execute(
                 text(f'UPDATE "{schema}".alembic_version SET version_num = :v'), {"v": original}
             )
+
+
+def test_startup_refuses_a_postgres_older_than_the_target(
+    app_engine: Engine, test_settings: Settings
+) -> None:
+    """Cụm cũ hơn phiên bản đích → từ chối khởi động (D4).
+
+    Đặt ngưỡng giả cao ngất thay vì dựng một cụm cũ: thứ đang kiểm là **cổng có
+    chặn không**, và nó phải chặn ở mọi phiên bản.
+    """
+    settings = test_settings.model_copy(update={"minimum_postgres_version": 99})
+    with pytest.raises(UnsupportedPostgresVersionError):
+        verify_postgres_version(app_engine, settings)
+
+
+def test_app_refuses_to_start_on_an_old_postgres(test_settings: Settings) -> None:
+    """Cổng phiên bản phải nằm **trên đường khởi động**, không chỉ tồn tại như một hàm.
+
+    Kiểm đột biến chỉ ra: xóa hẳn lời gọi `verify_postgres_version` khỏi
+    `lifespan` mà toàn bộ test vẫn xanh, vì hai test kia gọi thẳng vào hàm. Toàn
+    bộ giá trị của D4 nằm ở chỗ nó **chặn được lúc khởi động** — đó mới là thứ
+    phải có test.
+    """
+    settings = test_settings.model_copy(
+        update={
+            "minimum_postgres_version": 99,
+            "verify_postgres_version_on_startup": True,
+            "verify_schema_on_startup": False,
+        }
+    )
+    with pytest.raises(UnsupportedPostgresVersionError), TestClient(create_app(settings)):
+        pass  # pragma: no cover — lifespan ném lỗi trước khi vào được thân khối
+
+
+def test_cluster_runs_the_target_postgres_version(
+    app_engine: Engine, test_settings: Settings
+) -> None:
+    """Cụm đang chạy test phải đúng phiên bản đích của bản cài (D4).
+
+    Test này đỏ trên máy lập trình còn dùng PostgreSQL cũ — đó là mục đích. Cơ
+    chế cô lập của lát này nằm ở `CREATEROLE`, ACL và RLS, những thứ đổi hành vi
+    giữa các phiên bản; kiểm chúng trên nền khác bản cài là tự cho mình niềm tin
+    không có cơ sở.
+    """
+    verify_postgres_version(app_engine, test_settings)
 
 
 def test_control_schema_version_is_a_real_gate(app_engine: Engine, owner_engine: Engine) -> None:

@@ -15,8 +15,14 @@ from sqlalchemy.orm import Session
 
 from ket.kernel.security.rls import BRANCH_SCOPE_GUC
 
-_SET_CONFIG = text(f"SELECT set_config('{BRANCH_SCOPE_GUC}', :value, true)")
-_GET_CONFIG = text(f"SELECT current_setting('{BRANCH_SCOPE_GUC}', true)")
+# Tên GUC ràng buộc như **tham số**, không ghép chuỗi: `set_config` và
+# `current_setting` nhận nó như đối số hàm chứ không như identifier, nên không
+# có lý do gì phải nối chuỗi ở đây. Ngoài việc bỏ được một ngoại lệ khỏi
+# `tests/test_no_sql_string_interpolation.py`, câu lệnh có tham số buộc psycopg
+# dùng extended protocol — protocol không cho nhiều câu lệnh trong một lần gửi
+# (xem ADR-017 §Consequences về tiêm nhiều câu lệnh).
+_SET_CONFIG = text("SELECT set_config(:guc, :value, true)")
+_GET_CONFIG = text("SELECT current_setting(:guc, true)")
 
 
 def set_branch_scope(session: Session, branch_ids: Sequence[int]) -> None:
@@ -37,12 +43,15 @@ def set_branch_scope(session: Session, branch_ids: Sequence[int]) -> None:
         # ngay giữa policy RLS.
         if isinstance(branch_id, bool):
             raise TypeError(f"branch_id phải là int, nhận {branch_id!r}")
-    session.execute(_SET_CONFIG, {"value": ",".join(str(b) for b in branch_ids)})
+    session.execute(
+        _SET_CONFIG,
+        {"guc": BRANCH_SCOPE_GUC, "value": ",".join(str(b) for b in branch_ids)},
+    )
 
 
 def current_branch_scope(session: Session) -> tuple[int, ...]:
     """Đọc lại phạm vi chi nhánh đang có hiệu lực (dùng cho test và chẩn đoán)."""
-    raw = session.execute(_GET_CONFIG).scalar_one_or_none()
+    raw = session.execute(_GET_CONFIG, {"guc": BRANCH_SCOPE_GUC}).scalar_one_or_none()
     if not raw:
         return ()
     return tuple(int(part) for part in raw.split(","))

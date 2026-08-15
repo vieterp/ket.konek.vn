@@ -23,6 +23,7 @@ from alembic import context
 from sqlalchemy import Connection, engine_from_config, pool
 
 from ket.kernel.datasets.naming import validate_schema_name
+from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 from ket.model_registry import DatasetBase
 from ket.settings import get_settings
 
@@ -37,18 +38,30 @@ target_metadata = DatasetBase.metadata
 def _resolve_schema() -> str:
     """Schema dataset đích của lần chạy migration này (đã kiểm hợp lệ).
 
+    Kết quả được ghi lại vào `config.attributes[ALEMBIC_SCHEMA_ATTRIBUTE]` để
+    **migration** đọc được (nó cần suy ra tên vai trò nhận quyền — xem
+    `_dataset_grantee()` trong `0001_core_platform.py`). Ghi lại thay vì để
+    migration tự hỏi DB `current_schema()`: chế độ offline (`--sql`) không có
+    connection thật, và một migration hỏi DB sẽ làm vỡ hẳn chế độ đó.
+
+    Vẫn chỉ có **một** nơi phân giải schema, nên không mở ra đường thứ hai để
+    migration của dataset này cấp quyền lên bảng của dataset kia.
+
     Tên schema đi thẳng vào câu lệnh SQL (identifier không tham số hóa được),
     nên nó phải được kiểm trước khi dùng. Bộ luật kiểm dùng chung với runtime
     (`kernel/datasets/naming.py`) — hai bộ luật khác nhau cho cùng một tên
     schema là cách chắc chắn nhất để migration chạy nhầm chỗ.
     """
-    from_attributes = config.attributes.get("dataset_schema")
+    from_attributes = config.attributes.get(ALEMBIC_SCHEMA_ATTRIBUTE)
     if isinstance(from_attributes, str):
         return validate_schema_name(from_attributes)
 
     override = context.get_x_argument(as_dictionary=True).get("schema")
-    schema = str(override) if override else get_settings().default_dataset_schema
-    return validate_schema_name(schema)
+    schema = validate_schema_name(
+        str(override) if override else get_settings().default_dataset_schema
+    )
+    config.attributes[ALEMBIC_SCHEMA_ATTRIBUTE] = schema
+    return schema
 
 
 def _resolve_url() -> str:

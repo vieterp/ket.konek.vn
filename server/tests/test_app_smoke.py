@@ -1,5 +1,8 @@
 """Smoke test cho khung app — chứng minh khung dựng và chạy được.
 
+Hai cờ kiểm lúc khởi động đều tắt: các test này chạy trong nhóm không cần DB
+(mọi hệ điều hành trong CI), mà cả hai cổng đều phải mở connection thật.
+
 Phase 1 chưa có nghiệp vụ nào để kiểm; mục đích duy nhất là CI có tín hiệu
 "khung còn sống" trước khi phase 2 gắn auth/RBAC/DB vào.
 """
@@ -13,7 +16,13 @@ from ket.settings import Settings
 
 
 def test_health_endpoint_returns_ok() -> None:
-    app = create_app(Settings(deployment_mode="standalone", verify_schema_on_startup=False))
+    app = create_app(
+        Settings(
+            deployment_mode="standalone",
+            verify_schema_on_startup=False,
+            verify_postgres_version_on_startup=False,
+        )
+    )
 
     with TestClient(app) as client:
         response = client.get("/health")
@@ -26,7 +35,9 @@ def test_health_endpoint_returns_ok() -> None:
 
 def test_openapi_schema_generates() -> None:
     """Hợp đồng client↔server sinh từ OpenAPI (LD-03) — schema phải dựng được."""
-    app = create_app(Settings(verify_schema_on_startup=False))
+    app = create_app(
+        Settings(verify_schema_on_startup=False, verify_postgres_version_on_startup=False)
+    )
 
     schema = app.openapi()
 
