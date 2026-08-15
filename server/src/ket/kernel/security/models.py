@@ -18,9 +18,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from ket.kernel.auditing.listener import Audited
 from ket.kernel.persistence.base import DatasetBase
+from ket.kernel.persistence.versioning import RowVersioned
 
 
-class Branch(DatasetBase, Audited):
+class Branch(DatasetBase, Audited, RowVersioned):
     """Chi nhánh / đơn vị trực thuộc (LD-12, FR-SYS-072).
 
     Đồng thời là **neo cô lập dữ liệu**: mọi bảng nghiệp vụ mang `branch_id` và
@@ -31,6 +32,10 @@ class Branch(DatasetBase, Audited):
     Bản thân bảng này **không** bật RLS — xem lý do trong migration `0001`
     (`_apply_row_level_security`): policy trên danh mục sẽ chặn luôn việc tạo
     chi nhánh mới. Quyền xem/sửa danh mục thuộc về RBAC.
+
+    `RowVersioned` vì đây là danh mục **người dùng sửa qua form**: hai người
+    cùng mở một chi nhánh rồi lần lượt lưu là chuyện bình thường, và người lưu
+    sau không được ghi đè im lặng thay đổi của người lưu trước (FR-NFR-005).
     """
 
     __tablename__ = "branches"
@@ -115,12 +120,17 @@ class UserBranch(DatasetBase, Audited):
     )
 
 
-class Setting(DatasetBase, Audited):
+class Setting(DatasetBase, Audited, RowVersioned):
     """Tùy chọn hai cấp: chung hệ thống hoặc riêng người dùng (FR-SYS-060, BR-SYS-06).
 
     Giá trị lưu chuỗi + `value_type` thay vì JSONB: tùy chọn ở đây là vô hướng
     (số chữ số thập phân, phím Enter/Tab, ngôn ngữ) và chuỗi có kiểu thì so
     sánh, index và đọc bằng mắt trong bản dump đều dễ hơn.
+
+    `RowVersioned` vì tùy chọn **chung hệ thống** là bản ghi dùng chung: hai
+    quản trị viên cùng chỉnh màn hình thiết lập thì người lưu sau phải biết bản
+    mình đang xem đã cũ — `money.scale` bị ghi đè im lặng sẽ đổi cách làm tròn
+    của toàn bộ dữ liệu kế toán.
     """
 
     __tablename__ = "settings"

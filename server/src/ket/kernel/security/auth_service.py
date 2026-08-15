@@ -23,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Final, cast
 from uuid import UUID
 
-from sqlalchemy import CursorResult, select, update
+from sqlalchemy import CursorResult, delete, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.auditing.control_log import ControlAuditAction, record_control_action
@@ -474,6 +474,76 @@ def revoke_session(
         correlation_id=correlation_id,
         client_info=client_info,
     )
+
+
+DEFAULT_SESSION_RETENTION: Final[timedelta] = timedelta(days=30)
+"""Giữ phiên đã kết thúc thêm bao lâu trước khi dọn.
+
+30 ngày vì bảng này là **nguồn điều tra sự cố**: "tài khoản đó đăng nhập từ máy
+nào, lúc mấy giờ, phiên sống bao lâu" là câu hỏi được đặt ra hàng tuần sau khi
+chuyện xảy ra, không phải hàng giờ. Ngắn hơn thì mất dấu vết đúng lúc cần; dài
+hơn thì không đổi được gì vì bảng đã nhỏ sẵn."""
+
+
+def prune_expired_sessions(
+    session: Session,
+    *,
+    retention: timedelta = DEFAULT_SESSION_RETENTION,
+    actor_user_id: int | None = None,
+    client_info: str | None = None,
+    now: datetime | None = None,
+) -> int:
+    """Xóa phiên **đã kết thúc** và đủ cũ. Trả số dòng đã xóa.
+
+    Bảng `auth_sessions` chỉ tăng: mỗi lần đăng nhập là một dòng, và với 50
+    người dùng thì đó là ~18.000 dòng mỗi năm — không nguy hiểm, nhưng cũng
+    không có lý do để giữ mãi.
+
+    **Chỉ chạy được bằng `ket_owner`.** Vai trò runtime cố ý không có `DELETE`
+    trên bảng này (`bootstrap.app_login_table_grants`), nên một lỗ hổng ở tầng
+    API không xóa được dấu vết đăng nhập. Đó là lý do việc dọn nằm ở
+    `python -m ket.admin prune-sessions` chứ không ở một endpoint.
+
+    Không đụng `control_audit_log`: **sự kiện tài khoản** (tạo, đổi mật khẩu,
+    thu hồi) nằm ở bảng đó và là bảng chỉ-thêm, không bao giờ dọn. Ở đây chỉ dọn
+    *phiên* đã hết đời.
+    """
+    if retention < timedelta(0):
+        # Cửa sổ âm đẩy mốc cắt về **tương lai**, tức là xóa sạch cả phiên đang
+        # sống — một lệnh dọn dẹp biến thành lệnh đuổi cả văn phòng. Chặn ở
+        # tầng dịch vụ chứ không chỉ ở bộ phân tích tham số CLI: đây là đường mà
+        # mọi nơi gọi (CLI hôm nay, job đặt lịch ở 2B-2b) đều đi qua.
+        raise ValueError(f"retention không được âm, nhận {retention}")
+
+    moment = now if now is not None else datetime.now(UTC)
+    cutoff = moment - retention
+    statement = delete(AuthSession).where(
+        # Hai điều kiện, không phải một: một phiên bị **thu hồi** vẫn có thể còn
+        # hạn trên giấy tờ (`expires_at` trong tương lai), và nó đã chết từ lúc
+        # bị thu hồi. Chỉ lọc theo `expires_at` sẽ giữ lại đúng những dòng vô
+        # dụng nhất.
+        (AuthSession.expires_at < cutoff)
+        | ((AuthSession.revoked_at.is_not(None)) & (AuthSession.revoked_at < cutoff))
+    )
+    result = cast("CursorResult[Any]", session.execute(statement))
+    removed = result.rowcount
+    if removed:
+        # Xóa lịch sử phiên phải tự nó để lại vết: `auth_sessions` là nguồn trả
+        # lời "ai đăng nhập từ máy nào, lúc mấy giờ" khi có tranh chấp, nên một
+        # lần dọn không ghi gì là một khoảng trống không giải thích được.
+        record_control_action(
+            session,
+            action=ControlAuditAction.SESSIONS_PRUNED,
+            actor_user_id=actor_user_id,
+            subject_user_id=None,
+            new_values={
+                "removed_sessions": removed,
+                "cutoff": cutoff.isoformat(),
+                "retention_days": retention.days,
+            },
+            client_info=client_info,
+        )
+    return removed
 
 
 def revoke_other_sessions(

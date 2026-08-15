@@ -79,6 +79,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("name_en", sa.String(length=255), nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
+        sa.Column("row_version", sa.Integer(), server_default="1", nullable=False),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_branches")),
         sa.UniqueConstraint("code", name=op.f("uq_branches_code")),
     )
@@ -88,8 +89,8 @@ def upgrade() -> None:
         sa.Column("idempotency_key", sa.String(length=120), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("request_fingerprint", sa.String(length=64), nullable=False),
-        sa.Column("result_type", sa.String(length=100), nullable=False),
-        sa.Column("result_id", sa.String(length=100), nullable=False),
+        sa.Column("result_type", sa.String(length=100), nullable=True),
+        sa.Column("result_id", sa.String(length=100), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -185,6 +186,7 @@ def upgrade() -> None:
         sa.Column("key", sa.String(length=120), nullable=False),
         sa.Column("value", sa.String(length=1000), nullable=False),
         sa.Column("value_type", sa.String(length=20), server_default="string", nullable=False),
+        sa.Column("row_version", sa.Integer(), server_default="1", nullable=False),
         sa.CheckConstraint(
             "(scope = 'system' AND user_id IS NULL) OR (scope = 'user' AND user_id IS NOT NULL)",
             name=op.f("ck_settings_scope_user_consistent"),

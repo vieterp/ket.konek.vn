@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from typing import Final
 
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -35,6 +36,26 @@ from ket.kernel.auditing.listener import (
 from ket.kernel.security.dataset_roles import set_local_role_statement
 from ket.kernel.security.rls import set_search_path_statement
 from ket.kernel.security.tenant import set_branch_scope
+
+LOCK_TIMEOUT_MS: Final[int] = 3_000
+"""Chờ tối đa bao lâu ở một khóa hàng trước khi bỏ cuộc.
+
+Không có nó thì `lock_timeout` mặc định của PostgreSQL là **vô hạn**, và đó là
+một vấn đề có thật với chính thiết kế của lát này: idempotency cố ý dựa vào việc
+request trùng khóa **chờ** ở ràng buộc duy nhất. Cái chờ đó dài đúng bằng
+transaction nghiệp vụ của bên thắng — ở phase 6 (ghi sổ nhiều bảng) có thể vài
+giây. Người dùng bấm lại năm lần là năm connection nằm chờ, và pool chỉ có
+`db_pool_size + db_max_overflow` = 15 chỗ. Vài người cùng làm vậy thì cả văn
+phòng đứng vì một khóa.
+
+3 giây: dài hơn hẳn mọi thao tác ghi bình thường (đo ở lát này: dưới 50ms), đủ
+ngắn để một connection kẹt không kéo theo cái thứ hai. Hết giờ → PostgreSQL ném
+lỗi, `unit_of_work` rollback, và tầng API trả lỗi thay vì treo."""
+
+_SET_LOCK_TIMEOUT = text("SELECT set_config('lock_timeout', :value, true)")
+"""Giá trị ràng buộc như **tham số**, không ghép chuỗi — cùng lý do với GUC chi
+nhánh (`security/tenant.py`): câu lệnh có tham số buộc psycopg dùng extended
+protocol, và protocol đó không cho nhiều câu lệnh trong một lần gửi."""
 
 
 def create_session_factory(engine: Engine) -> sessionmaker[Session]:
@@ -67,6 +88,7 @@ def bind_transaction_scope(
         raise RuntimeError("bind_transaction_scope phải chạy trong transaction đang mở")
     session.execute(text(set_local_role_statement(dataset_schema)))
     session.execute(text(set_search_path_statement(dataset_schema)))
+    session.execute(_SET_LOCK_TIMEOUT, {"value": f"{LOCK_TIMEOUT_MS}ms"})
     set_branch_scope(session, branch_ids)
     session.info[AUDIT_CONTEXT_KEY] = audit
 

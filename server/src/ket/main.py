@@ -6,8 +6,12 @@ hồi được, 2FA, hợp đồng lỗi RFC 7807) và **phân quyền** — đ�
 theo header mỗi request, RBAC tới cấp `{module}.{chứng từ}.{hành vi}`, phạm vi
 chi nhánh cho RLS.
 
-Còn lại của phase 2: idempotency + optimistic locking + hàng đợi job (2B-2),
-client + bắt tay schema-version (2C).
+Lát 2B-2a thêm **hợp đồng ghi**: idempotency cùng transaction (FR-NFR-004),
+khóa lạc quan bằng `row_version` (FR-NFR-005), tùy chọn hai cấp (FR-SYS-060) và
+hạn mức request.
+
+Còn lại của phase 2: hàng đợi job + worker + sinh type OpenAPI (2B-2b), client
++ bắt tay schema-version (2C).
 
 Luồng nghiệp vụ đi qua REST + OpenAPI (LD-03). Client **không bao giờ** nối
 thẳng PostgreSQL và **không** dùng API Tauri cho nghiệp vụ — giữ đường mở lên
@@ -24,9 +28,11 @@ from sqlalchemy import Engine
 
 from ket import __version__
 from ket.api.middleware.problem_details import register_problem_handlers
+from ket.api.middleware.rate_limit import RateLimitMiddleware
 from ket.api.middleware.request_context import RequestContextMiddleware
 from ket.api.routers.auth import router as auth_router
 from ket.api.routers.system import router as system_router
+from ket.api.routers.system_settings import router as settings_router
 from ket.kernel.datasets.bootstrap import verify_control_schema
 from ket.kernel.datasets.provisioning import find_alembic_config, verify_dataset_schema_version
 from ket.kernel.datasets.service import list_datasets
@@ -129,13 +135,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = resolved
 
-    # Thứ tự có ý nghĩa: middleware mã tương quan chạy **trước** mọi thứ khác để
-    # handler lỗi có `correlation_id` mà trả về — không có nó, thông điệp 500
-    # không còn tra được vào log.
+    # Thứ tự **ngược** với thứ tự chạy: Starlette bọc theo chiều ngược lại, nên
+    # middleware thêm **sau cùng** là lớp ngoài cùng. Ở đây điều đó có nghĩa là
+    # mã tương quan được gắn trước, rồi mới tới hạn mức — để một phản hồi `429`
+    # cũng mang `correlation_id` và tra được vào log như mọi lỗi khác.
+    app.add_middleware(
+        RateLimitMiddleware,
+        default_per_minute=resolved.rate_limit_per_minute,
+        auth_per_minute=resolved.rate_limit_auth_per_minute,
+    )
     app.add_middleware(RequestContextMiddleware)
     register_problem_handlers(app)
     app.include_router(auth_router)
     app.include_router(system_router)
+    app.include_router(settings_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

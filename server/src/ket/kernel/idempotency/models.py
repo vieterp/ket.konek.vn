@@ -51,8 +51,13 @@ class IdempotencyKey(DatasetBase):
     """Băm của thân request. Cùng khóa nhưng khác nội dung = lỗi phía client
     (dùng lại khóa), phải trả `409` chứ không phải im lặng trả kết quả cũ."""
 
-    result_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    result_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    result_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    result_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    """Cho phép `NULL` vì khóa được **giành trước khi làm việc**: lúc `INSERT`
+    thì chưa biết chứng từ nào sẽ ra đời (xem `service.execute_once`). Hai cột
+    được điền trong cùng transaction, trước khi commit, nên không có dòng `NULL`
+    nào quan sát được từ bên ngoài — `service._lookup` coi dòng như vậy là hỏng
+    chứ không phải kết quả rỗng."""
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

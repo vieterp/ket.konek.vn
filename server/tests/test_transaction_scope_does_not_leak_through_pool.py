@@ -25,7 +25,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.datasets.provisioning import DatasetRef
-from ket.kernel.persistence.session import create_session_factory
+from ket.kernel.persistence.session import LOCK_TIMEOUT_MS, create_session_factory
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security.grants import APP_ROLE
 from ket.kernel.security.models import Branch
@@ -106,3 +106,34 @@ def test_a_leaked_role_would_actually_expose_the_other_dataset(
         with pytest.raises(ProgrammingError) as error:
             connection.execute(text(f'SELECT count(*) FROM "{dataset_alpha.schema_name}".branches'))
     assert getattr(error.value.orig, "sqlstate", None) == "42501"
+
+
+def test_a_business_transaction_carries_a_lock_timeout(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
+) -> None:
+    """Không có `lock_timeout`, một request chờ khóa **vô hạn**.
+
+    Idempotency cố ý dựa vào việc request trùng khóa *chờ* ở ràng buộc duy nhất
+    (xem `kernel/idempotency/service.py`). Cái chờ đó dài bằng transaction của
+    bên thắng, và pool chỉ có 15 chỗ — vài người bấm lại là cả văn phòng đứng.
+
+    Kiểm giá trị **bên trong** transaction, và kiểm nó biến mất sau đó: `SET
+    LOCAL` phải theo transaction, nếu không connection trả về pool sẽ mang theo
+    giới hạn này sang người dùng kế tiếp.
+    """
+    # `pg_settings` trả giá trị theo **đơn vị chuẩn** (ms) dưới dạng số; `SHOW`
+    # thì chuẩn hóa thành chuỗi người đọc ("3s"), khác nhau tùy giá trị.
+    reading = text("SELECT setting FROM pg_settings WHERE name = 'lock_timeout'")
+
+    scope = RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=())
+    with unit_of_work(session_factory, scope) as session:
+        inside = int(session.execute(reading).scalar_one())
+
+    assert inside == LOCK_TIMEOUT_MS
+
+    with session_factory() as session:
+        session.begin()
+        outside = int(session.execute(reading).scalar_one())
+        session.rollback()
+
+    assert outside != inside, "`lock_timeout` rò ra ngoài transaction đã đặt nó"

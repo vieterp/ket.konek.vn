@@ -21,11 +21,19 @@ from typing import Final
 import structlog
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from psycopg.errors import ForeignKeyViolation, UniqueViolation
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import StaleDataError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from ket.api.middleware.request_context import correlation_id_of
-from ket.kernel.errors import DomainError
+from ket.kernel.errors import (
+    DomainError,
+    DuplicateValueError,
+    ReferenceNotFoundError,
+    RowVersionConflictError,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -40,14 +48,22 @@ VALIDATION_ERROR_CODE: Final[str] = "request.validation_failed"
 INTERNAL_ERROR_CODE: Final[str] = "system.internal_error"
 
 
-def _problem(
+def problem_response(
     *,
     status: int,
     error_code: str,
     detail: str,
     request: Request,
     extra: dict[str, object] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
+    """Dựng một phản hồi RFC 7807.
+
+    Lộ ra (không còn `_problem` riêng tư) vì **middleware** cũng phải trả lỗi:
+    middleware chạy ngoài phạm vi của `add_exception_handler`, nên nó không thể
+    ném `DomainError` và trông chờ handler bắt. Dùng chung hàm này là cách giữ
+    cho API chỉ có **một** định dạng lỗi duy nhất.
+    """
     correlation_id = correlation_id_of(request)
     body: dict[str, object] = {
         "type": f"{ERROR_TYPE_PREFIX}{error_code}",
@@ -59,7 +75,9 @@ def _problem(
     }
     if extra:
         body.update(extra)
-    return JSONResponse(status_code=status, content=body, media_type=PROBLEM_CONTENT_TYPE)
+    return JSONResponse(
+        status_code=status, content=body, media_type=PROBLEM_CONTENT_TYPE, headers=headers
+    )
 
 
 async def handle_domain_error(request: Request, exc: Exception) -> JSONResponse:
@@ -72,12 +90,15 @@ async def handle_domain_error(request: Request, exc: Exception) -> JSONResponse:
         status=exc.http_status,
         details=exc.details,
     )
-    return _problem(
+    return problem_response(
         status=exc.http_status,
         error_code=exc.error_code,
         detail=exc.message,
         request=request,
-        extra={"details": exc.details},
+        # `problem_extra()` do chính lớp lỗi khai (mặc định rỗng) — xem
+        # `DomainError.problem_extra`. Đặt sau `details` để không lớp con nào
+        # vô tình ghi đè tham số thông điệp.
+        extra={"details": exc.details, **exc.problem_extra()},
     )
 
 
@@ -89,13 +110,80 @@ async def handle_validation_error(request: Request, exc: Exception) -> JSONRespo
     """
     if not isinstance(exc, RequestValidationError):  # pragma: no cover
         raise exc
-    return _problem(
+    return problem_response(
         status=422,
         error_code=VALIDATION_ERROR_CODE,
         detail="Dữ liệu gửi lên không hợp lệ",
         request=request,
         extra={"errors": exc.errors()},
     )
+
+
+async def handle_stale_data_error(request: Request, exc: Exception) -> JSONResponse:
+    """`StaleDataError` của SQLAlchemy → cùng `409` với xung đột phiên bản.
+
+    Đây là nhánh **hai request cùng đọc một phiên bản rồi cùng ghi**: lớp kiểm
+    sớm (`require_row_version`) để lọt vì cả hai đều đọc đúng phiên bản mới
+    nhất, và chỉ mệnh đề `WHERE row_version = ?` ở PostgreSQL phân xử được.
+
+    Không kèm `latest` như nhánh kia: transaction vừa đổ, và mở thêm một
+    transaction ở tầng handler chỉ để đọc lại bản ghi sẽ đặt một lượt truy vấn
+    DB vào đúng chỗ không có ngữ cảnh nào để biết nên đọc bảng nào. Client gọi
+    lại `GET` — nó vốn phải làm thế để dựng lại form.
+
+    Bắt ở đây chứ không ở từng endpoint vì mọi bảng `RowVersioned` của mọi phase
+    sau đều sinh ra lỗi này, và endpoint quên bắt sẽ trả `500` cho một tình
+    huống hoàn toàn bình thường.
+    """
+    if not isinstance(exc, StaleDataError):  # pragma: no cover - FastAPI chỉ gọi đúng loại
+        raise exc
+    logger.info("row_version_conflict", detail=str(exc))
+    return problem_response(
+        status=RowVersionConflictError.http_status,
+        error_code=RowVersionConflictError.error_code,
+        detail="Bản ghi đã được người khác sửa — hãy tải lại rồi lưu lại",
+        request=request,
+        extra={"details": {}, "latest": None},
+    )
+
+
+async def handle_integrity_error(request: Request, exc: Exception) -> JSONResponse:
+    """Ràng buộc DB bị vi phạm → lỗi **của người dùng**, không phải lỗi hệ thống.
+
+    Không có handler này, mã chi nhánh trùng — lỗi gõ tay thường gặp nhất — trả
+    về `500 "Đã xảy ra lỗi không mong muốn, cung cấp mã tham chiếu cho bộ phận
+    hỗ trợ"`. Người nhập liệu không có gì để làm với câu đó, còn thứ họ cần chỉ
+    là "mã này đã có".
+
+    Bắt ở tầng chung chứ không ở từng endpoint: từ phase 6, mỗi phân hệ có hàng
+    chục ràng buộc duy nhất (số chứng từ, mã danh mục), và endpoint quên bắt sẽ
+    lặp lại đúng cái `500` này.
+
+    **Chỉ** lộ tên ràng buộc, không bao giờ lộ câu lệnh hay thông điệp thô của
+    PostgreSQL — chúng chứa tên bảng, tên cột và cả giá trị dữ liệu.
+    """
+    if not isinstance(exc, IntegrityError):  # pragma: no cover - FastAPI chỉ gọi đúng loại
+        raise exc
+
+    original = exc.orig
+    constraint = getattr(getattr(original, "diag", None), "constraint_name", None)
+    logger.info("integrity_error", constraint=constraint, kind=type(original).__name__)
+
+    if isinstance(original, UniqueViolation):
+        error: DomainError = DuplicateValueError(
+            "Giá trị này đã có bản ghi khác sử dụng", constraint=constraint
+        )
+    elif isinstance(original, ForeignKeyViolation):
+        error = ReferenceNotFoundError(
+            "Bản ghi được tham chiếu không tồn tại", constraint=constraint
+        )
+    else:
+        # Ràng buộc khác (CHECK, NOT NULL): vẫn là dữ liệu không hợp lệ, nhưng
+        # không có thông điệp riêng nào đúng cho mọi trường hợp — trả `422` với
+        # tên ràng buộc để người vận hành tra được.
+        error = DomainError("Dữ liệu vi phạm ràng buộc của cơ sở dữ liệu", constraint=constraint)
+
+    return await handle_domain_error(request, error)
 
 
 async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
@@ -106,7 +194,7 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
     dò cấu trúc DB qua thông điệp lỗi.
     """
     logger.error("unhandled_exception", exc_info=exc)
-    return _problem(
+    return problem_response(
         status=500,
         error_code=INTERNAL_ERROR_CODE,
         detail=(
@@ -118,7 +206,9 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
 
 
 def register_problem_handlers(app: FastAPI) -> None:
-    """Gắn ba handler vào app. Gọi trong `create_app`."""
+    """Gắn năm handler vào app. Gọi trong `create_app`."""
     app.add_exception_handler(DomainError, handle_domain_error)
     app.add_exception_handler(RequestValidationError, handle_validation_error)
+    app.add_exception_handler(StaleDataError, handle_stale_data_error)
+    app.add_exception_handler(IntegrityError, handle_integrity_error)
     app.add_exception_handler(Exception, handle_unexpected_error)
