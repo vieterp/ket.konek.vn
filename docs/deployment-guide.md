@@ -1,10 +1,10 @@
 # Hướng dẫn triển khai — Konek Két
 
-**Cập nhật:** 2026-08-15 · phản ánh **đúng thứ đang có trong repo** sau phase 2 lát 2B-1a.
+**Cập nhật:** 2026-08-15 · phản ánh **đúng thứ đang có trong repo** sau phase 2 lát 2B-2b.
 
-Phạm vi: dựng cụm PostgreSQL, khóa mã hóa, tài khoản đầu tiên, khôi phục sau sao lưu,
+Phạm vi: dựng cụm PostgreSQL, khóa mã hóa, tài khoản đầu tiên, chạy app server và tiến trình worker, khôi phục sau sao lưu,
 chạy test cục bộ, kênh phát hành bộ cài. Lệnh quản trị chạy qua `python -m ket.admin`.
-Chưa có **bộ cài** app server — server chạy từ mã nguồn; đóng gói là spike S4 / phase 11.
+Chưa có **bộ cài** app server/worker — cả hai chạy từ mã nguồn; đóng gói là spike S4 / phase 11.
 
 ---
 
@@ -35,14 +35,14 @@ Linux: cài `postgresql-16`, sửa `port` trong `/etc/postgresql/16/main/postgre
 
 ## 2. Khởi tạo cụm lần đầu
 
-### 2.1 Ba vai trò nền (chạy bằng superuser, một lần cho mỗi cụm)
+### 2.1 Bốn vai trò nền (chạy bằng superuser, một lần cho mỗi cụm)
 
 ```bash
 psql -p 5433 -d postgres -c 'CREATE DATABASE ket OWNER ket_owner'
 psql -p 5433 -d ket -f server/src/ket/kernel/security/roles.sql
 ```
 
-> `roles.sql` tạo cả ba vai trò, nên lệnh `CREATE DATABASE … OWNER ket_owner` ở trên chỉ
+> `roles.sql` tạo cả bốn vai trò, nên lệnh `CREATE DATABASE … OWNER ket_owner` ở trên chỉ
 > chạy được khi vai trò đã có từ một cụm trước. Lần đầu tuyệt đối: chạy `roles.sql` trên
 > database `postgres` trước, rồi mới `CREATE DATABASE`.
 
@@ -51,8 +51,9 @@ psql -p 5433 -d ket -f server/src/ket/kernel/security/roles.sql
 | Vai trò | Thuộc tính | Việc |
 | --- | --- | --- |
 | `ket_owner` | LOGIN, INHERIT, **CREATEROLE**, NOSUPERUSER | Sở hữu schema/bảng, chạy DDL + migration, tạo vai trò dataset |
-| `ket_app` | LOGIN, **NOINHERIT**, NOSUPERUSER | Vai trò runtime. Không sở hữu bảng nào, không có quyền trên bảng dataset nào |
+| `ket_app` | LOGIN, **NOINHERIT**, NOSUPERUSER | Vai trò runtime của app server. Không sở hữu bảng nào, không có quyền trên bảng dataset nào |
 | `ket_control` | NOLOGIN, INHERIT (nhóm) | Giữ quyền trên 3 bảng schema điều khiển, cho vai trò dataset kế thừa |
+| `ket_worker` | LOGIN, **NOINHERIT**, NOSUPERUSER | Vai trò của tiến trình worker nền. Quyền riêng chỉ trên bảng `jobs` của từng dataset: `SELECT`, và `UPDATE` **theo cột** cho các cột cơ chế (trạng thái, tiến độ, kết quả, lease) — không đổi được `type`/`params`/`requested_by`/`branch_id` của một tác vụ |
 
 `ket_owner` cần `CREATEROLE` vì mỗi dữ liệu kế toán sinh thêm một vai trò `ds_<mã>_app`.
 Đây không phải nới quyền thực chất — owner vốn sở hữu toàn bộ dữ liệu — và `CREATEROLE`
@@ -162,7 +163,7 @@ schema khôi phục xong vẫn vô hình với ứng dụng.
 ### 3.2 Khôi phục — thứ tự bắt buộc
 
 ```bash
-# 1. Database rỗng thuộc ket_owner + ba vai trò nền (superuser)
+# 1. Database rỗng thuộc ket_owner + bốn vai trò nền (superuser)
 psql -p 5433 -d postgres -c 'CREATE DATABASE ket OWNER ket_owner'
 psql -p 5433 -d ket -f server/src/ket/kernel/security/roles.sql
 
@@ -180,7 +181,7 @@ Bỏ bước 3 thì app chết lúc khởi động với `role "ds_<mã>_app" do
 kiểm phiên bản schema chuyển sang vai trò dataset trước khi đọc `alembic_version`.
 
 **Vì sao `--no-privileges`.** Bản dump chứa `GRANT … TO ds_<mã>_app`, mà bước 1 mới chỉ
-dựng ba vai trò nền — vai trò dataset chưa tồn tại. Không có cờ này, `pg_restore` in một
+dựng bốn vai trò nền — vai trò dataset chưa tồn tại. Không có cờ này, `pg_restore` in một
 loạt `ERROR: role "ds_<mã>_app" does not exist`, kết bằng `errors ignored on restore: N` và
 **thoát mã 1**. Dữ liệu vào đủ và bước 3 sửa được, nhưng script `set -e` sẽ dừng ngay đó và
 không bao giờ chạy bước 3, còn người làm tay thì tưởng bản sao lưu hỏng.
@@ -300,7 +301,41 @@ Chạy cục bộ: `make version-check`.
 
 ---
 
-## 7. Đã biết là chưa xong
+## 7. Chạy tiến trình worker
+
+```bash
+cd server && uv run python -m ket.worker
+```
+
+Tiến trình này chạy song song với app server; bản cài đích sẽ cài cả hai như
+dịch vụ cùng một installer (phase 11). Nhiều tiến trình worker chạy được — hàng
+đợi dùng `FOR UPDATE SKIP LOCKED` nên hai worker không bao giờ giành cùng một
+job. Tùy chọn `--once` chạy một vòng rồi thoát (dùng cho lịch OS):
+
+```bash
+cd server && uv run python -m ket.worker --once
+```
+
+**Cấu hình worker** qua biến môi trường `KET_*` (cùng hàng với app server):
+
+| Biến | Mặc định | Ghi chú |
+| --- | --- | --- |
+| `KET_WORKER_DATABASE_URL` | `postgresql+psycopg://ket_worker@localhost/ket` | DSN của vai trò `ket_worker` — **khác** app server |
+| `KET_WORKER_OWNER_DATABASE_URL` | `(trống)` | DSN `ket_owner` chỉ cho job dọn phiên đăng nhập. Để trống (mặc định) = worker **không** cầm quyền owner, việc dọn phiên bị từ chối nếu xếp hàng. Chỉ khai khi bản cài muốn chạy dọn phiên qua hàng đợi |
+| `KET_WORKER_POLL_SECONDS` | `2` | Nghỉ bao lâu khi mọi dữ liệu kế toán đều hết việc — độ trễ không ai nhận ra, mà vẫn đủ thưa để một bản cài để không cả đêm không tạo ra hàng chục nghìn truy vấn rỗng |
+| `KET_JOB_LEASE_SECONDS` | `60` | Một lần giành job giữ bao lâu nếu worker im lặng. Phải ≥ 3× `job_heartbeat_seconds` |
+| `KET_JOB_HEARTBEAT_SECONDS` | `15` | Nhịp gia hạn lease trong lúc job chạy. Phải < `job_lease_seconds` ÷ 3 |
+| `KET_JOB_MAX_ATTEMPTS` | `3` | Số lần một job được giành trước khi reaper đánh hỏng nó |
+| `KET_WORKER_REAP_SECONDS` | `30` | Khoảng cách quét job hết lease (khác với `POLL_SECONDS`); reaper chạy ít thường xuyên hơn để tiết kiệm I/O |
+
+**Ý nghĩa lease/heartbeat/reaper:** để chống job mồ côi (worker chết giữa chừng).
+Worker giành một job, được giữ (lease) bao lâu; trong lúc chạy, định kỳ gia hạn
+(heartbeat); nếu worker chết (không gia hạn lần nữa), reaper quét và xếp lại
+job vào hàng để worker khác chạy. Chi tiết: ADR-014, RT-13.
+
+---
+
+## 8. Đã biết là chưa xong
 
 | # | Việc | Hệ quả |
 | --- | --- | --- |
@@ -310,5 +345,5 @@ Chạy cục bộ: `make version-check`.
 | 4 | **Chưa có bộ cài app server** | Server chạy từ mã nguồn (`uv run uvicorn`). Đóng gói Python + native deps là spike S4 |
 | 5 | Cụm dev đã tạo dataset bằng mã **trước** lát 2B-0 còn quyền bảng cấp thẳng cho `ket_app` | Chạy `python -m ket.admin ensure-cluster` một lần để thu hồi |
 | 6 | Cụm cài bằng mã **trước** lát 2B-1b còn cấp `INSERT/UPDATE` trên `users` và `auth_sessions` cho nhóm `ket_control` (tức mọi vai trò dataset) | `ensure-cluster` thu hồi. Chạy nó sau **mọi** lần nâng cấp — đây là đường leo thang từ một lỗ tiêm SQL bất kỳ tới việc tự cấp phiên |
-| 7 | Dọn `auth_sessions` hết hạn chạy **bằng tay**: `python -m ket.admin prune-sessions --retention-days 30` (mặc định giữ 30 ngày sau khi phiên chết) | Chạy theo quý là đủ ở quy mô mục tiêu. Lệnh dùng `ket_owner` vì vai trò runtime cố ý không có `DELETE`, và mỗi lần chạy để lại một dòng `control_audit_log`. Cùng nhịp đó chạy `python -m ket.admin prune-idempotency-keys` (khóa hết hạn, mọi dữ liệu kế toán, chạy bằng vai trò runtime). Đặt lịch tự động khi hàng đợi job có thật (lát 2B-2b) |
+| 7 | Dọn `auth_sessions` hết hạn chạy **bằng tay**: `python -m ket.admin prune-sessions --retention-days 30` (mặc định giữ 30 ngày sau khi phiên chết) | Chạy theo quý là đủ ở quy mô mục tiêu. Lệnh dùng `ket_owner` vì vai trò runtime cố ý không có `DELETE`, và mỗi lần chạy để lại một dòng `control_audit_log`. Cùng nhịp đó chạy `python -m ket.admin prune-idempotency-keys` (khóa hết hạn, mọi dữ liệu kế toán, chạy bằng vai trò runtime). Xếp hàng qua hàng đợi cũng được: `system.maintenance.prune_idempotency_keys` (quyền `system.maintenance.create`) và `system.maintenance.prune_sessions` (quyền `system.installation.create` — cấp bản cài, đòi 2FA, **và** cần `KET_WORKER_OWNER_DATABASE_URL`). Chưa có bộ đặt lịch: chạy tay hoặc để lịch OS gọi `python -m ket.worker --once` |
 | 8 | Hạn mức request đếm **trong tiến trình** (lát 2B-2a): `KET_RATE_LIMIT_PER_MINUTE` mặc định 600, `KET_RATE_LIMIT_AUTH_PER_MINUTE` mặc định 30, đặt `0` để tắt | Ngân sách neo theo **địa chỉ IP** (nhóm `auth`) và `(IP, token)` cho phần còn lại, kèm trần tổng theo IP — header `Authorization` do người gọi tự khai không mua được ngân sách mới. Chạy nhiều tiến trình API thì hạn mức thực tế nhân theo số tiến trình — chấp nhận ở quy mô LAN. Vẫn giữ **trần 4 lần băm Argon2id đồng thời** (`503 auth.throttled`) như lớp thứ hai |

@@ -130,6 +130,41 @@ def control_session(factory: sessionmaker[Session]) -> Iterator[Session]:
 
 
 @contextmanager
+def worker_session(factory: sessionmaker[Session], *, dataset_schema: str) -> Iterator[Session]:
+    """Transaction của tiến trình worker trên bảng `jobs` của một dataset.
+
+    Ba thứ **cố ý không có**, và mỗi thứ vắng mặt vì một lý do khác nhau:
+
+    * Không `SET LOCAL ROLE`: đây là lượt **giành việc**, chạy dưới chính danh
+      nghĩa `ket_worker` để policy RLS `p_worker_queue` (`TO ket_worker`) có
+      hiệu lực. Chuyển vai trò ở đây sẽ làm policy đó không bao giờ áp và hàng
+      đợi trông như rỗng (quyết định F2). Thân job thì ngược lại — nó chạy trong
+      `unit_of_work` bình thường, có đủ ba lệnh.
+    * Không GUC chi nhánh: worker không thuộc chi nhánh nào; phạm vi chi nhánh
+      được đặt cho thân job theo `jobs.branch_id` của chính dòng vừa giành.
+    * Không `AuditContext`: `Job` không phải `Audited` (trạng thái job đổi liên
+      tục theo cơ chế nội bộ và ghi vết chúng chỉ làm loãng nhật ký kiểm toán).
+      Việc *nghiệp vụ* mà job làm thì vẫn ghi vết đầy đủ, trong transaction của
+      thân job.
+
+    Commit khi thoát sạch — mỗi lượt báo tiến độ phải nhìn thấy được ngay, đó là
+    lý do nó không dùng chung transaction với thân job.
+    """
+    session = factory()
+    try:
+        session.begin()
+        session.execute(text(set_search_path_statement(dataset_schema)))
+        session.execute(_SET_LOCK_TIMEOUT, {"value": f"{LOCK_TIMEOUT_MS}ms"})
+        yield session
+        session.commit()
+    except BaseException:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+@contextmanager
 def dataset_session(
     factory: sessionmaker[Session],
     *,

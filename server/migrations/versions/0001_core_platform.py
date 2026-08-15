@@ -24,13 +24,14 @@ from sqlalchemy.dialects import postgresql
 from ket.kernel.auditing.models import AUDIT_TABLE_NAME
 from ket.kernel.datasets.naming import role_name_for_schema
 from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
+from ket.kernel.security.dataset_roles import WORKER_ROLE, worker_table_grants
 from ket.kernel.security.grants import (
     APPEND_ONLY_TABLES,
     grant_append_only,
     grant_read_write,
     serial_sequence_name,
 )
-from ket.kernel.security.rls import enable_branch_rls_statements
+from ket.kernel.security.rls import enable_branch_rls_statements, worker_queue_policy_statements
 
 revision: str = "0001"
 down_revision: str | None = None
@@ -288,6 +289,12 @@ def _apply_grants() -> None:
         for statement in builder(table, grantee=grantee, sequence=sequence):
             op.execute(statement)
 
+    # Vai trò của tiến trình chạy tác vụ nền (D2/F2): quyền dừng ở đúng bảng
+    # `jobs`, cấp ngay cạnh chỗ tạo bảng — cùng lý do với mọi GRANT khác ở đây,
+    # `ON ALL TABLES` cuối migration sẽ bỏ sót bảng của migration sau.
+    for statement in worker_table_grants():
+        op.execute(statement)
+
 
 def _dataset_grantee() -> str:
     """Vai trò nhận quyền trên bảng của **schema đang được migrate** (D3).
@@ -336,6 +343,12 @@ def _apply_row_level_security() -> None:
     for table in (AUDIT_TABLE_NAME, "jobs"):
         for statement in enable_branch_rls_statements(table, allow_null_branch=True):
             op.execute(statement)
+
+    # Ngoại lệ đúng một vai trò, đúng một bảng: tiến trình chạy tác vụ nền không
+    # thuộc chi nhánh nào, nên policy chi nhánh sẽ giấu toàn bộ hàng đợi khỏi nó.
+    # Chi tiết đánh đổi ở `rls.worker_queue_policy_statements`.
+    for statement in worker_queue_policy_statements("jobs", worker_role=WORKER_ROLE):
+        op.execute(statement)
 
 
 def downgrade() -> None:

@@ -37,6 +37,7 @@ from ket.kernel.persistence.base import ControlBase
 from ket.kernel.security.auth_models import SESSION_TABLE_NAME
 from ket.kernel.security.dataset_roles import (
     CONTROL_GROUP_ROLE,
+    WORKER_ROLE,
     create_dataset_role_statements,
     repair_dataset_privileges_statements,
     revoke_legacy_login_role_grants,
@@ -89,6 +90,39 @@ def app_login_table_grants() -> tuple[str, ...]:
             sequence=serial_sequence_name(CONTROL_AUDIT_TABLE_NAME),
             schema=CONTROL_SCHEMA,
         ),
+    )
+
+
+def worker_login_table_grants() -> tuple[str, ...]:
+    """Quyền của `ket_worker` trên bảng schema điều khiển — đúng một bảng, chỉ đọc.
+
+    Worker phải biết **có những dữ liệu kế toán nào** để quét hàng đợi của từng
+    schema, và nó đọc điều đó trước khi `SET ROLE` sang bất kỳ vai trò dataset
+    nào (lúc đó chưa biết chọn vai trò nào).
+
+    Danh sách dừng ở đây có chủ đích. Đặc biệt **không** có `users` hay
+    `auth_sessions`: tiến trình worker không xác thực ai cả, và một quyền đọc
+    bảng người dùng ở đó chỉ là một bản sao nữa của dữ liệu nhạy cảm nằm trong
+    tầm với của một tiến trình chạy mã của mọi phase sau.
+    """
+    return (f"GRANT SELECT ON public.{Dataset.__tablename__} TO {WORKER_ROLE}",)
+
+
+def worker_login_revokes() -> tuple[str, ...]:
+    """Thu hồi quyền `ket_worker` từng có trên bảng điều khiển, trước khi cấp lại.
+
+    Cùng khuôn với `control_group_revokes`: danh sách trong mã là **toàn bộ**
+    quyền của vai trò, không phải phần thêm vào những gì cụm đang có.
+    """
+    return tuple(
+        f"REVOKE ALL ON public.{table} FROM {WORKER_ROLE}"
+        for table in (
+            User.__tablename__,
+            SESSION_TABLE_NAME,
+            CONTROL_AUDIT_TABLE_NAME,
+            Dataset.__tablename__,
+            SystemMetadata.__tablename__,
+        )
     )
 
 
@@ -349,6 +383,10 @@ def ensure_control_schema(owner_engine: Engine) -> None:
         for statement in control_group_revokes():
             connection.exec_driver_sql(statement)
         for statement in control_group_table_grants():
+            connection.exec_driver_sql(statement)
+        for statement in worker_login_revokes():
+            connection.exec_driver_sql(statement)
+        for statement in worker_login_table_grants():
             connection.exec_driver_sql(statement)
     _stamp_version(owner_engine)
 

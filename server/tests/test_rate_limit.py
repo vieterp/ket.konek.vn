@@ -1,22 +1,36 @@
 """Hạn mức request theo người gọi.
 
-Không cần PostgreSQL: mọi thứ được kiểm ở đây xảy ra **trước** khi request chạm
-tầng dịch vụ — đó chính là lý do hạn mức là middleware. Dùng `/health` và các
-endpoint trả `401` để đo, vì chúng không mở transaction nào.
+Không cần PostgreSQL: thứ được kiểm ở đây là **middleware**, chạy trước tầng
+dịch vụ. Request nào lọt qua cổng hạn mức mà chạm tới tra phiên hay đăng nhập
+sẽ gặp một factory nổ ngay (xem `_client`) — không được để nó mở kết nối mạng
+thật: trên Windows, psycopg mất ~130 giây cho **mỗi** địa chỉ (::1 rồi
+127.0.0.1) mới nhận ra `localhost:5432` không có ai nghe, vì tín hiệu
+"connection refused" của socket non-blocking nằm ở except-fdset mà vòng chờ
+của psycopg không theo dõi. Hai request như thế là đủ đẩy cả job CI qua trần
+20 phút.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import NoReturn
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
+from ket.api.dependencies import get_session_factory
+from ket.api.middleware import rate_limit
 from ket.api.middleware.problem_details import PROBLEM_CONTENT_TYPE
-from ket.api.middleware.rate_limit import IP_BUDGET_FACTOR, MAX_TRACKED_CALLERS
+from ket.api.middleware.rate_limit import IP_BUDGET_FACTOR
 from ket.api.middleware.request_context import CORRELATION_HEADER
 from ket.main import create_app
 from ket.settings import Settings
+
+
+def _refuse_to_connect() -> NoReturn:
+    raise RuntimeError("nhóm test hạn mức không được chạm DB — request đã lọt qua middleware")
 
 
 def _client(**overrides: int) -> Iterator[TestClient]:
@@ -28,8 +42,14 @@ def _client(**overrides: int) -> Iterator[TestClient]:
         **overrides,
     )
     app = create_app(settings)
-    # Không vào `lifespan`: nó dựng pool và kiểm phiên bản schema, hai việc cần
-    # DB. Hạn mức chạy trước cả hai.
+    # Request vượt qua cổng hạn mức (đăng nhập, tra phiên bằng Bearer) rơi vào
+    # engine có `creator` nổ tại chỗ: thất bại tức thời và giống hệt nhau trên
+    # mọi HĐH, thay vì tùy hành vi TCP của từng nền tảng. Test chỉ khẳng định
+    # `429` hay không-`429`, nên mã lỗi cụ thể của đường hỏng không quan trọng.
+    broken_engine = create_engine(settings.database_url, creator=_refuse_to_connect)
+    app.dependency_overrides[get_session_factory] = lambda: sessionmaker(bind=broken_engine)
+    # Vẫn vào `lifespan` (dựng pool lười, không connect); hai cổng cần DB đã tắt
+    # bằng settings ở trên.
     with TestClient(app, raise_server_exceptions=False) as client:
         yield client
 
@@ -147,21 +167,29 @@ def test_a_forged_authorization_header_cannot_buy_a_fresh_budget() -> None:
     assert statuses.count(429) > 40, "chặn được nhưng quá muộn — ngân sách vẫn bị nhân lên"
 
 
-def test_forged_identities_cannot_evict_a_real_caller_budget() -> None:
+def test_forged_identities_cannot_evict_a_real_caller_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Bơm định danh giả không được trở thành công tắc tắt hạn mức.
 
     Bản đầu tiên `clear()` sạch bảng khi chạm trần, nên đẩy bảng qua trần là đặt
     lại bộ đếm của **mọi** người dùng thật. Nay bảng đầy thì loại cửa sổ cũ
     nhất, và kẻ bơm tự đẩy chính mình ra vì mỗi định danh của nó chỉ dùng đúng
     một lần.
+
+    Bất biến nằm ở hành vi *khi bảng chạm trần*, không ở con số 4096 — nên hạ
+    trần xuống mức đếm được bằng vài chục request. Giá trị thật bắt cả job CI
+    Windows trả hàng phút chỉ cho vòng lặp gửi request.
     """
+    cap = 32
+    monkeypatch.setattr(rate_limit, "MAX_TRACKED_CALLERS", cap)
     for client in _client(rate_limit_per_minute=2, rate_limit_auth_per_minute=2):
         real = {"Authorization": "Bearer token-nguoi-that"}
         for _ in range(3):
             blocked = client.get("/api/v1/system/datasets", headers=real)
         assert blocked.status_code == 429, "người thật phải bị chặn trước khi bơm"
 
-        for index in range(MAX_TRACKED_CALLERS + 200):
+        for index in range(cap + 200):
             client.get("/api/v1/system/datasets", headers={"Authorization": f"Bearer rac-{index}"})
 
         assert client.get("/api/v1/system/datasets", headers=real).status_code == 429, (

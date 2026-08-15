@@ -1,6 +1,6 @@
 # Tóm tắt mã nguồn — Konek Két
 
-**Cập nhật:** 2026-08-15 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A (nền dữ liệu), 2B-0 (cô lập dataset + release pipeline), 2B-1a (danh tính lõi), 2B-1b (phân quyền & định tuyến request), 2B-2a (hợp đồng ghi).
+**Cập nhật:** 2026-08-15 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A (nền dữ liệu), 2B-0 (cô lập dataset + release pipeline), 2B-1a (danh tính lõi), 2B-1b (phân quyền & định tuyến request), 2B-2a (hợp đồng ghi), 2B-2b (tiến trình worker + API jobs + OpenAPI).
 
 Tài liệu này mô tả **thứ đang có thật trong repo**. Kiến trúc đích của cả v1
 nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó chưa dựng.
@@ -16,8 +16,9 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | Có thật | Chưa có |
 | --- | --- |
 | Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | Bảng chứng từ / `gl_postings` / số dư |
-| **RBAC tới cấp `{module}.{chứng từ}.{hành vi}`** + `require_permission`, **định tuyến dataset theo header `X-Dataset`**, phạm vi chi nhánh cho RLS | Hàng đợi job + worker + reaper; sinh type OpenAPI cho client |
+| **RBAC tới cấp `{module}.{chứng từ}.{hành vi}`** + `require_permission`, **định tuyến dataset theo header `X-Dataset`**, phạm vi chi nhánh cho RLS | Bảng chứng từ / `gl_postings` / số dư |
 | **Idempotency cùng transaction** (giành khóa → làm việc → điền kết quả), **khóa lạc quan `row_version`**, **tùy chọn hai cấp**, **hạn mức request** | Bảng chứng từ / `gl_postings` / số dư |
+| **Hàng đợi job + tiến trình worker riêng** (không FastAPI); **lease/heartbeat/reaper** chống job mồ côi; **vai trò `ket_worker`**; **API `/api/v1/jobs` + OpenAPI → type TypeScript** | Các module nghiệp vụ kế toán (phase 4 trở đi) |
 | Schema-per-dataset + provisioning + `ensure_cluster` + `repair_dataset_privileges_statements` + **gieo mã quyền/vai trò `admin`** | API nghiệp vụ (mới có `/health`, `/api/v1/auth/*`, `/api/v1/system/*`) |
 | **Đăng nhập Argon2id (có trần đồng thời), phiên lưu DB thu hồi được ngay, 2FA TOTP chống phát lại, khóa tạm khi dò mật khẩu** | Client (mới là bộ khung rỗng) |
 | **Phiên hạn chế `totp_enrollment`** — tài khoản bị bắt bật 2FA tự đăng ký thiết bị được, không cần ai chạm máy chủ | Bắt tay schema-version với client |
@@ -51,22 +52,27 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | `kernel/idempotency/` | `models` + **`service` (`execute_once`: giành khóa → làm việc → điền kết quả, tất cả trong một transaction)** | Thêm endpoint POST đổi trạng thái |
 | `kernel/config/` | **`catalog` (danh mục khóa tùy chọn, đóng), `settings_service` (phân giải user → system → mặc định)** | Thêm một tùy chọn cấu hình |
 | `kernel/persistence/versioning.py` | **Mixin `RowVersioned` + `require_row_version`** — khóa lạc quan hai lớp | Bảng người dùng sửa qua form |
-| `kernel/{jobs,numbering}/models.py` | Bảng đã dựng, **dịch vụ chưa viết** (lát 2B-2b/phase 3) | — |
-| `modules/*`, `posting/`, `reporting/`, `worker/` | Chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase sau | — |
+| `kernel/jobs/` | `models` (bảng `jobs`, `ResumeSemantics`, `JobStatus`), **`registry` (loại job + quyền + semantics), `queue` (giành job), `reaper` (dọn mồ côi), `builtin` (ba loại job mẫu)** | Thêm loại job mới, chạm job metadata |
+| `kernel/numbering/models.py` | Bảng `number_sequences`, dịch vụ chưa viết | — |
+| `api/routers/jobs` | **API `/api/v1/jobs/{types,list,detail,cancel}`** + schema request/response | Thêm loại job, đổi hợp đồng |
+| `worker/` | **`__main__.py` (điểm vào `python -m ket.worker`), `runner` (vòng lặp), `progress` (tiến độ + hủy), `contracts`** | Đổi cơ chế giành/chạy job |
+| `modules/*`, `posting/`, `reporting/` | Chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase sau | — |
 
 ### Ngoài server
 
 | Đường dẫn | Trạng thái |
 | --- | --- |
 | `server/migrations/` | `env.py` (chạy per-schema) + `versions/0001_core_platform.py` |
+| `server/scripts/export_openapi.py` | **Xuất OpenAPI từ `create_app()` ra JSON**, không cần DB. Chạy: `uv run python scripts/export_openapi.py <đường-dẫn.json>` hay `make api-types` |
+| `client/packages/api-types/` | **Sinh từ OpenAPI**: `schema.d.ts` (type TypeScript), `openapi.json` (spec). Cả hai **được COMMIT** là bản ghi hợp đồng. Tạo bằng `openapi-typescript` |
 | `client/src/` | Bộ khung: `main.tsx`, `app/{router,layout}`, `design-system/{base,tokens}.css`, `lib/api-client.ts` (mới có `get`), thư mục `features/*` **rỗng** |
 | `client/src-tauri/` | Shell Rust, edition 2024, plugin `dialog` + `opener` |
 
 ---
 
-## 3. Sáu cơ chế phải hiểu trước khi sửa bất cứ thứ gì
+## 3. Bảy cơ chế phải hiểu trước khi sửa bất cứ thứ gì
 
-Cả sáu đều hỏng **âm thầm** nếu làm sai — không có thông báo lỗi nào chỉ đúng chỗ.
+Cả bảy đều hỏng **âm thầm** nếu làm sai — không có thông báo lỗi nào chỉ đúng chỗ.
 
 **1. Một dữ liệu kế toán = một PG schema** (ADR-017). Mỗi transaction mở bằng
 `SET LOCAL search_path TO "ds_<mã>", public, pg_temp`. Schema đích **chỉ** lấy từ
@@ -133,6 +139,20 @@ tự cấp mình mọi chi nhánh còn lại trong một request — và dòng n
 mang chi nhánh **đích**, tức là vô hình với chính người vừa bị vượt qua. Đường CLI
 (`actor_branch_ids=None`) là phá-kính có chủ đích: lúc dựng bản cài chưa ai thấy chi
 nhánh nào.
+
+**7. Hàng đợi job chạy trong tiến trình riêng, không FastAPI.** Worker giành job
+bằng `FOR UPDATE SKIP LOCKED` dưới danh tính `ket_worker`, rồi mới chạy thân job
+dưới `SET LOCAL ROLE ds_<mã>_app` + phạm vi chi nhánh từ `jobs.branch_id`. Hai
+lý do không chạy trong FastAPI: GIL (job tính toán bận sẽ khóa request khác) và
+hai DSN khác nhau (`KET_WORKER_DATABASE_URL` vs `KET_DATABASE_URL`). Worker tự
+quản lease/heartbeat/reaper (RT-13): nếu worker chết, reaper quét và xếp lại job
+vào hàng. Ba loại job mẫu có sẵn: `system.diagnostic.slow_task` (chứng minh tiến
+độ), `system.maintenance.prune_idempotency_keys` (per-dataset), `system.maintenance.prune_sessions`
+(chạm bảng dùng chung của cả bản cài: đòi quyền `system.installation.create` có
+2FA **và** một DSN owner khai tường minh cho worker; mặc định không có thì job
+hỏng fail-closed). Mọi loại job mới phải khai bốn thuộc tính — `code`,
+`permission`, `resume_semantics`, `params_model` — và loại nào cần kết nối đặc
+quyền phải nằm trong danh sách đóng `CONTROL_OWNER_JOB_TYPES`.
 
 ---
 
@@ -206,26 +226,22 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_write_contract_api.py` (16) | **Mới**: chuỗi hợp đồng ghi qua HTTP — thiếu `X-Idempotency-Key` là `400`, gửi lại là `200` (không phải `201`), cùng khóa khác nội dung là `409`; người lưu sau nhận `409` **kèm bản mới nhất**; `row_version` không lọt vào nhật ký; tùy chọn riêng không rò sang người khác; sửa tùy chọn cấp hệ thống cần quyền riêng |
 | `test_api_authorization.py` (16) | **Mới**: chuỗi định tuyến đầu-cuối qua HTTP; thiếu/sai `X-Dataset`; thiếu quyền nêu đúng mã còn thiếu; **RLS cắt `/system/audit-log` dù câu truy vấn không lọc chi nhánh**; mật khẩu tạm và phiên hạn chế chặn ở server; vòng đăng ký 2FA đi trọn bằng HTTP |
 
-Tổng **327 test** (226 cần PostgreSQL 16). Độ phủ **92%** trên `src/ket`. Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
+Tổng **409 test** (293 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
 
 ---
 
 ## 6. Việc tiếp theo
 
-Lát **2B-2b**: hàng đợi job + tiến trình worker + reaper, vai trò `ket_worker`
-(quyền riêng **chỉ trên bảng `jobs`** — claim dưới danh tính của chính nó rồi mới
-`SET ROLE ds_<mã>_app` cho thân job), sinh OpenAPI → type TS.
-Lát **2C**: client + ba spike S1/S3/S4.
+Lát **2C**: client (design system, layout, quản lý phiên, i18n) + ba spike S1/S3/S4 (lưới nhập liệu, IME Việt, đóng gói bộ cài).
 
 **Còn mở:**
 
-1. Độ phủ có đặt ngưỡng chặn không — hiện 92%, CI mới chỉ **báo cáo**.
+1. Độ phủ có đặt ngưỡng chặn không — CI mới chỉ **báo cáo**.
 2. Đường build Windows và bộ cài chưa ký chứng thư OS — xác minh ở lần chạy
    `release.yml` đầu tiên.
 3. Hạn mức request đếm **trong tiến trình**: chạy hai tiến trình API thì hạn mức
    thực tế nhân đôi. Chấp nhận ở quy mô LAN; chỗ sửa khi cần chính xác là chuyển
    bộ đếm xuống PostgreSQL, không phải thêm Redis vào bản cài.
-4. `prune-sessions` chạy tay. Khi hàng đợi job có thật (2B-2b), đây là ứng viên
-   đầu tiên để đặt lịch.
+4. Dọn phiên `prune_sessions` và `prune_idempotency_keys` có sẵn làm job (xếp hàng qua API); lịch tự động thuộc phase 3 hoặc sau (tuỳ chức năng Scheduler).
 5. Bộ vai trò mẫu (`ke-toan`, `thu-quy`, `xem`) vẫn chờ gói cấu hình TT200/TT133
    ở phase 5 — hiện chỉ gieo `admin`.
