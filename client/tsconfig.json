@@ -27,7 +27,10 @@
     "noImplicitOverride": true,
     "noImplicitReturns": true,
 
-    "baseUrl": ".",
+    // Không khai `baseUrl`: TypeScript 6 đánh dấu nó deprecated và 7.0 sẽ bỏ
+    // hẳn. Khi vắng `baseUrl`, `paths` được giải theo vị trí của chính
+    // tsconfig.json — các lối tắt dưới đây đã viết dạng `./` nên không đổi
+    // nghĩa. Alias tương ứng ở phía bundler nằm trong `vite.config.ts`.
     "paths": {
       "@/*": ["./src/*"],
       "@api-types/*": ["./packages/api-types/*"]

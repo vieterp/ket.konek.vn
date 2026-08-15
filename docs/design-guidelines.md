@@ -1,4 +1,4 @@
-# Hướng dẫn thiết kế giao diện — Konek Kế toán
+# Hướng dẫn thiết kế giao diện — Konek Két
 
 ## 1. Nguồn giao diện duy nhất
 
@@ -25,10 +25,19 @@ Nguồn: `uploads/brand-assets/tokens/colors.css` v1.1 và
 
 | File | Vai trò |
 | --- | --- |
-| `client/src/design-system/tokens.css` | CSS variable — thang màu đầy đủ + biến semantic + dark mode |
-| `client/tailwind.config.js` | Thang màu cho lớp tiện ích Tailwind + fontSize + fontFamily |
+| `client/src/design-system/base.css` (`@theme`) | Thang màu THÔ của brand (navy/ocean/sky/gray) + fontSize + fontFamily. Mỗi khai báo vừa sinh lớp tiện ích (`bg-navy-700`) vừa là CSS variable thật (`var(--color-navy-700)`) |
+| `client/src/design-system/tokens.css` | Token NGỮ NGHĨA `--ds-color-*` (text, surface, border, screen) + dark mode |
 
 **Không gõ tay lại mã màu.** Brand asset đổi → đồng bộ xuống, không sửa cục bộ.
+
+> **Đổi từ Tailwind 4 (2026-08-15):** không còn `client/tailwind.config.js` —
+> Tailwind 4 khai theme bằng `@theme` ngay trong CSS. Trước đó thang màu bị chép
+> làm hai bản (một trong config JS, một trong `tokens.css`) và phải tự giữ đồng
+> bộ với nhau; nay chỉ còn **một** nguồn.
+>
+> Tầng ngữ nghĩa đổi tiền tố `--color-*` → `--ds-color-*`: Tailwind 4 tự sinh
+> `--color-*` từ `@theme`, nên để nguyên tên cũ sẽ thành `--color-screen:
+> var(--color-screen)` — một vòng tự tham chiếu, CSS bỏ qua và màu nền biến mất.
 
 ### Màu chốt (kiểm tay khi đồng bộ)
 
