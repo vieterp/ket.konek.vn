@@ -73,6 +73,24 @@ def validate_schema_name(schema: str) -> str:
     return schema
 
 
+def validate_grantable_schema(schema: str) -> str:
+    """Tên schema dùng được trong lệnh **cấp quyền**: dataset hoặc điều khiển.
+
+    Khác `validate_schema_name` đúng một điểm: chấp nhận `public`. Cấp quyền là
+    việc duy nhất chạm cả hai loại schema (`grants.py` phục vụ cả bảng dataset
+    lẫn `control_audit_log`), trong khi mọi đường khác — `CREATE SCHEMA`,
+    `SET search_path`, định tuyến request — vẫn **phải** từ chối `public`, nếu
+    không một dataset tên `public` sẽ ghi đè lên schema điều khiển.
+
+    Tách thành hàm riêng thay vì thêm cờ vào `validate_schema_name`: một cờ
+    `allow_control=True` là thứ sẽ bị sao chép sang chỗ khác vì "chạy được", và
+    chỗ đó có thể là đường định tuyến.
+    """
+    if schema == CONTROL_SCHEMA:
+        return CONTROL_SCHEMA
+    return validate_schema_name(schema)
+
+
 def validate_dataset_code(code: str) -> str:
     """Kiểm mã dữ liệu kế toán do người dùng đặt (FR-SYS-001)."""
     if not _DATASET_CODE_PATTERN.match(code):

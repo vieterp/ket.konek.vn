@@ -26,7 +26,7 @@ from __future__ import annotations
 from typing import Final
 
 from ket.kernel.auditing.models import AUDIT_TABLE_NAME
-from ket.kernel.datasets.naming import validate_schema_name
+from ket.kernel.datasets.naming import validate_grantable_schema
 from ket.kernel.security.rls import validate_identifier
 
 APPEND_ONLY_TABLES: Final[frozenset[str]] = frozenset({AUDIT_TABLE_NAME})
@@ -63,11 +63,16 @@ def _qualify(name: str, schema: str | None) -> str:
     sửa chữa chạy ngoài request nên phải nêu schema. Cùng một bộ hàm phục vụ cả
     hai — tách đôi là cách hai đường trôi lệch, đúng lỗi mà `APPEND_ONLY_TABLES`
     vừa được dựng để chống.
+
+    `validate_grantable_schema` chứ không `validate_schema_name`: bảng chỉ-thêm
+    của schema điều khiển (`public.control_audit_log`, quyết định D1) đi qua đúng
+    hàm `grant_append_only` này, nên `public` phải hợp lệ **ở đây** — và chỉ ở
+    đây.
     """
     validate_identifier(name)
     if schema is None:
         return name
-    return f'"{validate_schema_name(schema)}".{name}'
+    return f'"{validate_grantable_schema(schema)}".{name}'
 
 
 def grant_read_write(

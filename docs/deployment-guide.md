@@ -1,9 +1,10 @@
 # Hướng dẫn triển khai — Konek Két
 
-**Cập nhật:** 2026-08-15 · phản ánh **đúng thứ đang có trong repo** sau phase 2 lát 2B-0.
+**Cập nhật:** 2026-08-15 · phản ánh **đúng thứ đang có trong repo** sau phase 2 lát 2B-1a.
 
-Phạm vi: dựng cụm PostgreSQL, khôi phục sau sao lưu, chạy test cục bộ, kênh phát hành
-bộ cài. Chưa có bộ cài app server và chưa có CLI — hai thứ đó thuộc spike S4 / phase 11.
+Phạm vi: dựng cụm PostgreSQL, khóa mã hóa, tài khoản đầu tiên, khôi phục sau sao lưu,
+chạy test cục bộ, kênh phát hành bộ cài. Lệnh quản trị chạy qua `python -m ket.admin`.
+Chưa có **bộ cài** app server — server chạy từ mã nguồn; đóng gói là spike S4 / phase 11.
 
 ---
 
@@ -59,17 +60,54 @@ vẫn không cấp được `SUPERUSER` hay `BYPASSRLS`, nên nhật ký bất b
 
 ### 2.2 Schema điều khiển + vai trò dataset
 
-Chưa có CLI; gọi trực tiếp bằng Python (bộ test dùng đúng đường này):
-
-```python
-from sqlalchemy import create_engine
-from ket.kernel.datasets.bootstrap import ensure_cluster
-
-owner = create_engine("postgresql+psycopg://ket_owner@localhost:5433/ket")
-ensure_cluster(owner)   # bảng điều khiển + vai trò cho mọi dataset đã đăng ký
+```bash
+cd server && uv run python -m ket.admin ensure-cluster
 ```
 
-`ensure_cluster` = `ensure_control_schema` + `ensure_dataset_roles`. Chạy lại được.
+Đọc DSN từ `KET_OWNER_DATABASE_URL` (xem `ket.settings`). Bên trong là
+`ensure_control_schema` + `ensure_dataset_roles`: dựng bảng điều khiển, **chạy bước nâng
+cấp schema điều khiển nếu cụm cũ hơn mã nguồn**, cấp lại quyền, dựng vai trò cho mọi
+dataset đã đăng ký. Chạy lại được, chạy sau mỗi lần nâng cấp bản cài.
+
+Cụm đã dựng mà **mất dòng phiên bản** trong `system_metadata` thì lệnh này **dừng** thay
+vì đoán: không có phiên bản cũ thì không suy được cần nâng cấp những gì, và dán nhãn bừa
+sẽ cho ra một DB tự nhận là mới trong khi thiếu cột. Cách xử lý: khôi phục bản sao lưu
+gần nhất, hoặc ghi đúng phiên bản đang có bằng tay rồi chạy lại.
+
+### 2.2b Khóa mã hóa ứng dụng (ADR-019)
+
+```bash
+cd server && uv run python -m ket.admin generate-app-key
+```
+
+Ghi một khóa Fernet vào OS keystore của máy chạy app server (Keychain trên macOS,
+Credential Manager trên Windows). Bí mật `totp_secret` được mã hóa bằng khóa này, nên
+**bản dump và bản sao lưu không chứa bí mật dạng rõ**.
+
+Ba điều phải nhớ:
+
+* Chạy lệnh này **ghi đè** khóa cũ. Bí mật mã hóa bằng khóa cũ không mở lại được — người
+  dùng đã bật 2FA phải đăng ký lại thiết bị sinh mã.
+* Khôi phục DB sang máy khác mà không mang theo khóa: đăng nhập thường vẫn chạy, chỉ tài
+  khoản bật 2FA mới hỏng, với thông điệp nêu đúng nguyên nhân.
+* Môi trường không có keystore (container, CI) đặt `KET_APP_KEY` thay thế.
+
+### 2.2c Tài khoản đầu tiên
+
+```bash
+cd server && uv run python -m ket.admin create-user ketoantruong --email ke.toan@congty.vn
+```
+
+Hỏi mật khẩu hai lần (hoặc `--password-stdin` cho script cài đặt — tham số dòng lệnh nằm
+trong `ps` và lịch sử shell, nên **không** truyền mật khẩu qua đó). Tài khoản tạo ra bắt
+buộc đổi mật khẩu ở lần đăng nhập đầu.
+
+Hai lệnh phá-kính khác, chạy tại máy chủ khi không còn đường nào qua HTTP:
+
+| Lệnh | Dùng khi | Hệ quả |
+| --- | --- | --- |
+| `reset-password <tên>` | Quên mật khẩu, không có quản trị viên khác | Đặt lại mật khẩu, mở khóa tài khoản, **thu hồi mọi phiên đang mở** |
+| `reset-totp <tên>` | Mất điện thoại sinh mã 2FA | Xóa bí mật + cờ bắt buộc để người dùng đăng ký lại thiết bị |
 
 ### 2.3 Tạo một dữ liệu kế toán
 
@@ -109,11 +147,7 @@ psql -p 5433 -d ket -f server/src/ket/kernel/security/roles.sql
 pg_restore -p 5433 -U ket_owner -d ket --no-privileges ket.dump
 
 # 3. Dựng lại vai trò của từng dataset + cấp lại quyền  ← KHÔNG BỎ QUA
-python -c "
-from sqlalchemy import create_engine
-from ket.kernel.datasets.bootstrap import ensure_cluster
-ensure_cluster(create_engine('postgresql+psycopg://ket_owner@localhost:5433/ket'))
-"
+cd server && uv run python -m ket.admin ensure-cluster
 
 # 4. Khởi động app
 cd server && uv run uvicorn ket.main:app --host 127.0.0.1 --port 5443
@@ -251,4 +285,4 @@ Chạy cục bộ: `make version-check`.
 | 2 | **Chưa ký chứng thư hệ điều hành** | macOS Gatekeeper và Windows SmartScreen sẽ cảnh báo. Cần Apple Developer ID + chứng thư Authenticode (phase 11) |
 | 3 | **Plugin updater runtime chưa dựng** | Bộ cài chưa tự kiểm tra bản mới. Endpoint là địa chỉ app server của từng bản cài nên không biết lúc build — thuộc lát 2C / phase 11 |
 | 4 | **Chưa có bộ cài app server** | Server chạy từ mã nguồn (`uv run uvicorn`). Đóng gói Python + native deps là spike S4 |
-| 5 | Cụm dev đã tạo dataset bằng mã **trước** lát 2B-0 còn quyền bảng cấp thẳng cho `ket_app` | Chạy `ensure_cluster(owner)` một lần để thu hồi |
+| 5 | Cụm dev đã tạo dataset bằng mã **trước** lát 2B-0 còn quyền bảng cấp thẳng cho `ket_app` | Chạy `python -m ket.admin ensure-cluster` một lần để thu hồi |

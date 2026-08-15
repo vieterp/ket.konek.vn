@@ -27,6 +27,17 @@ class DomainError(Exception):
 
     error_code: ClassVar[str] = "domain_error"
 
+    http_status: ClassVar[int] = 422
+    """Mã HTTP mà `api/middleware/problem_details.py` trả cho lớp lỗi này.
+
+    Khai **ở lớp lỗi** chứ không phải bằng một bảng ánh xạ đặt cạnh handler: bảng
+    ánh xạ là thứ người thêm lớp lỗi mới sẽ quên cập nhật, và cái giá của việc
+    quên là một lỗi xác thực trả về 422 — client hiểu thành "dữ liệu sai" và
+    không bật lại màn hình đăng nhập.
+
+    422 là mặc định đúng cho phần lớn lỗi nghiệp vụ (yêu cầu hợp lệ về cú pháp
+    nhưng vi phạm luật nghiệp vụ)."""
+
     def __init__(self, message: str, **details: str | int | None) -> None:
         super().__init__(message)
         self.message = message
@@ -107,3 +118,125 @@ class SchemaVersionMismatchError(DomainError):
     """
 
     error_code: ClassVar[str] = "system.schema_version_mismatch"
+
+
+class AppKeyUnavailableError(DomainError):
+    """Không lấy được khóa mã hóa của ứng dụng từ OS keystore (ADR-019, RT-05).
+
+    Fail-closed: thà từ chối thao tác chạm bí mật còn hơn ghi `totp_secret`
+    dạng rõ vào DB — dạng rõ thì bản sao lưu cũng mang theo, và không có đường
+    thu hồi về sau.
+
+    503 chứ không 500: đây là **thiếu cấu hình vận hành** (chưa chạy
+    `ket.admin generate-app-key`, hoặc keystore của máy chưa mở khóa), sửa được
+    mà không cần sửa mã.
+    """
+
+    error_code: ClassVar[str] = "system.app_key_unavailable"
+    http_status: ClassVar[int] = 503
+
+
+class NotAuthenticatedError(DomainError):
+    """Thiếu token phiên, token sai, đã thu hồi hoặc đã hết hạn.
+
+    Một mã lỗi duy nhất cho cả bốn nguyên nhân: phân biệt "token không tồn tại"
+    với "token đã thu hồi" chỉ giúp người dò token, không giúp người dùng thật —
+    họ đăng nhập lại trong cả bốn trường hợp.
+    """
+
+    error_code: ClassVar[str] = "auth.not_authenticated"
+    http_status: ClassVar[int] = 401
+
+
+class InvalidCredentialsError(DomainError):
+    """Sai tên đăng nhập hoặc mật khẩu, hoặc tài khoản đã bị vô hiệu hóa.
+
+    Gộp ba nguyên nhân có chủ đích, và đường mã cũng phải **tốn công như nhau**
+    ở cả ba (xem `passwords.verify_dummy`), nếu không thời gian phản hồi sẽ trả
+    lời thay cho thông điệp.
+    """
+
+    error_code: ClassVar[str] = "auth.invalid_credentials"
+    http_status: ClassVar[int] = 401
+
+
+class AccountLockedError(DomainError):
+    """Tài khoản tạm khóa vì quá nhiều lần đăng nhập sai.
+
+    Nói thẳng thay vì gộp vào `InvalidCredentialsError`: hệ này chạy trong LAN
+    một doanh nghiệp với 5–50 người dùng có tên biết trước, nên "giấu sự tồn tại
+    của tài khoản" không bảo vệ được gì thật, trong khi một kế toán viên gõ sai
+    mật khẩu ba lần rồi bị từ chối im lặng sẽ gọi hỗ trợ.
+    """
+
+    error_code: ClassVar[str] = "auth.account_locked"
+    http_status: ClassVar[int] = 401
+
+
+class TotpRequiredError(DomainError):
+    """Mật khẩu đúng nhưng tài khoản bắt buộc 2FA và request chưa kèm mã.
+
+    Client dùng mã lỗi này để hiện ô nhập mã — nên nó **phải** khác
+    `InvalidCredentialsError`.
+    """
+
+    error_code: ClassVar[str] = "auth.totp_required"
+    http_status: ClassVar[int] = 401
+
+
+class TotpEnrollmentRequiredError(DomainError):
+    """Tài khoản bắt buộc 2FA nhưng chưa đăng ký thiết bị sinh mã.
+
+    Không cấp phiên trong trạng thái này: cấp phiên rồi mới đòi đăng ký sẽ tạo
+    ra một cửa sổ mà tài khoản nhạy cảm chạy **không có** lớp thứ hai.
+    """
+
+    error_code: ClassVar[str] = "auth.totp_enrollment_required"
+    http_status: ClassVar[int] = 403
+
+
+class InvalidTotpCodeError(DomainError):
+    """Mã 2FA sai hoặc đã hết cửa sổ hiệu lực."""
+
+    error_code: ClassVar[str] = "auth.totp_code_invalid"
+    http_status: ClassVar[int] = 401
+
+
+class TotpCodeReusedError(DomainError):
+    """Mã 2FA đúng nhưng đã dùng rồi (FR-NFR-016).
+
+    Một mã sống 30 giây và cửa sổ chấp nhận rộng hơn thế. Không chặn dùng lại
+    thì ai đọc trộm được mã — qua vai, qua log, qua một phiên chia sẻ màn hình —
+    vẫn dùng lại được trong cùng cửa sổ đó, và lớp thứ hai chỉ còn là hình thức.
+    """
+
+    error_code: ClassVar[str] = "auth.totp_code_reused"
+    http_status: ClassVar[int] = 401
+
+
+class WeakPasswordError(DomainError):
+    """Mật khẩu không đạt chính sách tối thiểu (FR-NFR-010).
+
+    `details` nêu **luật nào** bị vi phạm để client dựng được câu tiếng Việt cụ
+    thể, thay vì một câu chung chung khiến người dùng thử mò.
+    """
+
+    error_code: ClassVar[str] = "auth.password_too_weak"
+
+
+class UserNotFoundError(DomainError):
+    """Không có người dùng với tên đăng nhập này (đường quản trị/CLI).
+
+    Khác `InvalidCredentialsError`: đường quản trị **được** biết tài khoản có
+    tồn tại hay không, còn đường đăng nhập thì không.
+    """
+
+    error_code: ClassVar[str] = "auth.user_not_found"
+    http_status: ClassVar[int] = 404
+
+
+class UserAlreadyExistsError(DomainError):
+    """Tên đăng nhập đã có người dùng."""
+
+    error_code: ClassVar[str] = "auth.user_already_exists"
+    http_status: ClassVar[int] = 409

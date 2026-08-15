@@ -1,10 +1,12 @@
 """FastAPI app factory.
 
-Slice hiện tại của phase 2 dựng **nền dữ liệu và bảo mật**: engine + pool,
-schema-per-dataset, vai trò DB tách đôi, RLS, nhật ký bất biến, phép tính tiền
-`Decimal`. Auth/RBAC, idempotency, hàng đợi job, xử lý lỗi RFC 7807 và bắt tay
-schema-version là các bước tiếp theo của cùng phase — `/health` vẫn là endpoint
-duy nhất cho tới lúc đó.
+Đã dựng: nền dữ liệu và bảo mật (engine + pool, schema-per-dataset, vai trò DB
+tách đôi, RLS, nhật ký bất biến, `Decimal`), và **danh tính** — đăng nhập, phiên
+thu hồi được, 2FA, hợp đồng lỗi RFC 7807.
+
+Còn lại của phase 2: RBAC + định tuyến dataset theo request (lát 2B-1b),
+idempotency + optimistic locking + hàng đợi job (2B-2), client + bắt tay
+schema-version (2C).
 
 Luồng nghiệp vụ đi qua REST + OpenAPI (LD-03). Client **không bao giờ** nối
 thẳng PostgreSQL và **không** dùng API Tauri cho nghiệp vụ — giữ đường mở lên
@@ -20,6 +22,9 @@ from pydantic import BaseModel
 from sqlalchemy import Engine
 
 from ket import __version__
+from ket.api.middleware.problem_details import register_problem_handlers
+from ket.api.middleware.request_context import RequestContextMiddleware
+from ket.api.routers.auth import router as auth_router
 from ket.kernel.datasets.bootstrap import verify_control_schema
 from ket.kernel.datasets.provisioning import find_alembic_config, verify_dataset_schema_version
 from ket.kernel.datasets.service import list_datasets
@@ -80,13 +85,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
 
+    # Hai cổng dưới đây tắt được bằng cấu hình, và mỗi lần tắt đều phải để lại
+    # dấu vết trong log. Một bản cài chạy tháng này qua tháng khác với cổng đã
+    # tắt — vì ai đó gỡ rối rồi quên bật lại — là bản cài không còn ai canh việc
+    # binary và schema có khớp nhau không, và triệu chứng đầu tiên sẽ là số liệu
+    # sai chứ không phải một thông báo lỗi.
     if settings.verify_postgres_version_on_startup:
         verify_postgres_version(engine, settings)
         logger.info("postgres_version_verified")
+    else:
+        logger.warning(
+            "postgres_version_gate_disabled",
+            minimum_postgres_version=settings.minimum_postgres_version,
+        )
 
     if settings.verify_schema_on_startup:
         verify_schema_versions(engine, settings)
         logger.info("schema_version_verified")
+    else:
+        logger.warning("schema_version_gate_disabled")
 
     try:
         yield
@@ -109,6 +126,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         debug=resolved.debug,
     )
     app.state.settings = resolved
+
+    # Thứ tự có ý nghĩa: middleware mã tương quan chạy **trước** mọi thứ khác để
+    # handler lỗi có `correlation_id` mà trả về — không có nó, thông điệp 500
+    # không còn tra được vào log.
+    app.add_middleware(RequestContextMiddleware)
+    register_problem_handlers(app)
+    app.include_router(auth_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:
