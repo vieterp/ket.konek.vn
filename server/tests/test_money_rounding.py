@@ -11,7 +11,7 @@ from decimal import Decimal
 
 import pytest
 
-from konek.kernel.money import (
+from ket.kernel.money import (
     MONEY_SCALE_DEFAULT,
     convert_currency,
     divide_money,

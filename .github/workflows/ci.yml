@@ -222,7 +222,7 @@ jobs:
         # Ghim phiên bản: hành vi RLS/quyền phải giống bản khách hàng chạy.
         image: postgres:16
         env:
-          # Bộ test tự tạo `konek_owner`/`konek_app` **không mật khẩu** (bản cài
+          # Bộ test tự tạo `ket_owner`/`ket_app` **không mật khẩu** (bản cài
           # thật đặt mật khẩu từ OS keystore — ADR-019). Dùng đúng công tắc mà
           # image hỗ trợ, thay vì sửa `pg_hba.conf` qua `docker exec`:
           # `pg_ctl reload` khi đó chạy dưới root và PostgreSQL từ chối.
@@ -241,10 +241,10 @@ jobs:
 
     env:
       # Không có DB thì job này phải ĐỎ, không được "xanh vì bỏ qua".
-      KONEK_TEST_REQUIRE_DB: "1"
-      KONEK_TEST_ADMIN_DSN: postgresql+psycopg://postgres@localhost:5432/postgres
-      KONEK_TEST_KONEK_OWNER_DSN: postgresql+psycopg://konek_owner@localhost:5432/konek_test
-      KONEK_TEST_KONEK_APP_DSN: postgresql+psycopg://konek_app@localhost:5432/konek_test
+      KET_TEST_REQUIRE_DB: "1"
+      KET_TEST_ADMIN_DSN: postgresql+psycopg://postgres@localhost:5432/postgres
+      KET_TEST_KET_OWNER_DSN: postgresql+psycopg://ket_owner@localhost:5432/ket_test
+      KET_TEST_KET_APP_DSN: postgresql+psycopg://ket_app@localhost:5432/ket_test
 
     steps:
       - uses: actions/checkout@v4

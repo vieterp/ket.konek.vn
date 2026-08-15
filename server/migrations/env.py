@@ -6,7 +6,7 @@ từng schema dataset**, không phải một lần cho cả DB: `version_table_s
 
 Schema đích lấy từ (theo thứ tự): `Config.attributes["dataset_schema"]` (khi
 gọi trong tiến trình, xem `kernel/datasets/provisioning.py`) → `-x schema=<tên>`
-trên dòng lệnh → `KONEK_DEFAULT_DATASET_SCHEMA` → mặc định trong `konek.settings`.
+trên dòng lệnh → `KET_DEFAULT_DATASET_SCHEMA` → mặc định trong `ket.settings`.
 
 `target_metadata` chỉ gồm bảng của **schema dataset**. Ba bảng điều khiển
 (`public.datasets`, `public.users`, `public.system_metadata`) do
@@ -22,9 +22,9 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import Connection, engine_from_config, pool
 
-from konek.kernel.datasets.naming import validate_schema_name
-from konek.model_registry import DatasetBase
-from konek.settings import get_settings
+from ket.kernel.datasets.naming import validate_schema_name
+from ket.model_registry import DatasetBase
+from ket.settings import get_settings
 
 config = context.config
 
@@ -99,7 +99,7 @@ def run_migrations_online() -> None:
     """Chạy migration trên một connection.
 
     Ưu tiên connection do người gọi truyền vào (`Config.attributes`): khi tạo
-    dữ liệu kế toán mới, app đã có sẵn engine `konek_owner` và không nên mở
+    dữ liệu kế toán mới, app đã có sẵn engine `ket_owner` và không nên mở
     thêm connection thứ hai bằng credential lấy từ chỗ khác.
     """
     schema = _resolve_schema()

@@ -15,12 +15,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
-from konek.kernel.auditing.listener import AuditContext
-from konek.kernel.auditing.models import AuditAction, AuditLog
-from konek.kernel.datasets.provisioning import DatasetRef
-from konek.kernel.persistence.session import dataset_session
-from konek.kernel.persistence.unit_of_work import RequestScope, unit_of_work
-from konek.kernel.security.tenant import current_branch_scope
+from ket.kernel.auditing.listener import AuditContext
+from ket.kernel.auditing.models import AuditAction, AuditLog
+from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.persistence.session import dataset_session
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.tenant import current_branch_scope
 
 pytestmark = pytest.mark.db
 

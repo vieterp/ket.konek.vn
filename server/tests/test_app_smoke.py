@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from konek.main import create_app
-from konek.settings import Settings
+from ket.main import create_app
+from ket.settings import Settings
 
 
 def test_health_endpoint_returns_ok() -> None:
@@ -30,5 +30,5 @@ def test_openapi_schema_generates() -> None:
 
     schema = app.openapi()
 
-    assert schema["info"]["title"] == "Konek Accounting App Server"
+    assert schema["info"]["title"] == "Konek Két — App Server"
     assert "/health" in schema["paths"]

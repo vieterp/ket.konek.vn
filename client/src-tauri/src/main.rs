@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    konek_accounting_lib::run()
+    ket_lib::run()
 }

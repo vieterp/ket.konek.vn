@@ -11,7 +11,7 @@ export function AppLayout({ children }: { children: ReactNode }): ReactElement {
   return (
     <div className="min-h-screen bg-screen text-text-default">
       <header className="border-b-2 border-navy-700 bg-surface px-6 py-4">
-        <h1 className="text-h3 text-navy-700">Konek Kế toán</h1>
+        <h1 className="text-h3 text-navy-700">Konek Két</h1>
       </header>
       <main className="p-6">{children}</main>
     </div>

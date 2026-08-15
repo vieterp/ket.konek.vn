@@ -17,7 +17,7 @@ Hệ thống có 18 phân hệ (SRS 00 §4) + shared kernel. Nếu module tùy t
 
 Layout:
 ```
-konek/
+ket/
   kernel/                # shared: persistence, security, config, numbering, periods, ...
   posting/               # posting engine, balances
   reporting/             # report generator
@@ -28,11 +28,11 @@ konek/
 **Luật phụ thuộc** (5 ép tự động bằng `import-linter` trong CI, 2 review):
 
 **Tự động (import-linter):**
-1. `konek.modules.*` → `konek.kernel`, `konek.posting` được; **KHÔNG** import module khác (contract C2/C3)
+1. `ket.modules.*` → `ket.kernel`, `ket.posting` được; **KHÔNG** import module khác (contract C2/C3)
 2. Cần dữ liệu module khác → qua **Protocol** trong `kernel` (DI injection) hoặc **domain event** (hệ quả của C3)
-3. Chỉ `konek.posting` được `INSERT` vào `gl_postings` (bảng lõi) — **code review**, không ép import-linter
-4. `konek.reporting` chỉ **đọc** DB, không ghi (contract C5, chỉ chặn import — không chặn access DB)
-5. `konek.kernel` **KHÔNG** import `konek.modules` hay `konek.posting` (contract C1)
+3. Chỉ `ket.posting` được `INSERT` vào `gl_postings` (bảng lõi) — **code review**, không ép import-linter
+4. `ket.reporting` chỉ **đọc** DB, không ghi (contract C5, chỉ chặn import — không chặn access DB)
+5. `ket.kernel` **KHÔNG** import `ket.modules` hay `ket.posting` (contract C1)
 6. Web UI gọi **REST API + type sinh từ OpenAPI** — **eslint `no-restricted-imports`**, không phải import-linter
 
 **Review (code review, không ép tự động):**

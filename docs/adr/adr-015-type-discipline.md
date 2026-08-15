@@ -20,7 +20,7 @@ Python không có kiểm kiểu lúc compile. Trên miền 504 FR, thêm kiểm 
 1. **mypy strict** (hoặc pyright strict) chạy CI, fail = block merge.
    - Cấu hình: `disallow_untyped_defs`, `disallow_any_generics`, `warn_return_any`, `strict_equality`, `no_implicit_optional`.
    - **Không** ngoại lệ per-module ở giai đoạn này (repo rỗng — dễ nhất).
-   - Toàn bộ `src/konek` bắt buộc xanh; `tests/` có thể relax một chút.
+   - Toàn bộ `src/ket` bắt buộc xanh; `tests/` có thể relax một chút.
    - Thêm `# type: ignore` phải kèm **lý do** dòng cụ thể.
 
 2. **Pydantic v2** cho mọi ranh giới API:
@@ -30,7 +30,7 @@ Python không có kiểm kiểu lúc compile. Trên miền 504 FR, thêm kiểm 
 
 3. **Cấm `float` trong code nghiệp vụ**:
    - Chỉ `decimal.Decimal` cho tiền tệ.
-   - Cấm literal `1.5` trong `konek.posting/modules/*`.
+   - Cấm literal `1.5` trong `ket.posting/modules/*`.
    - Test `server/tests/test_no_float_in_domain.py` quét AST (bắt tham chiếu tên `float`, thuộc tính `.float`, literal dấu phẩy động).
 
 4. **Dataclass hoặc Pydantic cho DTO nội bộ**:
@@ -57,7 +57,7 @@ Python không có kiểm kiểu lúc compile. Trên miền 504 FR, thêm kiểm 
 
 - **Xóa mypy**: mất hàng rào duy nhất → sai số dễ vào production.
 - **Bỏ Pydantic**: dùng `dict` lại → loss of validate, mất documentation.
-- Phải sửa tất cả module `konek.*` loại bỏ type hint (không khả thi sau 1 tháng).
+- Phải sửa tất cả module `ket.*` loại bỏ type hint (không khả thi sau 1 tháng).
 
 ## Related FR
 
@@ -69,6 +69,6 @@ Python không có kiểm kiểu lúc compile. Trên miền 504 FR, thêm kiểm 
 
 **Phase 1 setup**: 
 - Cấu hình `pyproject.toml` [tool.mypy]
-- Test: `mypy --strict src/konek` pass 0 error
+- Test: `mypy --strict src/ket` pass 0 error
 - Test: `pytest server/tests/test_no_float_in_domain.py` → AST quét detect literal `float` → fail
-- Note: mypy cấu hình `packages = ["konek"]` nên `tests/` không nằm trong phạm vi mypy (relax một chút, chỉ check `src/`)
+- Note: mypy cấu hình `packages = ["ket"]` nên `tests/` không nằm trong phạm vi mypy (relax một chút, chỉ check `src/`)

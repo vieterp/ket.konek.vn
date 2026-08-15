@@ -66,7 +66,7 @@ Các cách tiếp cận:
    - GUC là **danh sách** chi nhánh, không phải một giá trị: một người dùng thường
      được gán nhiều chi nhánh.
    - Policy thực tế:
-     `branch_id = ANY (string_to_array(nullif(current_setting('konek.branch_ids', true), ''), ',')::int[])`.
+     `branch_id = ANY (string_to_array(nullif(current_setting('ket.branch_ids', true), ''), ',')::int[])`.
      `nullif` giữ tính **fail-closed**: GUC chưa đặt → biểu thức NULL → không dòng nào lọt.
    - Bảng danh mục `branches` **không** bật RLS: `WITH CHECK` trên chính nó sẽ khiến
      không ai tạo được chi nhánh mới (id do sequence cấp lúc INSERT, không thể nằm sẵn
@@ -100,14 +100,14 @@ Các cách tiếp cận:
 ### Tiêu cực / Đánh đổi
 
 - **⚠ Cô lập dataset hiện dựa vào `search_path`, chưa dựa vào quyền** (trạng thái sau
-  phase 2 slice 2A). `konek_app` được `GRANT USAGE` trên **mọi** schema dataset, nên một
+  phase 2 slice 2A). `ket_app` được `GRANT USAGE` trên **mọi** schema dataset, nên một
   câu truy vấn ghi rõ tên schema (`SELECT … FROM ds_beta.gl_postings`) vẫn đọc được
   dataset khác. Trên thực tế không đường mã nào sinh ra tên schema có định danh ngoài
   `SET LOCAL search_path` (đã qua whitelist), nên chỉ một lỗi SQL injection trong câu
   truy vấn mới khai thác được — nhưng đây **vẫn là cô lập yếu hơn** mức ADR này đặt ra
   ban đầu ("REVOKE USAGE trên schema khác").
   Đường siết đã khảo sát: mỗi dataset một vai trò DB (`ds_<mã>_app`) chỉ có USAGE trên
-  schema của nó, `konek_app` khai `NOINHERIT` và `SET LOCAL ROLE` mỗi transaction. Vướng
+  schema của nó, `ket_app` khai `NOINHERIT` và `SET LOCAL ROLE` mỗi transaction. Vướng
   mắc phải giải trước khi làm: bảng điều khiển (`public.users`) cũng phải cấp quyền cho
   từng vai trò dataset, và luồng đăng nhập chạy **trước** khi chọn dataset. Vì nó gắn
   chặt với tầng xác thực chưa dựng, quyết định để mở — **chốt trước phase 3**, khi đó

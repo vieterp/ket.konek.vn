@@ -35,7 +35,7 @@ App server: **Python 3.12, FastAPI + SQLAlchemy 2.x + Alembic + Pydantic v2 + ps
 ## Reversal cost
 
 Đảo từ Python sang C#/.NET:
-- Viết lại toàn bộ `server/src/konek/` từ Python sang C# (posting, modules, reporting)
+- Viết lại toàn bộ `server/src/ket/` từ Python sang C# (posting, modules, reporting)
 - Thay SQLAlchemy sang Entity Framework Core
 - Thay Pydantic v2 sang C# records/DataAnnotations
 - Thay FastAPI router sang ASP.NET Core controller
@@ -45,7 +45,7 @@ App server: **Python 3.12, FastAPI + SQLAlchemy 2.x + Alembic + Pydantic v2 + ps
 
 ## Related FR
 
-- **FR-NFR-001/002** (Decimal, làm tròn): Python `decimal` + custom `rounding` module ở `konek.kernel.money`
+- **FR-NFR-001/002** (Decimal, làm tròn): Python `decimal` + custom `rounding` module ở `ket.kernel.money`
 - **FR-NFR-041/042** (Hiệu năng báo cáo): set-based SQL, không vòng lặp Python
 - **FR-NFR-054** (Auto-update): FastAPI + Alembic migration riêng server
 - **LD-03** (Stack chọn)

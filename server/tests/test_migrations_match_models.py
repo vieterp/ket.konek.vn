@@ -15,8 +15,8 @@ from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import Engine
 
-from konek.kernel.datasets.provisioning import DatasetRef
-from konek.model_registry import DatasetBase
+from ket.kernel.datasets.provisioning import DatasetRef
+from ket.model_registry import DatasetBase
 
 pytestmark = pytest.mark.db
 

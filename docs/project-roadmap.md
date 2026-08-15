@@ -54,7 +54,7 @@ flowchart LR
 | Mốc | Phase | Nội dung | Lý do |
 | --- | --- | --- | --- |
 | **Nền tảng xong** | Cuối 2 | FastAPI + SQLAlchemy + schema-per-dataset + RBAC + RLS + audit owner-split; spike S1, S3, S4 đạt | Ghi nhật ký + cô lập + phân quyền phải có trước khi viết logic |
-| **Kernel đóng băng** | Cuối 6 | Mọi Protocol chạm 7/8 phải khai; `konek.kernel` API gần như **không đổi** | Phase 7 + 8 chạy song song; thay đổi kernel sau đó phải ADR bổ sung (RT-18) |
+| **Kernel đóng băng** | Cuối 6 | Mọi Protocol chạm 7/8 phải khai; `ket.kernel` API gần như **không đổi** | Phase 7 + 8 chạy song song; thay đổi kernel sau đó phải ADR bổ sung (RT-18) |
 | **Go/No-go renderer** | Cuối 5 | WeasyPrint + mẫu in đạt ngưỡng FR-NFR-041 (Sổ Cái cả năm < 10s); plan-B sẵn sàng | Trước khi soạn 155 mẫu in trong phase 7–10 |
 | **Schema + API lõi đóng băng** | Cuối 6 | Không thêm migration schema kernel/posting | Phase 7/8 phải cam kết các chiều mở rộng (role mapping, dimension, bank profile) — không sửa lại schema lõi |
 | **Cổng phát hành** | Cuối 10a | Tổng hợp, khóa sổ, BCTC, 3 hình thức sổ chạy xanh; **phase 10b (dashboard) hoãn được sau** | Release candidate v1.0; production ready |
@@ -101,8 +101,8 @@ Mỗi spike là **cổng chặn (blocking gate)** — trượt → quay lại qu
 **Phase 7 và 8 chạy song song được** sau khi phase 6 xong, **điều kiện: kernel + posting API đóng băng** (mục tiêu cách).
 
 Ranh giới chia sẻ:
-- `konek.kernel` (danh mục, chiều, đánh số, config) — tất cả phase dùng, không đổi
-- `konek.posting` (gl_postings, posting service) — tất cả module gọi, không đổi
+- `ket.kernel` (danh mục, chiều, đánh số, config) — tất cả phase dùng, không đổi
+- `ket.posting` (gl_postings, posting service) — tất cả module gọi, không đổi
 - Module riêng (PUR, SAL, EIV ở phase 7; STK, CCD, TSC ở phase 8) — **tách hoàn toàn**, không import lẫn nhau
 
 ---

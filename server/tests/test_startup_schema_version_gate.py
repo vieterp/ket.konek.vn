@@ -16,11 +16,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
 
-from konek.kernel.datasets.bootstrap import CONTROL_SCHEMA_VERSION, verify_control_schema
-from konek.kernel.datasets.provisioning import DatasetRef, verify_dataset_schema_version
-from konek.kernel.errors import SchemaVersionMismatchError
-from konek.main import create_app, verify_schema_versions
-from konek.settings import Settings
+from ket.kernel.datasets.bootstrap import CONTROL_SCHEMA_VERSION, verify_control_schema
+from ket.kernel.datasets.provisioning import DatasetRef, verify_dataset_schema_version
+from ket.kernel.errors import SchemaVersionMismatchError
+from ket.main import create_app, verify_schema_versions
+from ket.settings import Settings
 
 pytestmark = pytest.mark.db
 
@@ -45,7 +45,7 @@ def test_runtime_role_can_read_dataset_revision(
 def test_runtime_role_cannot_write_dataset_revision(
     app_engine: Engine, dataset_alpha: DatasetRef
 ) -> None:
-    """…nhưng chỉ đọc: ghi phiên bản schema là việc của `konek_owner`."""
+    """…nhưng chỉ đọc: ghi phiên bản schema là việc của `ket_owner`."""
     from sqlalchemy.exc import ProgrammingError
 
     with app_engine.connect() as connection, pytest.raises(ProgrammingError, match="permission"):

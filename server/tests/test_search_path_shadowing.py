@@ -16,8 +16,8 @@ import pytest
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import ProgrammingError
 
-from konek.kernel.datasets.provisioning import DatasetRef
-from konek.kernel.security.rls import set_search_path_statement
+from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.security.rls import set_search_path_statement
 
 pytestmark = pytest.mark.db
 
@@ -46,7 +46,7 @@ def test_runtime_role_cannot_create_temp_tables(app_engine: Engine) -> None:
 def test_owner_role_cannot_create_temp_tables_either(owner_engine: Engine) -> None:
     """`REVOKE TEMPORARY … FROM PUBLIC` chặn cả vai trò DDL, không chỉ runtime.
 
-    `konek_owner` không phải superuser nên nó cũng mất quyền này — đúng ý đồ:
+    `ket_owner` không phải superuser nên nó cũng mất quyền này — đúng ý đồ:
     không tiến trình nào của ứng dụng cần bảng tạm.
     """
     with owner_engine.connect() as connection, pytest.raises(ProgrammingError, match="permission"):

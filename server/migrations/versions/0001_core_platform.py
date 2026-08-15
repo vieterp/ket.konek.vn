@@ -6,7 +6,7 @@ Create Date: 2026-08-15
 
 Migration này chạy **một lần cho mỗi schema dataset** (ADR-017), không phải một
 lần cho cả database — xem `migrations/env.py`. Phải chạy bằng vai trò
-`konek_owner`: bảng do vai trò nào tạo thì vai trò đó sở hữu, và toàn bộ cơ chế
+`ket_owner`: bảng do vai trò nào tạo thì vai trò đó sở hữu, và toàn bộ cơ chế
 "nhật ký bất biến" (RT-02) dựa trên việc vai trò runtime **không** sở hữu bảng.
 
 Không có khóa ngoại nào trỏ ra ngoài schema này (kể cả tới `public.users`) — một
@@ -21,13 +21,13 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-from konek.kernel.auditing.models import AUDIT_TABLE_NAME
-from konek.kernel.security.grants import (
+from ket.kernel.auditing.models import AUDIT_TABLE_NAME
+from ket.kernel.security.grants import (
     grant_app_append_only,
     grant_app_read_write,
     serial_sequence_name,
 )
-from konek.kernel.security.rls import enable_branch_rls_statements
+from ket.kernel.security.rls import enable_branch_rls_statements
 
 revision: str = "0001"
 down_revision: str | None = None
@@ -248,9 +248,9 @@ def upgrade() -> None:
 def _apply_grants() -> None:
     """Phân quyền bảng cho vai trò runtime (RT-02).
 
-    `audit_log` là bảng **chỉ thêm**: `konek_app` không `UPDATE`/`DELETE`/
+    `audit_log` là bảng **chỉ thêm**: `ket_app` không `UPDATE`/`DELETE`/
     `TRUNCATE`/`DROP` được, kể cả khi app server bị chiếm quyền hoàn toàn. Cơ
-    chế này chỉ có hiệu lực khi bảng thuộc `konek_owner` — chủ sở hữu bảng tự
+    chế này chỉ có hiệu lực khi bảng thuộc `ket_owner` — chủ sở hữu bảng tự
     bỏ qua `REVOKE` của chính mình, nên nếu migration chạy bằng vai trò runtime
     thì "bất biến" chỉ còn là lời hứa.
     """

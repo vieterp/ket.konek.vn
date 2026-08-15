@@ -12,25 +12,25 @@ import pytest
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from konek.kernel.auditing.listener import AuditContext
-from konek.kernel.datasets.models import Dataset, SystemMetadata, User
-from konek.kernel.datasets.naming import (
+from ket.kernel.auditing.listener import AuditContext
+from ket.kernel.datasets.models import Dataset, SystemMetadata, User
+from ket.kernel.datasets.naming import (
     RESERVED_SCHEMA_NAMES,
     schema_name_for,
     validate_schema_name,
 )
-from konek.kernel.datasets.provisioning import DatasetRef, current_revision
-from konek.kernel.datasets.service import list_datasets, resolve_dataset
-from konek.kernel.errors import (
+from ket.kernel.datasets.provisioning import DatasetRef, current_revision
+from ket.kernel.datasets.service import list_datasets, resolve_dataset
+from ket.kernel.errors import (
     DatasetAlreadyExistsError,
     DatasetNotFoundError,
     InvalidSchemaNameError,
 )
-from konek.kernel.numbering.models import NumberSequence
-from konek.kernel.persistence.base import DatasetBase
-from konek.kernel.persistence.session import dataset_session
-from konek.kernel.persistence.unit_of_work import RequestScope, unit_of_work
-from konek.kernel.security.models import Branch
+from ket.kernel.numbering.models import NumberSequence
+from ket.kernel.persistence.base import DatasetBase
+from ket.kernel.persistence.session import dataset_session
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.models import Branch
 
 pytestmark = pytest.mark.db
 
@@ -139,7 +139,7 @@ def test_resolve_dataset_rejects_unknown_code(owner_engine: Engine) -> None:
 def test_provisioning_refuses_duplicate_code(
     owner_engine: Engine, dataset_alpha: DatasetRef
 ) -> None:
-    from konek.kernel.datasets.provisioning import provision_dataset
+    from ket.kernel.datasets.provisioning import provision_dataset
 
     with pytest.raises(DatasetAlreadyExistsError):
         provision_dataset(owner_engine, code=dataset_alpha.code, name="Trùng mã", scheme="TT200")

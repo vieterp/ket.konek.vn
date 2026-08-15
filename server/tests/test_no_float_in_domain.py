@@ -20,7 +20,7 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 
-# Tiền tố đường dẫn (tương đối với `src/konek`) được miễn, kèm lý do.
+# Tiền tố đường dẫn (tương đối với `src/ket`) được miễn, kèm lý do.
 ALLOWED_PREFIXES: tuple[str, ...] = ()
 
 
@@ -59,7 +59,7 @@ def _is_allowed(relative_path: str) -> bool:
 
 
 def test_domain_code_has_no_float(domain_root: Path) -> None:
-    """Toàn bộ `src/konek` không được dùng `float`."""
+    """Toàn bộ `src/ket` không được dùng `float`."""
     violations: list[FloatUsage] = []
 
     for path in sorted(domain_root.rglob("*.py")):
@@ -78,7 +78,7 @@ def test_migrations_have_no_float() -> None:
 
     Một `sa.Float()` hay một `server_default="0.1"` lọt vào đây làm hỏng số liệu
     ở tầng sâu nhất và không cổng nào khác bắt được: `mypy` chỉ soi
-    `src/konek`, còn bộ quét trước đây cũng vậy. Sai sót ở migration lại là
+    `src/ket`, còn bộ quét trước đây cũng vậy. Sai sót ở migration lại là
     loại đắt nhất để sửa — dữ liệu đã nằm sai kiểu trên đĩa của khách hàng.
     """
     migrations_root = Path(__file__).resolve().parent.parent / "migrations"

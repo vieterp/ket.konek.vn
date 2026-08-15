@@ -1,4 +1,4 @@
-# Chuẩn code — Konek Kế toán
+# Chuẩn code — Konek Két
 
 Chốt ở phase 1. Nguyên tắc chọn quy tắc: **chỉ giữ quy tắc kiểm được tự động,
 hoặc quy tắc mà vi phạm gây sai số tiền.** Quy tắc "phong cách" không kiểm được
@@ -13,9 +13,9 @@ LD-13, LD-14.
 
 | Chủ đề | Quy tắc | Ép bằng |
 | --- | --- | --- |
-| Kiểu tiền | Chỉ `decimal.Decimal`. **Cấm `float`** trên **toàn bộ `server/src/konek`** (bộ quét không chừa package nào) | `server/tests/test_no_float_in_domain.py` — quét AST, chạy trong CI |
+| Kiểu tiền | Chỉ `decimal.Decimal`. **Cấm `float`** trên **toàn bộ `server/src/ket`** (bộ quét không chừa package nào) | `server/tests/test_no_float_in_domain.py` — quét AST, chạy trong CI |
 | Ngoại lệ cấm float | Chỉ mã vẽ biểu đồ (phase 10b). Thêm đường dẫn vào `ALLOWED_PREFIXES` **kèm lý do**, không nới bộ quét | Review |
-| Làm tròn | Một module duy nhất `konek.kernel.money` (phase 3). `ROUND_HALF_UP`; scale lấy từ cấu hình, không hard-code (FR-SYS-064) | Review + test |
+| Làm tròn | Một module duy nhất `ket.kernel.money` (phase 3). `ROUND_HALF_UP`; scale lấy từ cấu hình, không hard-code (FR-SYS-064) | Review + test |
 | Cột tiền trong DB | `NUMERIC(18,4)` cho đơn giá / tỷ giá · `NUMERIC(18,2)` cho thành tiền | Review migration |
 | Đa tiền tệ | Mỗi dòng phát sinh lưu đủ bộ `(currency, rate, amount_fc, amount_debit, amount_credit)`; sổ cái lưu VND quy đổi | Schema phase 4 |
 
@@ -29,7 +29,7 @@ LD-13, LD-14.
 
 | Chủ đề | Quy tắc |
 | --- | --- |
-| mypy | `strict = true` trên toàn `server/src/konek`, **fail = chặn merge**. Không có ngoại lệ per-module |
+| mypy | `strict = true` trên toàn `server/src/ket`, **fail = chặn merge**. Không có ngoại lệ per-module |
 | Cờ bật thêm | `disallow_untyped_defs`, `disallow_any_generics`, `warn_return_any`, `strict_equality`, `no_implicit_optional`, `warn_unused_ignores`, `warn_unreachable` |
 | `# type: ignore` | Cấm dạng trần — `enable_error_code = ["ignore-without-code"]` bắt phải nêu mã lỗi. Mỗi ignore phải kèm lý do trong comment và được review. **Đếm số ignore trong báo cáo mỗi phase** |
 | Ranh giới API | Pydantic v2 model cho mọi request/response |
@@ -78,7 +78,7 @@ phase 7/8 phải khai từ phase 6 (RT-18 — kernel đóng băng cuối phase 6
 
 | Chủ đề | Quy tắc |
 | --- | --- |
-| Layout | `src/` layout, package `konek` |
+| Layout | `src/` layout, package `ket` |
 | Đặt tên | `snake_case` cho module/hàm/biến, `PascalCase` cho class (ruff `N`) |
 | Lint | ruff: `E,W,F,I,N,UP,B,ANN,S,C4,DTZ,T20,RUF` |
 | Tắt có chủ đích | `E501` (formatter lo), `RUF001/002/003` (docstring tiếng Việt chứa ký tự "mơ hồ" — en dash, dấu thanh) |
@@ -97,8 +97,8 @@ phase 7/8 phải khai từ phase 6 (RT-18 — kernel đóng băng cuối phase 6
 | Đặt tên | `snake_case`; bảng số nhiều (`gl_postings`); khóa ngoại `<bảng_số_ít>_id` |
 | Khóa chính | UUIDv7 cho bảng chứng từ/phát sinh; `int` cho danh mục **+ cột `uid UUIDv7` ổn định** (ADR-012) |
 | Migration | Alembic, chạy **theo từng PG schema dataset** (ADR-017). Một dataset = một schema = một lịch sử migration |
-| Quyền | DDL/migration chạy bằng `konek_owner`; runtime dùng `konek_app` (không UPDATE/DELETE/DROP được `audit_log`) — ADR-019 |
-| Bảng phát sinh | `gl_postings` append-only; chỉ `konek.posting` được ghi |
+| Quyền | DDL/migration chạy bằng `ket_owner`; runtime dùng `ket_app` (không UPDATE/DELETE/DROP được `audit_log`) — ADR-019 |
+| Bảng phát sinh | `gl_postings` append-only; chỉ `ket.posting` được ghi |
 
 ---
 

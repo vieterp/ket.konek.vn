@@ -18,11 +18,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from konek.kernel.auditing.listener import AuditContext
-from konek.kernel.datasets.provisioning import DatasetRef
-from konek.kernel.persistence.session import dataset_session
-from konek.kernel.persistence.unit_of_work import RequestScope, unit_of_work
-from konek.kernel.security.models import Branch
+from ket.kernel.auditing.listener import AuditContext
+from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.persistence.session import dataset_session
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.models import Branch
 
 pytestmark = pytest.mark.db
 
@@ -90,7 +90,7 @@ def test_failed_flush_then_rollback_then_reuse_leaks_nothing(
     scope = _scope(dataset_alpha)
     try:
         session.begin()
-        from konek.kernel.persistence.session import bind_transaction_scope
+        from ket.kernel.persistence.session import bind_transaction_scope
 
         bind_transaction_scope(
             session,

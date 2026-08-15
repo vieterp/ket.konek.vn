@@ -13,13 +13,13 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
-from konek.kernel.auditing.listener import AuditContext
-from konek.kernel.auditing.models import AuditAction, AuditLog
-from konek.kernel.datasets.provisioning import DatasetRef
-from konek.kernel.errors import AuditContextMissingError
-from konek.kernel.persistence.session import dataset_session
-from konek.kernel.persistence.unit_of_work import RequestScope, unit_of_work
-from konek.kernel.security.models import Branch
+from ket.kernel.auditing.listener import AuditContext
+from ket.kernel.auditing.models import AuditAction, AuditLog
+from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.errors import AuditContextMissingError
+from ket.kernel.persistence.session import dataset_session
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.models import Branch
 
 pytestmark = pytest.mark.db
 
@@ -38,7 +38,7 @@ def _scope(dataset: DatasetRef) -> RequestScope:
 
 
 def test_app_role_has_no_privileges_that_defeat_the_mechanism(app_engine: Engine) -> None:
-    """`konek_app` không owner, không superuser, không BYPASSRLS.
+    """`ket_app` không owner, không superuser, không BYPASSRLS.
 
     Ba thuộc tính này là **điều kiện cần** của cả nhật ký bất biến lẫn cô lập
     chi nhánh. Mất bất kỳ cái nào, cả hai cơ chế im lặng vô hiệu.

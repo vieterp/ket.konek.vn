@@ -1,4 +1,4 @@
-# Konek Kế toán — cổng chất lượng chạy cục bộ.
+# Konek Két — cổng chất lượng chạy cục bộ.
 # `make check` chạy ĐÚNG bộ mà CI chạy (trừ tauri-build, xem `make tauri-build`).
 
 SERVER := server
@@ -27,7 +27,7 @@ server-install: ## uv sync với Python 3.12
 server-lint: ## ruff
 	cd $(SERVER) && uv run ruff check .
 
-server-typecheck: ## mypy --strict trên toàn src/konek
+server-typecheck: ## mypy --strict trên toàn src/ket
 	cd $(SERVER) && uv run mypy
 
 server-imports: ## import-linter — luật phụ thuộc (ADR-004)

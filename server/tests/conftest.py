@@ -5,7 +5,7 @@ RLS, tách quyền sở hữu bảng, `search_path`, `SELECT … FOR UPDATE SKIP
 là hành vi của PostgreSQL, và chính chúng là thứ đang được kiểm. Một bộ test
 chạy trên SQLite sẽ xanh trong khi cơ chế cô lập dữ liệu không hoạt động.
 
-Kết nối lấy từ `KONEK_TEST_ADMIN_DSN` (mặc định: PostgreSQL cục bộ). Không kết
+Kết nối lấy từ `KET_TEST_ADMIN_DSN` (mặc định: PostgreSQL cục bộ). Không kết
 nối được thì nhóm `db` **bị bỏ qua** chứ không làm đỏ CI trên runner không có
 DB — cổng thật nằm ở job CI có service PostgreSQL.
 
@@ -25,35 +25,35 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
-from konek.kernel.datasets.bootstrap import ensure_control_schema, ensure_database_roles
-from konek.kernel.datasets.provisioning import DatasetRef, provision_dataset
-from konek.kernel.persistence.session import create_session_factory
-from konek.settings import Settings
+from ket.kernel.datasets.bootstrap import ensure_control_schema, ensure_database_roles
+from ket.kernel.datasets.provisioning import DatasetRef, provision_dataset
+from ket.kernel.persistence.session import create_session_factory
+from ket.settings import Settings
 
 SERVER_ROOT = Path(__file__).resolve().parent.parent
-DOMAIN_ROOT = SERVER_ROOT / "src" / "konek"
+DOMAIN_ROOT = SERVER_ROOT / "src" / "ket"
 
-TEST_DATABASE = "konek_test"
+TEST_DATABASE = "ket_test"
 DEFAULT_ADMIN_DSN = "postgresql+psycopg://localhost/postgres"
 
 
 @pytest.fixture(scope="session")
 def domain_root() -> Path:
-    """Thư mục gốc của mã nghiệp vụ (`server/src/konek`)."""
+    """Thư mục gốc của mã nghiệp vụ (`server/src/ket`)."""
     return DOMAIN_ROOT
 
 
 def _admin_dsn() -> str:
-    return os.environ.get("KONEK_TEST_ADMIN_DSN", DEFAULT_ADMIN_DSN)
+    return os.environ.get("KET_TEST_ADMIN_DSN", DEFAULT_ADMIN_DSN)
 
 
 def _dsn_for(role: str) -> str:
     """DSN của một vai trò tới database test.
 
     Mật khẩu cố ý không có: máy lập trình dùng `trust`/`peer` cục bộ, còn CI
-    truyền DSN đầy đủ qua `KONEK_TEST_*_DSN`.
+    truyền DSN đầy đủ qua `KET_TEST_*_DSN`.
     """
-    override = os.environ.get(f"KONEK_TEST_{role.upper()}_DSN")
+    override = os.environ.get(f"KET_TEST_{role.upper()}_DSN")
     if override:
         return override
     return f"postgresql+psycopg://{role}@localhost/{TEST_DATABASE}"
@@ -83,7 +83,7 @@ def test_settings(postgres_available: bool) -> Settings:
         # Trên máy lập trình, bỏ qua là hợp lý. Trong CI thì **không**: job này
         # tồn tại để chạy đúng nhóm test đó, và "xanh vì đã bỏ qua" là tín hiệu
         # tệ hơn không có tín hiệu — cổng bảo mật sẽ mục dần mà không ai biết.
-        if os.environ.get("KONEK_TEST_REQUIRE_DB"):
+        if os.environ.get("KET_TEST_REQUIRE_DB"):
             pytest.fail(message)
         pytest.skip(message)
 
@@ -102,8 +102,8 @@ def test_settings(postgres_available: bool) -> Settings:
         connection.exec_driver_sql(f'CREATE DATABASE "{TEST_DATABASE}"')
 
     settings = Settings(
-        database_url=_dsn_for("konek_app"),
-        owner_database_url=_dsn_for("konek_owner"),
+        database_url=_dsn_for("ket_app"),
+        owner_database_url=_dsn_for("ket_owner"),
         verify_schema_on_startup=False,
     )
 
@@ -143,7 +143,7 @@ def owner_engine(test_settings: Settings) -> Iterator[Engine]:
 
 @pytest.fixture(scope="session")
 def app_engine(test_settings: Settings) -> Iterator[Engine]:
-    """Engine runtime (`konek_app`) — mọi test hành vi phải đi qua engine này.
+    """Engine runtime (`ket_app`) — mọi test hành vi phải đi qua engine này.
 
     Dùng nhầm `owner_engine` sẽ khiến RLS và quyền `audit_log` **không** có tác
     dụng, và test sẽ xanh trong khi cơ chế bảo vệ đã hỏng.

@@ -15,9 +15,9 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import Engine, text
 
-from konek.kernel.datasets.provisioning import DatasetRef
-from konek.kernel.security.rls import POLICY_NAME
-from konek.model_registry import DatasetBase
+from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.security.rls import POLICY_NAME
+from ket.model_registry import DatasetBase
 
 pytestmark = pytest.mark.db
 

@@ -33,7 +33,7 @@ Ba tầng: **Tauri desktop (client) ↔ FastAPI app server ↔ PostgreSQL**. Cli
 
 Nếu đảo quyết định → **thay toàn bộ hàng rào bảo mật, kiểm quyền, tính tiền từ server sang client**:
 - Sửa `main.py` (FastAPI route + auth) → client code (React)
-- Ghi lại toàn bộ `konek.kernel` logic vào TypeScript
+- Ghi lại toàn bộ `ket.kernel` logic vào TypeScript
 - Thay generator route + OpenAPI type → generator client-side
 - Migrate `audit_log` từ DB audit sang client logger
 - Không thể đảo được vì đã ghi sổ ở DB

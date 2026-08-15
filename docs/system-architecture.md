@@ -88,7 +88,7 @@ stateDiagram-v2
 ```
 
 **Bất biến:**
-- Chỉ `konek.posting` module ghi vào `gl_postings`.
+- Chỉ `ket.posting` module ghi vào `gl_postings`.
 - `gl_postings` append-only — không UPDATE/DELETE dòng phát sinh đã ghi.
 - Chứng từ **chưa ghi sổ** không lên báo cáo phân tích; hiển thị khác màu danh sách.
 - Chứng từ **đã khóa sổ**: chỉ đọc; tùy cấu hình có in được hay không.
@@ -101,7 +101,7 @@ stateDiagram-v2
 server/
   pyproject.toml                     # uv/poetry, ruff, mypy strict, pytest
   alembic.ini
-  src/konek/
+  src/ket/
     main.py                          # FastAPI app factory, router mount, lifespan
     kernel/                          # shared kernel (phase 3)
       persistence/ security/ auditing/ config/ numbering/ currency/
@@ -144,10 +144,10 @@ client/                              # Tauri + web UI (TypeScript)
 ## 7. Luật phụ thuộc (5 ép tự động, 2 review)
 
 **Ép tự động bằng `import-linter` trong CI:**
-1. **C1**: `konek.kernel` không import `konek.modules.*` hay `konek.posting`.
-2. **C2/C3**: `konek.modules.*` không import module khác (chỉ được import `konek.kernel`, `konek.posting`); nếu cần dữ liệu module khác → qua **Protocol trong kernel** đăng ký lúc khởi động, hoặc qua **domain event**.
-3. **C4** (chỉ review, không ép import-linter): Chỉ `konek.posting` được INSERT vào `gl_postings` — module khác gọi `PostingService`.
-4. **C5**: `konek.reporting` chỉ **đọc** (chặn import các module khác để ghi DB).
+1. **C1**: `ket.kernel` không import `ket.modules.*` hay `ket.posting`.
+2. **C2/C3**: `ket.modules.*` không import module khác (chỉ được import `ket.kernel`, `ket.posting`); nếu cần dữ liệu module khác → qua **Protocol trong kernel** đăng ký lúc khởi động, hoặc qua **domain event**.
+3. **C4** (chỉ review, không ép import-linter): Chỉ `ket.posting` được INSERT vào `gl_postings` — module khác gọi `PostingService`.
+4. **C5**: `ket.reporting` chỉ **đọc** (chặn import các module khác để ghi DB).
 5. **UI**: Web UI chỉ biết REST API + type sinh từ OpenAPI — eslint `no-restricted-imports` chặn gọi API Tauri trong logic.
 
 **Review (code review, không ép tự động):**
@@ -159,25 +159,25 @@ client/                              # Tauri + web UI (TypeScript)
 
 | SRS | Phân hệ | Mã FR | Package server | Nhóm màn hình (UI) | Phase |
 | --- | --- | --- | --- | --- | --- |
-| 01 | Danh mục | SYS | `konek.kernel` | Danh mục & Thiết lập | 3 |
-| 02 | Số dư ban đầu | OPB | `konek.posting` | Danh mục & Thiết lập | 4 |
-| 03 | Quỹ tiền mặt | QUY | `konek.modules.cash_book` | Tiền vào tiền ra | 6 |
-| 04 | Ngân hàng | BNK | `konek.modules.bank` | Tiền vào tiền ra | 6 |
-| 05 | Mua hàng | PUR | `konek.modules.purchase` | Mua hàng | 7 |
-| 06 | Bán hàng | SAL | `konek.modules.sales` | Bán hàng | 7 |
-| 07 | HĐĐT cấp số | EIV | `konek.modules.einvoice` | Hóa đơn điện tử | 7 |
-| 08 | Quản lý hóa đơn | INV | `konek.modules.einvoice` | Hóa đơn điện tử | 7 |
-| 09 | Kho | STK | `konek.modules.inventory` | Kho | 8 |
-| 10 | CCDC | CCD | `konek.modules.tools` | Tài sản | 8 |
-| 11 | TSCĐ | TSC | `konek.modules.fixed_assets` | Tài sản | 8 |
-| 12 | Thuế | TAX | `konek.modules.tax` | Sổ sách & Thuế | 9 |
-| 13 | Tiền lương | PAY | `konek.modules.payroll` | Lương & Nhân sự | 9 |
-| 14 | Giá thành | CST | `konek.modules.costing` | Sổ sách & Thuế | 9 |
-| 15 | Tổng hợp & GL | GLE | `konek.modules.general_ledger` | Sổ sách & Thuế | 10a |
+| 01 | Danh mục | SYS | `ket.kernel` | Danh mục & Thiết lập | 3 |
+| 02 | Số dư ban đầu | OPB | `ket.posting` | Danh mục & Thiết lập | 4 |
+| 03 | Quỹ tiền mặt | QUY | `ket.modules.cash_book` | Tiền vào tiền ra | 6 |
+| 04 | Ngân hàng | BNK | `ket.modules.bank` | Tiền vào tiền ra | 6 |
+| 05 | Mua hàng | PUR | `ket.modules.purchase` | Mua hàng | 7 |
+| 06 | Bán hàng | SAL | `ket.modules.sales` | Bán hàng | 7 |
+| 07 | HĐĐT cấp số | EIV | `ket.modules.einvoice` | Hóa đơn điện tử | 7 |
+| 08 | Quản lý hóa đơn | INV | `ket.modules.einvoice` | Hóa đơn điện tử | 7 |
+| 09 | Kho | STK | `ket.modules.inventory` | Kho | 8 |
+| 10 | CCDC | CCD | `ket.modules.tools` | Tài sản | 8 |
+| 11 | TSCĐ | TSC | `ket.modules.fixed_assets` | Tài sản | 8 |
+| 12 | Thuế | TAX | `ket.modules.tax` | Sổ sách & Thuế | 9 |
+| 13 | Tiền lương | PAY | `ket.modules.payroll` | Lương & Nhân sự | 9 |
+| 14 | Giá thành | CST | `ket.modules.costing` | Sổ sách & Thuế | 9 |
+| 15 | Tổng hợp & GL | GLE | `ket.modules.general_ledger` | Sổ sách & Thuế | 10a |
 | 16 | Hợp đồng & Ngân sách | CTR | *(hoãn v1.1)* | — | — |
-| 17 | Thủ kho / Thủ quỹ | WHK | `konek.modules.warehousing` | Tiền vào tiền ra (thủ quỹ) / Kho (thủ kho) | 6, 8 |
-| 18 | Báo cáo & phân tích | RPT | `konek.reporting` | xuyên suốt; **dashboard §4 = hoãn 10b** | 5, 10a, 10b |
-| — | AR/AP công nợ subledger | — | `konek.modules.receivables` | Mua/Bán/Công nợ | 7 |
+| 17 | Thủ kho / Thủ quỹ | WHK | `ket.modules.warehousing` | Tiền vào tiền ra (thủ quỹ) / Kho (thủ kho) | 6, 8 |
+| 18 | Báo cáo & phân tích | RPT | `ket.reporting` | xuyên suốt; **dashboard §4 = hoãn 10b** | 5, 10a, 10b |
+| — | AR/AP công nợ subledger | — | `ket.modules.receivables` | Mua/Bán/Công nợ | 7 |
 | 20 | Đặc thù ngành | IND | *(hoãn v1.1 — phủ bằng chiều mở rộng + gói config)* | — | — |
 
 ---
@@ -217,7 +217,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | **Số dư** (RT-22) | Hybrid: `gl_postings` là nguồn sự thật + snapshot `account_balances` **khóa chỉ `(kỳ, sổ, chi nhánh, TK, tiền tệ)`** — **KHÔNG mang chiều/đối tác/vật tư** (nổ tổ hợp). Đối tác → `ar_ap_ledger`, vật tư → `inventory_balances`, chiều → `gl_postings` có index | 4 |
 | **Chứng từ lùi ngày** | Đánh dấu dirty snapshot + hàng đợi tính lại kiểm soát; **chặn tính lại ngầm** (RT-11) | 4, 8 |
 | **Đánh số** (RT-12) | Bảng counter + `SELECT … FOR UPDATE`; idempotency key ghi cùng txn business write, scope theo route, miễn `/reports`,`/jobs` | 2, 3 |
-| **Nhật ký** (RT-02) | `audit_log` thuộc `konek_owner`; `konek_app` chỉ INSERT/SELECT (không UPDATE/DELETE/DROP); ghi trước–sau JSONB theo schema dataset | 2 |
+| **Nhật ký** (RT-02) | `audit_log` thuộc `ket_owner`; `ket_app` chỉ INSERT/SELECT (không UPDATE/DELETE/DROP); ghi trước–sau JSONB theo schema dataset | 2 |
 | **Nhiều dữ liệu kế toán** (RT-17, D2) | **Schema-per-dataset trong 1 PG DB (ADR-017)**; routing schema session; handshake/đánh số/audit/RLS/backup per-schema | 2, 3, 11 |
 | **Cấu hình pháp lý** (RT-07) | `config_packages` + bảng con có `effective_from/to` + `scheme(TT200/TT133)`; ký số; SQL/template sandbox | 5 |
 | **Báo cáo** (RT-01, RT-04) | Metadata-driven: `report_definitions` (dataset + layout + params); render server-side; mẫu in Jinja2 sandbox + WeasyPrint `url_fetcher` chặn `file://`; **RLS trên bảng gốc** | 5 |
@@ -235,7 +235,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | `posting_dimension_values` | Chiều phân tích mở rộng | 3, 4 | `kernel` |
 | `ar_ap_ledger` | Công nợ subledger (đối tác + TK + số tiền nợ) | 7 | `receivables` |
 | `inventory_balances` | Tồn kho (warehouse, item, lot, serial, qty) | 8 | `inventory` |
-| `audit_log` | Nhật ký bất biến (người, hành động, giá trị trước–sau) | 2 | `konek_owner` |
+| `audit_log` | Nhật ký bất biến (người, hành động, giá trị trước–sau) | 2 | `ket_owner` |
 | `config_packages` | Gói cấu hình pháp lý (TT200/TT133, hiệu lực từ…) | 5 | `kernel` |
 | `report_definitions` | Báo cáo metadata (layout, tham số, query) | 5 | `reporting` |
 | `number_sequences` | Bộ đếm đánh số chứng từ (`scope_key` gói cả chi nhánh + năm) | 2 (bảng), 3 (cấp số) | `kernel` |
@@ -262,8 +262,8 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | Mối quan tâm | Thiết kế | FR | Phase |
 | --- | --- | --- | --- |
 | **Xác thực** | User/password + policy; 2FA cho quản trị + ngân hàng; token phiên hạn | FR-NFR-010/016, FR-SYS-070/075 | 2 |
-| **Phân quyền (RT-04)** | RBAC: role × (loại chứng từ) × (hành vi) × chi nhánh ở server. **RLS chi nhánh trên bảng gốc theo GUC `konek.branch_ids` mỗi transaction** (không dựa filter tầng app); GUC chưa đặt = không thấy dòng nào (fail-closed). Danh mục `branches` và bảng nguồn `user_branches` không bật RLS — ADR-017 §6 | FR-NFR-011, FR-SYS-071/072/074 | 2, 5 |
-| **Nhật ký (RT-02)** | Listener ghi mọi thêm/sửa/xóa/ghi sổ/bỏ ghi sổ/khóa sổ, **trong cùng transaction** với thao tác nghiệp vụ (rollback thì mất theo; flush hỏng không để lại diff trôi sang lần ghi sau). `audit_log` ⊂ `konek_owner`; `konek_app` **không UPDATE/DELETE/DROP** được. `search_path` nêu `pg_temp` **cuối cùng** + thu hồi quyền `TEMPORARY`: nếu không, một `CREATE TEMP TABLE audit_log` che được bảng thật và vô hiệu hóa nhật ký mà không cần sửa/xóa dòng nào | FR-NFR-012/013, FR-SYS-073 | 2 |
+| **Phân quyền (RT-04)** | RBAC: role × (loại chứng từ) × (hành vi) × chi nhánh ở server. **RLS chi nhánh trên bảng gốc theo GUC `ket.branch_ids` mỗi transaction** (không dựa filter tầng app); GUC chưa đặt = không thấy dòng nào (fail-closed). Danh mục `branches` và bảng nguồn `user_branches` không bật RLS — ADR-017 §6 | FR-NFR-011, FR-SYS-071/072/074 | 2, 5 |
+| **Nhật ký (RT-02)** | Listener ghi mọi thêm/sửa/xóa/ghi sổ/bỏ ghi sổ/khóa sổ, **trong cùng transaction** với thao tác nghiệp vụ (rollback thì mất theo; flush hỏng không để lại diff trôi sang lần ghi sau). `audit_log` ⊂ `ket_owner`; `ket_app` **không UPDATE/DELETE/DROP** được. `search_path` nêu `pg_temp` **cuối cùng** + thu hồi quyền `TEMPORARY`: nếu không, một `CREATE TEMP TABLE audit_log` che được bảng thật và vô hiệu hóa nhật ký mà không cần sửa/xóa dòng nào | FR-NFR-012/013, FR-SYS-073 | 2 |
 | **Bảo mật khóa/bí mật (RT-05)** | `totp_secret`, token eSign, creds DB **mã hóa bằng khóa app ở OS keystore** | FR-NFR-014/015 | 2, 11 |
 | **Kênh app→DB (RT-06)** | TLS verify-full; `scram-sha-256` pg_hba; **cấm superuser làm app login**; creds keystore | FR-NFR-014 | 11 |
 | **Đa ngôn ngữ** | Resource vi/en cho UI + cột `name_en` danh mục & hệ thống TK | FR-NFR-034 | 3, 5 |
