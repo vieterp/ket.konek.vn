@@ -36,7 +36,7 @@ LD-13, LD-14.
 | DTO nội bộ | Pydantic model hoặc dataclass có kiểu |
 | Cấm | `dict[str, Any]` đi qua ranh giới module |
 
-Hiện trạng (sau phase 2A): `mypy --strict` xanh trên **71 file**, **0** `# type: ignore` trong
+Hiện trạng (sau phase 2B-0): `mypy --strict` xanh trên **72 file**, **0** `# type: ignore` trong
 `server/src`. Ngưỡng 0 là cổng CI thật — nới phải sửa `.github/workflows/ci.yml` trong PR.
 
 ---
@@ -83,7 +83,7 @@ phase 7/8 phải khai từ phase 6 (RT-18 — kernel đóng băng cuối phase 6
 | Đặt tên | `snake_case` cho module/hàm/biến, `PascalCase` cho class (ruff `N`) |
 | Lint | ruff: `E,W,F,I,N,UP,B,ANN,S,C4,DTZ,T20,RUF` |
 | Tắt có chủ đích | `E501` (formatter lo), `RUF001/002/003` (docstring tiếng Việt chứa ký tự "mơ hồ" — en dash, dấu thanh) |
-| SQL | Truy vấn nghiệp vụ dùng SQLAlchemy Core/ORM có kiểu; báo cáo và tính khối lượng lớn dùng SQL text **đã tham số hóa**. **Cấm nối chuỗi SQL** |
+| SQL | Truy vấn nghiệp vụ dùng SQLAlchemy Core/ORM có kiểu; báo cáo dùng SQL text **đã tham số hóa**. **Cấm f-string / chuỗi nối trong `text()` / `exec_driver_sql()`**. Luật cứng: quét AST, 5 tệp DDL-identity miễn trừ kèm lý do. Test: `tests/test_no_sql_string_interpolation.py` |
 | Tính khối lượng lớn | Set-based SQL (ADR-014). Vòng lặp Python trên > 1.000 dòng dữ liệu phải có lý do ghi trong comment và được review chấp thuận |
 | Ngày | `date` cho ngày hạch toán / ngày chứng từ; `timestamptz` cho dấu vết audit (ruff `DTZ` cấm datetime naive) |
 | `print()` | Cấm trong code nghiệp vụ (ruff `T20`) — dùng logger |
@@ -118,6 +118,18 @@ thật khi dựng phase 2A, và cả sáu đều hỏng **âm thầm** nếu qu�
 Migration đã phát hành thì **cấm sửa** — viết migration mới. Model và migration
 phải mô tả cùng một schema: `tests/test_migrations_match_models.py` so metadata
 với DB thật sau khi chạy migration, còn khác biệt là còn thiếu migration.
+
+### Cô lập dữ liệu bằng vai trò per-dataset (phase 2B-0)
+
+| Khía cạnh | Quy tắc |
+| --- | --- |
+| Cấu trúc vai trò | `ket_owner` (sở hữu bảng + chạy DDL) · `ket_control` (vai trò **nhóm**, giữ quyền trên 3 bảng schema điều khiển) · `ds_<mã>_app` per-dataset (NOLOGIN, **INHERIT**, thành viên `ket_control`, giữ quyền bảng của schema mình) |
+| `ket_app` | LOGIN, **NOINHERIT**, không có quyền trên bảng dataset nào. Là thành viên của mọi `ds_*_app` để `SET ROLE` được — `NOINHERIT` là thứ khiến tư cách thành viên đó không tự biến thành quyền |
+| Mở transaction | `SET LOCAL ROLE ds_<mã>_app` → `SET LOCAL search_path` → `set_config('ket.branch_ids', …, local)`, trong `persistence.session.bind_transaction_scope`. Cả ba là `LOCAL` nên hết hiệu lực khi transaction kết thúc — **đó** là thứ cho phép dùng chung pool, không phải lớp pool đang dùng. Test canh: `test_transaction_scope_does_not_leak_through_pool.py` (chạy trên `QueuePool` thật vì `NullPool` không quan sát được rò) |
+| Trần mã dataset | **56 ký tự** để chừa hậu tố `_app` (tên vai trò ≤ 63 ký tự). Vượt quá thì PostgreSQL cắt tên âm thầm và hai dataset dùng chung một vai trò. Kiểm ở `role_name_for_schema()` |
+| Truy vấn chéo schema | ❌ `SELECT … FROM ds_beta.x` từ phiên đã bind `ds_alpha` → `42501 permission denied` |
+| Giới hạn đã biết | Cơ chế này **không** chặn tiêm SQL **nhiều câu lệnh** (`SET ROLE` xét `session_user`). Xem `docs/adr/adr-017-schema-per-dataset.md` §Consequences |
+| Luật cứng bù | Quét AST cấm f-string / chuỗi nối trong `text()`/`exec_driver_sql()`. Tham số ràng buộc ép psycopg dùng extended protocol, protocol đó không cho nhiều câu lệnh trong một lần gửi. Test: `test_no_sql_string_interpolation.py` |
 
 ---
 

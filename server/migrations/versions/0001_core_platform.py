@@ -25,6 +25,7 @@ from ket.kernel.auditing.models import AUDIT_TABLE_NAME
 from ket.kernel.datasets.naming import role_name_for_schema
 from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 from ket.kernel.security.grants import (
+    APPEND_ONLY_TABLES,
     grant_append_only,
     grant_read_write,
     serial_sequence_name,
@@ -256,7 +257,6 @@ def _apply_grants() -> None:
     bỏ qua `REVOKE` của chính mình, nên nếu migration chạy bằng vai trò runtime
     thì "bất biến" chỉ còn là lời hứa.
     """
-    append_only = {AUDIT_TABLE_NAME}
     tables_with_serial_id = {
         "branches",
         "roles",
@@ -282,7 +282,7 @@ def _apply_grants() -> None:
     grantee = _dataset_grantee()
     for table in all_tables:
         sequence = serial_sequence_name(table) if table in tables_with_serial_id else None
-        builder = grant_append_only if table in append_only else grant_read_write
+        builder = grant_append_only if table in APPEND_ONLY_TABLES else grant_read_write
         for statement in builder(table, grantee=grantee, sequence=sequence):
             op.execute(statement)
 

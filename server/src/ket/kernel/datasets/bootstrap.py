@@ -135,7 +135,17 @@ def ensure_dataset_roles(owner_engine: Engine) -> tuple[str, ...]:
             # sạch mọi mục ACL trỏ tới nó. Dựng vai trò mà không cấp lại quyền là
             # sửa được đúng một nửa — app vẫn chết, chỉ đổi thông điệp từ
             # "role does not exist" thành "permission denied for table".
-            for statement in repair_dataset_privileges_statements(schema):
+            present = {
+                row[0]
+                for row in connection.execute(
+                    text(
+                        "SELECT c.relname FROM pg_class c JOIN pg_namespace n "
+                        "ON n.oid = c.relnamespace WHERE n.nspname = :schema"
+                    ),
+                    {"schema": schema},
+                ).all()
+            }
+            for statement in repair_dataset_privileges_statements(schema, present_tables=present):
                 connection.exec_driver_sql(statement)
             # Chỉ chạy được ở đây chứ không ở `provision_dataset`: lúc provision,
             # schema vừa tạo còn rỗng nên `ON ALL TABLES` không có gì để thu hồi.

@@ -29,16 +29,30 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ALLOWED_FILES: dict[str, str] = {
-    "kernel/security/rls.py": "sinh DDL policy + `SET LOCAL search_path`: tên schema/cột là identifier",
-    "kernel/security/grants.py": "sinh GRANT/REVOKE: tên bảng, sequence, vai trò là identifier",
-    "kernel/security/dataset_roles.py": "sinh DDL vai trò: tên vai trò và schema là identifier",
-    "kernel/datasets/bootstrap.py": "cấp quyền bảng điều khiển: tên bảng lấy từ ORM metadata",
-    "kernel/datasets/provisioning.py": "CREATE/DROP SCHEMA + đọc `alembic_version`: tên schema là identifier",
+    "kernel/datasets/provisioning.py": (
+        "CREATE/DROP SCHEMA + đọc `alembic_version` của một schema cụ thể: tên schema là "
+        "identifier, không tham số hóa được, đã qua `validate_schema_name`"
+    ),
 }
-"""Tệp được phép ghép chuỗi vào SQL, kèm lý do. Mọi tệp ở đây chỉ ghép
-**identifier đã qua whitelist**, không bao giờ ghép giá trị do người dùng nhập."""
+"""Tệp được phép ghép chuỗi vào SQL, kèm lý do.
 
-SQL_CALLS: frozenset[str] = frozenset({"text", "exec_driver_sql", "execute"})
+Danh sách này từng có năm tệp; bốn trong số đó **không** cần miễn trừ — chúng chỉ
+*trả về* chuỗi DDL chứ không tự gọi `text()`/`exec_driver_sql()`, nên bộ quét vốn
+không đụng tới chúng. Miễn trừ thừa lại có hại thật: `grants.py` và
+`dataset_roles.py` là hai tệp sinh SQL nhiều nhất, và một dòng miễn trừ đặt chúng
+ra ngoài tầm quét **vĩnh viễn**. Đo bằng cách chạy bộ quét lên từng tệp: bốn tệp
+cho 0 phát hiện."""
+
+ALLOWED_MIGRATION_FILES: dict[str, str] = {
+    "env.py": (
+        '`SET search_path TO "<schema>"` — tên schema là identifier, đã qua '
+        "`validate_schema_name`; đây là chỗ duy nhất trong migration được ghép"
+    ),
+}
+
+SQL_CALLS: frozenset[str] = frozenset({"text", "exec_driver_sql", "execute", "executemany"})
+"""Khớp theo **đoạn cuối** của tên gọi, nên `op.execute(...)` và
+`connection.exec_driver_sql(...)` đều nằm trong tầm quét."""
 
 
 @dataclass(frozen=True)
@@ -54,11 +68,19 @@ class Interpolation:
 
 
 def _called_name(node: ast.Call) -> str | None:
+    """Tên hàm được gọi, giữ cả tiền tố khi nó là một tên đơn (`op.execute`)."""
     if isinstance(node.func, ast.Name):
         return node.func.id
     if isinstance(node.func, ast.Attribute):
+        if isinstance(node.func.value, ast.Name):
+            return f"{node.func.value.id}.{node.func.attr}"
         return node.func.attr
     return None
+
+
+def _is_sql_call(node: ast.Call) -> bool:
+    name = _called_name(node)
+    return name is not None and name.rsplit(".", 1)[-1] in SQL_CALLS
 
 
 def _describe_dynamic(node: ast.expr) -> str | None:
@@ -67,22 +89,71 @@ def _describe_dynamic(node: ast.expr) -> str | None:
         return "f-string"
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add | ast.Mod):
         return "nối chuỗi bằng `+`" if isinstance(node.op, ast.Add) else "định dạng bằng `%`"
-    if isinstance(node, ast.Call) and _called_name(node) in {"format", "join"}:
+    if isinstance(node, ast.Call) and (_called_name(node) or "").rsplit(".", 1)[-1] in {
+        "format",
+        "join",
+    }:
         return "dựng chuỗi bằng `.format()`/`.join()`"
     return None
+
+
+def _dynamic_locals(tree: ast.Module) -> dict[str, str]:
+    """Biến gán **một lần** từ một chuỗi dựng động, tra theo tên.
+
+    `sql = f"SELECT … {v}"` rồi `text(sql)` là cách viết tự nhiên nhất cho một
+    câu truy vấn báo cáo dài — tức đúng thứ phase 5 sẽ viết — và bộ quét chỉ nhìn
+    đối số tại chỗ sẽ bỏ lọt hoàn toàn. Chỉ nhận biến gán **đúng một lần** trong
+    tệp: gán nhiều lần thì không biết giá trị nào tới được lời gọi, và đoán ở đây
+    sẽ sinh báo nhầm.
+    """
+    assigned: dict[str, list[ast.expr]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    assigned.setdefault(target.id, []).append(node.value)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.value is not None:
+                assigned.setdefault(node.target.id, []).append(node.value)
+
+    dynamic: dict[str, str] = {}
+    for name, values in assigned.items():
+        if len(values) != 1:
+            continue
+        detail = _describe_dynamic(values[0])
+        if detail is not None:
+            dynamic[name] = f"biến `{name}` gán từ {detail}"
+    return dynamic
+
+
+def _unwrap(node: ast.expr) -> ast.expr:
+    """Bóc các lớp bọc chỉ định dạng lại chuỗi, không đổi bản chất động của nó."""
+    while isinstance(node, ast.Call) and (_called_name(node) or "").rsplit(".", 1)[-1] in {
+        "dedent",
+        "strip",
+        "format_map",
+    }:
+        if not node.args:
+            break
+        node = node.args[0]
+    return node
 
 
 def find_sql_interpolations(source: str, filename: str) -> list[Interpolation]:
     """Quét AST, trả về các lời gọi SQL nhận chuỗi dựng động."""
     findings: list[Interpolation] = []
     tree = ast.parse(source, filename=filename)
+    dynamic_locals = _dynamic_locals(tree)
 
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or _called_name(node) not in SQL_CALLS:
+        if not isinstance(node, ast.Call) or not _is_sql_call(node):
             continue
         if not node.args:
             continue
-        detail = _describe_dynamic(node.args[0])
+        argument = _unwrap(node.args[0])
+        detail = _describe_dynamic(argument)
+        if detail is None and isinstance(argument, ast.Name):
+            detail = dynamic_locals.get(argument.id)
         if detail is not None:
             findings.append(
                 Interpolation(filename, node.lineno, f"{_called_name(node)}(…) nhận {detail}")
@@ -106,6 +177,57 @@ def test_domain_code_binds_parameters_instead_of_building_sql_strings(domain_roo
         "vượt được cô lập dataset (ADR-017 §Consequences). Dùng tham số ràng buộc:\n"
         + "\n".join(str(v) for v in violations)
     )
+
+
+def test_migrations_also_bind_parameters(domain_root: Path) -> None:
+    """Migration là nơi ghép chuỗi nhiều nhất — không được nằm ngoài tầm quét.
+
+    `op.execute(...)` cũng là một đường chạy SQL; nó không đi qua `text()` nên
+    bộ quét phải biết tên đó.
+    """
+    migrations_root = domain_root.parent.parent / "migrations"
+    violations: list[Interpolation] = []
+
+    for path in sorted(migrations_root.rglob("*.py")):
+        relative = path.relative_to(migrations_root).as_posix()
+        if relative in ALLOWED_MIGRATION_FILES:
+            continue
+        violations.extend(find_sql_interpolations(path.read_text(encoding="utf-8"), relative))
+
+    assert not violations, "Ghép chuỗi vào SQL trong migration:\n" + "\n".join(
+        str(v) for v in violations
+    )
+
+
+def test_scanner_catches_the_indirect_forms(domain_root: Path) -> None:
+    """Ba đường vòng mà bản đầu của bộ quét bỏ lọt."""
+    planted = (
+        "from textwrap import dedent\n"
+        "def bao_cao(ky: str) -> None:\n"
+        "    sql = f\"SELECT * FROM gl_postings WHERE ky = '{ky}'\"\n"
+        "    session.execute(text(sql))\n"
+        '    conn.exec_driver_sql(dedent(f"SELECT {ky}"))\n'
+        '    op.execute(f"GRANT SELECT ON {ky} TO r")\n'
+    )
+    details = [f.detail for f in find_sql_interpolations(planted, "planted.py")]
+
+    assert any("biến `sql`" in d for d in details), "bỏ lọt biến trung gian"
+    assert any("exec_driver_sql" in d for d in details), "bỏ lọt dedent(f-string)"
+    assert any("op.execute" in d for d in details), "bỏ lọt op.execute"
+
+
+def test_no_exemption_is_unnecessary(domain_root: Path) -> None:
+    """Mỗi tệp trong danh sách miễn trừ phải **thật sự** bị bộ quét bắt.
+
+    Miễn trừ thừa đặt một tệp ra ngoài tầm quét vĩnh viễn mà không ai để ý — và
+    bốn trong năm miễn trừ ban đầu đúng là thừa.
+    """
+    unnecessary = [
+        name
+        for name in ALLOWED_FILES
+        if not find_sql_interpolations((domain_root / name).read_text(encoding="utf-8"), name)
+    ]
+    assert not unnecessary, f"Miễn trừ không cần thiết, bỏ đi: {unnecessary}"
 
 
 def test_every_allowed_file_still_exists(domain_root: Path) -> None:

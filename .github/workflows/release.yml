@@ -83,14 +83,16 @@ jobs:
             *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
           esac
 
-          # So với TAG chứ không với release mới nhất: release nháp có thể bị xóa
-          # tay, còn tag thì ở lại — và tag mới là thứ quyết định `tauri-action`
-          # ghi đè hay tạo mới.
+          # So với RELEASE, không so với tag. GitHub chỉ tạo git tag khi release
+          # được **publish**; release nháp thì không có tag. Cổng dựa vào tag vì
+          # thế không bao giờ chặn: mọi lần push master đều dựng lại hai runner
+          # (macOS tính giá ×10) và đẻ thêm một draft trùng tên, chồng dần lên.
+          # `gh release view` thấy cả draft nên nó là câu hỏi đúng.
           if [ "$FORCE" = "true" ]; then
             echo "Chạy tay có ép buộc → dựng lại $tag"
             echo "should_release=true" >> "$GITHUB_OUTPUT"
-          elif git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "$tag đã tồn tại → không phát hành lại"
+          elif gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$tag đã có release (kể cả nháp) → không phát hành lại"
             echo "should_release=false" >> "$GITHUB_OUTPUT"
           else
             echo "$tag chưa có → phát hành"

@@ -15,13 +15,16 @@ khỏi `ket_app` hoặc cấp lại quyền bảng cho nó:
 
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import DataError, ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.auditing.listener import AuditContext
-from ket.kernel.datasets.bootstrap import ensure_dataset_roles
+from ket.kernel.auditing.models import AUDIT_TABLE_NAME
+from ket.kernel.datasets.bootstrap import ensure_cluster, ensure_dataset_roles
 from ket.kernel.datasets.naming import (
     MAX_DATASET_CODE_LENGTH,
     role_name_for_schema,
@@ -35,8 +38,9 @@ from ket.kernel.datasets.provisioning import (
 )
 from ket.kernel.errors import DatasetRoleNotAdministrableError, InvalidSchemaNameError
 from ket.kernel.persistence.session import dataset_session
+from ket.kernel.security import dataset_roles
 from ket.kernel.security.dataset_roles import CONTROL_GROUP_ROLE
-from ket.kernel.security.grants import APP_ROLE
+from ket.kernel.security.grants import APP_ROLE, APPEND_ONLY_TABLES, grant_append_only
 
 pytestmark = pytest.mark.db
 
@@ -348,3 +352,126 @@ def test_provisioning_refuses_a_role_it_cannot_administer(
         ) as connection:
             connection.exec_driver_sql(f"DROP OWNED BY {role}")
             connection.exec_driver_sql(f"DROP ROLE {role}")
+
+
+# --------------------------------------------------------------------------
+# Đường sửa chữa không được phá bất biến mà nó đi sửa
+# --------------------------------------------------------------------------
+
+
+def _privileges_of(engine: Engine, schema: str, table: str, role: str) -> set[str]:
+    """Tập quyền mà `role` có trên một bảng, đọc từ ACL (không tính kế thừa)."""
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT a.privilege_type "
+                "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace, "
+                "     aclexplode(c.relacl) a "
+                "WHERE n.nspname = :schema AND c.relname = :table "
+                "  AND a.grantee = CAST(:role AS regrole)"
+            ),
+            {"schema": schema, "table": table, "role": role},
+        ).all()
+    return {row[0] for row in rows}
+
+
+def test_repair_keeps_append_only_and_read_only_tables_downgraded(
+    owner_engine: Engine,
+) -> None:
+    """`ensure_cluster` cấp `ON ALL TABLES` rồi PHẢI hạ lại đúng hai lớp ngoại lệ.
+
+    Đây là lỗi đã đo được, không phải phòng xa: danh sách bảng chỉ-thêm từng bị
+    chép làm hai bản (migration và đường sửa chữa), nên một bảng chỉ-thêm thêm ở
+    phase sau bị `ensure_cluster` **âm thầm nâng lên read-write** — nhật ký bất
+    biến (FR-NFR-012/013) bị vô hiệu bởi chính đường sửa chữa, và không test nào đỏ.
+
+    Test dựng thêm một bảng chỉ-thêm **thứ hai** (mô phỏng `gl_postings` của phase
+    4) để bắt được đúng kiểu hồi quy đó, chứ không chỉ canh mỗi `audit_log`.
+    """
+    code = "temp_repair_probe"
+    dataset = provision_dataset(owner_engine, code=code, name="Dò sửa chữa", scheme="TT200")
+    schema = dataset.schema_name
+    role = role_name_for_schema(schema)
+    second_append_only = "ledger_probe"
+
+    try:
+        with owner_engine.begin() as connection:
+            connection.exec_driver_sql(
+                f'CREATE TABLE "{schema}".{second_append_only} (id bigserial PRIMARY KEY)'
+            )
+            for statement in grant_append_only(second_append_only, grantee=role, schema=schema):
+                connection.exec_driver_sql(statement)
+
+        # Bảng chỉ-thêm thứ hai phải nằm trong nguồn sự thật thì đường sửa chữa
+        # mới biết hạ nó — mô phỏng đúng việc phase 4 khai thêm `gl_postings`.
+        patched = APPEND_ONLY_TABLES | {second_append_only}
+        with mock.patch.object(dataset_roles, "APPEND_ONLY_TABLES", patched):
+            ensure_dataset_roles(owner_engine)
+
+        for table in (AUDIT_TABLE_NAME, second_append_only):
+            assert _privileges_of(owner_engine, schema, table, role) == {"INSERT", "SELECT"}, (
+                f"{table} bị nâng lên read-write bởi đường sửa chữa"
+            )
+        assert _privileges_of(owner_engine, schema, "alembic_version", role) == {"SELECT"}
+        # Đối chứng: bảng thường vẫn phải được cấp đủ quyền.
+        assert _privileges_of(owner_engine, schema, "branches", role) == {
+            "SELECT",
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+        }
+    finally:
+        drop_dataset_schema(owner_engine, code)
+
+
+def test_append_only_registry_matches_what_the_migration_grants(owner_engine: Engine) -> None:
+    """Nguồn sự thật và thực tế trong DB phải khớp.
+
+    Nếu ai đó thêm bảng vào `APPEND_ONLY_TABLES` mà quên đổi migration (hoặc
+    ngược lại), hai đường cấp quyền lại lệch — đúng lớp lỗi vừa sửa.
+    """
+    for table in APPEND_ONLY_TABLES:
+        assert _privileges_of(owner_engine, "ds_alpha", table, "ds_alpha_app") == {
+            "INSERT",
+            "SELECT",
+        }
+
+
+def test_ensure_cluster_rebuilds_dataset_roles(owner_engine: Engine, app_engine: Engine) -> None:
+    """`ensure_cluster` là điểm-vào-duy-nhất của quy trình khôi phục — phải làm đủ hai nửa.
+
+    Trước đây nó không có nơi gọi nào trong mã và không test nào chạm tới: bỏ hẳn
+    lời gọi `ensure_dataset_roles` bên trong mà toàn bộ bộ test vẫn xanh.
+    """
+    code = "temp_cluster_probe"
+    dataset = provision_dataset(owner_engine, code=code, name="Dò ensure_cluster", scheme="TT200")
+    role = role_name_for_schema(dataset.schema_name)
+    try:
+        with owner_engine.begin() as connection:
+            connection.exec_driver_sql(f"DROP OWNED BY {role}")
+            connection.exec_driver_sql(f"DROP ROLE {role}")
+
+        ensure_cluster(owner_engine)
+
+        assert current_revision(app_engine, dataset.schema_name) is not None
+    finally:
+        drop_dataset_schema(owner_engine, code)
+
+
+def test_ensure_dataset_roles_revokes_grants_left_to_the_login_role(
+    owner_engine: Engine, dataset_alpha: DatasetRef
+) -> None:
+    """Thu hồi quyền mà bản cài **trước D3** đã cấp thẳng cho `ket_app`.
+
+    Cụm đã tạo dữ liệu kế toán bằng mã cũ vẫn còn `GRANT … TO ket_app` ở tầng
+    bảng; trên cụm đó `ket_app` trần đọc được sổ của mọi dataset và toàn bộ D3
+    không có tác dụng — trong khi bộ test (chạy trên cụm dựng mới) vẫn xanh.
+    """
+    schema = dataset_alpha.schema_name
+    with owner_engine.begin() as connection:
+        connection.exec_driver_sql(f'GRANT SELECT ON "{schema}".branches TO {APP_ROLE}')
+    assert _privileges_of(owner_engine, schema, "branches", APP_ROLE) == {"SELECT"}
+
+    ensure_dataset_roles(owner_engine)
+
+    assert _privileges_of(owner_engine, schema, "branches", APP_ROLE) == set()

@@ -116,7 +116,35 @@ def _drop_ket_roles(connection: Connection) -> None:
             text("SELECT rolname FROM pg_roles WHERE rolname LIKE 'ds\\_%\\_app'")
         ).all()
     ]
-    for role in [*dataset_roles, APP_ROLE, CONTROL_GROUP_ROLE, OWNER_ROLE]:
+    roles = [*dataset_roles, APP_ROLE, CONTROL_GROUP_ROLE, OWNER_ROLE]
+
+    # Biến môi trường trên là lời khẳng định của con người, và `Makefile` đặt sẵn
+    # nó — nên nó chỉ chặn được người gõ `pytest -m db` trần. Đây mới là kiểm
+    # thật: `pg_shdepend` cho biết vai trò còn được database NÀO tham chiếu. Còn
+    # bản cài khác dùng chung cụm thì dừng lại, với thông điệp chỉ đúng chỗ —
+    # thay vì để `DROP ROLE` đổ giữa chừng bằng "19 objects in database …" và
+    # kéo theo 56 test lỗi không liên quan.
+    outsiders = (
+        connection.execute(
+            text(
+                "SELECT DISTINCT d.datname FROM pg_shdepend s "
+                "JOIN pg_database d ON d.oid = s.dbid "
+                "JOIN pg_authid a ON a.oid = s.refobjid "
+                "WHERE a.rolname = ANY(:roles) AND d.datname <> :test_db"
+            ),
+            {"roles": roles, "test_db": TEST_DATABASE},
+        )
+        .scalars()
+        .all()
+    )
+    if outsiders:
+        pytest.fail(
+            f"Cụm tại {_admin_dsn()} còn database dùng vai trò Konek: {sorted(outsiders)}. "
+            "Nhóm test `db` sẽ xóa các vai trò đó và làm hỏng bản cài kia. "
+            "Trỏ KET_TEST_ADMIN_DSN sang một cụm dùng riêng cho test."
+        )
+
+    for role in roles:
         validate_identifier(role)
         connection.exec_driver_sql(
             f"DO $$ BEGIN "

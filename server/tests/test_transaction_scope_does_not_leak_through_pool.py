@@ -44,10 +44,23 @@ def test_next_transaction_on_the_same_connection_starts_clean(
     dataset_alpha: DatasetRef,
 ) -> None:
     """Sau một transaction đã commit, connection quay lại pool phải sạch cả ba thứ."""
+    # `branch_ids` phải KHÁC RỖNG. Với tuple rỗng, `set_branch_scope` đặt GUC
+    # bằng chuỗi rỗng, nên `assert not branch_scope` đúng bất kể `set_config` có
+    # `local=true` hay không — khẳng định rỗng nghĩa. Đã đo: đổi `local` thành
+    # `false` mà toàn bộ bộ test vẫn xanh.
+    with unit_of_work(
+        pooled_factory,
+        RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=()),
+    ) as session:
+        branch = Branch(code="POOL-LEAK-BRANCH", name="Chi nhánh cho phép dò GUC")
+        session.add(branch)
+        session.flush()
+        branch_id = branch.id
+
     scope = RequestScope(
         dataset_schema=dataset_alpha.schema_name,
         user_id=1,
-        branch_ids=(),
+        branch_ids=(branch_id,),
     )
     with unit_of_work(pooled_factory, scope) as session:
         session.add(Branch(code="POOL-LEAK-PROBE", name="Dò rò trạng thái qua pool"))
@@ -63,7 +76,10 @@ def test_next_transaction_on_the_same_connection_starts_clean(
     assert current_user == APP_ROLE, (
         f"vai trò rò sang transaction sau: {current_user} — `SET LOCAL ROLE` đã mất chữ LOCAL"
     )
-    assert not branch_scope, f"phạm vi chi nhánh rò sang transaction sau: {branch_scope!r}"
+    assert not branch_scope, (
+        f"phạm vi chi nhánh rò sang transaction sau: {branch_scope!r} — "
+        "`set_config(..., local)` đã mất tham số local"
+    )
     assert current_schema == "public", f"search_path rò sang transaction sau: {current_schema}"
 
 

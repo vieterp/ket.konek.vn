@@ -27,7 +27,10 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | Nhật ký bất biến ghi cùng transaction | ✅ chạy thật |
 | `ket.kernel.money` — Decimal, ROUND_HALF_UP | ✅ chạy thật |
 | Kiểm phiên bản schema lúc khởi động (LD-05) | ✅ chạy thật |
-| Auth / RBAC enforcement / 2FA · idempotency · worker + reaper · RFC 7807 · sinh type OpenAPI | ⏳ phase 2 lát 2B |
+| **Cô lập dataset bằng vai trò per-dataset `ds_<mã>_app` (D3)**; luật cứng AST quét tiêm SQL | ✅ chạy thật (2B-0) |
+| **PostgreSQL 16 là phiên bản tối thiểu (D4)**; app từ chối PG < 16 | ✅ chạy thật (2B-0) |
+| **Kênh phát hành Windows+macOS** (release.yml, minisign ký gói updater) | ⚠️ đã dựng, **chưa chạy lần nào** — đường build Windows chưa xác minh (máy phát triển là macOS); bộ cài chưa ký chứng thư OS |
+| Auth / RBAC enforcement / 2FA · idempotency · worker + reaper · RFC 7807 · sinh type OpenAPI | ⏳ phase 2 lát 2B-1/2B-2 |
 | Client (design system, layout, đăng nhập, handshake, i18n) · spike S1/S3/S4 | ⏳ phase 2 lát 2C |
 | Posting engine, báo cáo, và toàn bộ phân hệ nghiệp vụ | ⏳ phase 4 trở đi |
 

@@ -43,3 +43,18 @@ def test_openapi_schema_generates() -> None:
 
     assert schema["info"]["title"] == "Konek Két — App Server"
     assert "/health" in schema["paths"]
+
+
+def test_startup_gates_default_to_enabled() -> None:
+    """Hai cổng kiểm lúc khởi động phải **mặc định bật**.
+
+    Test khác tự đặt cờ = True rồi khẳng định cổng chặn — nó chứng minh cổng chạy
+    khi được bật, không chứng minh bản cài mặc định có bật. Đổi mặc định thành
+    `False` là vô hiệu hóa cả hai cổng trên mọi bản cài, và trước dòng này thì
+    không có gì đỏ.
+    """
+    settings = Settings()
+
+    assert settings.verify_postgres_version_on_startup is True
+    assert settings.verify_schema_on_startup is True
+    assert settings.minimum_postgres_version == 16
