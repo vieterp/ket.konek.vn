@@ -238,18 +238,22 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | `audit_log` | Nhật ký bất biến (người, hành động, giá trị trước–sau) | 2 | `konek_owner` |
 | `config_packages` | Gói cấu hình pháp lý (TT200/TT133, hiệu lực từ…) | 5 | `kernel` |
 | `report_definitions` | Báo cáo metadata (layout, tham số, query) | 5 | `reporting` |
-| `numbering_counters` | Bộ đếm đánh số chứng từ (reset theo kỳ/chi nhánh) | 3 | `kernel` |
+| `number_sequences` | Bộ đếm đánh số chứng từ (`scope_key` gói cả chi nhánh + năm) | 2 (bảng), 3 (cấp số) | `kernel` |
 | `idempotency_keys` | Khóa idempotency + kết quả (TTL, result_ref) | 2 | `kernel` |
 | `jobs` | Tác vụ nền (hàng đợi, tiến độ, lease, reaper) | 2 | `worker` |
 | `periods` | Kỳ kế toán (từ, đến, trạng thái khóa) | 3 | `kernel` |
-| `branches` | Chi nhánh (mã, tên, địa chỉ) | 3 | `kernel` |
+| `branches` | Chi nhánh (mã, tên, địa chỉ). **Không bật RLS** — xem ADR-017 §6 | 2 (lõi), 3 (mở rộng) | `kernel` |
 | `accounts` | Tài khoản (mã, tên, loại, nhóm công thức BCTC) | 3 | `kernel` |
 | `partners` | Đối tác (khách, NCC, nhân viên, …) | 3 | `kernel` |
 | `items` | Vật tư hàng hóa (mã, tên, ĐVT, định mức) | 3 | `kernel` |
 | `currencies` | Ngoại tệ (mã ISO, tên, số lẻ) | 3 | `kernel` |
 | `exchange_rates` | Tỷ giá (ngày, từ-tới, tỷ lệ) | 3 | `kernel` |
 | `bank_statement_profiles` | Mapping sao kê ngân hàng (per-bank format) | 3 | `kernel` |
-| `datasets` | Dữ liệu kế toán (DN, năm, schema) | 2, 3 | `kernel` |
+| `datasets` | Dữ liệu kế toán (DN, năm, schema) — schema điều khiển `public` | 2, 3 | `kernel` |
+| `users` | Danh tính đăng nhập **toàn cục** — schema điều khiển `public` | 2 | `kernel` |
+| `system_metadata` | Phiên bản schema điều khiển, dữ liệu handshake — `public` | 2 | `kernel` |
+| `roles`, `permissions`, `role_permissions`, `user_roles`, `user_branches` | RBAC **per-dataset** | 2 | `kernel` |
+| `settings` | Tùy chọn hai cấp (chung hệ thống / riêng người dùng) | 2 | `kernel` |
 
 ---
 
@@ -258,8 +262,8 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | Mối quan tâm | Thiết kế | FR | Phase |
 | --- | --- | --- | --- |
 | **Xác thực** | User/password + policy; 2FA cho quản trị + ngân hàng; token phiên hạn | FR-NFR-010/016, FR-SYS-070/075 | 2 |
-| **Phân quyền (RT-04)** | RBAC: role × (loại chứng từ) × (hành vi) × chi nhánh ở server. **RLS chi nhánh trên bảng gốc theo GUC tenant mỗi request** (không dựa filter tầng app) | FR-NFR-011, FR-SYS-071/072/074 | 2, 5 |
-| **Nhật ký (RT-02)** | Listener ghi mọi thêm/sửa/xóa/ghi sổ/bỏ ghi sổ/khóa sổ. `audit_log` ⊂ `konek_owner`; `konek_app` **không UPDATE/DELETE/DROP** được | FR-NFR-012/013, FR-SYS-073 | 2 |
+| **Phân quyền (RT-04)** | RBAC: role × (loại chứng từ) × (hành vi) × chi nhánh ở server. **RLS chi nhánh trên bảng gốc theo GUC `konek.branch_ids` mỗi transaction** (không dựa filter tầng app); GUC chưa đặt = không thấy dòng nào (fail-closed). Danh mục `branches` và bảng nguồn `user_branches` không bật RLS — ADR-017 §6 | FR-NFR-011, FR-SYS-071/072/074 | 2, 5 |
+| **Nhật ký (RT-02)** | Listener ghi mọi thêm/sửa/xóa/ghi sổ/bỏ ghi sổ/khóa sổ, **trong cùng transaction** với thao tác nghiệp vụ (rollback thì mất theo; flush hỏng không để lại diff trôi sang lần ghi sau). `audit_log` ⊂ `konek_owner`; `konek_app` **không UPDATE/DELETE/DROP** được. `search_path` nêu `pg_temp` **cuối cùng** + thu hồi quyền `TEMPORARY`: nếu không, một `CREATE TEMP TABLE audit_log` che được bảng thật và vô hiệu hóa nhật ký mà không cần sửa/xóa dòng nào | FR-NFR-012/013, FR-SYS-073 | 2 |
 | **Bảo mật khóa/bí mật (RT-05)** | `totp_secret`, token eSign, creds DB **mã hóa bằng khóa app ở OS keystore** | FR-NFR-014/015 | 2, 11 |
 | **Kênh app→DB (RT-06)** | TLS verify-full; `scram-sha-256` pg_hba; **cấm superuser làm app login**; creds keystore | FR-NFR-014 | 11 |
 | **Đa ngôn ngữ** | Resource vi/en cho UI + cột `name_en` danh mục & hệ thống TK | FR-NFR-034 | 3, 5 |

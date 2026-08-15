@@ -6,7 +6,8 @@ CLIENT := client
 
 .DEFAULT_GOAL := help
 .PHONY: help install check \
-        server-install server-lint server-typecheck server-imports server-test server-check \
+        server-install server-lint server-format server-typecheck server-imports \
+        server-test server-test-db server-check \
         client-install client-typecheck client-lint client-build client-check \
         shell-fmt shell-lint tauri-build clean
 
@@ -32,10 +33,16 @@ server-typecheck: ## mypy --strict trên toàn src/konek
 server-imports: ## import-linter — luật phụ thuộc (ADR-004)
 	cd $(SERVER) && uv run lint-imports --config importlinter.ini
 
-server-test: ## pytest (gồm kiểm cấm float trong code nghiệp vụ)
-	cd $(SERVER) && uv run pytest
+server-format: ## ruff format --check
+	cd $(SERVER) && uv run ruff format --check .
 
-server-check: server-lint server-typecheck server-imports server-test ## Toàn bộ cổng phía server
+server-test: ## pytest, nhóm không cần DB (gồm kiểm cấm float trong code nghiệp vụ)
+	cd $(SERVER) && uv run pytest -m "not db"
+
+server-test-db: ## pytest nhóm cần PostgreSQL thật (RLS, nhật ký bất biến, cô lập dataset)
+	cd $(SERVER) && uv run pytest -m db
+
+server-check: server-lint server-format server-typecheck server-imports server-test server-test-db ## Toàn bộ cổng phía server
 
 # --- client (web UI) ------------------------------------------------------
 

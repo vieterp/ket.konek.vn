@@ -1,7 +1,7 @@
 {
   "name": "konek-accounting-client",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Konek — client kế toán: Tauri desktop shell bọc web UI TypeScript/React",
   "scripts": {

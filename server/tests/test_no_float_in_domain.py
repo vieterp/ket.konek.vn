@@ -73,6 +73,26 @@ def test_domain_code_has_no_float(domain_root: Path) -> None:
     )
 
 
+def test_migrations_have_no_float() -> None:
+    """Migration cũng là mã nghiệp vụ — nó định nghĩa **kiểu cột** của số tiền.
+
+    Một `sa.Float()` hay một `server_default="0.1"` lọt vào đây làm hỏng số liệu
+    ở tầng sâu nhất và không cổng nào khác bắt được: `mypy` chỉ soi
+    `src/konek`, còn bộ quét trước đây cũng vậy. Sai sót ở migration lại là
+    loại đắt nhất để sửa — dữ liệu đã nằm sai kiểu trên đĩa của khách hàng.
+    """
+    migrations_root = Path(__file__).resolve().parent.parent / "migrations"
+    violations: list[FloatUsage] = []
+
+    for path in sorted(migrations_root.rglob("*.py")):
+        relative = path.relative_to(migrations_root).as_posix()
+        violations.extend(find_float_usages(path.read_text(encoding="utf-8"), relative))
+
+    assert not violations, "Cấm `float` trong migration (ADR-015):\n" + "\n".join(
+        str(v) for v in violations
+    )
+
+
 def test_scanner_catches_planted_float() -> None:
     """Bộ quét phải bắt được `float` cố tình cài — nếu không, test trên vô nghĩa."""
     planted = (

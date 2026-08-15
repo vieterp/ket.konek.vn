@@ -52,8 +52,12 @@ jobs:
           PYTHONUTF8: "1"
         run: uv run lint-imports --config importlinter.ini
 
-      - name: pytest
-        run: uv run pytest
+      # Nhóm `db` cần service container PostgreSQL — chỉ chạy được trên runner
+      # Linux, nên nó có job riêng bên dưới. Ở đây loại trừ tường minh thay vì
+      # để nó tự bỏ qua: một bộ test "xanh vì không kết nối được DB" là tín
+      # hiệu tệ hơn không có tín hiệu.
+      - name: pytest (không cần DB)
+        run: uv run pytest -m "not db"
 
       # mypy strict là hàng rào duy nhất bù cho việc Python không kiểm kiểu lúc
       # biên dịch (ADR-015). Đếm số `# type: ignore` mỗi lần chạy để thấy nó
@@ -78,6 +82,64 @@ jobs:
             echo "::error::Vượt ngưỡng \`# type: ignore\` ($count > $MAX_TYPE_IGNORE) — xem ADR-015"
             exit 1
           fi
+
+  # Cổng bảo mật dữ liệu: RLS cô lập chi nhánh (RT-04), nhật ký bất biến bằng
+  # tách quyền sở hữu (RT-02), cô lập schema-per-dataset (RT-17). Không mô
+  # phỏng được — chúng là hành vi của PostgreSQL, nên job này chạy DB thật.
+  server-db:
+    name: server-db (postgres)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+
+    services:
+      postgres:
+        # Ghim phiên bản: hành vi RLS/quyền phải giống bản khách hàng chạy.
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Vai trò `konek_owner`/`konek_app` do chính bộ test tạo (bootstrap dựng
+      # cụm). Chỉ DSN superuser là phải cấp từ ngoài.
+      # Không có DB thì job này phải ĐỎ, không được "xanh vì bỏ qua".
+      KONEK_TEST_REQUIRE_DB: "1"
+      KONEK_TEST_ADMIN_DSN: postgresql+psycopg://postgres:postgres@localhost:5432/postgres
+      KONEK_TEST_KONEK_OWNER_DSN: postgresql+psycopg://konek_owner@localhost:5432/konek_test
+      KONEK_TEST_KONEK_APP_DSN: postgresql+psycopg://konek_app@localhost:5432/konek_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Đồng bộ phụ thuộc (Python 3.12)
+        run: uv sync --python 3.12
+
+      # Vai trò test đăng nhập không mật khẩu; image postgres mặc định dùng
+      # `scram-sha-256` cho kết nối host nên phải mở `trust` cho riêng container
+      # CI này. Bản cài thật làm ngược lại — xem `security/roles.sql` và RT-06.
+      - name: Cho phép đăng nhập không mật khẩu trong container CI
+        run: |
+          docker exec $(docker ps -qf ancestor=postgres:16) bash -c \
+            "echo 'host all all all trust' > /var/lib/postgresql/data/pg_hba.conf && \
+             echo 'local all all trust' >> /var/lib/postgresql/data/pg_hba.conf"
+          docker exec $(docker ps -qf ancestor=postgres:16) pg_ctl reload -D /var/lib/postgresql/data
+
+      - name: pytest (nhóm cần PostgreSQL)
+        run: uv run pytest -m db
 
   client:
     name: client (${{ matrix.os }})

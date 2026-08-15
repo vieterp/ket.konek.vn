@@ -6,6 +6,7 @@ eSign) KHÔNG lấy từ đây ở môi trường thật** — chúng nằm tron
 được nạp ở phase 2 (ADR-019 key-management). Phase 1 chỉ dựng khung cấu hình.
 """
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -33,13 +34,34 @@ class Settings(BaseSettings):
     port: int = 5443
 
     # --- Cơ sở dữ liệu
-    database_url: str = "postgresql+psycopg://localhost/konek"
-    """DSN không kèm mật khẩu ở môi trường thật — mật khẩu nạp từ OS keystore.
-    Kênh app→DB phải TLS verify-full khi DB khác host (ADR-019, RT-06)."""
+    database_url: str = "postgresql+psycopg://konek_app@localhost/konek"
+    """DSN **runtime**, đăng nhập bằng vai trò `konek_app`: không sở hữu bảng,
+    không `BYPASSRLS`, không sửa được `audit_log` (RT-02/RT-04). Không kèm mật
+    khẩu ở môi trường thật — mật khẩu nạp từ OS keystore. Kênh app→DB phải TLS
+    verify-full khi DB khác host (ADR-019, RT-06)."""
+
+    owner_database_url: str = "postgresql+psycopg://konek_owner@localhost/konek"
+    """DSN **đặc quyền** cho DDL/migration/tạo dataset. Tách hẳn khỏi
+    `database_url` là điều kiện để nhật ký bất biến và RLS có hiệu lực — dùng
+    chung một vai trò cho cả hai việc thì cả hai cơ chế đều vô hiệu."""
+
+    db_pool_size: int = 10
+    db_max_overflow: int = 5
+    """Quy mô mục tiêu đã chốt (OQ#3): ~20 người dùng đồng thời. Job nặng chạy ở
+    tiến trình worker riêng nên không ăn vào pool của API."""
 
     default_dataset_schema: str = "konek_default"
-    """Một dữ liệu kế toán = một PG schema (ADR-017). Định tuyến schema theo
-    dataset làm ở tầng session/connection — phase 2."""
+    """Một dữ liệu kế toán = một PG schema (ADR-017). Chỉ là mặc định cho lệnh
+    migration chạy tay; runtime lấy schema từ bảng `datasets` theo dataset của
+    request."""
+
+    alembic_ini_path: Path | None = None
+    """Ghi đè đường dẫn `alembic.ini` khi chạy từ thư mục khác hoặc từ bản đóng
+    gói (S4/phase 11). `None` = suy từ vị trí gói."""
+
+    verify_schema_on_startup: bool = True
+    """Chặn khởi động khi schema DB lệch phiên bản migration (LD-05,
+    FR-NFR-054). Chỉ đặt `False` cho test/CI không có PostgreSQL."""
 
     # --- Vận hành
     debug: bool = False
