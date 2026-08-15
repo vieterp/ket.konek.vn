@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    // `node` chỉ để kiểm kiểu file cấu hình (vite.config.ts, eslint.config.js).
+    // Mã trong `src/` chạy trên trình duyệt — không được dùng API Node.
+    "types": ["vite/client", "node"],
+
+    "allowImportingTsExtensions": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+
+    /* strict — đối trọng phía client của mypy strict ở server (ADR-015) */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@api-types/*": ["./packages/api-types/*"]
+    }
+  },
+  "include": ["src", "packages", "vite.config.ts", "eslint.config.js"]
+}

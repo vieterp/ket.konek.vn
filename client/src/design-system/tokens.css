@@ -1,0 +1,110 @@
+/**
+ * KONEK Brand Colors & Typography — tokens dùng chung cho web UI.
+ *
+ * NGUỒN: brand asset `uploads/brand-assets/tokens/colors.css` v1.1 trong Claude
+ * Design project `91a2c87a-3304-418f-a296-dc584cd56cfe`. Giá trị chép nguyên
+ * văn — KHÔNG gõ tay lại mã màu, KHÔNG chỉnh ở đây. Muốn đổi màu thì đổi ở
+ * brand asset rồi đồng bộ xuống.
+ *
+ * HAI KHÁC BIỆT CÓ CHỦ ĐÍCH so với brand asset (ghi rõ để lần sau đồng bộ
+ * không vô tình kéo ngược lại):
+ *
+ * 1. Bỏ `@import url('https://fonts.googleapis.com/...')`. Sản phẩm phải chạy
+ *    OFFLINE HOÀN TOÀN (LD-01) nên không được nạp font qua mạng. Be Vietnam Pro
+ *    tự host bằng gói `@fontsource/be-vietnam-pro`, nạp trong `src/main.tsx`.
+ * 2. Thêm `--color-screen` = #F5F7FA (nền màn hình ứng dụng) — giá trị này đến
+ *    từ design "Konek Screens 2a", không có trong colors.css.
+ *
+ * Dark mode: brand asset dùng `@media (prefers-color-scheme: dark)`. Ở đây giữ
+ * nguyên media query đó và thêm biến thể `[data-theme="dark"]` để người dùng
+ * chọn tay được (thiết lập ứng dụng), cùng bộ giá trị.
+ */
+
+:root {
+  /* Primary - Navy */
+  --color-navy-50: #e8edf4;
+  --color-navy-100: #c5d3e8;
+  --color-navy-200: #a2b9dc;
+  --color-navy-300: #5b7ba3;
+  --color-navy-400: #3d5f89;
+  --color-navy-500: #2d4a6f;
+  --color-navy-600: #234058;
+  --color-navy-700: #1b365d;
+  --color-navy-800: #152b4a;
+  --color-navy-900: #0f1f38;
+
+  /* Secondary - Ocean Blue */
+  --color-ocean-50: #ebf4fc;
+  --color-ocean-100: #c9e0f5;
+  --color-ocean-200: #a7ccee;
+  --color-ocean-300: #85b8e7;
+  --color-ocean-400: #63a4e0;
+  --color-ocean-500: #4a90d9;
+  --color-ocean-600: #3a7ac4;
+  --color-ocean-700: #2e6db5;
+  --color-ocean-800: #235a96;
+  --color-ocean-900: #1a4777;
+
+  /* Accent - Sky Blue */
+  --color-sky-50: #f0f7fc;
+  --color-sky-100: #d9ebf7;
+  --color-sky-200: #b3d7ef;
+  --color-sky-300: #8dc3e7;
+  --color-sky-400: #7cb9e8;
+  --color-sky-500: #5ba5de;
+  --color-sky-600: #4891d4;
+  --color-sky-700: #357dca;
+
+  /* Neutrals */
+  --color-white: #ffffff;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+
+  /* Semantic */
+  --color-primary: var(--color-navy-700);
+  --color-secondary: var(--color-ocean-500);
+  --color-accent: var(--color-sky-400);
+  --color-text: var(--color-gray-800);
+  --color-text-muted: var(--color-gray-500);
+  --color-background: var(--color-white);
+  --color-surface: var(--color-gray-50);
+  --color-border: var(--color-gray-200);
+
+  /* Nền màn hình ứng dụng — nguồn: design "Konek Screens 2a" */
+  --color-screen: #f5f7fa;
+
+  /* Typography */
+  --font-primary: 'Be Vietnam Pro', sans-serif;
+}
+
+/* Dark Mode — theo thiết lập hệ điều hành */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-primary: var(--color-ocean-400);
+    --color-text: var(--color-gray-100);
+    --color-text-muted: var(--color-gray-400);
+    --color-background: var(--color-gray-900);
+    --color-surface: var(--color-gray-800);
+    --color-border: var(--color-gray-700);
+    --color-screen: var(--color-gray-900);
+  }
+}
+
+/* Dark Mode — người dùng chọn tay trong Thiết lập */
+:root[data-theme='dark'] {
+  --color-primary: var(--color-ocean-400);
+  --color-text: var(--color-gray-100);
+  --color-text-muted: var(--color-gray-400);
+  --color-background: var(--color-gray-900);
+  --color-surface: var(--color-gray-800);
+  --color-border: var(--color-gray-700);
+  --color-screen: var(--color-gray-900);
+}

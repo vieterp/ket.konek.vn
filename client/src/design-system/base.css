@@ -1,0 +1,21 @@
+/**
+ * Lớp nền của design system: nạp Tailwind và gắn token vào phần tử gốc.
+ * Component cơ sở (Button, DataGrid, …) dựng từ phase 2 trở đi — phase 1 chỉ
+ * chứng minh tokens nạp được và bundle build được.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: var(--font-primary);
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-screen);
+    color: var(--color-text);
+  }
+}

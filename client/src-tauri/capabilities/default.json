@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Quyền tối thiểu của shell. Phase 1 chưa có luồng nào chạm tệp nên chỉ mở hộp thoại chọn/lưu và mở tệp bằng ứng dụng hệ thống. Quyền đọc/ghi tệp (fs:*) cấp ở phase cần nó, theo phạm vi hẹp của đường dẫn do hộp thoại trả về — không cấp đệ quy cả Documents/Downloads. Không quyền nào phục vụ luồng nghiệp vụ: nghiệp vụ đi qua REST tới app server.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "opener:allow-open-path"
+  ]
+}

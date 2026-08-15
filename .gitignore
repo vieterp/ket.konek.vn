@@ -1,0 +1,40 @@
+scripts/
+plans/
+.claude/
+
+# --- Server (Python) ---
+server/.venv/
+server/**/__pycache__/
+server/**/*.py[cod]
+server/.mypy_cache/
+server/.ruff_cache/
+server/.pytest_cache/
+server/.coverage
+server/htmlcov/
+server/*.egg-info/
+
+# --- Client (web UI + Tauri) ---
+client/node_modules/
+client/dist/
+client/src-tauri/target/
+client/src-tauri/gen/
+
+# --- Bí mật: không bao giờ commit ---
+# Khóa ký bản cập nhật Tauri, khóa mã hóa backup, creds DB đều nằm ở OS keystore
+# hoặc biến môi trường (ADR-019) — file dưới đây chỉ là lưới an toàn.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# --- Hệ điều hành / IDE ---
+.DS_Store
+.idea/
+.vscode/
+
+# --- Rác công cụ (không thuộc sản phẩm) ---
+.playwright-mcp/
+ket-page*.yml

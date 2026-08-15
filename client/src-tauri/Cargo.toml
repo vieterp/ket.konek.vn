@@ -1,0 +1,27 @@
+[package]
+name = "konek-accounting"
+version = "0.1.0"
+description = "Konek Kế toán — desktop shell"
+edition = "2021"
+rust-version = "1.77"
+publish = false
+
+[lib]
+name = "konek_accounting_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+# Shell chỉ giữ đúng bốn việc: cập nhật, in ấn, chọn/lưu tệp, giữ phiên.
+# KHÔNG có logic nghiệp vụ ở tầng Rust — mọi phép tính tiền ở app server.
+# Plugin updater thêm ở phase 11 (cần cặp khóa ký + endpoint phát hành thật);
+# thêm sớm chỉ tạo cấu hình giả.
+#
+# `tauri-plugin-fs` cố tình KHÔNG có ở phase 1: chưa luồng nào đọc/ghi tệp, và
+# quyền fs tương ứng cũng chưa cấp trong `capabilities/default.json`. Thêm ở
+# phase cần nó, cùng lúc với phạm vi quyền hẹp.
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"

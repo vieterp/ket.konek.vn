@@ -1,0 +1,24 @@
+<!--
+  Nguồn: brand asset `uploads/brand-assets/logos/konek-icon-clean.svg`
+  (Claude Design project 91a2c87a-3304-418f-a296-dc584cd56cfe).
+
+  Khác biệt duy nhất so với bản gốc: bọc trong khung VUÔNG 440x440 và dời dấu
+  hiệu xuống 57.5px cho cân giữa, vì icon ứng dụng phải vuông. Đường path và
+  mã màu (#7CB9E8 sky-400, #4A90D9 ocean-500, #1B365D navy-700) giữ NGUYÊN VĂN.
+
+  Bộ icon .png/.icns/.ico trong thư mục này sinh từ file này bằng:
+      rsvg-convert -w 1024 -h 1024 konek-icon-source.svg -o /tmp/konek-icon.png
+      pnpm tauri icon /tmp/konek-icon.png
+  Sinh lại khi brand asset đổi — đừng sửa tay file nhị phân.
+-->
+<svg width="440" height="440" viewBox="0 0 440 440" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(0,57.5)">
+    <path d="M245 20&#xA;      H420&#xA;      L345 105&#xA;      H230&#xA;      V35&#xA;      Q230 20 245 20&#xA;      Z" fill="#7CB9E8"></path>
+
+    <path d="M135 120&#xA;       H335&#xA;       L235 220&#xA;       L220 205&#xA;       H120&#xA;       V135&#xA;       Q120 120 135 120&#xA;       Z" fill="#4A90D9"></path>
+
+    <path d="M295 160&#xA;       L420 305&#xA;       H310&#xA;       L235 220&#xA;       Z" fill="#1B365D"></path>
+
+    <path d="M50 220&#xA;     H215&#xA;     V290&#xA;     Q215 305 200 305&#xA;     H20&#xA;     V235&#xA;     Q20 220 35 220&#xA;     Z" fill="#1B365D"></path>
+  </g>
+</svg>

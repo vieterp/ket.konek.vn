@@ -1,0 +1,152 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Cổng phía server: kiểu tĩnh + luật phụ thuộc + cấm float trong code nghiệp vụ.
+  # Chạy trên cả ba OS vì đội phát triển trên macOS còn khách hàng chạy Windows.
+  server:
+    name: server (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Đồng bộ phụ thuộc (Python 3.12)
+        run: uv sync --python 3.12
+
+      - name: ruff
+        run: uv run ruff check .
+
+      - name: mypy --strict
+        run: uv run mypy
+
+      - name: import-linter (luật phụ thuộc — ADR-004)
+        run: uv run lint-imports --config importlinter.ini
+
+      - name: pytest
+        run: uv run pytest
+
+      # mypy strict là hàng rào duy nhất bù cho việc Python không kiểm kiểu lúc
+      # biên dịch (ADR-015). Đếm số `# type: ignore` mỗi lần chạy để thấy nó
+      # trôi dần, thay vì phát hiện sau sáu tháng.
+      #
+      # `grep` trả exit 1 khi KHÔNG tìm thấy gì — tức đúng lúc repo sạch nhất.
+      # GitHub Actions chạy `bash -eo pipefail` nên phải chặn exit đó, nếu không
+      # cổng bị lật ngược: chỉ xanh khi có ai đó THÊM `# type: ignore`.
+      #
+      # Ngưỡng là cổng thật, không phải dòng log. Nới ngưỡng phải sửa file này
+      # trong PR và nêu lý do — đó chính là điểm kiểm soát ta muốn.
+      - name: Đếm `# type: ignore` (ngưỡng ADR-015)
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          MAX_TYPE_IGNORE: 0
+        run: |
+          count=$(grep -rn "type: ignore" src/ | wc -l | tr -d ' ') || count=0
+          echo "Số \`# type: ignore\` trong src/: $count (ngưỡng: $MAX_TYPE_IGNORE)"
+          echo "\`# type: ignore\`: $count / ngưỡng $MAX_TYPE_IGNORE" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$count" -gt "$MAX_TYPE_IGNORE" ]; then
+            echo "::error::Vượt ngưỡng \`# type: ignore\` ($count > $MAX_TYPE_IGNORE) — xem ADR-015"
+            exit 1
+          fi
+
+  client:
+    name: client (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+
+      - name: Cài phụ thuộc
+        run: pnpm install --frozen-lockfile
+
+      - name: tsc --noEmit
+        run: pnpm exec tsc --noEmit
+
+      - name: eslint
+        run: pnpm exec eslint .
+
+      - name: vite build
+        run: pnpm exec vite build
+
+  # Đóng gói desktop chỉ chạy trên hai nền tảng đích của v1 (LD-02).
+  # Ubuntu không nằm trong phạm vi nên không dựng bản Linux.
+  tauri:
+    name: tauri (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client/src-tauri -> target
+
+      - name: Cài phụ thuộc
+        run: pnpm install --frozen-lockfile
+
+      - name: cargo fmt --check
+        working-directory: client/src-tauri
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        working-directory: client/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: tauri build
+        run: pnpm exec tauri build
