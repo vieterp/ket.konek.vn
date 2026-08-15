@@ -17,12 +17,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import resources
-from typing import Final
+from typing import Final, cast
 
-from sqlalchemy import Connection, Engine, select, text, update
+from sqlalchemy import Connection, Engine, Table, select, text, update
 from sqlalchemy.orm import Session
+from sqlalchemy.schema import AddConstraint
 
-from ket.kernel.auditing.control_log import CONTROL_AUDIT_TABLE_NAME
+from ket.kernel.auditing.control_log import CONTROL_AUDIT_TABLE_NAME, ControlAuditLog
 from ket.kernel.datasets.models import (
     CONTROL_SCHEMA_VERSION_KEY,
     Dataset,
@@ -43,13 +44,14 @@ from ket.kernel.security.dataset_roles import (
 from ket.kernel.security.grants import APP_ROLE, grant_append_only, serial_sequence_name
 from ket.kernel.security.role_service import seed_registered_datasets
 
-CONTROL_SCHEMA_VERSION = "3"
+CONTROL_SCHEMA_VERSION = "4"
 """Tăng khi DDL của schema điều khiển đổi — **kèm** một bước nâng cấp tường minh
 trong `_UPGRADE_STEPS`. Tăng hằng số mà không viết bước nâng cấp sẽ làm app từ
 chối khởi động trên mọi cụm đã cài (`_stamp_version`), đúng như mong muốn.
 
 Lịch sử: `1` = ba bảng nền (lát 2A). `2` = nhật ký điều khiển + phiên đăng nhập
-+ cột danh tính (lát 2B-1a, quyết định D1). `3` = phạm vi phiên
++ cột danh tính (lát 2B-1a, quyết định D1). `4` = hành vi `sessions_pruned`
+(lát 2B-2a). `3` = phạm vi phiên
 (`auth_sessions.scope`, lát 2B-1b quyết định E2)."""
 
 
@@ -230,9 +232,37 @@ def _upgrade_2_to_3(connection: Connection) -> None:
         connection.exec_driver_sql(statement)
 
 
+def _upgrade_3_to_4(connection: Connection) -> None:
+    """Lát 2B-2a: thêm hành vi `sessions_pruned` vào nhật ký điều khiển.
+
+    Ràng buộc `CHECK` liệt kê danh sách hành vi hợp lệ, nên một hành vi mới bắt
+    buộc phải dựng lại ràng buộc — `create_all` không sửa bảng đã tồn tại. Bỏ
+    bước này thì lệnh dọn phiên hỏng ngay lần chạy đầu trên cụm đã cài, với một
+    lỗi `CHECK` không nói lên điều gì.
+
+    Dựng lại chứ không `ADD` thêm: hai ràng buộc cùng tên là không hợp lệ, và
+    danh sách hành vi phải có đúng **một** nguồn sự thật ở DB.
+    """
+    connection.exec_driver_sql(
+        "ALTER TABLE public.control_audit_log "
+        "DROP CONSTRAINT IF EXISTS ck_control_audit_log_action_known"
+    )
+    # Dựng lại ràng buộc từ **chính định nghĩa trong model**, không ghép chuỗi
+    # tay: danh sách hành vi hợp lệ phải có đúng một nguồn sự thật, và một bản
+    # chép ở đây sẽ trôi khỏi enum ngay lần thêm hành vi kế tiếp. `AddConstraint`
+    # sinh đúng câu `ALTER TABLE … ADD CONSTRAINT …` mà `create_all` sẽ sinh trên
+    # cụm mới, nên hai đường không thể lệch nhau.
+    table = cast("Table", ControlAuditLog.__table__)
+    constraint = next(
+        item for item in table.constraints if item.name == "ck_control_audit_log_action_known"
+    )
+    connection.execute(AddConstraint(constraint))
+
+
 _UPGRADE_STEPS: Final[tuple[_UpgradeStep, ...]] = (
     _UpgradeStep(source="1", target="2", apply=_upgrade_1_to_2),
     _UpgradeStep(source="2", target="3", apply=_upgrade_2_to_3),
+    _UpgradeStep(source="3", target="4", apply=_upgrade_3_to_4),
 )
 """Chuỗi bước nâng cấp, theo thứ tự. Thêm bước = thêm một phần tử **và** tăng
 `CONTROL_SCHEMA_VERSION`."""

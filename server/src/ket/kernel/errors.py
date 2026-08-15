@@ -14,7 +14,7 @@ Bộ chuyển `DomainError` → RFC 7807 `application/problem+json` nằm ở
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 
 class DomainError(Exception):
@@ -45,6 +45,17 @@ class DomainError(Exception):
 
     def __str__(self) -> str:
         return self.message
+
+    def problem_extra(self) -> dict[str, Any]:
+        """Trường phụ đưa thêm vào thân RFC 7807, ngoài `details`.
+
+        Tồn tại cho đúng một loại lỗi: xung đột phiên bản phải trả kèm **bản
+        ghi mới nhất** (FR-NFR-005), mà `details` chỉ nhận giá trị vô hướng —
+        nó là tham số để client dựng câu thông báo, không phải chỗ chứa một bản
+        ghi. Khai ở lớp lỗi, cùng lý do với `http_status`: một bảng ánh xạ đặt
+        cạnh handler là thứ người thêm lớp lỗi mới sẽ quên.
+        """
+        return {}
 
 
 class InvalidSchemaNameError(DomainError):
@@ -327,3 +338,137 @@ class BranchNotFoundError(DomainError):
 
     error_code: ClassVar[str] = "org.branch_not_found"
     http_status: ClassVar[int] = 404
+
+
+class IdempotencyKeyMissingError(DomainError):
+    """Endpoint đổi trạng thái nhưng request không mang `X-Idempotency-Key`.
+
+    `400` chứ không `422`: thiếu ở đây là thiếu **header giao thức**, và phân
+    biệt được hai loại giúp lập trình viên client biết phải sửa ở tầng nào —
+    thân request hay lớp gửi HTTP.
+
+    Bắt buộc chứ không "có thì tốt" (FR-NFR-004): mạng LAN của một doanh nghiệp
+    có switch rẻ và cáp đi trần qua xưởng, nên mất phản hồi giữa chừng là
+    chuyện xảy ra thật, và cách xử lý duy nhất mà người dùng biết là bấm lại.
+    """
+
+    error_code: ClassVar[str] = "idempotency.key_missing"
+    http_status: ClassVar[int] = 400
+
+
+class IdempotencyKeyInvalidError(DomainError):
+    """Khóa có mặt nhưng không dùng được: rỗng, quá dài, hoặc chứa ký tự lạ.
+
+    Kiểm ở cổng vào chứ không để `INSERT` tự đổ: một khóa dài hơn cột sẽ làm
+    hỏng transaction **sau khi** lệnh ghi nghiệp vụ đã chạy, và biến một lỗi
+    client đơn giản thành `500`.
+    """
+
+    error_code: ClassVar[str] = "idempotency.key_invalid"
+    http_status: ClassVar[int] = 400
+
+
+class IdempotencyKeyReusedError(DomainError):
+    """Khóa đã dùng cho một yêu cầu khác (khác nội dung, hoặc khác người gửi)."""
+
+    error_code: ClassVar[str] = "idempotency.key_reused"
+    http_status: ClassVar[int] = 409
+
+
+class IdempotencyKeyExpiredError(DomainError):
+    """Khóa còn trong bảng nhưng đã quá hạn — từ chối, không chạy lại (RT-12)."""
+
+    error_code: ClassVar[str] = "idempotency.key_expired"
+    http_status: ClassVar[int] = 409
+
+
+class IdempotencyRaceLostError(DomainError):
+    """Hai yêu cầu cùng khóa chạy song song và không đọc lại được kết quả bên kia.
+
+    Trạng thái hiếm: bên thắng phải vừa commit khóa vừa rollback ngay sau đó.
+    Trả `409` để client thử lại bằng chính khóa cũ — an toàn, vì lần thử lại sẽ
+    hoặc thấy kết quả cũ, hoặc thực hiện lần đầu tiên thật sự.
+    """
+
+    error_code: ClassVar[str] = "idempotency.race_lost"
+    http_status: ClassVar[int] = 409
+
+
+class DuplicateValueError(DomainError):
+    """Giá trị đã có bản ghi khác dùng (mã danh mục, số chứng từ…).
+
+    Tồn tại vì đây là **lỗi gõ tay thường gặp nhất** của người nhập liệu, và
+    trước khi có nó, một mã chi nhánh trùng đi thẳng thành `500 lỗi không mong
+    muốn + mã tham chiếu, gọi bộ phận hỗ trợ`. Từ phase 6 mỗi phân hệ có hàng
+    chục ràng buộc duy nhất, nên hướng ánh xạ phải đúng ngay từ tầng chung.
+
+    `details.constraint` nêu **tên ràng buộc** chứ không phải câu SQL: đủ để
+    client dựng thông điệp đúng trường, không lộ cấu trúc bảng.
+    """
+
+    error_code: ClassVar[str] = "data.duplicate"
+    http_status: ClassVar[int] = 409
+
+
+class ReferenceNotFoundError(DomainError):
+    """Tham chiếu tới một bản ghi không tồn tại (vi phạm khóa ngoại)."""
+
+    error_code: ClassVar[str] = "data.reference_not_found"
+
+
+class RowVersionConflictError(DomainError):
+    """Bản ghi đã bị người khác sửa từ lúc client đọc nó (FR-NFR-005).
+
+    Trả kèm **bản mới nhất** trong trường `latest` để màn hình hiện được "người
+    kia vừa đổi gì" thay vì chỉ báo lỗi rồi bắt người dùng tự mở lại form —
+    thao tác mà họ sẽ làm bằng cách bấm Lưu lần nữa.
+    """
+
+    error_code: ClassVar[str] = "concurrency.row_version_conflict"
+    http_status: ClassVar[int] = 409
+
+    def __init__(
+        self, message: str, *, latest: dict[str, Any] | None = None, **details: str | int | None
+    ) -> None:
+        super().__init__(message, **details)
+        self.latest = latest
+
+    def problem_extra(self) -> dict[str, Any]:
+        return {"latest": self.latest}
+
+
+class RateLimitedError(DomainError):
+    """Quá nhiều request trong một cửa sổ thời gian.
+
+    Khác `AuthThrottledError` (trần tài nguyên băm mật khẩu, `503`): đây là hạn
+    mức theo **người gọi**, nên `429` và kèm `Retry-After` để client tự giãn
+    nhịp thay vì thử lại ngay lập tức.
+    """
+
+    error_code: ClassVar[str] = "system.rate_limited"
+    http_status: ClassVar[int] = 429
+
+
+class SettingUnknownError(DomainError):
+    """Khóa tùy chọn không có trong catalog (FR-SYS-060).
+
+    Catalog đóng chứ không cho ghi khóa tùy ý: một bảng key-value mở là nơi mọi
+    thứ chưa kịp thiết kế sẽ rơi vào, và ba phase sau sẽ không ai biết khóa nào
+    còn được đọc.
+    """
+
+    error_code: ClassVar[str] = "settings.key_unknown"
+    http_status: ClassVar[int] = 404
+
+
+class SettingScopeNotAllowedError(DomainError):
+    """Tùy chọn này không khai báo cấp đang được ghi (user hoặc system)."""
+
+    error_code: ClassVar[str] = "settings.scope_not_allowed"
+    http_status: ClassVar[int] = 422
+
+
+class SettingValueInvalidError(DomainError):
+    """Giá trị không đúng kiểu đã khai của tùy chọn."""
+
+    error_code: ClassVar[str] = "settings.value_invalid"

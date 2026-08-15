@@ -47,6 +47,14 @@ class ControlAuditAction(StrEnum):
     TOTP_ENROLLED = "totp_enrolled"
     TOTP_DISABLED = "totp_disabled"
 
+    SESSIONS_PRUNED = "sessions_pruned"
+    """Dọn phiên đã kết thúc (`ket.admin prune-sessions`).
+
+    Bảng `auth_sessions` là nguồn trả lời "tài khoản đó đăng nhập từ máy nào,
+    lúc mấy giờ" khi có sự cố — nên việc **xóa** nó phải tự nó là một sự kiện
+    kiểm toán. Không có dòng này thì lịch sử phiên biến mất mà không ai biết ai
+    đã cho lệnh, lúc nào, với mốc lưu trữ nào."""
+
 
 CONTROL_AUDIT_TABLE_NAME = "control_audit_log"
 

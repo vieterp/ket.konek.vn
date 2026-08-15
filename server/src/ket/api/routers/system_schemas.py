@@ -45,6 +45,11 @@ class BranchResponse(BaseModel):
     name_en: str | None
     is_active: bool
 
+    row_version: int
+    """Client gửi lại giá trị này khi lưu (FR-NFR-005). Có trong **mọi** phản
+    hồi của bảng có phiên bản, kể cả danh sách: form mở từ màn hình danh sách
+    thì không có lượt `GET` chi tiết nào để lấy số này."""
+
 
 class BranchListResponse(BaseModel):
     items: list[BranchResponse]
@@ -54,6 +59,20 @@ class BranchCreateRequest(BaseModel):
     code: str = Field(min_length=1, max_length=50)
     name: str = Field(min_length=1, max_length=255)
     name_en: str | None = Field(default=None, max_length=255)
+
+
+class BranchUpdateRequest(BaseModel):
+    """Sửa chi nhánh. `code` không sửa được — nó là mã đối chiếu của cả sổ sách.
+
+    `row_version` **bắt buộc**, không có mặc định: một trường tùy chọn ở đây
+    nghĩa là client nào quên gửi sẽ ghi đè im lặng, tức là đúng cái mà khóa lạc
+    quan sinh ra để chặn.
+    """
+
+    name: str = Field(min_length=1, max_length=255)
+    name_en: str | None = Field(default=None, max_length=255)
+    is_active: bool
+    row_version: int = Field(ge=1)
 
 
 class RoleGrantRequest(BaseModel):

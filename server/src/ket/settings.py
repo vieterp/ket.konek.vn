@@ -98,6 +98,30 @@ class Settings(BaseSettings):
     đăng nhập lại. Không có gia hạn trượt: gia hạn theo hoạt động nghĩa là một
     phiên bị chiếm sẽ tự nuôi mình sống mãi."""
 
+    # --- Hợp đồng ghi (FR-NFR-004/005)
+    idempotency_ttl_hours: int = Field(default=24, ge=1)
+    """Khóa idempotency còn chống trùng trong bao lâu (RT-12).
+
+    24 giờ = cửa sổ của **một lần gửi lại**, không phải của lịch sử. Sau đó khóa
+    hết hiệu lực và lần gửi lại bị **từ chối** chứ không chạy lại — xem
+    `kernel/idempotency/service.py`."""
+
+    # --- Hạn mức request
+    rate_limit_per_minute: int = Field(default=600, ge=0)
+    """Trần request mỗi phút cho một người gọi (0 = tắt).
+
+    600 = 10 request/giây, cao hơn nhiều lần nhịp của người nhập liệu nhanh
+    nhất kể cả khi màn hình gọi song song nhiều endpoint. Ngưỡng này để bắt
+    client hỏng và kịch bản chạy loạn, không để bóp người dùng thật."""
+
+    rate_limit_auth_per_minute: int = Field(default=30, ge=0)
+    """Trần riêng cho `/api/v1/auth/*` (0 = tắt).
+
+    Chặt hơn hai chục lần vì đây là nơi mật khẩu bị thử. 30 lần/phút vẫn thừa
+    cho người gõ sai vài lần rồi đổi mật khẩu, nhưng cắt hẳn đường dò từ một máy
+    trạm trong LAN — nơi khóa theo tài khoản không giúp gì nếu kẻ dò rải đều
+    qua nhiều tài khoản."""
+
     # --- Vận hành
     debug: bool = False
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")

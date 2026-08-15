@@ -21,19 +21,23 @@ Handler viết `def` chứ không `async def` — xem lý do ở `routers/auth.p
 
 from __future__ import annotations
 
-from typing import Annotated
+from datetime import timedelta
+from typing import Annotated, Final
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from ket.api.dependencies import (
     AppEngine,
+    AppSettings,
     Authorized,
     AuthorizedRequest,
     SessionFactory,
     get_current_principal,
     require_permission,
 )
+from ket.api.idempotency import idempotency_key_dependency
 from ket.api.routers.system_schemas import (
     AccessResponse,
     AuditEntryResponse,
@@ -42,6 +46,7 @@ from ket.api.routers.system_schemas import (
     BranchGrantRequest,
     BranchListResponse,
     BranchResponse,
+    BranchUpdateRequest,
     DatasetListResponse,
     DatasetSummary,
     GrantResponse,
@@ -49,7 +54,10 @@ from ket.api.routers.system_schemas import (
 )
 from ket.kernel.auditing.models import AuditLog
 from ket.kernel.datasets.service import list_datasets
+from ket.kernel.errors import BranchNotFoundError
+from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
 from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.persistence.versioning import require_row_version
 from ket.kernel.security import role_service
 from ket.kernel.security.models import Branch
 from ket.kernel.security.permissions import SYSTEM_MODULE, Action, permission_code
@@ -58,6 +66,7 @@ router = APIRouter(prefix="/api/v1/system", tags=["system"])
 
 BRANCH_VIEW = permission_code(SYSTEM_MODULE, "branch", Action.VIEW)
 BRANCH_CREATE = permission_code(SYSTEM_MODULE, "branch", Action.CREATE)
+BRANCH_EDIT = permission_code(SYSTEM_MODULE, "branch", Action.EDIT)
 ROLE_EDIT = permission_code(SYSTEM_MODULE, "role", Action.EDIT)
 USER_EDIT = permission_code(SYSTEM_MODULE, "user", Action.EDIT)
 AUDIT_VIEW = permission_code(SYSTEM_MODULE, "audit_log", Action.VIEW)
@@ -67,9 +76,13 @@ AUDIT_VIEW = permission_code(SYSTEM_MODULE, "audit_log", Action.VIEW)
 # đọc được thành danh sách.
 BranchViewer = Annotated[AuthorizedRequest, Depends(require_permission(BRANCH_VIEW))]
 BranchAuthor = Annotated[AuthorizedRequest, Depends(require_permission(BRANCH_CREATE))]
+BranchEditor = Annotated[AuthorizedRequest, Depends(require_permission(BRANCH_EDIT))]
 RoleAdmin = Annotated[AuthorizedRequest, Depends(require_permission(ROLE_EDIT))]
 UserAdmin = Annotated[AuthorizedRequest, Depends(require_permission(USER_EDIT))]
 AuditReader = Annotated[AuthorizedRequest, Depends(require_permission(AUDIT_VIEW))]
+
+BRANCH_CREATE_ROUTE: Final[str] = "POST /api/v1/system/branches"
+BranchCreateKey = Annotated[str, Depends(idempotency_key_dependency(BRANCH_CREATE_ROUTE))]
 
 MAX_PAGE_SIZE = 200
 
@@ -81,6 +94,7 @@ def _branch_response(branch: Branch) -> BranchResponse:
         name=branch.name,
         name_en=branch.name_en,
         is_active=branch.is_active,
+        row_version=branch.row_version,
     )
 
 
@@ -130,19 +144,85 @@ def list_branches(authorized: BranchViewer, factory: SessionFactory) -> BranchLi
 
 @router.post("/branches", response_model=BranchResponse, status_code=status.HTTP_201_CREATED)
 def create_branch(
-    payload: BranchCreateRequest, authorized: BranchAuthor, factory: SessionFactory
+    payload: BranchCreateRequest,
+    authorized: BranchAuthor,
+    factory: SessionFactory,
+    settings: AppSettings,
+    idempotency_key: BranchCreateKey,
+    response: Response,
 ) -> BranchResponse:
-    """Tạo chi nhánh mới.
+    """Tạo chi nhánh mới — **thực hiện đúng một lần** (FR-NFR-004).
 
     Danh mục chi nhánh cố ý **không** bật RLS (xem migration `0001`): policy
     `WITH CHECK (id = ANY(scope))` sẽ khiến không ai tạo được chi nhánh đầu tiên,
     vì `id` do sequence cấp lúc `INSERT` và không thể nằm sẵn trong phạm vi của
     người tạo. Ai được sửa danh mục là câu hỏi của RBAC — chính dependency ở
     trên — không phải của cô lập dòng.
+
+    Lần gửi lại trả `200` kèm chính chi nhánh đã tạo, không phải `201`: mã trạng
+    thái là chỗ duy nhất client biết được lần này có tạo thêm gì hay không.
     """
-    with unit_of_work(factory, authorized.scope) as session:
+
+    def work(session: Session) -> tuple[BranchResponse, IdempotentRef]:
         branch = Branch(code=payload.code, name=payload.name, name_en=payload.name_en)
         session.add(branch)
+        session.flush()
+        return _branch_response(branch), IdempotentRef(
+            result_type=Branch.__tablename__, result_id=str(branch.id)
+        )
+
+    def replay(session: Session, ref: IdempotentRef) -> BranchResponse:
+        branch = session.get(Branch, int(ref.result_id))
+        if branch is None:
+            # Khóa còn nhưng bản ghi đã biến mất (khôi phục một phần, hoặc một
+            # đường xóa của phase sau). Nói thật là không tìm thấy, thay vì dựng
+            # lại một phản hồi từ dữ liệu đã lưu trong khóa — dữ liệu đó là tham
+            # chiếu, không phải bản sao.
+            raise BranchNotFoundError(
+                "Chi nhánh của lần thực hiện trước không còn tồn tại", branch=ref.result_id
+            )
+        return _branch_response(branch)
+
+    branch, created = execute_once(
+        factory,
+        authorized.scope,
+        route_key=BRANCH_CREATE_ROUTE,
+        key=idempotency_key,
+        fingerprint=fingerprint_of(payload.model_dump_json()),
+        work=work,
+        replay=replay,
+        ttl=timedelta(hours=settings.idempotency_ttl_hours),
+    )
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return branch
+
+
+@router.put("/branches/{branch_id}", response_model=BranchResponse)
+def update_branch(
+    branch_id: int,
+    payload: BranchUpdateRequest,
+    authorized: BranchEditor,
+    factory: SessionFactory,
+) -> BranchResponse:
+    """Sửa chi nhánh, có kiểm phiên bản (FR-NFR-005).
+
+    `PUT` nên **không** đòi `X-Idempotency-Key`: gửi lại đúng thân request này
+    lần thứ hai cho ra đúng trạng thái đó, và `row_version` đã chặn sẵn việc ghi
+    đè lên thay đổi của người khác.
+    """
+    with unit_of_work(factory, authorized.scope) as session:
+        branch = session.get(Branch, branch_id)
+        if branch is None:
+            raise BranchNotFoundError("Không có chi nhánh với mã này", branch=branch_id)
+        require_row_version(
+            current=branch.row_version,
+            expected=payload.row_version,
+            entity=Branch.__tablename__,
+            latest=_branch_response(branch).model_dump(mode="json"),
+        )
+        branch.name = payload.name
+        branch.name_en = payload.name_en
+        branch.is_active = payload.is_active
         session.flush()
         return _branch_response(branch)
 

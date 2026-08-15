@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import io
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, create_engine, select
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
 from ket.admin.cli import main
@@ -21,9 +23,11 @@ from ket.kernel.auditing.listener import AuditContext
 from ket.kernel.datasets.models import User
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.errors import NotAuthenticatedError
-from ket.kernel.persistence.session import control_session, dataset_session
+from ket.kernel.idempotency.models import IdempotencyKey
+from ket.kernel.persistence.session import control_session, create_session_factory, dataset_session
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security import auth_service, passwords
+from ket.kernel.security.auth_models import AuthSession, token_digest
 from ket.kernel.security.authorization import resolve_access
 from ket.kernel.security.keystore import SecretBox
 from ket.kernel.security.models import Branch
@@ -377,3 +381,217 @@ def test_grant_branch_puts_a_user_inside_the_rls_scope(
     ) as session:
         access = resolve_access(session, user_id=user.id)
     assert len(access.branch_ids) == 1
+
+
+def test_prune_sessions_removes_dead_sessions_and_keeps_live_ones(
+    session_factory: sessionmaker[Session],
+    user_factory: UserFactory,
+    owner_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dọn phiên đã chết, giữ phiên đang dùng.
+
+    Bảng `auth_sessions` chỉ tăng, nên nó cần một đường dọn; nhưng đường dọn mà
+    xóa nhầm phiên đang sống sẽ đuổi cả văn phòng ra ngoài giữa giờ làm.
+    """
+    user = user_factory("cli_don_phien")
+    live = auth_service.authenticate(
+        session_factory,
+        username=user.username,
+        password=PASSWORD,
+        secret_box_provider=_no_key_needed,
+        session_ttl=timedelta(hours=12),
+    )
+
+    # Một phiên đã hết hạn từ lâu, dựng bằng cách đẩy `expires_at` về quá khứ.
+    stale = auth_service.authenticate(
+        session_factory,
+        username=user.username,
+        password=PASSWORD,
+        secret_box_provider=_no_key_needed,
+        session_ttl=timedelta(hours=12),
+    )
+    long_ago = datetime.now(UTC) - timedelta(days=400)
+    with control_session(session_factory) as session:
+        row = session.scalars(
+            select(AuthSession).where(AuthSession.token_hash == token_digest(stale.token))
+        ).one()
+        row.expires_at = long_ago
+
+    code = _run("prune-sessions", "--retention-days", "30", monkeypatch=monkeypatch)
+
+    assert code == 0
+    with control_session(session_factory) as session:
+        remaining = session.scalars(select(AuthSession).where(AuthSession.user_id == user.id)).all()
+        tokens = {bytes(row.token_hash) for row in remaining}
+
+    assert token_digest(live.token) in tokens, "phiên đang dùng bị xóa nhầm"
+    assert token_digest(stale.token) not in tokens, "phiên đã hết hạn vẫn còn"
+
+
+def test_prune_sessions_needs_the_owner_role(test_settings: Settings) -> None:
+    """Vai trò runtime cố ý **không** có `DELETE` trên `auth_sessions` (RT-02).
+
+    Đây là lý do lệnh dọn nằm ở CLI chứ không ở một endpoint: nếu đường API xóa
+    được dấu vết đăng nhập thì một lỗ hổng ở tầng đó cũng xóa được.
+    """
+    app_only = create_engine(test_settings.database_url)
+    try:
+        factory = create_session_factory(app_only)
+        with pytest.raises(ProgrammingError) as failure, control_session(factory) as session:
+            auth_service.prune_expired_sessions(session, retention=timedelta(days=0))
+    finally:
+        app_only.dispose()
+
+    assert "permission denied" in str(failure.value).lower()
+
+
+def test_prune_sessions_keeps_a_recently_expired_session(
+    session_factory: sessionmaker[Session],
+    user_factory: UserFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cửa sổ lưu trữ phải có tác dụng thật.
+
+    Phiên hết hạn **trong** cửa sổ vẫn là nguồn điều tra: "tài khoản đó đăng
+    nhập từ máy nào sáng nay" là câu hỏi được đặt ra sau khi chuyện đã xảy ra.
+    Bỏ cửa sổ (`cutoff = now`) thì mọi phiên vừa hết hạn biến mất ngay.
+    """
+    user = user_factory("cli_giu_moi_het_han")
+    issued = auth_service.authenticate(
+        session_factory,
+        username=user.username,
+        password=PASSWORD,
+        secret_box_provider=_no_key_needed,
+        session_ttl=timedelta(hours=12),
+    )
+    with control_session(session_factory) as session:
+        row = session.scalars(
+            select(AuthSession).where(AuthSession.token_hash == token_digest(issued.token))
+        ).one()
+        row.expires_at = datetime.now(UTC) - timedelta(days=2)
+
+    assert _run("prune-sessions", "--retention-days", "30", monkeypatch=monkeypatch) == 0
+
+    with control_session(session_factory) as session:
+        still_there = session.scalars(
+            select(AuthSession).where(AuthSession.token_hash == token_digest(issued.token))
+        ).one_or_none()
+
+    assert still_there is not None, "phiên hết hạn 2 ngày trước bị dọn dù cửa sổ là 30 ngày"
+
+
+def test_prune_sessions_removes_a_long_revoked_session_that_has_not_expired_yet(
+    session_factory: sessionmaker[Session],
+    user_factory: UserFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nhánh thứ hai của mệnh đề `WHERE` — phiên **bị thu hồi** từ lâu.
+
+    Nó vẫn còn hạn trên giấy tờ (`expires_at` ở tương lai) nhưng đã chết từ lúc
+    bị thu hồi. Chỉ lọc theo `expires_at` sẽ giữ lại đúng những dòng vô dụng
+    nhất, và test cũ không canh nhánh này.
+    """
+    user = user_factory("cli_thu_hoi_lau")
+    issued = auth_service.authenticate(
+        session_factory,
+        username=user.username,
+        password=PASSWORD,
+        secret_box_provider=_no_key_needed,
+        session_ttl=timedelta(days=3650),
+    )
+    long_ago = datetime.now(UTC) - timedelta(days=400)
+    with control_session(session_factory) as session:
+        row = session.scalars(
+            select(AuthSession).where(AuthSession.token_hash == token_digest(issued.token))
+        ).one()
+        row.revoked_at = long_ago
+
+    assert _run("prune-sessions", "--retention-days", "30", monkeypatch=monkeypatch) == 0
+
+    with control_session(session_factory) as session:
+        remaining = session.scalars(
+            select(AuthSession).where(AuthSession.token_hash == token_digest(issued.token))
+        ).one_or_none()
+
+    assert remaining is None, "phiên bị thu hồi 400 ngày trước vẫn còn vì `expires_at` ở tương lai"
+
+
+def test_prune_sessions_records_who_ran_it(
+    session_factory: sessionmaker[Session],
+    user_factory: UserFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Xóa lịch sử phiên phải tự nó là một sự kiện kiểm toán.
+
+    `auth_sessions` là nguồn trả lời "ai đăng nhập từ máy nào, lúc mấy giờ" khi
+    có tranh chấp; một lần dọn không để lại gì là một khoảng trống không giải
+    thích được — đúng loại khoảng trống mà nhật ký chỉ-thêm sinh ra để lấp.
+    """
+    user = user_factory("cli_don_co_vet")
+    issued = auth_service.authenticate(
+        session_factory,
+        username=user.username,
+        password=PASSWORD,
+        secret_box_provider=_no_key_needed,
+        session_ttl=timedelta(hours=12),
+    )
+    with control_session(session_factory) as session:
+        row = session.scalars(
+            select(AuthSession).where(AuthSession.token_hash == token_digest(issued.token))
+        ).one()
+        row.expires_at = datetime.now(UTC) - timedelta(days=400)
+
+    _run("prune-sessions", "--retention-days", "30", monkeypatch=monkeypatch)
+
+    with control_session(session_factory) as session:
+        entry = session.scalars(
+            select(ControlAuditLog)
+            .where(ControlAuditLog.action == ControlAuditAction.SESSIONS_PRUNED.value)
+            .order_by(ControlAuditLog.id.desc())
+        ).first()
+
+    assert entry is not None, "dọn phiên không để lại vết nào"
+    assert entry.client_info == "ket.admin"
+    assert (entry.new_values or {})["retention_days"] == 30
+    assert int((entry.new_values or {})["removed_sessions"]) >= 1
+
+
+def test_prune_sessions_refuses_a_negative_retention(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`--retention-days -3650` đẩy mốc cắt về **tương lai** → xóa cả phiên sống.
+
+    `type=int` trần cho giá trị đó đi qua, và một lệnh dọn dẹp biến thành lệnh
+    đuổi cả văn phòng ra khỏi hệ thống.
+    """
+    with pytest.raises(SystemExit):
+        _run("prune-sessions", "--retention-days", "-3650", monkeypatch=monkeypatch)
+
+
+def test_prune_idempotency_keys_clears_expired_keys_in_every_dataset(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Khóa hết hạn không còn chống trùng cho gì — nhưng bảng thì chỉ tăng."""
+    scope = RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=())
+    with unit_of_work(session_factory, scope) as session:
+        session.add(
+            IdempotencyKey(
+                route_key="POST /test/cli",
+                idempotency_key="khoa-cli-het-han",
+                user_id=1,
+                request_fingerprint="0" * 64,
+                result_type="branches",
+                result_id="1",
+                expires_at=datetime.now(UTC) - timedelta(days=2),
+            )
+        )
+
+    assert _run("prune-idempotency-keys", monkeypatch=monkeypatch) == 0
+
+    with unit_of_work(session_factory, scope) as session:
+        left = session.scalar(
+            select(IdempotencyKey).where(IdempotencyKey.idempotency_key == "khoa-cli-het-han")
+        )
+
+    assert left is None

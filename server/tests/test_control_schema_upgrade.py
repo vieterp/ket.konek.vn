@@ -15,10 +15,11 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, create_engine, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import NullPool
 
-from ket.kernel.auditing.control_log import CONTROL_AUDIT_TABLE_NAME
+from ket.kernel.auditing.control_log import CONTROL_AUDIT_TABLE_NAME, ControlAuditAction
 from ket.kernel.datasets.bootstrap import (
     CONTROL_SCHEMA_VERSION,
     _upgrade_path,
@@ -26,6 +27,7 @@ from ket.kernel.datasets.bootstrap import (
     ensure_control_schema,
     ensure_database_roles,
 )
+from ket.kernel.datasets.models import CONTROL_SCHEMA_VERSION_KEY, SystemMetadata
 from ket.kernel.errors import SchemaVersionMismatchError
 from ket.kernel.security.auth_models import SESSION_TABLE_NAME
 
@@ -149,8 +151,9 @@ def test_upgrade_path_covers_every_released_version() -> None:
     Cụm v1 phải đi được **hết** chuỗi, không dừng ở nửa đường: một bản cài bỏ
     qua vài lần nâng cấp là chuyện bình thường ở khách hàng chạy offline.
     """
-    assert [step.source for step in _upgrade_path("1")] == ["1", "2"]
-    assert [step.source for step in _upgrade_path("2")] == ["2"]
+    assert [step.source for step in _upgrade_path("1")] == ["1", "2", "3"]
+    assert [step.source for step in _upgrade_path("2")] == ["2", "3"]
+    assert [step.source for step in _upgrade_path("3")] == ["3"]
     assert _upgrade_path(CONTROL_SCHEMA_VERSION) == ()
 
 
@@ -391,3 +394,51 @@ def _control_group_privileges(engine: Engine) -> set[tuple[str, str]]:
             )
         ).all()
     return {(row[0], row[1]) for row in rows}
+
+
+def test_an_upgraded_cluster_accepts_the_new_control_audit_action(
+    probe_owner_engine: Engine,
+) -> None:
+    """Bước 3→4: ràng buộc `CHECK` phải nhận hành vi `sessions_pruned`.
+
+    `create_all` chỉ tạo bảng còn thiếu, không sửa ràng buộc của bảng đã có —
+    nên trên **cụm đã cài** (khác cụm mới) một hành vi mới sẽ bị chính `CHECK`
+    từ chối, và lệnh dọn phiên hỏng ngay lần chạy đầu với một lỗi không nói lên
+    điều gì. Diễn tập ở đây: hạ ràng buộc về danh sách cũ rồi nâng cấp lại.
+    """
+    ensure_control_schema(probe_owner_engine)
+
+    old_actions = ", ".join(
+        f"'{action.value}'"
+        for action in ControlAuditAction
+        if action is not ControlAuditAction.SESSIONS_PRUNED
+    )
+    with probe_owner_engine.begin() as connection:
+        connection.exec_driver_sql(
+            "ALTER TABLE public.control_audit_log "
+            "DROP CONSTRAINT IF EXISTS ck_control_audit_log_action_known"
+        )
+        connection.exec_driver_sql(
+            "ALTER TABLE public.control_audit_log "
+            "ADD CONSTRAINT ck_control_audit_log_action_known "
+            f"CHECK (action IN ({old_actions}))"
+        )
+        connection.execute(
+            update(SystemMetadata)
+            .where(SystemMetadata.key == CONTROL_SCHEMA_VERSION_KEY)
+            .values(value="3")
+        )
+
+    # Đối chứng: trước khi nâng cấp, hành vi mới bị DB từ chối.
+    with pytest.raises(IntegrityError), probe_owner_engine.begin() as connection:
+        connection.exec_driver_sql(
+            "INSERT INTO public.control_audit_log (action) VALUES ('sessions_pruned')"
+        )
+
+    ensure_control_schema(probe_owner_engine)
+
+    assert control_schema_version(probe_owner_engine) == CONTROL_SCHEMA_VERSION
+    with probe_owner_engine.begin() as connection:
+        connection.exec_driver_sql(
+            "INSERT INTO public.control_audit_log (action) VALUES ('sessions_pruned')"
+        )

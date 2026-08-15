@@ -32,7 +32,8 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | **Kênh phát hành Windows+macOS** (release.yml, minisign ký gói updater) | ⚠️ đã dựng, **chưa chạy lần nào** — đường build Windows chưa xác minh (máy phát triển là macOS); bộ cài chưa ký chứng thư OS |
 | **Danh tính**: Argon2id, phiên lưu DB thu hồi được ngay, 2FA TOTP chống phát lại, khóa tạm, RFC 7807 | ✅ chạy thật (2B-1a) |
 | **RBAC enforcement** `{module}.{chứng từ}.{hành vi}` sinh từ registry; định tuyến dataset theo header `X-Dataset`; phạm vi chi nhánh cho RLS | ✅ chạy thật (2B-1b) |
-| Idempotency · optimistic locking · worker + reaper · sinh type OpenAPI | ⏳ phase 2 lát 2B-2 |
+| **Idempotency cùng transaction** (giành khóa → làm việc → điền kết quả); **khóa lạc quan `row_version` hai lớp**; **tùy chọn hai cấp**; **hạn mức request theo người gọi** | ✅ chạy thật (2B-2a) |
+| Worker + reaper (hàng đợi job) · sinh type OpenAPI cho client | ⏳ phase 2 lát 2B-2b |
 | Client (design system, layout, đăng nhập, handshake, i18n) · spike S1/S3/S4 | ⏳ phase 2 lát 2C |
 | Posting engine, báo cáo, và toàn bộ phân hệ nghiệp vụ | ⏳ phase 4 trở đi |
 
@@ -245,7 +246,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | **Đa tiền tệ** | Mỗi dòng lưu (currency, rate, amount_fc, amount_debit, amount_credit); sổ cái quy VND | 3, 4 |
 | **Số dư** (RT-22) | Hybrid: `gl_postings` là nguồn sự thật + snapshot `account_balances` **khóa chỉ `(kỳ, sổ, chi nhánh, TK, tiền tệ)`** — **KHÔNG mang chiều/đối tác/vật tư** (nổ tổ hợp). Đối tác → `ar_ap_ledger`, vật tư → `inventory_balances`, chiều → `gl_postings` có index | 4 |
 | **Chứng từ lùi ngày** | Đánh dấu dirty snapshot + hàng đợi tính lại kiểm soát; **chặn tính lại ngầm** (RT-11) | 4, 8 |
-| **Đánh số** (RT-12) | Bảng counter + `SELECT … FOR UPDATE`; idempotency key ghi cùng txn business write, scope theo route, miễn `/reports`,`/jobs` | 2, 3 |
+| **Đánh số** (RT-12) | Bảng counter + `SELECT … FOR UPDATE`; idempotency **giành khóa trước rồi làm việc, cùng một txn**, scope theo route, miễn `/reports`,`/jobs` và các thao tác tự nó idempotent (gán vai trò/chi nhánh) | 2, 3 |
 | **Nhật ký** (RT-02) | `audit_log` thuộc `ket_owner`; `ket_app` chỉ INSERT/SELECT (không UPDATE/DELETE/DROP); ghi trước–sau JSONB theo schema dataset | 2 |
 | **Nhiều dữ liệu kế toán** (RT-17, D2) | **Schema-per-dataset trong 1 PG DB (ADR-017)**; routing schema session; handshake/đánh số/audit/RLS/backup per-schema | 2, 3, 11 |
 | **Cấu hình pháp lý** (RT-07) | `config_packages` + bảng con có `effective_from/to` + `scheme(TT200/TT133)`; ký số; SQL/template sandbox | 5 |

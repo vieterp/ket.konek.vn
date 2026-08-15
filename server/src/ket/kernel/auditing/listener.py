@@ -41,6 +41,7 @@ from sqlalchemy.orm.attributes import instance_state
 from ket.kernel.auditing.models import AuditAction, AuditLog
 from ket.kernel.errors import AuditContextMissingError
 from ket.kernel.persistence.types import AuditValues, JsonPrimitive
+from ket.kernel.persistence.versioning import ROW_VERSION_COLUMN
 
 AUDIT_CONTEXT_KEY: Final[str] = "ket_audit_context"
 _PENDING_KEY: Final[str] = "ket_audit_pending"
@@ -50,6 +51,17 @@ MAX_VALUE_LENGTH: Final[int] = 4000
 đổi, không phải bản sao thứ hai của dữ liệu."""
 
 REDACTED: Final[str] = "<đã ẩn>"
+
+MECHANISM_COLUMNS: Final[frozenset[str]] = frozenset({ROW_VERSION_COLUMN})
+"""Cột của **cơ chế**, không của nghiệp vụ — bỏ hẳn khỏi nhật ký.
+
+Khác `__audit_exclude__` (ghi nhận "có đổi" nhưng ẩn giá trị, dùng cho bí mật):
+ở đây không có gì để ẩn cả, chỉ đơn giản là không có gì đáng kể. `row_version`
+tăng đúng một lần cho mỗi `UPDATE` mà nhật ký đã ghi bằng diff của các cột thật,
+nên giữ nó lại chỉ làm mọi dòng dài thêm mà không thêm thông tin nào.
+
+Hệ quả có chủ đích: một `UPDATE` **chỉ** đổi `row_version` sẽ không sinh dòng
+nhật ký nào — và đúng như vậy, vì không có gì nghiệp vụ đã thay đổi."""
 
 
 @dataclass(frozen=True)
@@ -119,7 +131,12 @@ def _truncate(value: JsonPrimitive) -> JsonPrimitive:
 
 
 def _column_keys(instance: object) -> tuple[str, ...]:
-    return tuple(attr.key for attr in object_mapper(instance).column_attrs)
+    """Cột được ghi nhật ký — mọi cột ánh xạ, trừ cột cơ chế."""
+    return tuple(
+        attr.key
+        for attr in object_mapper(instance).column_attrs
+        if attr.key not in MECHANISM_COLUMNS
+    )
 
 
 def _table_name(instance: object) -> str:

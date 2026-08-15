@@ -19,8 +19,12 @@ Những việc chỉ làm được **tại máy chủ**, không qua HTTP, và đ
   `system.role.edit` thì không ai gán được vai trò qua HTTP, và một dữ liệu kế
   toán vừa tạo là cái hộp không ai mở được.
 * `generate-app-key` — ghi khóa mã hóa vào OS keystore (ADR-019).
+* `prune-sessions` — dọn phiên đã kết thúc. Ở đây chứ không ở API vì vai trò
+  runtime cố ý không có `DELETE` trên `auth_sessions`.
+* `prune-idempotency-keys` — dọn khóa hết hạn ở mọi dữ liệu kế toán. Ở CLI vì
+  nó là việc vận hành thường kỳ, không phải thao tác của người dùng nào.
 
-`argparse` chứ không Typer/Click: bảy lệnh không đáng thêm một phụ thuộc, và
+`argparse` chứ không Typer/Click: chín lệnh không đáng thêm một phụ thuộc, và
 `ket.admin` phải chạy được trong bản đóng gói PyInstaller (S4) nơi mỗi phụ thuộc
 là một thứ phải kiểm lại.
 """
@@ -31,15 +35,19 @@ import argparse
 import getpass
 import sys
 from collections.abc import Sequence
+from datetime import timedelta
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 
 from ket.kernel.datasets.bootstrap import ensure_cluster
-from ket.kernel.datasets.service import resolve_dataset
+from ket.kernel.datasets.service import list_datasets, resolve_dataset
 from ket.kernel.errors import DomainError
+from ket.kernel.idempotency import service as idempotency_service
 from ket.kernel.persistence.session import control_session, create_session_factory
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security import account_service, auth_service, role_service
+from ket.kernel.security.auth_service import DEFAULT_SESSION_RETENTION
 from ket.kernel.security.keystore import generate_app_key, store_app_key
 from ket.settings import Settings, get_settings
 
@@ -61,6 +69,18 @@ def _read_password(from_stdin: bool) -> str:
     if first != getpass.getpass(PASSWORD_CONFIRM_PROMPT):
         raise SystemExit("Hai lần nhập không khớp.")
     return first
+
+
+def _non_negative_days(raw: str) -> int:
+    """Số ngày lưu trữ — chặn số âm ngay ở bộ phân tích tham số.
+
+    `--retention-days -3650` đẩy mốc cắt về **tương lai**, tức là lệnh dọn dẹp
+    xóa sạch cả phiên đang sống. `type=int` trần cho giá trị đó đi qua.
+    """
+    days = int(raw)
+    if days < 0:
+        raise argparse.ArgumentTypeError(f"số ngày lưu trữ không được âm, nhận {days}")
+    return days
 
 
 def _owner_engine(settings: Settings) -> Engine:
@@ -269,6 +289,68 @@ def command_generate_app_key(_args: argparse.Namespace, settings: Settings) -> N
     )
 
 
+def command_prune_sessions(args: argparse.Namespace, settings: Settings) -> None:
+    """Dọn phiên đăng nhập đã kết thúc và đủ cũ.
+
+    Chạy bằng **`ket_owner`**, không phải vai trò runtime: `ket_app` cố ý không
+    có `DELETE` trên `auth_sessions` (lát 2B-1a), để một lỗ hổng ở tầng API
+    không xóa được dấu vết ai đã đăng nhập lúc nào. Việc dọn vì thế phải là một
+    thao tác tại máy chủ.
+
+    Không có lịch chạy tự động ở lát này: bảng tăng ~18.000 dòng/năm với 50
+    người dùng, nên chạy tay theo quý là đủ. Khi hàng đợi job có thật (2B-2b),
+    đây là ứng viên đầu tiên để đặt lịch.
+    """
+    engine = _owner_engine(settings)
+    try:
+        factory = create_session_factory(engine)
+        with control_session(factory) as session:
+            removed = auth_service.prune_expired_sessions(
+                session,
+                retention=timedelta(days=args.retention_days),
+                client_info="ket.admin",
+            )
+    finally:
+        engine.dispose()
+    print(  # noqa: T201
+        f"Đã xóa {removed} phiên đã kết thúc trước {args.retention_days} ngày."
+    )
+
+
+def command_prune_idempotency_keys(_args: argparse.Namespace, settings: Settings) -> None:
+    """Dọn khóa idempotency đã hết hạn ở **mọi** dữ liệu kế toán.
+
+    Cùng lý do với `prune-sessions`: bảng chỉ tăng và index dọn dẹp đã có sẵn từ
+    migration `0001`. Khác ở chỗ khóa nằm **trong từng schema dataset**, nên
+    lệnh phải lặp qua danh sách dataset và bind từng schema một.
+
+    Chạy bằng vai trò **runtime**: `ds_<mã>_app` đã có `DELETE` trên bảng nghiệp
+    vụ (khác `auth_sessions` của schema điều khiển — ở đó `DELETE` bị thu hồi có
+    chủ đích). Không cần đặc quyền owner cho một việc dọn dẹp thường kỳ.
+    """
+    engine = _app_engine(settings)
+    total = 0
+    try:
+        factory = create_session_factory(engine)
+        for dataset in list_datasets(engine, include_inactive=True):
+            scope = RequestScope(
+                dataset_schema=dataset.schema_name,
+                # Không có người dùng nào đứng sau lệnh dọn; `0` là quy ước
+                # "chạy từ máy chủ" và không có dòng nhật ký nghiệp vụ nào được
+                # sinh ra ở đây (`IdempotencyKey` không phải `Audited`).
+                user_id=0,
+                branch_ids=(),
+                client_info="ket.admin",
+            )
+            with unit_of_work(factory, scope) as session:
+                removed = idempotency_service.prune_expired_keys(session)
+            total += removed
+            print(f"  {dataset.code}: {removed}")  # noqa: T201
+    finally:
+        engine.dispose()
+    print(f"Đã xóa {total} khóa idempotency đã hết hạn.")  # noqa: T201
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Bộ phân tích tham số. Tách khỏi `main` để test gọi thẳng được."""
     parser = argparse.ArgumentParser(
@@ -333,6 +415,20 @@ def build_parser() -> argparse.ArgumentParser:
         "generate-app-key", help="Sinh khóa mã hóa ứng dụng và ghi vào OS keystore"
     )
     app_key.set_defaults(handler=command_generate_app_key)
+
+    prune = subparsers.add_parser("prune-sessions", help="Xóa phiên đăng nhập đã kết thúc và đủ cũ")
+    prune.add_argument(
+        "--retention-days",
+        type=_non_negative_days,
+        default=DEFAULT_SESSION_RETENTION.days,
+        help="Giữ phiên đã kết thúc bao nhiêu ngày trước khi xóa (>= 0)",
+    )
+    prune.set_defaults(handler=command_prune_sessions)
+
+    prune_keys = subparsers.add_parser(
+        "prune-idempotency-keys", help="Xóa khóa idempotency đã hết hạn ở mọi dữ liệu kế toán"
+    )
+    prune_keys.set_defaults(handler=command_prune_idempotency_keys)
 
     return parser
 
