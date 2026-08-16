@@ -65,7 +65,7 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | `server/migrations/` | `env.py` (chạy per-schema) + `versions/0001_core_platform.py` |
 | `server/scripts/export_openapi.py` | **Xuất OpenAPI từ `create_app()` ra JSON**, không cần DB. Chạy: `uv run python scripts/export_openapi.py <đường-dẫn.json>` hay `make api-types` |
 | `client/packages/api-types/` | **Sinh từ OpenAPI**: `schema.d.ts` (type TypeScript), `openapi.json` (spec). Cả hai **được COMMIT** là bản ghi hợp đồng. Tạo bằng `openapi-typescript` |
-| `client/src/` | Bộ khung: `main.tsx`, `app/{router,layout}`, `design-system/{base,tokens}.css`, `lib/api-client.ts` (mới có `get`), thư mục `features/*` **rỗng** |
+| `client/src/` | **Lát 2C-1:** `main.tsx`; `app/{providers,router,session-gate,app-layout,navigation,placeholder-page}`; `design-system/{base,tokens}.css` + `components/{button,text-field,select-field,alert}`; `lib/{api-client,session,session-storage,app-version,i18n,formatters,access}`; `features/auth/*` (đăng nhập, đổi mật khẩu tạm, đăng ký 2FA, cần cập nhật, mất kết nối) + `features/dataset`; `locales/{vi,en}.ts` |
 | `client/src-tauri/` | Shell Rust, edition 2024, plugin `dialog` + `opener` |
 
 ---

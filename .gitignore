@@ -42,3 +42,4 @@ client/src-tauri/gen/
 .playwright-mcp/
 ket-page*.yml
 server/.claude/
+docs/journals/

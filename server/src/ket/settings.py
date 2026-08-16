@@ -11,8 +11,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from ket import __version__
+from ket.kernel.versions import parse_required_version
 
 DeploymentMode = Literal["standalone", "lan"]
 
@@ -80,6 +83,63 @@ class Settings(BaseSettings):
     verify_schema_on_startup: bool = True
     """Chặn khởi động khi schema DB lệch phiên bản migration (LD-05,
     FR-NFR-054). Chỉ đặt `False` cho test/CI không có PostgreSQL."""
+
+    minimum_client_version: str = __version__
+    """Bản client cũ nhất còn được **ghi** vào bản cài này (LD-05, FR-NFR-054).
+
+    Mặc định bằng chính phiên bản server: một bản cài chưa ai chỉnh cấu hình sẽ
+    đòi client cùng lứa, và đó là hướng mặc định đúng — nới ra là quyết định có
+    chủ đích của người triển khai, còn siết vào là thứ họ sẽ quên làm.
+
+    Chỉ tăng khi một migration **phá tương thích** với client cũ. Tăng theo mỗi
+    bản phát hành thường là cách nhanh nhất để cả văn phòng dừng việc vì một
+    máy trạm chưa kịp tự cập nhật.
+
+    Client cũ hơn giá trị này vẫn **đọc** được (chế độ chỉ-đọc); chỉ lệnh ghi
+    trả `426` — xem `api/middleware/schema_version_gate.py`.
+    """
+
+    cors_allowed_origins: tuple[str, ...] = (
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+    )
+    """Origin được phép gọi API từ trình duyệt/webview (CORS).
+
+    Cần vì webview của Tauri **không** chạy ở origin của app server: macOS dùng
+    `tauri://localhost`, Windows dùng `http(s)://tauri.localhost`. Không khai ba
+    origin đó thì client desktop không gọi được endpoint nào — trình duyệt chặn
+    trước khi request rời máy, và triệu chứng là "đăng nhập không phản hồi" mà
+    log server hoàn toàn trống.
+
+    Chế độ trình duyệt trong LAN (v1.x) **không** cần mục nào ở đây: khi ấy app
+    server tự phục vụ chính bundle web đó, nên request là same-origin.
+
+    Danh sách đóng, không có `*`: hệ này giữ PII lương và bí mật doanh nghiệp,
+    và `*` biến mọi trang web mà nhân viên mở thành một chỗ có thể gọi API nội
+    bộ.
+
+    Khai bằng **JSON**, không phải danh sách ngăn cách bằng dấu phẩy — đây là
+    kiểu phức nên `pydantic-settings` phân tích bằng JSON, và một chuỗi có dấu
+    phẩy làm tiến trình **không khởi động**. Giá trị khai ra **thay thế** cả
+    danh sách này chứ không cộng thêm, nên máy lập trình chạy `vite dev` phải
+    liệt kê lại ba origin Tauri:
+
+        KET_CORS_ALLOWED_ORIGINS='["tauri://localhost","http://tauri.localhost",
+                                   "https://tauri.localhost","http://localhost:5173"]'
+    """
+
+    @field_validator("minimum_client_version")
+    @classmethod
+    def _minimum_client_version_parses(cls, value: str) -> str:
+        """Giá trị gõ sai phải chặn khởi động, không được im lặng thành vô hiệu.
+
+        Kiểm ở đây chứ không ở middleware: middleware chạy khi đã có request,
+        tức là triệu chứng đầu tiên của một dòng cấu hình sai sẽ là `500` trên
+        máy người dùng thay vì một tiến trình không chịu khởi động.
+        """
+        parse_required_version(value)
+        return value
 
     # --- Danh tính & bí mật (ADR-019, RT-05)
     keyring_service: str = "ket"

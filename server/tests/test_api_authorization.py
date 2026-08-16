@@ -25,6 +25,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from conftest import api_test_client
 from ket.api.dependencies import BRANCH_HEADER, DATASET_HEADER
 from ket.kernel.datasets.models import User
 from ket.kernel.datasets.provisioning import DatasetRef
@@ -60,7 +61,7 @@ def client(
     """App thật chạy qua `lifespan` thật, trên database của bộ fixture."""
     assert app_engine is not None and session_factory is not None
     app = create_app(test_settings)
-    with TestClient(app, raise_server_exceptions=False) as instance:
+    with api_test_client(app) as instance:
         yield instance
 
 

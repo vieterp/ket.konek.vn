@@ -350,7 +350,7 @@ jobs:
   # này. Hai job cùng chạy = dựng lại y hệt một bundle hai lần.
   # ---------------------------------------------------------------------------
   client:
-    name: client · kiểu, lint, build
+    name: client · kiểu, lint, test, build
     needs: changes
     if: >-
       github.event_name == 'pull_request'
@@ -382,6 +382,11 @@ jobs:
 
       - name: eslint
         run: pnpm exec eslint .
+
+      # Máy trạng thái đăng nhập có bốn nhánh mà `tsc` không thấy được
+      # (mã 2FA, mật khẩu tạm, phiên hạn chế, client quá cũ) — quyết định H3.
+      - name: vitest
+        run: pnpm exec vitest run
 
       - name: vite build
         run: pnpm exec vite build

@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from conftest import api_test_client
 from ket.api.middleware.problem_details import PROBLEM_CONTENT_TYPE
 from ket.api.middleware.request_context import CORRELATION_HEADER
 from ket.kernel.datasets.models import User
@@ -43,7 +44,7 @@ def client(
     """
     assert app_engine is not None and session_factory is not None
     app = create_app(test_settings)
-    with TestClient(app, raise_server_exceptions=False) as instance:
+    with api_test_client(app) as instance:
         yield instance
 
 

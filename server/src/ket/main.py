@@ -26,13 +26,20 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import Engine
 
 from ket import __version__
+from ket.api.dependencies import BRANCH_HEADER, DATASET_HEADER
+from ket.api.idempotency import IDEMPOTENCY_HEADER
 from ket.api.middleware.problem_details import ProblemDetails, register_problem_handlers
 from ket.api.middleware.rate_limit import RateLimitMiddleware
-from ket.api.middleware.request_context import RequestContextMiddleware
+from ket.api.middleware.request_context import CORRELATION_HEADER, RequestContextMiddleware
+from ket.api.middleware.schema_version_gate import (
+    CLIENT_VERSION_HEADER,
+    SchemaVersionGateMiddleware,
+)
 from ket.api.routers.auth import router as auth_router
 from ket.api.routers.jobs import router as jobs_router
 from ket.api.routers.system import router as system_router
@@ -44,6 +51,7 @@ from ket.kernel.errors import UnsupportedPostgresVersionError
 from ket.kernel.logging_setup import configure_logging, get_logger
 from ket.kernel.persistence.engine import create_app_engine
 from ket.kernel.persistence.session import create_session_factory
+from ket.kernel.versions import parse_required_version
 from ket.settings import Settings, get_settings
 
 logger = get_logger(__name__)
@@ -148,12 +156,46 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # middleware thêm **sau cùng** là lớp ngoài cùng. Ở đây điều đó có nghĩa là
     # mã tương quan được gắn trước, rồi mới tới hạn mức — để một phản hồi `429`
     # cũng mang `correlation_id` và tra được vào log như mọi lỗi khác.
+    #
+    # Cổng phiên bản nằm **trong cùng** trong ba lớp này: một client quá cũ gọi
+    # dồn dập vẫn phải chạm hạn mức trước, nếu không thì `426` trở thành một
+    # phản hồi rẻ mà kẻ gọi lặp vô hạn được.
+    app.add_middleware(
+        SchemaVersionGateMiddleware,
+        minimum=parse_required_version(resolved.minimum_client_version),
+    )
     app.add_middleware(
         RateLimitMiddleware,
         default_per_minute=resolved.rate_limit_per_minute,
         auth_per_minute=resolved.rate_limit_auth_per_minute,
     )
     app.add_middleware(RequestContextMiddleware)
+    # CORS thêm **sau cùng** nên nó là lớp NGOÀI CÙNG, và điều đó bắt buộc:
+    # webview của Tauri không chạy ở origin của app server (`tauri://localhost`
+    # trên macOS, `http(s)://tauri.localhost` trên Windows), nên mọi lời gọi từ
+    # client desktop đều là xuyên origin. Nằm ngoài cùng thì preflight `OPTIONS`
+    # được trả lời ngay, và **mọi** phản hồi — kể cả `429` của hạn mức hay `426`
+    # của cổng phiên bản — đều mang header CORS. Nằm trong thì một phản hồi bị
+    # chặn sẽ tới trình duyệt mà thiếu header, và người dùng thấy "lỗi mạng"
+    # thay vì lý do thật.
+    #
+    # Không dùng `allow_credentials`: phiên đi bằng header `Authorization`, chứ
+    # không bằng cookie — nên trình duyệt không cần gửi thông tin đăng nhập
+    # xuyên site, và bật cờ đó chỉ mở rộng bề mặt tấn công CSRF.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(resolved.cors_allowed_origins),
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            CLIENT_VERSION_HEADER,
+            DATASET_HEADER,
+            BRANCH_HEADER,
+            IDEMPOTENCY_HEADER,
+            CORRELATION_HEADER,
+        ],
+    )
     register_problem_handlers(app)
     app.include_router(auth_router)
     app.include_router(system_router)

@@ -124,6 +124,61 @@ chi tiết màn hình.
 
 ## 5. Quy ước component
 
+### Bộ component hiện có (lát 2C-1)
+
+Bốn component — đúng những gì đường đăng nhập cần. Thêm biến thể chỉ khi có màn
+hình thật đòi, không thêm trước:
+
+| Component | Tệp | Biến thể / tính năng |
+| --- | --- | --- |
+| `Button` | `design-system/components/button.tsx` | `primary`, `secondary`, `ghost`; mặc định `type="button"` (mặc định của HTML là `submit`, và một nút phụ trong form sẽ gửi form) |
+| `TextField` | `design-system/components/text-field.tsx` | nhãn `<label htmlFor>` thật, `hint`, `error`, `aria-invalid`/`aria-describedby` |
+| `SelectField` | `design-system/components/select-field.tsx` | `<select>` gốc (bàn phím, IME tiếng Việt, trình đọc màn hình đã đúng sẵn), `labelHidden` cho thanh công cụ chật |
+| `Alert` | `design-system/components/alert.tsx` | `error` (`role="alert"`), `warning`, `info` |
+
+Phần còn lại của design system (`Tabs`, `Drawer`, `DataGrid`, `StatusPill`,
+`NextActionCell`, `ChecklistPanel`, `SplitPane`) thuộc lát 2C-2 (bước 16).
+
+### i18n cách sử dụng
+
+Mọi chuỗi hiển thị lấy qua `t()` của hook `useI18n()`. Nguồn là hai module
+TypeScript `client/src/locales/{vi,en}.ts` — không JSON, không i18next:
+
+```typescript
+const { t, locale, setLocale } = useI18n()
+
+t('login.title')                              // "Đăng nhập"
+t('common.version', { version: '0.6.0' })     // "Phiên bản 0.6.0"
+
+// client/src/locales/vi.ts — nguồn khóa
+export const vi = {
+  'login.title': 'Đăng nhập',
+  'common.version': 'Phiên bản {version}',
+  'error.auth.invalid_credentials': 'Tên đăng nhập hoặc mật khẩu không đúng.',
+} as const
+
+export type TranslationKey = keyof typeof vi
+
+// client/src/locales/en.ts — bộ khóa bị ép bằng kiểu
+export const en: Record<TranslationKey, string> = {
+  'login.title': 'Sign in',
+  'common.version': 'Version {version}',
+  'error.auth.invalid_credentials': 'Wrong username or password.',
+}
+```
+
+Thiếu hay thừa một khóa trong `en.ts` là lỗi `tsc`. Mã lỗi của server đổi thành
+câu hiển thị bằng `translateErrorCode(t, errorCode)` (tra khóa `error.<mã>`);
+mã chưa có bản dịch rơi về câu chung **kèm chính mã đó**.
+
+**Nguyên tắc:**
+- `vi.ts` là nguồn khóa (khai `as const`)
+- `en.ts` khai `Record<TranslationKey, string>` → TypeScript ép đủ khóa lúc biên dịch
+- Thiếu khóa trong `en.ts` → lỗi `tsc`, không phải chuỗi lạ trên màn hình
+- Số/tiền/ngày định dạng bằng `Intl` của trình duyệt (không cần i18n)
+
+### Quy tắc khác
+
 - Component cơ sở nằm ở `client/src/design-system/`; màn hình nghiệp vụ nằm ở
   `client/src/features/<nhóm>/`. Feature **không** định nghĩa lại nút/bảng riêng.
 - Đặt tên file `kebab-case.tsx`, component `PascalCase`, hook `useXxx`.

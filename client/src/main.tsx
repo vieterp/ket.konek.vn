@@ -15,6 +15,7 @@ import '@fontsource/be-vietnam-pro/vietnamese-500.css'
 import '@fontsource/be-vietnam-pro/vietnamese-600.css'
 import '@fontsource/be-vietnam-pro/vietnamese-700.css'
 
+import { AppProviders } from '@/app/providers'
 import { AppRouter } from '@/app/router'
 import '@/design-system/tokens.css'
 import '@/design-system/base.css'
@@ -26,6 +27,8 @@ if (container === null) {
 
 createRoot(container).render(
   <StrictMode>
-    <AppRouter />
+    <AppProviders>
+      <AppRouter />
+    </AppProviders>
   </StrictMode>,
 )
