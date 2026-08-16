@@ -86,6 +86,11 @@ export const en: Record<TranslationKey, string> = {
   'nav.so-sach-thue': 'Ledgers & Tax',
   'nav.danh-muc-thiet-lap': 'Master data & Settings',
 
+  'theme.label': 'Appearance',
+  'theme.system': 'Follow system',
+  'theme.light': 'Light',
+  'theme.dark': 'Dark',
+
   'status.branch': 'Branch',
   'status.allBranches': 'All assigned branches',
   'status.noBranch': 'No branch assigned',

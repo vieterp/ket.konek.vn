@@ -88,6 +88,11 @@ export const vi = {
   'nav.so-sach-thue': 'Sổ sách & Thuế',
   'nav.danh-muc-thiet-lap': 'Danh mục & Thiết lập',
 
+  'theme.label': 'Chế độ hiển thị',
+  'theme.system': 'Theo hệ thống',
+  'theme.light': 'Sáng',
+  'theme.dark': 'Tối',
+
   'status.branch': 'Chi nhánh',
   'status.allBranches': 'Tất cả chi nhánh được gán',
   'status.noBranch': 'Chưa gán chi nhánh',

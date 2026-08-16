@@ -78,6 +78,33 @@
   --color-text-default: var(--ds-color-text);
   --color-text-muted: var(--ds-color-text-muted);
   --color-border-default: var(--ds-color-border);
+  /* Hai token dưới đây thiếu ở lát 2C-1 và đó là một thiếu sót có hậu quả thật:
+     không có lớp tiện ích ngữ nghĩa cho "nền thẻ" và "màu thương hiệu", mọi chỗ
+     gọi đành viết `bg-white` và `text-navy-700` — đúng hai màu KHÔNG đổi theo
+     chế độ. Khi bật chế độ tối lần đầu (lát 2C-2), chữ sáng nằm trên thẻ trắng:
+     không đọc được một dòng nào. Phơi hai token ra ở đây là cách sửa tận gốc,
+     vì nó làm lựa chọn đúng trở thành lựa chọn sẵn có. */
+  --color-background: var(--ds-color-background);
+  --color-primary: var(--ds-color-primary);
+  --color-secondary: var(--ds-color-secondary);
+  --color-row-alt: var(--ds-color-row-alt);
+  --color-status-ok: var(--ds-color-status-ok);
+  --color-status-todo: var(--ds-color-status-todo);
+  --color-status-bad: var(--ds-color-status-bad);
+
+  /* --- Thang chữ của màn hình nghiệp vụ (design "Konek Screens 2a") ---
+     Đặc hơn thang mặc định của Tailwind (14px/12px) một cách có chủ đích: đây
+     là phần mềm nhập liệu dùng cả ngày, mỗi 1px thừa trên mỗi dòng là một dòng
+     ít hơn nhìn thấy được trên màn hình. Con số lấy nguyên từ design. */
+  --text-app: 0.8125rem; /* 13px — cỡ chữ nền của bảng, thẻ, nội dung */
+  --text-app--line-height: 1.5;
+  --text-control: 0.84375rem; /* 13.5px — nav, tab, ô nhập, nút */
+  --text-control--line-height: 1.45;
+  --text-meta: 0.78125rem; /* 12.5px — đầu bảng, nhãn trạng thái */
+  --text-meta--line-height: 1.4;
+  --text-page: 1.3125rem; /* 21px — tiêu đề trang */
+  --text-page--line-height: 1.3;
+  --text-page--font-weight: 600;
 
   /* --- Typography (brand asset) --- */
   --font-sans: 'Be Vietnam Pro', sans-serif;

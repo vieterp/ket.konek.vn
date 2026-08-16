@@ -16,6 +16,8 @@
  * phải chạy đúng trước.
  */
 
+import { readStored, removeStored, writeStored } from '@/lib/safe-storage'
+
 const PREFIX = 'ket.session'
 
 interface StoredSession {
@@ -30,7 +32,7 @@ function keyFor(baseUrl: string): string {
 }
 
 export function readStoredSession(baseUrl: string): StoredSession | null {
-  const raw = localStorage.getItem(keyFor(baseUrl))
+  const raw = readStored(keyFor(baseUrl))
   if (raw === null) {
     return null
   }
@@ -52,11 +54,11 @@ export function readStoredSession(baseUrl: string): StoredSession | null {
 }
 
 export function writeStoredSession(baseUrl: string, session: StoredSession): void {
-  localStorage.setItem(keyFor(baseUrl), JSON.stringify(session))
+  writeStored(keyFor(baseUrl), JSON.stringify(session))
 }
 
 export function clearStoredSession(baseUrl: string): void {
-  localStorage.removeItem(keyFor(baseUrl))
+  removeStored(keyFor(baseUrl))
 }
 
 export type { StoredSession }

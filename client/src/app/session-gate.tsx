@@ -78,7 +78,7 @@ export function SessionGate(): ReactElement {
     const denied = access.error instanceof ApiError ? access.error.errorCode : null
     return (
       <div className="flex min-h-screen items-center justify-center bg-screen p-6">
-        <section className="w-full max-w-md rounded border-2 border-navy-700 bg-white p-6">
+        <section className="w-full max-w-md rounded border-2 border-primary bg-background p-6">
           <Alert tone="error">
             {denied === null ? t('error.transport.unreachable') : translateErrorCode(t, denied)}
           </Alert>

@@ -1,9 +1,14 @@
 /**
- * Bọc ứng dụng bằng ba lớp ngữ cảnh, theo đúng thứ tự phụ thuộc.
+ * Bọc ứng dụng bằng một lưới an toàn + bốn lớp ngữ cảnh, theo đúng thứ tự phụ thuộc.
  *
- * `I18n` ngoài cùng vì màn hình lỗi của hai lớp trong cũng cần chữ. `Session`
- * ở giữa vì nó dựng `ApiClient` mà `QueryClient` sẽ gọi qua. `QueryClient`
- * trong cùng.
+ * `AppErrorBoundary` bọc ngoài tất cả: một lỗi lúc render ở BẤT KỲ provider nào
+ * phải thành màn hình có chữ, không phải trang trắng — xem `error-boundary.tsx`.
+ *
+ * `Theme` ngoài cùng trong số các provider và không phụ thuộc gì: nó chỉ đặt một thuộc tính lên
+ * `<html>`, và phải đặt xong trước khi bất kỳ màn hình nào vẽ ra — kể cả màn
+ * hình lỗi của các lớp trong. `I18n` kế tiếp vì màn hình lỗi cũng cần chữ.
+ * `Session` ở giữa vì nó dựng `ApiClient` mà `QueryClient` sẽ gọi qua.
+ * `QueryClient` trong cùng.
  *
  * `QueryClient` dựng trong `useState` chứ không phải hằng ở tầng module: một
  * hằng dùng chung sẽ mang bộ nhớ đệm của lần chạy trước sang bài test kế tiếp,
@@ -14,8 +19,10 @@ import type { ReactElement, ReactNode } from 'react'
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
+import { AppErrorBoundary } from '@/app/error-boundary'
 import { I18nProvider } from '@/lib/i18n'
 import { ApiError, SessionProvider } from '@/lib/session'
+import { ThemeProvider } from '@/lib/theme'
 
 function createQueryClient(): QueryClient {
   return new QueryClient({
@@ -44,10 +51,14 @@ export function AppProviders({ children }: { children: ReactNode }): ReactElemen
   const [queryClient] = useState(createQueryClient)
 
   return (
-    <I18nProvider>
-      <SessionProvider>
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      </SessionProvider>
-    </I18nProvider>
+    <AppErrorBoundary>
+      <ThemeProvider>
+        <I18nProvider>
+          <SessionProvider>
+            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+          </SessionProvider>
+        </I18nProvider>
+      </ThemeProvider>
+    </AppErrorBoundary>
   )
 }

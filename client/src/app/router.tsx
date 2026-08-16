@@ -12,18 +12,38 @@
  *
  * `createBrowserRouter` (không phải hash router) vì bundle này còn phải phục vụ
  * được qua HTTP trong chế độ trình duyệt LAN ở v1.x.
+ *
+ * Ngoại lệ duy nhất nằm ngoài `SessionGate` là `/kitchen-sink` — trang duyệt
+ * design system, và **chỉ có khi đang chạy máy chủ dev** (quyết định H8). Nằm
+ * ngoài gác phiên là có chủ đích: người thiết kế mở nó khi chưa có server nào
+ * chạy và chưa có tài khoản nào.
+ *
+ * Cổng là `__DEV_TOOLS__` (`command === 'serve'` trong `vite.config.ts`), KHÔNG
+ * phải `import.meta.env.DEV`. Cờ `DEV` đọc `NODE_ENV`, nên
+ * `NODE_ENV=development pnpm build` từng cho ra một bản giao khách có route này
+ * — tức một đường vào ứng dụng không qua `SessionGate`. `__DEV_TOOLS__` là hằng
+ * lúc dựng cấu hình và không biến môi trường nào bẻ được; Rollup loại cả nhánh
+ * lẫn cây import phía sau khỏi bundle.
  */
 
 import type { ReactElement } from 'react'
+import type { RouteObject } from 'react-router-dom'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 
 import { NAVIGATION } from '@/app/navigation'
 import { PlaceholderPage } from '@/app/placeholder-page'
 import { SessionGate } from '@/app/session-gate'
+import { KitchenSinkPage } from '@/features/kitchen-sink/kitchen-sink-page'
 
 const [home, ...groups] = NAVIGATION
 
+/** Rỗng trong MỌI bản dựng — xem ghi chú đầu tệp. */
+export const devOnlyRoutes: RouteObject[] = __DEV_TOOLS__
+  ? [{ path: '/kitchen-sink', element: <KitchenSinkPage /> }]
+  : []
+
 const router = createBrowserRouter([
+  ...devOnlyRoutes,
   {
     path: '/',
     element: <SessionGate />,

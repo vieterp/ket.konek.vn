@@ -33,7 +33,7 @@ export function AuthShell({
       <div className="w-full max-w-md">
         <div className="mb-6 flex items-end justify-between gap-4">
           <div>
-            <p className="text-h3 font-semibold text-navy-700">{t('common.appName')}</p>
+            <p className="text-h3 font-semibold text-primary">{t('common.appName')}</p>
             <p className="text-sm text-text-muted">{t('common.tagline')}</p>
           </div>
           <SelectField
@@ -50,8 +50,8 @@ export function AuthShell({
           />
         </div>
 
-        <section className="rounded border-2 border-navy-700 bg-white p-6 shadow-sm">
-          <h1 className="mb-4 text-lg font-semibold text-navy-700">{title}</h1>
+        <section className="rounded border-2 border-primary bg-background p-6 shadow-sm">
+          <h1 className="mb-4 text-lg font-semibold text-primary">{title}</h1>
           {children}
         </section>
 

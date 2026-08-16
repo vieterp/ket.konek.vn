@@ -16,8 +16,8 @@ export function PlaceholderPage({ item }: { readonly item: NavigationItem }): Re
   const { t } = useI18n()
 
   return (
-    <section className="rounded border border-border-default bg-white p-6">
-      <h1 className="mb-2 text-lg font-semibold text-navy-700">
+    <section className="rounded border border-border-default bg-background p-6">
+      <h1 className="mb-2 text-lg font-semibold text-primary">
         {t('placeholder.title', { group: t(item.labelKey) })}
       </h1>
       <p className="text-sm text-text-muted">{t('placeholder.body')}</p>
