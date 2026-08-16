@@ -389,6 +389,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/handshake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Handshake
+         * @description Phiên bản của máy chủ và bản client tối thiểu nó nhận (LD-05, FR-NFR-054).
+         *
+         *     **Endpoint ẩn danh duy nhất của nhóm này**, và cố ý như vậy: client gọi nó
+         *     ở màn hình đầu tiên, trước cả khi có ai gõ mật khẩu. Một bản client quá cũ
+         *     phải biết mình cần cập nhật ngay lúc đó — biết sau khi đăng nhập rồi nhập
+         *     xong một chứng từ là biết quá muộn.
+         *
+         *     Không chạm cơ sở dữ liệu: mọi con số ở đây thuộc về **tiến trình** đang
+         *     chạy. `control_schema_version` là phiên bản mà mã nguồn này đòi hỏi, và
+         *     `lifespan` đã từ chối khởi động nếu DB lệch khỏi nó — nên đọc lại từ DB chỉ
+         *     thêm một truy vấn cho một endpoint mà mọi máy trạm gọi lúc khởi động.
+         */
+        get: operations["handshake_api_v1_system_handshake_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/settings": {
         parameters: {
             query?: never;
@@ -689,6 +719,29 @@ export interface components {
         GrantResponse: {
             /** Changed */
             changed: boolean;
+        };
+        /**
+         * HandshakeResponse
+         * @description Bắt tay client ↔ server, gọi **trước khi đăng nhập** (LD-05, FR-NFR-054).
+         *
+         *     Không đòi xác thực, vì đúng cái nó trả lời là câu hỏi *có đăng nhập được
+         *     không*: một client quá cũ phải biết điều đó ở màn hình đầu tiên, chứ không
+         *     phải sau khi người dùng gõ xong mật khẩu và bấm lưu một chứng từ.
+         *
+         *     Nội dung giữ ở mức tối thiểu cần cho quyết định của client. Đây là endpoint
+         *     **ẩn danh** trong LAN, nên mỗi trường thêm vào là một thứ ai cũng đọc được:
+         *     không có tên doanh nghiệp, không có danh sách dữ liệu kế toán, không có tên
+         *     máy chủ.
+         */
+        HandshakeResponse: {
+            /** Control Schema Version */
+            control_schema_version: string;
+            /** Deployment Mode */
+            deployment_mode: string;
+            /** Min Client Version */
+            min_client_version: string;
+            /** Server Version */
+            server_version: string;
         };
         /**
          * HealthResponse
@@ -1520,6 +1573,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatasetListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    handshake_api_v1_system_handshake_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandshakeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

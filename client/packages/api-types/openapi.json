@@ -345,6 +345,35 @@
         "title": "GrantResponse",
         "type": "object"
       },
+      "HandshakeResponse": {
+        "description": "Bắt tay client ↔ server, gọi **trước khi đăng nhập** (LD-05, FR-NFR-054).\n\nKhông đòi xác thực, vì đúng cái nó trả lời là câu hỏi *có đăng nhập được\nkhông*: một client quá cũ phải biết điều đó ở màn hình đầu tiên, chứ không\nphải sau khi người dùng gõ xong mật khẩu và bấm lưu một chứng từ.\n\nNội dung giữ ở mức tối thiểu cần cho quyết định của client. Đây là endpoint\n**ẩn danh** trong LAN, nên mỗi trường thêm vào là một thứ ai cũng đọc được:\nkhông có tên doanh nghiệp, không có danh sách dữ liệu kế toán, không có tên\nmáy chủ.",
+        "properties": {
+          "control_schema_version": {
+            "title": "Control Schema Version",
+            "type": "string"
+          },
+          "deployment_mode": {
+            "title": "Deployment Mode",
+            "type": "string"
+          },
+          "min_client_version": {
+            "title": "Min Client Version",
+            "type": "string"
+          },
+          "server_version": {
+            "title": "Server Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server_version",
+          "min_client_version",
+          "control_schema_version",
+          "deployment_mode"
+        ],
+        "title": "HandshakeResponse",
+        "type": "object"
+      },
       "HealthResponse": {
         "description": "Trả lời của `/health`. Pydantic ở mọi ranh giới API (ADR-015).",
         "properties": {
@@ -1023,7 +1052,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.6.0"
+    "version": "0.7.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1701,6 +1730,38 @@
           }
         },
         "summary": "List Available Datasets",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/v1/system/handshake": {
+      "get": {
+        "description": "Phiên bản của máy chủ và bản client tối thiểu nó nhận (LD-05, FR-NFR-054).\n\n**Endpoint ẩn danh duy nhất của nhóm này**, và cố ý như vậy: client gọi nó\nở màn hình đầu tiên, trước cả khi có ai gõ mật khẩu. Một bản client quá cũ\nphải biết mình cần cập nhật ngay lúc đó — biết sau khi đăng nhập rồi nhập\nxong một chứng từ là biết quá muộn.\n\nKhông chạm cơ sở dữ liệu: mọi con số ở đây thuộc về **tiến trình** đang\nchạy. `control_schema_version` là phiên bản mà mã nguồn này đòi hỏi, và\n`lifespan` đã từ chối khởi động nếu DB lệch khỏi nó — nên đọc lại từ DB chỉ\nthêm một truy vấn cho một endpoint mà mọi máy trạm gọi lúc khởi động.",
+        "operationId": "handshake_api_v1_system_handshake_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandshakeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Handshake",
         "tags": [
           "system"
         ]

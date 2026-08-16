@@ -12,6 +12,37 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class HandshakeResponse(BaseModel):
+    """Bắt tay client ↔ server, gọi **trước khi đăng nhập** (LD-05, FR-NFR-054).
+
+    Không đòi xác thực, vì đúng cái nó trả lời là câu hỏi *có đăng nhập được
+    không*: một client quá cũ phải biết điều đó ở màn hình đầu tiên, chứ không
+    phải sau khi người dùng gõ xong mật khẩu và bấm lưu một chứng từ.
+
+    Nội dung giữ ở mức tối thiểu cần cho quyết định của client. Đây là endpoint
+    **ẩn danh** trong LAN, nên mỗi trường thêm vào là một thứ ai cũng đọc được:
+    không có tên doanh nghiệp, không có danh sách dữ liệu kế toán, không có tên
+    máy chủ.
+    """
+
+    server_version: str
+    """Phiên bản app server. Client mới hơn server → tự hiện cảnh báo và chuyển
+    chế độ chỉ-đọc; server **không** chặn nhánh này, vì nó thường có nghĩa là
+    máy trạm vừa cập nhật trước máy chủ và việc phải làm nằm ở máy chủ."""
+
+    min_client_version: str
+    """Bản client cũ nhất còn **ghi** được. Cũ hơn → mọi lệnh ghi trả `426`."""
+
+    control_schema_version: str
+    """Phiên bản schema điều khiển mà server này đang chạy. Client không quyết
+    định gì từ số này ở v1; nó có mặt để màn hình chẩn đoán và báo cáo sự cố nêu
+    được đúng một con số thay vì "bản mới nhất"."""
+
+    deployment_mode: str
+    """`standalone` (một máy) hay `lan`. Client đổi vài mặc định theo nó — ví dụ
+    có mời người dùng chọn dữ liệu kế toán khác hay không."""
+
+
 class DatasetSummary(BaseModel):
     """Một dữ liệu kế toán trong màn hình chọn (FR-SYS-001)."""
 

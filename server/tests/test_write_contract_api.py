@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from conftest import api_test_client
 from ket.api.dependencies import DATASET_HEADER
 from ket.api.idempotency import IDEMPOTENCY_HEADER
 from ket.kernel.config.catalog import GRID_ENTER_KEY, LOCALE_KEY, MONEY_SCALE_KEY
@@ -53,7 +54,7 @@ def client(
 ) -> Iterator[TestClient]:
     assert app_engine is not None and session_factory is not None
     app = create_app(test_settings)
-    with TestClient(app, raise_server_exceptions=False) as instance:
+    with api_test_client(app) as instance:
         yield instance
 
 

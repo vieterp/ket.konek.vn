@@ -21,12 +21,16 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import Connection, Engine, create_engine, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool, QueuePool
 
+from ket import __version__
+from ket.api.middleware.schema_version_gate import CLIENT_VERSION_HEADER
 from ket.kernel.datasets.bootstrap import ensure_control_schema, ensure_database_roles
 from ket.kernel.datasets.models import User
 from ket.kernel.datasets.naming import validate_schema_name
@@ -413,3 +417,25 @@ def session_factory(app_engine: Engine) -> sessionmaker[Session]:
     dùng được nó.
     """
     return create_session_factory(app_engine)
+
+
+def api_test_client(app: FastAPI) -> TestClient:
+    """`TestClient` tự khai phiên bản client, như một bản cài thật.
+
+    Từ bước 19, lệnh ghi thiếu `X-Client-Version` bị từ chối `426` (quyết định
+    H2 — cổng fail-open chỉ chặn được client trung thực). Test API muốn kiểm
+    tầng *nghiệp vụ* thì phải đi qua cổng đó trước, y như client thật.
+
+    Đặt ở conftest chứ không chép vào từng tệp test: cổng này áp cho **mọi**
+    đường ghi của mọi phase sau, và một tệp test mới quên header sẽ đỏ theo kiểu
+    khó đọc (`426` ở chỗ đang chờ `403`). Ở đây có đúng một nơi để sửa.
+
+    `raise_server_exceptions=False` để ngoại lệ không lường trước đi qua chính
+    handler RFC 7807 mà bản cài thật dùng, thay vì nổi lên thành traceback của
+    pytest — hợp đồng lỗi cũng là thứ đang được kiểm.
+    """
+    return TestClient(
+        app,
+        raise_server_exceptions=False,
+        headers={CLIENT_VERSION_HEADER: __version__},
+    )

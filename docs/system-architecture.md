@@ -16,7 +16,7 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 
 ---
 
-## 1b. Trạng thái hiện thực hóa (2026-08-15)
+## 1b. Trạng thái hiện thực hóa (2026-08-16)
 
 | Thành phần | Trạng thái |
 | --- | --- |
@@ -34,7 +34,15 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | **RBAC enforcement** `{module}.{chứng từ}.{hành vi}` sinh từ registry; định tuyến dataset theo header `X-Dataset`; phạm vi chi nhánh cho RLS | ✅ chạy thật (2B-1b) |
 | **Idempotency cùng transaction** (giành khóa → làm việc → điền kết quả); **khóa lạc quan `row_version` hai lớp**; **tùy chọn hai cấp**; **hạn mức request theo người gọi** | ✅ chạy thật (2B-2a) |
 | **Tiến trình worker nền** (giành job `FOR UPDATE SKIP LOCKED`, chạy dưới vai trò dataset); **lease/heartbeat/reaper** chống job mồ côi; **vai trò `ket_worker`** (`SELECT` + `UPDATE` theo cột trên `jobs`, có hàng rào lease); **API `/api/v1/jobs` + OpenAPI sinh type TS** | ✅ chạy thật (2B-2b) |
-| Client (design system, layout, đăng nhập, handshake, i18n) · spike S1/S3/S4 | ⏳ phase 2 lát 2C |
+| **Endpoint bắt tay `/api/v1/system/handshake`** (ẩn danh) — phiên bản server/client tối thiểu/schema | ✅ chạy thật (2C-1) |
+| **Cổng phiên bản client** — thiếu/sai `X-Client-Version` trên lệnh ghi → `426` (fail-closed) | ✅ chạy thật (2C-1) |
+| **CORS cho webview Tauri** — danh sách origin đóng, middleware ngoài cùng, preflight trước hạn mức | ✅ chạy thật (2C-1) |
+| **Design system tối thiểu** (`Button`, `TextField`, `SelectField`, `Alert`) + layout vỏ ứng dụng + sidebar/topbar | ✅ chạy thật (2C-1) |
+| **Đường đăng nhập đầy đủ** — login, 2FA, đổi mật khẩu tạm, cần cập nhật, mất kết nối | ✅ chạy thật (2C-1) |
+| **Chọn dữ liệu kế toán** — tự chọn khi bản cài chỉ có một; `401` ở bất kỳ request nào dọn phiên và đưa về màn đăng nhập | ✅ chạy thật (2C-1) |
+| **i18n tự viết** (vi/en) — khóa phẳng + nội suy, kiểu enforce TypeScript | ✅ chạy thật (2C-1) |
+| **Máy trạng thái phiên client** (7 trạng thái) — quyết định duy nhất ở `SessionGate` | ✅ chạy thật (2C-1) |
+| **Bộ test client** vitest + testing-library, có cổng CI `make client-test` | ✅ chạy thật (2C-1) |
 | Posting engine, báo cáo, và toàn bộ phân hệ nghiệp vụ | ⏳ phase 4 trở đi |
 
 Bảng còn lại trong §11 và phần lớn §12 là **thiết kế đích**, chưa có mã.
@@ -101,6 +109,188 @@ Ký số USB token nằm ở **dịch vụ esign riêng** trên máy người k�
 | **Tương lai: nối nhiều bản cài** | Thêm module đồng bộ đọc/ghi qua REST API (đã có sẵn). **Cam kết v1: tổng hợp một chiều** lên trụ sở | Danh mục có `uid UUIDv7` ổn định để nối sau; RT-19 |
 
 **Quy tắc bất di dịch:** client **không bao giờ nối thẳng PostgreSQL**. Mọi phép tính tiền, đánh số, ghi sổ, kiểm tra quyền đều ở server (loại 2-tier khỏi LD-01).
+
+---
+
+## 4b. Client, middleware và bắt tay phiên bản (lát 2C-1)
+
+### Endpoint bắt tay (bước 19)
+
+```
+GET /api/v1/system/handshake        — ẩn danh, không chạm cơ sở dữ liệu
+→ {
+    "server_version": "0.6.0",
+    "min_client_version": "0.6.0",
+    "control_schema_version": "4",
+    "deployment_mode": "standalone"      // hoặc "lan"
+  }
+```
+
+Ẩn danh có chủ đích: đúng cái nó trả lời là câu hỏi *có đăng nhập được không*,
+nên một client quá cũ phải biết ở màn hình đầu tiên chứ không phải sau khi người
+dùng gõ xong mật khẩu. Vì ai trong LAN cũng đọc được, nội dung giữ ở mức tối
+thiểu — không tên doanh nghiệp, không danh sách dữ liệu kế toán, không tên máy
+chủ. Bộ trường này bị **khóa bằng test**, để lát sau không "tiện tay" thêm tên
+công ty vào cho màn hình đăng nhập.
+
+Client so bản đang chạy với kết quả bắt tay (`client/src/lib/app-version.ts`):
+cũ hơn `min_client_version` → màn hình cần cập nhật; **mới hơn** `server_version`
+→ chỉ hiện băng cảnh báo, vì việc phải làm khi ấy nằm ở máy chủ.
+`control_schema_version` hiện chưa điều khiển hành vi nào của client — nó có mặt
+để màn hình chẩn đoán và báo cáo sự cố nêu được một con số cụ thể.
+
+### Cổng phiên bản client (H2)
+
+Header `X-Client-Version: MAJOR.MINOR.PATCH` **bắt buộc** trên mọi lệnh ghi
+(`POST`, `PUT`, `PATCH`, `DELETE`). Thiếu header, sai khuôn, hoặc cũ hơn
+`min_client_version` → `426 Upgrade Required`:
+
+```json
+{
+  "error_code": "system.client_version_unsupported",
+  "details": { "client_version": "0.5.0", "min_client_version": "0.6.0" }
+}
+```
+
+Lệnh **đọc** không bao giờ bị chặn — chế độ chỉ-đọc là thứ khiến cổng này an
+toàn để bật: mất nó thì một lần tăng `min_client_version` nhầm làm cả văn phòng
+dừng việc.
+
+Thiếu header cũng chặn, chứ không cho qua: cổng fail-open chỉ chặn được client
+**trung thực** — bản cũ chỉ cần bỏ header là đi vòng qua đúng cơ chế sinh ra để
+chặn nó. Cùng khuôn với `X-Dataset` (thiếu là lỗi, không đoán mặc định).
+
+Miễn trừ **năm** đường của `/auth`, danh sách đóng:
+
+| Đường | Lý do |
+| --- | --- |
+| `POST /auth/login` | chế độ chỉ-đọc cần một phiên, mà phiên thì phải đăng nhập mới có |
+| `POST /auth/logout` | thu hồi phiên phải chạy được ở mọi trạng thái |
+| `POST /auth/change-password` | tài khoản mang mật khẩu tạm **không đọc được gì** (server trả `auth.password_change_required` ở mọi endpoint khác), nên chặn đường này là khóa cứng chứ không phải chỉ-đọc |
+| `POST /auth/totp/enroll` | như trên, cho tài khoản bắt buộc 2FA chưa đăng ký thiết bị (phiên hạn chế) |
+| `POST /auth/totp/confirm` | như trên |
+
+Ba đường sau nới ra sau review lát 2C-1, khi đo được rằng một bản cài mới — nơi
+**mọi** tài khoản đều mang mật khẩu tạm — sẽ không ai vào được nếu máy trạm chạy
+bản client cũ hơn `min_client_version`. Nới mà không làm yếu cổng, vì chúng ghi
+vào **schema điều khiển** (tài khoản, phiên) chứ không vào sổ sách; rủi ro mà
+cổng sinh ra để chặn là "binary cũ ghi bút toán vào cấu trúc mới", và schema
+điều khiển đã có `verify_control_schema` canh lúc khởi động.
+
+Không có cờ tắt cổng. `main.py` đã có hai cờ tắt cho hai cổng khởi động, và mỗi
+cờ là một công tắc sẽ bị quên ở vị trí tắt.
+
+### CORS cho webview Tauri (H6)
+
+Webview Tauri không chạy ở origin của app server (`tauri://localhost` trên
+macOS; `http://tauri.localhost` và `https://tauri.localhost` trên Windows), nên
+mọi lời gọi của client desktop là xuyên origin. Thiếu lớp này thì "đăng nhập từ
+client Tauri" không chạy được, và triệu chứng là request bị trình duyệt chặn
+**trước khi rời máy** — log máy chủ trống trơn.
+
+- `allow_origins`: danh sách **đóng** từ `KET_CORS_ALLOWED_ORIGINS` (mặc định là
+  ba origin Tauri ở trên). Không `*`.
+- `allow_credentials`: **tắt** — phiên đi bằng header `Authorization` chứ không
+  cookie, nên bật cờ đó chỉ mở rộng bề mặt CSRF.
+- Vị trí: **lớp ngoài cùng** của chuỗi middleware. Preflight `OPTIONS` được trả
+  lời trước hạn mức và trước cổng phiên bản, và **mọi** phản hồi — kể cả `429`,
+  `426` — mang header CORS. Nằm trong thì một phản hồi bị chặn tới trình duyệt
+  mà thiếu header, và người dùng thấy "lỗi mạng" thay vì lý do thật.
+
+Chế độ trình duyệt trong LAN (v1.x) không cần mục nào: khi ấy app server tự phục
+vụ chính bundle web đó nên request là same-origin.
+
+**Thứ tự middleware hiện tại** (ngoài → trong): CORS → mã tương quan
+(`RequestContext`) → hạn mức request → cổng phiên bản client → router.
+
+### Máy trạng thái phiên client (H5)
+
+Kiểu `SessionStage` trong `client/src/lib/session.tsx` có **bảy** giá trị. Ba
+giá trị đầu do lượt bắt tay quyết định, bốn giá trị sau lấy từ `/auth/me` — chứ
+**không** suy từ phản hồi của lệnh đăng nhập, để tải lại trang rơi vào đúng màn
+hình đó:
+
+| Trạng thái | Lý do | Màn hình |
+| --- | --- | --- |
+| `starting` | Chưa xong lượt bắt tay | Đang tải |
+| `unreachable` | Không gọi được `/system/handshake` | Địa chỉ máy chủ + nút thử lại |
+| `update-required` | Bản đang chạy cũ hơn `min_client_version` | Cần cập nhật; có nút "tiếp tục ở chế độ chỉ đọc" |
+| `anonymous` | Chưa đăng nhập, hoặc phiên hết hạn / bị thu hồi | Đăng nhập |
+| `password-change` | `/auth/me` trả `must_change_password` | Đổi mật khẩu tạm |
+| `totp-enrollment` | `/auth/me` trả `session_scope = totp_enrollment` | Đăng ký thiết bị 2FA |
+| `ready` | Phiên đầy đủ | Chọn dữ liệu kế toán, rồi ứng dụng |
+
+Hai tình huống khác **không** phải trạng thái phiên mà là câu trả lời của server
+trong một trạng thái:
+
+- `auth.totp_required` — mã lỗi của `POST /auth/login` khi tài khoản bật 2FA.
+  Màn hình đăng nhập hiện thêm ô mã và **giữ nguyên** mật khẩu đã gõ; đây không
+  phải lỗi, chỉ là bước còn thiếu.
+- `dataset.access_denied` — `GET /system/access` từ chối vì tài khoản chưa có
+  vai trò trong **bộ sổ vừa chọn** (danh sách dữ liệu kế toán cố ý không lọc
+  theo vai trò). `SessionGate` hiện thông báo + nút quay lại màn chọn bộ sổ.
+
+**Quyết định duy nhất:** `SessionGate` trả lời "người này thấy màn hình nào".
+Rải logic đó ra từng màn hình thì một màn hình quên kiểm sẽ hiện ra rỗng — hoặc
+tệ hơn, hiện ra với dữ liệu của phiên trước.
+
+### i18n (H4)
+
+Module TypeScript (không JSON, không i18next):
+
+```typescript
+// client/src/locales/vi.ts — nguồn khóa
+export const vi = {
+  'login.title': 'Đăng nhập',
+  'common.version': 'Phiên bản {version}',
+  'error.auth.invalid_credentials': 'Tên đăng nhập hoặc mật khẩu không đúng.',
+  // …
+} as const
+
+export type TranslationKey = keyof typeof vi
+
+// client/src/locales/en.ts — bộ khóa bị ép bằng kiểu
+export const en: Record<TranslationKey, string> = {
+  'login.title': 'Sign in',
+  'common.version': 'Version {version}',
+  'error.auth.invalid_credentials': 'Wrong username or password.',
+  // …
+}
+```
+
+Thiếu hay thừa khóa trong `en.ts` → lỗi `tsc`, chứ không phải một chuỗi lạ hiện
+trên màn hình khách hàng. Mọi chuỗi hiển thị đi qua `t(key, params)` của
+`useI18n()`; nội suy tham số theo khuôn `{tên}`.
+
+Mã lỗi của server đổi thành câu hiển thị qua `translateErrorCode(t, errorCode)`,
+tra khóa `error.<mã>`. Mã chưa có bản dịch rơi về câu chung **kèm chính mã đó** —
+người dùng vẫn có thứ đọc cho bộ phận hỗ trợ.
+
+Số, tiền và ngày **không** đi qua i18n: chúng dùng `Intl` của trình duyệt
+(`client/src/lib/formatters.ts`), nơi luật định dạng địa phương đã đúng sẵn. Số
+tiền nhận vào dạng **chuỗi** như JSON của server trả về — chuyển sang `number`
+là chỗ mất chính xác đầu tiên.
+
+### Token phiên lưu ở `localStorage` (H5)
+
+Khóa: `ket.session:${baseUrl}` (ví dụ `ket.session:https://host.lan:5443`), giá
+trị là `{token, expiresAt, datasetCode}`. Xóa khi người dùng đăng xuất, và khi
+một request trả `auth.not_authenticated` (token thiếu, hết hạn, hoặc đã bị thu
+hồi).
+
+**Chỉ mã lỗi đó**, không phải mọi `401`: server dùng `401` cho cả "gõ sai mật
+khẩu hiện tại" (`auth.invalid_credentials`) và "sai mã 2FA"
+(`auth.totp_code_invalid`), và ở hai trường hợp đó phiên **vẫn sống**. Gộp lại
+thì gõ nhầm một chữ là văng về màn hình đăng nhập, không một dòng giải thích.
+
+Tải lại trang không bị bắt đăng nhập lại — đây là ứng dụng dùng cả ngày. Khóa
+theo `baseUrl` để một máy trạm mở hai bản cài (thật + demo) không giẫm phiên của
+nhau.
+
+Địa chỉ app server đến từ `VITE_KET_SERVER_URL` lúc dựng, mặc định là chính
+origin đang phục vụ trang (`client/.env.example`). Chế độ trình duyệt LAN và chế
+độ một máy không cần khai; `pnpm dev` và bản đóng gói Tauri thì phải khai, kèm
+origin tương ứng ở `KET_CORS_ALLOWED_ORIGINS`.
 
 ---
 

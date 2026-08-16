@@ -1,6 +1,6 @@
 # Hướng dẫn triển khai — Konek Két
 
-**Cập nhật:** 2026-08-15 · phản ánh **đúng thứ đang có trong repo** sau phase 2 lát 2B-2b.
+**Cập nhật:** 2026-08-16 · phản ánh **đúng thứ đang có trong repo** sau phase 2 lát 2C-1.
 
 Phạm vi: dựng cụm PostgreSQL, khóa mã hóa, tài khoản đầu tiên, chạy app server và tiến trình worker, khôi phục sau sao lưu,
 chạy test cục bộ, kênh phát hành bộ cài. Lệnh quản trị chạy qua `python -m ket.admin`.
@@ -30,6 +30,80 @@ brew services start postgresql@16
 
 Linux: cài `postgresql-16`, sửa `port` trong `/etc/postgresql/16/main/postgresql.conf`,
 `systemctl restart postgresql@16-main`.
+
+---
+
+## 1b. Hai biến môi trường mới (lát 2C-1)
+
+### `KET_MINIMUM_CLIENT_VERSION` — mặc định bằng phiên bản server
+
+Bản client cũ nhất còn **ghi** được vào bản cài này (LD-05, FR-NFR-054). Client
+cũ hơn giá trị này vẫn đăng nhập và **tra cứu** bình thường; chỉ lệnh ghi
+(`POST`/`PUT`/`PATCH`/`DELETE`) trả `426 Upgrade Required`, và client hiện màn
+hình "cần cập nhật".
+
+Năm đường của `/api/v1/auth` được miễn trừ (đăng nhập, đăng xuất, đổi mật khẩu,
+đăng ký và xác nhận 2FA) — nếu không, tài khoản mang mật khẩu tạm hoặc chưa đăng
+ký thiết bị 2FA sẽ bị **khóa cứng** thay vì chỉ-đọc, vì chúng cũng không đọc
+được gì cho tới khi làm xong hai việc đó.
+
+Mặc định bằng chính phiên bản server — hướng siết, vì nới ra là quyết định có
+chủ đích của người triển khai còn siết vào là thứ họ sẽ quên làm. Trên thực tế
+**chỉ tăng khi một migration phá tương thích**; tăng theo mỗi bản phát hành là
+cách nhanh nhất để cả văn phòng rơi vào chế độ chỉ đọc vì một máy trạm chưa kịp
+tự cập nhật.
+
+```bash
+KET_MINIMUM_CLIENT_VERSION=0.5.0   # client >= 0.5.0 ghi được; cũ hơn thì chỉ đọc
+```
+
+Giá trị không đúng khuôn `MAJOR.MINOR.PATCH` làm **tiến trình không khởi động**
+(kiểm ở `Settings`), thay vì im lặng thành một cổng không làm gì cả.
+
+### `KET_CORS_ALLOWED_ORIGINS` — mặc định là ba origin của webview Tauri
+
+Webview Tauri không chạy ở origin của app server, nên mọi lời gọi của client
+desktop là xuyên origin. Mặc định đã phủ cả hai hệ điều hành:
+
+```
+tauri://localhost          # macOS
+http://tauri.localhost     # Windows
+https://tauri.localhost    # Windows
+```
+
+**Cú pháp là JSON**, không phải danh sách ngăn cách bằng dấu phẩy — đây là kiểu
+phức nên `pydantic-settings` đọc bằng JSON:
+
+```bash
+# Máy lập trình chạy `vite dev` (thêm origin 5173 vào mặc định)
+KET_CORS_ALLOWED_ORIGINS='["tauri://localhost","http://tauri.localhost","https://tauri.localhost","http://localhost:5173"]'
+```
+
+Chế độ **trình duyệt trong LAN** (v1.x) không cần thêm mục nào: khi ấy app server
+tự phục vụ chính bundle web đó nên request là same-origin.
+
+### `VITE_KET_SERVER_URL` — cấu hình lúc **dựng** của web UI
+
+Địa chỉ app server mà bundle web sẽ gọi. Khác hai biến trên ở chỗ nó đọc lúc
+`vite build`, không phải lúc chạy — nên đổi nó đòi dựng lại gói.
+
+| Tình huống | Giá trị |
+| --- | --- |
+| App server tự phục vụ bundle (trình duyệt LAN, chế độ một máy) | **để trống** — client gọi chính origin đang phục vụ trang |
+| `pnpm dev` trên máy lập trình | `http://127.0.0.1:5443` |
+| Bản đóng gói Tauri | địa chỉ máy host, ví dụ `https://host.lan:5443` |
+
+Hai tình huống dưới là **xuyên origin**, nên origin tương ứng phải có trong
+`KET_CORS_ALLOWED_ORIGINS` — thiếu thì trình duyệt chặn request trước khi nó rời
+máy, và log máy chủ không có gì cả.
+
+Mẫu đầy đủ kèm giải thích: `client/.env.example`.
+
+Danh sách **đóng**, không `*`: hệ này giữ PII lương và bí mật doanh nghiệp, và
+`*` biến mọi trang web mà nhân viên mở thành một chỗ có thể gọi API nội bộ. CORS
+đặt ở **lớp ngoài cùng** của chuỗi middleware nên preflight `OPTIONS` được trả
+lời trước hạn mức và trước cổng phiên bản — nếu không, một phản hồi `429`/`426`
+tới trình duyệt mà thiếu header CORS và người dùng chỉ thấy "lỗi mạng".
 
 ---
 

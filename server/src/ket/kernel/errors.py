@@ -131,6 +131,24 @@ class SchemaVersionMismatchError(DomainError):
     error_code: ClassVar[str] = "system.schema_version_mismatch"
 
 
+class ClientVersionUnsupportedError(DomainError):
+    """Client quá cũ (hoặc không khai phiên bản) mà đang gọi một lệnh ghi.
+
+    426 Upgrade Required chứ không 403: đây không phải câu chuyện quyền — cùng
+    tài khoản đó, cùng dữ liệu đó, chỉ cần bản client mới hơn là làm được. Mã
+    riêng để client bắt đúng nhánh và hiện màn hình cập nhật thay vì màn hình
+    "bạn không có quyền" (FR-NFR-054, LD-05).
+
+    Lệnh **đọc** không bị chặn: một văn phòng đang chờ nâng cấp vẫn phải tra cứu
+    được sổ sách. Chế độ chỉ-đọc là điều kiện để cổng này an toàn khi bật — chặn
+    hoàn toàn thì một lần tăng `min_client_version` nhầm sẽ làm cả văn phòng
+    dừng việc.
+    """
+
+    error_code: ClassVar[str] = "system.client_version_unsupported"
+    http_status: ClassVar[int] = 426
+
+
 class AppKeyUnavailableError(DomainError):
     """Không lấy được khóa mã hóa của ứng dụng từ OS keystore (ADR-019, RT-05).
 

@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ket import __version__
 from ket.api.dependencies import (
     AppEngine,
     AppSettings,
@@ -50,9 +51,11 @@ from ket.api.routers.system_schemas import (
     DatasetListResponse,
     DatasetSummary,
     GrantResponse,
+    HandshakeResponse,
     RoleGrantRequest,
 )
 from ket.kernel.auditing.models import AuditLog
+from ket.kernel.datasets.bootstrap import CONTROL_SCHEMA_VERSION
 from ket.kernel.datasets.service import list_datasets
 from ket.kernel.errors import BranchNotFoundError
 from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
@@ -95,6 +98,28 @@ def _branch_response(branch: Branch) -> BranchResponse:
         name_en=branch.name_en,
         is_active=branch.is_active,
         row_version=branch.row_version,
+    )
+
+
+@router.get("/handshake", response_model=HandshakeResponse)
+def handshake(settings: AppSettings) -> HandshakeResponse:
+    """Phiên bản của máy chủ và bản client tối thiểu nó nhận (LD-05, FR-NFR-054).
+
+    **Endpoint ẩn danh duy nhất của nhóm này**, và cố ý như vậy: client gọi nó
+    ở màn hình đầu tiên, trước cả khi có ai gõ mật khẩu. Một bản client quá cũ
+    phải biết mình cần cập nhật ngay lúc đó — biết sau khi đăng nhập rồi nhập
+    xong một chứng từ là biết quá muộn.
+
+    Không chạm cơ sở dữ liệu: mọi con số ở đây thuộc về **tiến trình** đang
+    chạy. `control_schema_version` là phiên bản mà mã nguồn này đòi hỏi, và
+    `lifespan` đã từ chối khởi động nếu DB lệch khỏi nó — nên đọc lại từ DB chỉ
+    thêm một truy vấn cho một endpoint mà mọi máy trạm gọi lúc khởi động.
+    """
+    return HandshakeResponse(
+        server_version=__version__,
+        min_client_version=settings.minimum_client_version,
+        control_schema_version=CONTROL_SCHEMA_VERSION,
+        deployment_mode=settings.deployment_mode,
     )
 
 

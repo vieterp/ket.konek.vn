@@ -29,7 +29,7 @@ DB_TEST_ENV := \
 .PHONY: help install check \
         server-install server-lint server-format server-typecheck server-imports \
         server-test server-test-db server-coverage server-check version-check \
-        client-install client-typecheck client-lint client-build client-check \
+        client-install client-typecheck client-lint client-test client-build client-check \
         api-types api-types-check \
         shell-fmt shell-lint tauri-build clean
 
@@ -85,10 +85,13 @@ client-typecheck: ## tsc --noEmit
 client-lint: ## eslint
 	cd $(CLIENT) && pnpm exec eslint .
 
+client-test: ## vitest — máy trạng thái đăng nhập, hợp đồng HTTP, i18n
+	cd $(CLIENT) && pnpm exec vitest run
+
 client-build: ## vite build
 	cd $(CLIENT) && pnpm exec vite build
 
-client-check: api-types-check client-typecheck client-lint client-build ## Toàn bộ cổng phía client
+client-check: api-types-check client-typecheck client-lint client-test client-build ## Toàn bộ cổng phía client
 
 # --- hợp đồng client↔server (OpenAPI → TypeScript) ------------------------
 #
