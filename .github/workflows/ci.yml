@@ -15,7 +15,10 @@ name: CI
 #      nằm trong cổng PR; macOS là máy của đội phát triển nên để lại lúc merge.
 #   3. `tauri build` tự chạy `pnpm build` (xem `beforeBuildCommand`), nên job
 #      `client` và job đóng gói KHÔNG cùng chạy trên một PR — nếu không, cùng một
-#      bundle web bị dựng lại tới năm lần cho mỗi lần chạy.
+#      bundle web bị dựng lại tới năm lần cho mỗi lần chạy. Hệ quả phải nhớ:
+#      mọi cổng phía client (eslint, vitest) phải có mặt ở CẢ HAI job, vì PR nào
+#      đụng `client/src-tauri/**` sẽ chỉ chạy job đóng gói — và PR phát hành thì
+#      luôn đụng, do phiên bản nằm trong `Cargo.toml` + `tauri.conf.json`.
 #   4. Job chỉ chạy khi vùng mã tương ứng có thay đổi. PR chỉ sửa tài liệu hoặc
 #      chỉ sửa server thì không đụng tới toolchain Rust.
 #
@@ -487,6 +490,17 @@ jobs:
 
       - name: eslint
         run: pnpm exec eslint .
+
+      # Job này và job `client` loại trừ nhau (xem ghi chú đầu tệp), nên bộ test
+      # client phải có mặt ở CẢ HAI — nếu không, đúng những PR đụng `src-tauri`
+      # sẽ bỏ qua nó. Mà PR phát hành thì **luôn** đụng: phiên bản nằm trong
+      # `Cargo.toml` và `tauri.conf.json`.
+      #
+      # Chạy trên cả macOS lẫn Windows là phần thêm chứ không phải phần thừa:
+      # bộ test này chạm `Intl` và `localStorage` của jsdom, hai thứ có tiền lệ
+      # khác nhau giữa các nền tảng.
+      - name: vitest
+        run: pnpm exec vitest run
 
       - name: cargo fmt --check
         working-directory: client/src-tauri
