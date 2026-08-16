@@ -13,6 +13,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { createContext, use, useCallback, useMemo, useState } from 'react'
 
+import { readStored, writeStored } from '@/lib/safe-storage'
 import { en } from '@/locales/en'
 import type { TranslationKey } from '@/locales/vi'
 import { vi } from '@/locales/vi'
@@ -44,7 +45,7 @@ function interpolate(template: string, params?: Readonly<Record<string, string>>
 
 /** Ngôn ngữ đã chọn lần trước, mặc định tiếng Việt (người dùng đích là kế toán VN). */
 function initialLocale(): Locale {
-  const stored = localStorage.getItem(LOCALE_STORAGE_KEY)
+  const stored = readStored(LOCALE_STORAGE_KEY)
   return stored === 'en' ? 'en' : 'vi'
 }
 
@@ -53,7 +54,7 @@ export function I18nProvider({ children }: { children: ReactNode }): ReactElemen
 
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next)
-    localStorage.setItem(LOCALE_STORAGE_KEY, next)
+    writeStored(LOCALE_STORAGE_KEY, next)
     document.documentElement.lang = next
   }, [])
 

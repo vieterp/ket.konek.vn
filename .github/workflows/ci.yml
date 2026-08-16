@@ -394,6 +394,17 @@ jobs:
       - name: vite build
         run: pnpm exec vite build
 
+      # Cổng duy nhất chứng minh được bất biến "bundle giao khách không chứa
+      # công cụ dev". Test đơn vị ép cờ rồi khẳng định nhánh — nó vẫn xanh trong
+      # khi bản dựng THẬT đặt cờ sai, và đã từng đúng như vậy: hồi cổng còn treo
+      # trên `import.meta.env.DEV`, một bản dựng với `NODE_ENV=development` cho
+      # ra bundle có route `/kitchen-sink` (đường vào không qua `SessionGate`)
+      # kèm sourcemap toàn bộ mã nguồn client. Script dựng thử trong chính môi
+      # trường đó rồi grep sản phẩm.
+      - name: Bundle không chứa công cụ dev
+        working-directory: .
+        run: ./.github/scripts/check-client-bundle.sh
+
   # ---------------------------------------------------------------------------
   # Hợp đồng client↔server: type TypeScript phải là bản sinh từ mã server đang
   # có (bước 14 của phase 2). Job riêng vì nó cần **cả hai** toolchain — Python
@@ -501,6 +512,15 @@ jobs:
       # khác nhau giữa các nền tảng.
       - name: vitest
         run: pnpm exec vitest run
+
+      # Cùng lý do như bộ test: job này và job `client` loại trừ nhau, nên cổng
+      # "bundle giao khách không chứa công cụ dev" phải có mặt ở cả hai — mà PR
+      # phát hành thì LUÔN đi đường này. `shell: bash` để chạy được cả trên
+      # runner Windows (Git Bash có sẵn).
+      - name: Bundle không chứa công cụ dev
+        shell: bash
+        working-directory: .
+        run: ./.github/scripts/check-client-bundle.sh
 
       - name: cargo fmt --check
         working-directory: client/src-tauri

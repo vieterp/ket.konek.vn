@@ -19,10 +19,24 @@ const packageJson = JSON.parse(
 // Bundle web này phải mở được bằng trình duyệt thường, không chỉ trong Tauri
 // (topology "trình duyệt trong LAN" ở v1.x — cấm thiết kế thứ gì chặn nó).
 // Vì vậy: không dùng plugin nào gắn cứng vào Tauri, không nội xạ API Tauri.
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
+    // Trang duyệt design system `/kitchen-sink` chỉ tồn tại khi đang chạy MÁY
+    // CHỦ DEV (`vite`), không bao giờ trong một bản dựng (`vite build`).
+    //
+    // Trước đây cổng này là `import.meta.env.DEV`, và đó là một cổng thủng:
+    // `NODE_ENV=development pnpm exec vite build` cho ra bundle CÓ route
+    // `/kitchen-sink` — một đường vào ứng dụng không qua `SessionGate` — kèm cả
+    // sourcemap toàn bộ mã nguồn client. `tauri build` gọi `pnpm build` mà
+    // không ghim `NODE_ENV`, nên chỉ cần một runner CI hay một máy lập trình có
+    // biến đó trong profile là bản giao khách nhiễm.
+    //
+    // `command === 'serve'` là hằng lúc dựng cấu hình và **không đọc
+    // `NODE_ENV`**, nên không có biến môi trường nào bẻ được nó. Rollup thấy
+    // `false` và loại cả nhánh lẫn cây import phía sau.
+    __DEV_TOOLS__: JSON.stringify(command === 'serve'),
   },
   resolve: {
     alias: {
@@ -38,9 +52,19 @@ export default defineConfig({
     outDir: 'dist',
     // Tauri v2 trên Windows/macOS đều theo được ES2022.
     target: 'es2022',
-    // Sourcemap chỉ ở bản không phải production — bản giao khách không kèm
-    // sourcemap để không phát tán mã nguồn client theo installer.
-    sourcemap: process.env.NODE_ENV !== 'production',
+    // **Không bao giờ** kèm sourcemap trong một bản dựng: sourcemap mang theo
+    // `sourcesContent`, tức là TOÀN BỘ mã nguồn client, và bản dựng là thứ đi
+    // vào installer giao cho khách.
+    //
+    // Trước đây điều kiện là `process.env.NODE_ENV !== 'production'` — treo
+    // trên biến môi trường, đúng cùng một lỗi với cổng `/kitchen-sink` cũ.
+    // `tauri build` gọi `pnpm build` mà không ghim `NODE_ENV`, nên chỉ cần một
+    // runner CI hay một máy lập trình có `NODE_ENV=development` trong profile
+    // là installer nhiễm — đo được: 125 tệp nguồn, gồm cả `session.tsx`.
+    //
+    // Máy chủ dev không dùng tùy chọn này (nó có sourcemap riêng), nên tắt ở
+    // đây không làm mất gì khi phát triển.
+    sourcemap: false,
   },
   test: {
     // `jsdom` chứ không `happy-dom`: màn hình đăng nhập dựa vào form thật
@@ -51,4 +75,4 @@ export default defineConfig({
     setupFiles: ['./src/test-setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
   },
-})
+}))

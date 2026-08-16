@@ -36,8 +36,8 @@ export function DatasetPickerPage(): ReactElement {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-screen p-6">
-      <section className="w-full max-w-lg rounded border-2 border-navy-700 bg-white p-6">
-        <h1 className="mb-2 text-lg font-semibold text-navy-700">{t('dataset.title')}</h1>
+      <section className="w-full max-w-lg rounded border-2 border-primary bg-background p-6">
+        <h1 className="mb-2 text-lg font-semibold text-primary">{t('dataset.title')}</h1>
         <p className="mb-4 text-sm text-text-muted">{t('dataset.intro')}</p>
 
         {datasets.isPending && <p className="text-sm text-text-muted">{t('common.loading')}</p>}

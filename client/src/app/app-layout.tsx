@@ -21,27 +21,30 @@ import { APP_VERSION } from '@/lib/app-version'
 import type { Locale } from '@/lib/i18n'
 import { LOCALES, useI18n } from '@/lib/i18n'
 import { useSession } from '@/lib/session'
+import type { ThemePreference } from '@/lib/theme'
+import { THEME_PREFERENCES, useTheme } from '@/lib/theme'
+import type { TranslationKey } from '@/locales/vi'
 
 function Sidebar(): ReactElement {
   const { t } = useI18n()
 
   return (
-    <nav aria-label={t('common.appName')} className="w-56 shrink-0 border-r border-border-default bg-surface">
-      <div className="border-b-2 border-navy-700 px-4 py-4">
-        <p className="font-semibold text-navy-700">{t('common.appName')}</p>
+    <nav aria-label={t('common.appName')} className="w-[212px] shrink-0 border-r border-border-default bg-background">
+      <div className="border-b-2 border-primary px-4 py-4">
+        <p className="font-semibold text-primary">{t('common.appName')}</p>
         <p className="text-xs text-text-muted">{t('common.tagline')}</p>
       </div>
-      <ul className="flex flex-col gap-1 p-2">
+      <ul className="flex flex-col p-0 py-3">
         {NAVIGATION.map((item) => (
           <li key={item.path}>
             <NavLink
               to={item.path}
               end={item.path === '/'}
               className={({ isActive }) =>
-                `flex items-center gap-2 rounded px-3 py-2 text-sm ${
+                `flex items-center gap-[10px] px-[14px] py-[9px] text-control ${
                   isActive
-                    ? 'bg-navy-700 text-white'
-                    : 'text-text-default hover:bg-navy-50 hover:text-navy-700'
+                    ? 'bg-navy-50 font-semibold text-primary shadow-[inset_3px_0_0_var(--ds-color-primary)]'
+                    : 'text-text-default hover:bg-primary/10 hover:text-primary'
                 }`
               }
             >
@@ -55,14 +58,33 @@ function Sidebar(): ReactElement {
   )
 }
 
+const THEME_LABEL_KEY: Record<ThemePreference, TranslationKey> = {
+  system: 'theme.system',
+  light: 'theme.light',
+  dark: 'theme.dark',
+}
+
 function Topbar(): ReactElement {
   const { t, locale, setLocale } = useI18n()
   const { me, logout } = useSession()
+  const { preference, setPreference } = useTheme()
 
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-border-default bg-white px-6 py-3">
+    <header className="flex items-center justify-between gap-4 border-b-2 border-primary bg-background px-4 py-[11px]">
       <span className="text-sm text-text-default">{me?.username ?? ''}</span>
       <div className="flex items-center gap-3">
+        <SelectField
+          label={t('theme.label')}
+          labelHidden
+          value={preference}
+          onChange={(event) => {
+            setPreference(event.target.value as ThemePreference)
+          }}
+          options={THEME_PREFERENCES.map((value) => ({
+            value,
+            label: t(THEME_LABEL_KEY[value]),
+          }))}
+        />
         <SelectField
           label={t('common.language')}
           labelHidden

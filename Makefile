@@ -30,6 +30,7 @@ DB_TEST_ENV := \
         server-install server-lint server-format server-typecheck server-imports \
         server-test server-test-db server-coverage server-check version-check \
         client-install client-typecheck client-lint client-test client-build client-check \
+        client-bundle-check \
         api-types api-types-check \
         shell-fmt shell-lint tauri-build clean
 
@@ -91,7 +92,10 @@ client-test: ## vitest — máy trạng thái đăng nhập, hợp đồng HTTP,
 client-build: ## vite build
 	cd $(CLIENT) && pnpm exec vite build
 
-client-check: api-types-check client-typecheck client-lint client-test client-build ## Toàn bộ cổng phía client
+client-bundle-check: ## Bundle giao khách KHÔNG được chứa công cụ dev (dựng thử với NODE_ENV=development)
+	./.github/scripts/check-client-bundle.sh
+
+client-check: api-types-check client-typecheck client-lint client-test client-build client-bundle-check ## Toàn bộ cổng phía client
 
 # --- hợp đồng client↔server (OpenAPI → TypeScript) ------------------------
 #

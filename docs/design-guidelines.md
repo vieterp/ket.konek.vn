@@ -3,8 +3,26 @@
 ## 1. Nguồn giao diện duy nhất
 
 Design Konek Screens 2a + brand assets trong Claude Design project
-`91a2c87a-3304-418f-a296-dc584cd56cfe`. Tóm tắt đã trích ở
-`plans/260814-2204-accounting-system-architecture/reports/design-reference-260814-2219-konek-screens-ui-direction-report.md`.
+`91a2c87a-3304-418f-a296-dc584cd56cfe`.
+
+**Đọc chính file design, không đọc bản tóm tắt.** Truy cập bằng DesignSync MCP:
+
+```
+DesignSync list_files  projectId=91a2c87a-3304-418f-a296-dc584cd56cfe
+DesignSync get_file    path="Konek Screens 2a.dc.html"
+```
+
+Khối `<style>` trong file đó (~4 KB) là **đặc tả chuẩn tắc** của bộ component —
+xem bảng ánh xạ ở §5. `support.js` chỉ là runtime vẽ canvas, không phải nội dung
+design. `.frame{border:2px solid}` là khung TRÌNH BÀY của canvas, **không** phải
+viền thẻ trong ứng dụng (thẻ thật là `.w2-card`, viền 1px `#C5D3E8`).
+
+Bản tóm tắt chữ ở
+`plans/260814-2204-accounting-system-architecture/reports/design-reference-260814-2219-konek-screens-ui-direction-report.md`
+chỉ để tra nhanh nguyên tắc UX. Lát 2C-2 cho thấy vì sao không được dùng nó thay
+file gốc: nó giữ lại màu và nguyên tắc, nhưng làm mất giải phẫu component, thang
+chữ, mật độ, từ vựng trạng thái và quy ước bảng — và bộ component đầu tiên dựng
+theo nó đã lệch khỏi design ở sáu điểm, trong đó ba điểm phải làm lại.
 
 Hai ràng buộc bắt buộc:
 
@@ -25,8 +43,28 @@ Nguồn: `uploads/brand-assets/tokens/colors.css` v1.1 và
 
 | File | Vai trò |
 | --- | --- |
-| `client/src/design-system/base.css` (`@theme`) | Thang màu THÔ của brand (navy/ocean/sky/gray) + fontSize + fontFamily. Mỗi khai báo vừa sinh lớp tiện ích (`bg-navy-700`) vừa là CSS variable thật (`var(--color-navy-700)`) |
+| `client/src/design-system/base.css` (`@theme`) | Thang màu THÔ của brand (navy/ocean/sky/gray) + fontSize + fontFamily. Mỗi khai báo vừa sinh lớp tiện ích (`bg-navy-700`) vừa là CSS variable thật (`var(--color-navy-700)`). Cũng là nơi **phơi token ngữ nghĩa thành lớp tiện ích** (`bg-background`, `text-primary`…) |
 | `client/src/design-system/tokens.css` | Token NGỮ NGHĨA `--ds-color-*` (text, surface, border, screen) + dark mode |
+
+### Lớp tiện ích ngữ nghĩa — dùng cái này, không dùng mã màu thô
+
+| Lớp | Token | Dùng cho |
+| --- | --- | --- |
+| `bg-screen` | `--ds-color-screen` | nền màn hình ứng dụng |
+| `bg-background` | `--ds-color-background` | **nền thẻ / panel / bảng** |
+| `bg-surface` | `--ds-color-surface` | nền sidebar, thanh trạng thái, đầu bảng |
+| `text-text-default` / `text-text-muted` | `--ds-color-text*` | chữ thường / chữ phụ |
+| `text-primary` · `border-primary` | `--ds-color-primary` | tiêu đề, viền nhấn, chữ nút phụ |
+| `text-secondary` | `--ds-color-secondary` | link hành động trong bảng |
+| `border-border-default` | `--ds-color-border` | đường kẻ |
+
+> **Không viết `bg-white` hay `text-navy-700` cho nền thẻ và tiêu đề.** Hai màu
+> đó **không** đổi theo chế độ sáng/tối. Lát 2C-1 thiếu hai lớp `bg-background`
+> và `text-primary` nên mọi chỗ gọi đành dùng màu thô; đến khi bật chế độ tối
+> lần đầu (2C-2) thì chữ sáng nằm trên thẻ trắng — không đọc được một dòng nào.
+> Ngoại lệ có chủ đích duy nhất: nút `primary` giữ nền `bg-navy-700` đặc ở cả
+> hai chế độ (chữ trắng trên navy đạt ~11:1; nếu đổi theo token thì ở chế độ tối
+> nút thành ocean-400 và chữ trắng chỉ còn ~2,5:1).
 
 **Không gõ tay lại mã màu.** Brand asset đổi → đồng bộ xuống, không sửa cục bộ.
 
@@ -46,30 +84,50 @@ Nguồn: `uploads/brand-assets/tokens/colors.css` v1.1 và
 | navy-700 | `#1B365D` | primary — khung viền, tiêu đề, sidebar |
 | ocean-500 | `#4A90D9` | secondary |
 | sky-400 | `#7CB9E8` | accent |
-| surface | `#F9FAFB` (gray-50) | nền thẻ / topbar |
-| border | `#E5E7EB` (gray-200) | đường kẻ |
+| **secondary** | **ocean-700 `#2E6DB5`** | link hành động trong bảng (KHÔNG phải ocean-500 — xem khác biệt 4) |
+| surface | `#F9FAFB` (gray-50) | nền sidebar / thanh trạng thái |
+| background | `#FFFFFF` | nền thẻ / panel / bảng |
+| **border** | **navy-100 `#C5D3E8`** | đường kẻ (KHÔNG phải gray-200 — xem khác biệt 3) |
 | screen | `#F5F7FA` | nền màn hình ứng dụng |
+| status ok / todo / bad | gray-500 · ocean-700 · `#B23A2A` | ba tông trạng thái, xem §5 |
 
 `screen` **không có** trong `colors.css` — nó đến từ design Konek Screens 2a và
 được thêm vào `tokens.css` với ghi chú nguồn.
 
-### Ba khác biệt có chủ đích so với brand asset
+### Bốn khác biệt có chủ đích so với brand asset
 
 | # | Khác biệt | Lý do |
 | --- | --- | --- |
 | 1 | Bỏ `@import` font từ `fonts.googleapis.com` | Sản phẩm phải chạy **offline hoàn toàn** (LD-01). Font tự host bằng `@fontsource/be-vietnam-pro`, nạp trong `src/main.tsx`, subset **vietnamese**, 4 cân nặng 400/500/600/700 |
 | 2 | Thêm token `--color-screen` | Nền màn hình ứng dụng, nguồn từ Konek Screens 2a |
-| 3 | Thêm `[data-theme="dark"]` bên cạnh `prefers-color-scheme` | Người dùng chọn dark mode tay trong Thiết lập, không chỉ theo hệ điều hành |
+| 3 | `border` = navy-100 `#C5D3E8`, không phải gray-200 `#E5E7EB` | Hai nguồn mâu thuẫn thật: mọi thẻ/bảng/ô nhập trong Konek Screens 2a dùng `1px solid #C5D3E8` — viền ánh navy. Màn hình thật thắng vì đó là thứ người dùng nhìn thấy |
+| 4 | `secondary` = ocean-700, không phải ocean-500 | Ocean-500 trên nền trắng chỉ **3,34:1** — trượt WCAG AA cho chữ nhỏ, mà đây là màu nút hành động trong bảng ("Làm ngay"). Ocean-700 đạt **5,29:1** và trùng đúng `#2E6DB5` mà design dùng cho `.w2-note`/`.todo` |
 
-Khi đồng bộ tokens lần sau: giữ nguyên ba khác biệt này, đừng kéo ngược bản gốc
+`[data-theme="dark"]` bên cạnh `prefers-color-scheme` không tính là khác biệt về
+giá trị — brand asset chỉ có media query, ta thêm đường cho người dùng chọn tay.
+
+Khi đồng bộ tokens lần sau: giữ nguyên bốn khác biệt này, đừng kéo ngược bản gốc
 đè lên.
 
 ### Typography & icon
 
 - Font: **Be Vietnam Pro** 400/500/600/700.
-- Bậc chữ: `hero` 3.5rem · `h1` 2.5rem · `h2` 2rem · `h3` 1.5rem (từ brand config).
-- Icon: **lucide**.
-- Khung viền đặc trưng: navy 2px.
+- Bậc chữ **trang tiếp thị** (brand config): `hero` 3.5rem · `h1` 2.5rem ·
+  `h2` 2rem · `h3` 1.5rem.
+- Bậc chữ **màn hình nghiệp vụ** (Konek Screens 2a) — đặc hơn có chủ đích, vì
+  đây là phần mềm nhập liệu dùng cả ngày và mỗi 1px thừa mỗi dòng là một dòng ít
+  hơn nhìn thấy được:
+
+  | Lớp | Cỡ | Dùng cho |
+  | --- | --- | --- |
+  | `text-page` | 21px/600 | tiêu đề trang |
+  | `text-control` | 13.5px | nav, tab, ô nhập, nút |
+  | `text-app` | 13px | nội dung bảng, thẻ |
+  | `text-meta` | 12.5px | đầu bảng, nhãn trạng thái |
+
+- Icon: **lucide**, 17px, `stroke-width` 1.75.
+- Khung viền: thẻ/bảng/ô nhập **1px** `#C5D3E8`; gạch dưới topbar **2px** navy.
+  (2px navy quanh cả thẻ là đọc nhầm `.frame` — khung trình bày của canvas — xem §1.)
 
 ---
 
@@ -124,20 +182,89 @@ chi tiết màn hình.
 
 ## 5. Quy ước component
 
-### Bộ component hiện có (lát 2C-1)
+### Bộ component hiện có
 
-Bốn component — đúng những gì đường đăng nhập cần. Thêm biến thể chỉ khi có màn
-hình thật đòi, không thêm trước:
+Thêm biến thể chỉ khi có màn hình thật đòi, không thêm trước:
 
 | Component | Tệp | Biến thể / tính năng |
 | --- | --- | --- |
-| `Button` | `design-system/components/button.tsx` | `primary`, `secondary`, `ghost`; mặc định `type="button"` (mặc định của HTML là `submit`, và một nút phụ trong form sẽ gửi form) |
-| `TextField` | `design-system/components/text-field.tsx` | nhãn `<label htmlFor>` thật, `hint`, `error`, `aria-invalid`/`aria-describedby` |
-| `SelectField` | `design-system/components/select-field.tsx` | `<select>` gốc (bàn phím, IME tiếng Việt, trình đọc màn hình đã đúng sẵn), `labelHidden` cho thanh công cụ chật |
-| `Alert` | `design-system/components/alert.tsx` | `error` (`role="alert"`), `warning`, `info` |
+| `Button` | `button.tsx` | `primary`, `secondary`, `ghost`; mặc định `type="button"` (mặc định của HTML là `submit`, và một nút phụ trong form sẽ gửi form) |
+| `TextField` | `text-field.tsx` | nhãn `<label htmlFor>` thật, `hint`, `error`, `aria-invalid`/`aria-describedby` |
+| `SelectField` | `select-field.tsx` | `<select>` gốc (bàn phím, IME tiếng Việt, trình đọc màn hình đã đúng sẵn), `labelHidden` cho thanh công cụ chật |
+| `Alert` | `alert.tsx` | `error` (`role="alert"`), `warning`, `info` |
+| `Tabs` | `tabs.tsx` | tab trạng thái kèm số việc; roving tabindex; **kích hoạt bằng tay** (mũi tên chỉ chuyển focus, Enter mới đổi tab — mỗi tab là một truy vấn xuống server) |
+| `StatusPill` | `status-pill.tsx` | `neutral`, `pending`, `success`, `danger`; luôn có chữ, không chỉ có màu |
+| `NextActionCell` | `next-action-cell.tsx` | ô "Việc tiếp theo" (U1); `action={null}` hiện nhãn "đã xong" chứ không để ô trống |
+| `DataTable` | `data-table.tsx` | bảng **chỉ-đọc**: `align:'right'` + `tabular-nums` cho cột số, sắp xếp **do chỗ gọi điều khiển**, trạng thái rỗng/đang tải, `caption` bắt buộc |
+| `Drawer` | `drawer.tsx` | panel phải qua portal; Esc đóng, **bấm ra nền KHÔNG đóng**; bẫy focus; trả focus về chỗ mở; focus vào ô đầu của thân |
+| `SplitPane` | `split-pane.tsx` | chia trái/phải kéo bằng chuột **và bằng bàn phím** (`role="separator"`, mũi tên/Home/End); nhớ tỉ lệ qua `storageKey` |
+| `ChecklistPanel` | `checklist-panel.tsx` | danh mục kiểm tra (U11); mỗi mục hỏng có đường dẫn tới chỗ sửa; câu tổng kết do chỗ gọi truyền vào |
 
-Phần còn lại của design system (`Tabs`, `Drawer`, `DataGrid`, `StatusPill`,
-`NextActionCell`, `ChecklistPanel`, `SplitPane`) thuộc lát 2C-2 (bước 16).
+### Ánh xạ đặc tả design → component
+
+Cột trái là selector trong `Konek Screens 2a.dc.html`. Khi sửa component, đối
+chiếu lại cột này chứ đừng đối chiếu trí nhớ.
+
+| Design | Component | Ghi chú |
+| --- | --- | --- |
+| `.w2-b` / `.w2-b.pri` / `.w2-b.q` | `Button` secondary / primary / ghost | viền **1px**, `padding 8px 13px`, `gap 7px` |
+| `.w2-in` + `.w2-f label` | `TextField`, `SelectField` | nhãn 12px xám; ô cao tối thiểu 36px |
+| `.w2-tab` | `Tabs` | tab đang chọn gạch dưới 3px navy |
+| `.seg` | `Seg` | chọn một giá trị, khác `Tabs` |
+| `.w2-s` + `.ok`/`.todo`/`.bad` | `StatusPill` | chấm vuông 8px + chữ, **ba** tông |
+| `.w2-t` / `th` / `td.n` / `tr.alt` / `tr.tot` | `DataTable` | `td.n` căn phải + `tabular-nums` + `nowrap`; `tr.tot` = prop `totals` |
+| `.w2-card` + `.w2-ch` | `ChecklistPanel`, thẻ nói chung | viền 1px `#C5D3E8`, không phải 2px |
+| `.w2-side` / `.w2-nav.on` | sidebar trong `app-layout` | rộng 212px; mục chọn = nền navy-50 + gạch trái 3px inset |
+| `.w2-top` | topbar | gạch dưới **2px navy** |
+| — (không có trong design) | `Drawer`, `SplitPane` | design không dùng overlay; xem ghi chú dưới |
+
+**Design KHÔNG có drawer/modal/overlay nào** (0 lần trong cả file). Nguyên tắc là
+drill-down **tại chỗ** (U10). `Drawer` được giữ cho những màn hình design chưa
+vẽ (sửa nhanh một dòng), nhưng **cấm dùng cho drill-down sổ cái và BCTC** — hai
+chỗ đó U10 bắt buộc mở tại chỗ.
+
+### Ba tông trạng thái
+
+Trục ngữ nghĩa là **"có việc cho bạn không"**, không phải "chứng từ ở trạng thái
+nào". Đây là điểm dễ làm sai nhất:
+
+| Tông | Màu (sáng / tối) | Nghĩa | Ví dụ |
+| --- | --- | --- | --- |
+| `ok` | gray-500 / gray-400 | xong, không phải làm gì | "Đã cấp mã", "Đã ghi sổ", "Khớp" |
+| `todo` | ocean-700 / ocean-300 | cần bạn xử lý | "Chờ phát hành", "Chưa lập" |
+| `bad` | `#B23A2A` / red-400 | hỏng, phải sửa | "Bị từ chối", "Lệch 31.600.000" |
+
+**Không có tông "thành công" xanh lá.** Việc đã xong là **xám**: trên màn hình
+200 dòng mà 190 dòng đã xong, tô xanh lá cho chúng làm 10 dòng còn việc chìm
+nghỉm. Xám đẩy việc xong lùi khỏi tầm mắt và để màu dành cho thứ cần đọc.
+
+**Bất biến của tầng design system: KHÔNG phụ thuộc `src/lib/`.** Không gọi
+`useI18n`, không gọi `apiClient`, không dùng router — mọi chữ đi vào bằng prop.
+Nhờ vậy component vẽ được trong test không cần provider, trang `/kitchen-sink`
+mở được khi chưa đăng nhập, và cùng bộ này dùng lại được cho mẫu in render ở
+server (ADR-009) nơi không có ngữ cảnh React.
+
+**Lưới nhập liệu `DataGrid` chưa có** — nền công nghệ do spike S3 quyết (lát
+2C-3). `DataTable` là bảng chỉ-đọc, không thay thế được.
+
+### Trang duyệt `/kitchen-sink`
+
+`client/src/features/kitchen-sink/` — toàn bộ component trong đúng vỏ thật
+(token thật, chế độ tối thật, font offline thật). **Chỉ có ở bản dev**: gác bằng
+`import.meta.env.DEV` trong `router.tsx` nên bản giao khách không có route này,
+và có test khóa lại điều đó. Nằm **ngoài** `SessionGate` để người thiết kế mở
+`pnpm dev` là xem được ngay, không cần server và không cần tài khoản.
+
+Không dùng Storybook: ở đây component hiện trong chính cái vỏ sẽ chạy thật, và
+không phải nuôi thêm một bộ công cụ thứ hai bên cạnh vitest + vite.
+
+### Chế độ sáng/tối
+
+`client/src/lib/theme.tsx` — ba lựa chọn `system` / `light` / `dark`, lưu ở
+`localStorage` (`ket.theme`, thiết lập của **máy trạm**), đổi trong topbar.
+`system` phải **gỡ** `data-theme` chứ không đặt `data-theme="system"`: một giá
+trị lạ nằm đó sẽ loại `@media (prefers-color-scheme: dark)` mà không bật gì
+thay thế — chế độ tối của hệ điều hành ngừng tác dụng, âm thầm.
 
 ### i18n cách sử dụng
 
