@@ -29,6 +29,7 @@ from sqlalchemy.pool import NullPool
 
 from ket.kernel.datasets.models import User
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security import role_service
 from ket.kernel.security.models import Branch, UserBranch, UserRole
@@ -100,7 +101,7 @@ def test_assigning_the_same_branch_concurrently_never_errors(
     scope = RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=user.id, branch_ids=())
     with unit_of_work(session_factory, scope) as session:
         if session.scalar(select(Branch.id).where(Branch.code == code)) is None:
-            session.add(Branch(code=code, name="Chi nhánh đua"))
+            BranchService(session).create(code=code, name="Chi nhánh đua")
 
     errors = _run_together(
         lambda: role_service.assign_branch(

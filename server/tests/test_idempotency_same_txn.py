@@ -34,6 +34,7 @@ from ket.kernel.idempotency.service import (
     fingerprint_of,
     prune_expired_keys,
 )
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.session import create_session_factory
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security.models import Branch
@@ -55,8 +56,7 @@ def _create_branch(code: str) -> Callable[[Session], tuple[int, IdempotentRef]]:
     """`work` mẫu: tạo một chi nhánh và trả tham chiếu tới nó."""
 
     def work(session: Session) -> tuple[int, IdempotentRef]:
-        branch = Branch(code=code, name=f"Chi nhánh {code}")
-        session.add(branch)
+        branch = BranchService(session).create(code=code, name=f"Chi nhánh {code}")
         session.flush()
         return branch.id, IdempotentRef(result_type="branches", result_id=str(branch.id))
 
@@ -117,8 +117,7 @@ def test_a_failed_write_leaves_no_key_behind(
     """
 
     def failing_work(session: Session) -> tuple[int, IdempotentRef]:
-        branch = Branch(code="IDEM_HONG", name="Sẽ hỏng")
-        session.add(branch)
+        BranchService(session).create(code="IDEM_HONG", name="Sẽ hỏng")
         session.flush()
         raise RuntimeError("lệnh ghi nghiệp vụ đổ")
 

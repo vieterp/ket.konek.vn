@@ -28,6 +28,14 @@ _EXEMPT: dict[str, str] = {
     "branches": "danh mục, không phải dữ liệu phát sinh",
     # Nguồn dựng nên chính phạm vi RLS — bật lên là vòng lặp.
     "user_branches": "nguồn của phạm vi RLS",
+    # Danh mục (phase 3): `branch_id IS NULL` nghĩa là **dùng chung toàn công
+    # ty** (FR-SYS-018), và policy chi nhánh sẽ giấu đúng những dòng đó khỏi mọi
+    # người. Cùng lập luận đã áp cho `branches`: ai được xem/sửa danh mục là câu
+    # hỏi của RBAC, không phải của cô lập dòng. Bảng **phát sinh** mang
+    # `branch_id` (từ phase 4) vẫn phải có policy — miễn trừ này chỉ dành cho
+    # bảng dùng `MasterDataMixin`.
+    "cost_objects": "danh mục, NULL = dùng chung toàn công ty",
+    "expense_items": "danh mục, NULL = dùng chung toàn công ty",
 }
 
 

@@ -17,9 +17,12 @@ from ket.kernel.auditing.listener import AuditContext
 from ket.kernel.auditing.models import AuditAction, AuditLog
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.errors import AuditContextMissingError
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.session import dataset_session
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.dataset_roles import set_local_role_statement
 from ket.kernel.security.models import Branch
+from ket.kernel.security.rls import set_search_path_statement
 
 pytestmark = pytest.mark.db
 
@@ -131,7 +134,7 @@ def test_change_writes_audit_row_automatically(
 ) -> None:
     """Không service nào phải nhớ gọi — listener bắt mọi thay đổi qua ORM."""
     with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
-        session.add(Branch(code="AUTO-1", name="Chi nhánh tự động"))
+        BranchService(session).create(code="AUTO-1", name="Chi nhánh tự động")
 
     with dataset_session(
         session_factory,
@@ -155,7 +158,7 @@ def test_update_records_only_changed_columns(
 ) -> None:
     """Ghi diff, không ghi cả dòng (`docs/srs/01` §13 Q3 — chống phình bảng)."""
     with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
-        session.add(Branch(code="DIFF-1", name="Tên cũ"))
+        BranchService(session).create(code="DIFF-1", name="Tên cũ")
 
     with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
         branch = session.execute(text("SELECT id FROM branches WHERE code = 'DIFF-1'")).scalar_one()
@@ -184,7 +187,7 @@ def test_rollback_leaves_no_orphan_audit_row(
     """Nhật ký ghi trong cùng transaction → không kể lại thao tác chưa từng xảy ra."""
     with pytest.raises(RuntimeError, match="hỏng giữa chừng"):
         with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
-            session.add(Branch(code="ROLLBACK-1", name="Sẽ bị hủy"))
+            BranchService(session).create(code="ROLLBACK-1", name="Sẽ bị hủy")
             session.flush()
             raise RuntimeError("Nghiệp vụ hỏng giữa chừng")
 
@@ -211,10 +214,17 @@ def test_change_without_actor_is_refused(
     session = session_factory()
     try:
         session.begin()
-        session.execute(text(f'SET LOCAL search_path TO "{dataset_alpha.schema_name}", public'))
-        session.add(Branch(code="NO-ACTOR", name="Không có người thực hiện"))
+        # Đúng vai trò và schema mà một request nghiệp vụ chạy dưới, **thiếu duy
+        # nhất** ngữ cảnh nhật ký — đó là biến số đang được kiểm. Chỉ đặt
+        # `search_path` mà quên `SET LOCAL ROLE` thì `ket_app` không có cả
+        # `USAGE` trên schema dataset (D3), và test sẽ đỏ vì một lý do khác hẳn
+        # lý do nó được viết ra.
+        session.execute(text(set_local_role_statement(dataset_alpha.schema_name)))
+        session.execute(text(set_search_path_statement(dataset_alpha.schema_name)))
+        # `create` tự flush, nên phép ghi bị chặn ngay trong lời gọi này chứ
+        # không ở một `flush()` riêng phía sau.
         with pytest.raises(AuditContextMissingError):
-            session.flush()
+            BranchService(session).create(code="NO-ACTOR", name="Không có người thực hiện")
     finally:
         session.rollback()
         session.close()

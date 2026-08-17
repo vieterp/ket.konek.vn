@@ -35,6 +35,7 @@ from ket.kernel.auditing.listener import AuditContext
 from ket.kernel.datasets.models import User
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.jobs.builtin import SLOW_TASK
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.session import dataset_session
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security import role_service
@@ -95,7 +96,7 @@ def walkthrough_role(session_factory: sessionmaker[Session], dataset_alpha: Data
                     RolePermission(role_id=role.id, permission_id=permission_id, allow=True)
                 )
         if session.scalar(select(Branch.id).where(Branch.code == HOME_BRANCH)) is None:
-            session.add(Branch(code=HOME_BRANCH, name="Chi nhánh hành trình"))
+            BranchService(session).create(code=HOME_BRANCH, name="Chi nhánh hành trình")
     return WALKTHROUGH_ROLE
 
 

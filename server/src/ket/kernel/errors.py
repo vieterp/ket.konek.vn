@@ -666,3 +666,129 @@ class AttachmentStorageUnavailableError(DomainError):
 
     error_code: ClassVar[str] = "attachment.storage_unavailable"
     http_status: ClassVar[int] = 503
+
+
+class MasterDataNotFoundError(DomainError):
+    """Không có bản ghi danh mục với mã/khóa đã cho."""
+
+    error_code: ClassVar[str] = "master_data.not_found"
+    http_status: ClassVar[int] = 404
+
+
+class MasterDataInUseError(DomainError):
+    """Danh mục đã xuất hiện trên chứng từ nên không xóa được (BR-SYS-02).
+
+    `409` chứ không `422`: yêu cầu hợp lệ, chỉ là trạng thái hiện tại không cho
+    phép — và trạng thái đó đổi được (chuyển chứng từ sang danh mục khác, hoặc
+    dùng "Ngừng theo dõi" thay cho xóa, đúng lối FR-SYS-012 chỉ ra).
+
+    `details.usage_count` để màn hình nói được "đang dùng ở 143 chứng từ" thay
+    vì một câu từ chối trống rỗng mà người dùng không biết phải làm gì tiếp.
+    """
+
+    error_code: ClassVar[str] = "master_data.in_use"
+    http_status: ClassVar[int] = 409
+
+
+class MasterDataCycleError(DomainError):
+    """Chuyển một nút vào chính nhánh con của nó (FR-SYS-011).
+
+    Không phải lỗi lập trình mà là thao tác kéo-thả sai của người dùng trên cây
+    danh mục, nên nó là lỗi nghiệp vụ có thông điệp — chặn ở đây thay vì để cây
+    thành đồ thị có chu trình và mọi truy vấn nhánh chạy vô hạn.
+    """
+
+    error_code: ClassVar[str] = "master_data.parent_cycle"
+
+
+class MasterDataParentScopeError(DomainError):
+    """Gắn bản ghi vào một nhóm cha thuộc chi nhánh khác (FR-SYS-018).
+
+    Danh mục dùng chung (`branch_id IS NULL`) phải nhìn thấy được từ mọi chi
+    nhánh. Treo nó dưới một nhóm riêng của chi nhánh A thì nó vẫn nằm trong danh
+    sách phẳng nhưng biến mất khỏi cây của mọi chi nhánh khác — một bản ghi
+    "có mà không thấy", kiểu lỗi tốn nhiều giờ hỗ trợ nhất.
+    """
+
+    error_code: ClassVar[str] = "master_data.parent_scope_mismatch"
+
+
+class MasterDataGroupNotPostableError(DomainError):
+    """Chọn một nút nhóm ở chỗ chỉ nhận nút lá (`is_group = true`).
+
+    Nhóm tồn tại để gom và để cộng tổng; hạch toán thẳng vào nhóm làm số liệu
+    của nhóm không còn bằng tổng các con, và mọi báo cáo phân cấp lệch từ đó.
+    """
+
+    error_code: ClassVar[str] = "master_data.group_not_postable"
+
+
+class ExchangeRateNotFoundError(DomainError):
+    """Không có tỷ giá cho cặp (loại tiền, ngày, loại tỷ giá) (N5, FR-NFR-032).
+
+    Cố ý **không** có giá trị mặc định. Mặc định 1 sẽ ghi một hóa đơn 5.000 USD
+    thành 5.000 VND và không có gì trong sổ nói rằng tỷ giá bị thiếu — sai số
+    đúng bằng ba bậc, phát hiện ra sau vài tháng khi đối chiếu công nợ.
+    """
+
+    error_code: ClassVar[str] = "currency.exchange_rate_not_found"
+
+
+class BaseCurrencyMisconfiguredError(DomainError):
+    """Không có đúng một đồng tiền hạch toán (`is_base`).
+
+    Không có đồng nào thì không quy đổi được gì; có hai đồng thì mọi báo cáo
+    tổng hợp phụ thuộc vào việc truy vấn trả về dòng nào trước.
+    """
+
+    error_code: ClassVar[str] = "currency.base_misconfigured"
+
+
+class FiscalYearOverlapError(DomainError):
+    """Năm tài chính mới chồng lấn năm đã có (FR-NFR-033).
+
+    Nhiều năm tài chính song song là yêu cầu; **chồng lấn ngày** thì không —
+    một chứng từ ngày 15/03 sẽ thuộc hai kỳ cùng lúc và số dư cuối kỳ tính ra
+    hai giá trị khác nhau tùy đường truy vấn.
+    """
+
+    error_code: ClassVar[str] = "period.fiscal_year_overlap"
+
+
+class PeriodNotFoundError(DomainError):
+    """Ngày hạch toán không rơi vào kỳ kế toán nào đã khai."""
+
+    error_code: ClassVar[str] = "period.not_found"
+
+
+class PeriodClosedError(DomainError):
+    """Kỳ đã khóa sổ — không ghi thêm, không sửa, không xóa (LD-12, FR-NFR-031).
+
+    Khóa kỳ là cam kết với cơ quan thuế rằng số của kỳ đó đã cố định. Mở lại là
+    thao tác có ghi vết của người có quyền, không phải một nhánh `if` mà đường
+    ghi nào cũng có thể bỏ qua.
+    """
+
+    error_code: ClassVar[str] = "period.closed"
+
+
+class AccountingSchemeLockedError(DomainError):
+    """Đổi chế độ kế toán (TT200 ↔ TT133) trên năm đã có chứng từ (FR-SYS-004).
+
+    Đây là nhóm thiết lập "chốt một lần" của nguyên tắc U14: hệ thống tài khoản,
+    layout báo cáo tài chính và mẫu tờ khai đều dẫn xuất từ chế độ, nên đổi giữa
+    chừng làm chứng từ đã ghi trỏ vào những tài khoản không còn tồn tại.
+    """
+
+    error_code: ClassVar[str] = "period.accounting_scheme_locked"
+
+
+class NumberSequenceNotFoundError(DomainError):
+    """Chưa khai quy tắc đánh số cho loại chứng từ / phạm vi này (FR-SYS-063).
+
+    Không tự tạo dãy số với giá trị đoán: tiền tố và độ dài số chứng từ là thứ
+    doanh nghiệp đã đăng ký và in trên giấy, nên một dãy sinh ngầm sẽ tạo ra
+    những số chứng từ không ai nhận ra là của mình.
+    """
+
+    error_code: ClassVar[str] = "numbering.sequence_not_found"

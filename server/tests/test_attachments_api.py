@@ -32,6 +32,7 @@ from ket.api.idempotency import IDEMPOTENCY_HEADER
 from ket.kernel.attachments import storage
 from ket.kernel.datasets.models import User
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security import role_service
 from ket.kernel.security.models import Branch, Permission, Role, RolePermission
@@ -157,7 +158,7 @@ def attachment_branches(
         )
         for code in BRANCH_CODES:
             if code not in existing:
-                session.add(Branch(code=code, name=f"Chi nhánh {code}"))
+                BranchService(session).create(code=code, name=f"Chi nhánh {code}")
     return BRANCH_CODES
 
 
@@ -167,7 +168,7 @@ def beta_branch(session_factory: sessionmaker[Session], dataset_beta: DatasetRef
     scope = RequestScope(dataset_schema=dataset_beta.schema_name, user_id=1, branch_ids=())
     with unit_of_work(session_factory, scope) as session:
         if session.scalar(select(Branch.id).where(Branch.code == code)) is None:
-            session.add(Branch(code=code, name="Chi nhánh Beta"))
+            BranchService(session).create(code=code, name="Chi nhánh Beta")
     return code
 
 

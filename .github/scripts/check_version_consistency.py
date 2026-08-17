@@ -70,7 +70,9 @@ def _from_python_dunder(relative: str) -> str:
 
 def collect_versions() -> dict[str, str]:
     return {
-        "server/pyproject.toml": _from_toml("server/pyproject.toml", "project", "version"),
+        "server/pyproject.toml": _from_toml(
+            "server/pyproject.toml", "project", "version"
+        ),
         "server/src/ket/__init__.py": _from_python_dunder("server/src/ket/__init__.py"),
         "client/package.json": _from_json("client/package.json", "version"),
         "client/src-tauri/Cargo.toml": _from_toml(

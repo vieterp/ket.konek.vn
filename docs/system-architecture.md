@@ -16,7 +16,7 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 
 ---
 
-## 1b. Trạng thái hiện thực hóa (2026-08-16)
+## 1b. Trạng thái hiện thực hóa (2026-08-17)
 
 | Thành phần | Trạng thái |
 | --- | --- |
@@ -44,6 +44,12 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | **Máy trạng thái phiên client** (7 trạng thái) — quyết định duy nhất ở `SessionGate` | ✅ chạy thật (2C-1) |
 | **Bộ test client** vitest + testing-library, có cổng CI `make client-test` | ✅ chạy thật (2C-1) |
 | **Tệp đính kèm** (FR-NFR-053) — kho định địa chỉ theo nội dung tách theo dataset, `/api/v1/attachments` có RBAC + RLS + idempotency, gỡ-không-xóa | ✅ chạy thật (2C-5) |
+| **Khung danh mục dùng chung** — materialized path (cây ≥6 cấp, chuyển nhánh bằng **một** UPDATE), `MasterDataService[ModelT]` generic có kiểu, mã duy nhất theo phạm vi dùng-chung/riêng-chi-nhánh (BR-SYS-01), bộ đếm tham chiếu chặn xóa (BR-SYS-02) | ✅ chạy thật (3A) |
+| **`uuid7` tự viết** (RFC 9562) cho cột `uid` ổn định của danh mục (RT-19) — Python 3.12 chưa có `uuid.uuid7()`, và `uuid-utils` là extension Rust nên tránh trước spike đóng gói S4 | ✅ chạy thật (3A) |
+| **Đa tiền tệ** — `currencies`/`exchange_rates`, `MoneyFc` kiểm bất biến lúc dựng, tra tỷ giá gần nhất ≤ ngày; **thiếu tỷ giá là lỗi nghiệp vụ, không bao giờ mặc định 1** | ✅ chạy thật (3A) |
+| **Năm tài chính & kỳ kế toán** — sinh đủ 12 kỳ liền mạch (hỗ trợ niên độ lệch), khóa/mở kỳ có vết người thực hiện, chồng lấn niên độ chặn bằng `EXCLUDE USING gist` ở DB | ✅ chạy thật (3A) |
+| **Đánh số chứng từ** — `SELECT … FOR UPDATE` trong transaction của người gọi (rollback trả lại số), sổ cấp số cho dãy liên tục; kiểm bằng 20 luồng song song | ✅ chạy thật (3A) |
+| **Cây chi nhánh** — `branches` mở rộng tại chỗ; mọi đường tạo đi qua `BranchService` | ✅ chạy thật (3A) |
 | Posting engine, báo cáo, và toàn bộ phân hệ nghiệp vụ | ⏳ phase 4 trở đi |
 
 Bảng còn lại trong §11 và phần lớn §12 là **thiết kế đích**, chưa có mã.
@@ -460,11 +466,15 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | `attachments` | Metadata tệp đính kèm (`entity_type`+`entity_id`, `content_hash`, `branch_id`, `detached_at`). Nội dung nằm ngoài DB | 2 | `kernel` |
 | `config_packages` | Gói cấu hình pháp lý (TT200/TT133, hiệu lực từ…) | 5 | `kernel` |
 | `report_definitions` | Báo cáo metadata (layout, tham số, query) | 5 | `reporting` |
-| `number_sequences` | Bộ đếm đánh số chứng từ (`scope_key` gói cả chi nhánh + năm) | 2 (bảng), 3 (cấp số) | `kernel` |
+| `number_sequences` | Bộ đếm đánh số chứng từ (`scope_key` gói cả chi nhánh + chu kỳ reset) | 2 (bảng), 3 (cấp số) | `kernel` |
+| `allocated_numbers` | Sổ cấp số: số nào đã cấp cho chứng từ nào. Chỉ ghi cho dãy **liên tục** (hóa đơn) — `UNIQUE (scope_key, number)` là hàng rào cuối nếu một đường ghi ở phase sau quên đi qua dịch vụ (RT-10) | 3 | `kernel` |
+| `master_data_usage` | Bộ đếm tham chiếu của danh mục — trả lời "xóa được chưa" bằng một phép tra khóa chính thay vì quét mọi bảng chứng từ (BR-SYS-02). Đối chiếu với số đếm thật thuộc integrity checker phase 4 | 3 | `kernel` |
+| `cost_objects`, `expense_items` | Hai chiều phân tích lõi đầu tiên dùng khung danh mục chung (LD-08). **Không bật RLS**: `branch_id IS NULL` = dùng chung toàn công ty, mà policy chi nhánh sẽ giấu đúng những dòng đó — lọc phạm vi nằm ở `MasterDataService._visible_to` | 3 | `kernel` |
 | `idempotency_keys` | Khóa idempotency + kết quả (TTL, result_ref) | 2 | `kernel` |
 | `jobs` | Tác vụ nền (hàng đợi, tiến độ, lease, reaper); **vai trò `ket_worker` có `SELECT` + `UPDATE` theo cột** — mọi lệnh ghi trạng thái mang số hiệu lượt chạy (`attempt`) làm hàng rào, nên lượt chạy đã bị thu hồi không ghi đè được lượt mới (RT-13) | 2 | `worker` |
-| `periods` | Kỳ kế toán (từ, đến, trạng thái khóa) | 3 | `kernel` |
-| `branches` | Chi nhánh (mã, tên, địa chỉ). **Không bật RLS** — xem ADR-017 §6 | 2 (lõi), 3 (mở rộng) | `kernel` |
+| `fiscal_years` | Niên độ + những quyết định chốt một lần của nó (chế độ kế toán, đồng tiền hạch toán, phương pháp giá xuất, phương pháp GTGT). Chồng lấn ngày chặn bằng `EXCLUDE USING gist (daterange … WITH &&)` — ràng buộc ở DB, không phụ thuộc đường ghi nào nhớ kiểm | 3 | `kernel` |
+| `accounting_periods` | Kỳ kế toán (từ, đến, `locked_at`/`locked_by`). Vết khóa là **dữ liệu**, không phải cờ boolean: câu hỏi kiểm toán là "ai khóa, lúc nào" (FR-NFR-013) | 3 | `kernel` |
+| `branches` | Chi nhánh — cây materialized path, mã số thuế, hạch toán phụ thuộc/độc lập. **Không bật RLS** — xem ADR-017 §6 | 2 (lõi), 3 (cây) | `kernel` |
 | `accounts` | Tài khoản (mã, tên, loại, nhóm công thức BCTC) | 3 | `kernel` |
 | `partners` | Đối tác (khách, NCC, nhân viên, …) | 3 | `kernel` |
 | `items` | Vật tư hàng hóa (mã, tên, ĐVT, định mức) | 3 | `kernel` |

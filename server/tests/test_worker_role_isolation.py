@@ -27,10 +27,10 @@ from ket.kernel.datasets.naming import role_name_for_schema
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.jobs import queue
 from ket.kernel.jobs.builtin import SLOW_TASK
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.session import worker_session
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security.dataset_roles import WORKER_ROLE
-from ket.kernel.security.models import Branch
 
 pytestmark = pytest.mark.db
 
@@ -45,8 +45,9 @@ def _scope(dataset: DatasetRef, branch_ids: tuple[int, ...] = ()) -> RequestScop
 def branch_id(session_factory: sessionmaker[Session], dataset_alpha: DatasetRef) -> int:
     """Một chi nhánh thật để gắn job vào — job không chi nhánh không chứng minh gì."""
     with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
-        branch = Branch(code=f"CN_W_{uuid4().hex[:6].upper()}", name="Chi nhánh worker")
-        session.add(branch)
+        branch = BranchService(session).create(
+            code=f"CN_W_{uuid4().hex[:6].upper()}", name="Chi nhánh worker"
+        )
         session.flush()
         return branch.id
 

@@ -23,6 +23,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from ket.api.middleware.problem_details import register_problem_handlers
 from ket.api.middleware.request_context import RequestContextMiddleware
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.session import bind_transaction_scope
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security.models import Branch
@@ -43,7 +44,7 @@ def test_two_transactions_that_read_the_same_version_cannot_both_write(
     """
     code = f"CN_{uuid4().hex[:8].upper()}"
     with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
-        session.add(Branch(code=code, name="Bản gốc"))
+        BranchService(session).create(code=code, name="Bản gốc")
 
     first = session_factory()
     second = session_factory()

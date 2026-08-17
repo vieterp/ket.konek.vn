@@ -20,9 +20,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.auditing.listener import AuditContext
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.session import dataset_session
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
-from ket.kernel.security.models import Branch
 
 pytestmark = pytest.mark.db
 
@@ -67,14 +67,14 @@ def test_savepoint_rollback_does_not_leak_into_the_next_flush(
 ) -> None:
     """SAVEPOINT hủy → diff của nó phải biến mất, không trôi sang lần ghi sau."""
     with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
-        session.add(Branch(code="SP-1", name="bản ghi thật"))
+        BranchService(session).create(code="SP-1", name="bản ghi thật")
         session.flush()
 
         with pytest.raises(IntegrityError), session.begin_nested():
-            session.add(Branch(code="SP-1", name="trùng mã, sẽ bị hủy"))
+            BranchService(session).create(code="SP-1", name="trùng mã, sẽ bị hủy")
             session.flush()
 
-        session.add(Branch(code="SP-2", name="bản ghi thật thứ hai"))
+        BranchService(session).create(code="SP-2", name="bản ghi thật thứ hai")
 
     assert _branch_codes(session_factory, dataset_alpha, "SP-") == ["SP-1", "SP-2"]
     # Đúng hai dòng nhật ký. Trước khi sửa, ở đây có ba: "SP-1" xuất hiện hai
@@ -98,11 +98,9 @@ def test_failed_flush_then_rollback_then_reuse_leaks_nothing(
             branch_ids=scope.branch_ids,
             audit=scope.audit_context(),
         )
-        session.add(Branch(code="RB-1", name="đầu tiên"))
-        session.flush()
-        session.add(Branch(code="RB-1", name="trùng mã"))
+        BranchService(session).create(code="RB-1", name="đầu tiên")
         with pytest.raises(IntegrityError):
-            session.flush()
+            BranchService(session).create(code="RB-1", name="trùng mã")
         session.rollback()
 
         session.begin()
@@ -112,7 +110,7 @@ def test_failed_flush_then_rollback_then_reuse_leaks_nothing(
             branch_ids=scope.branch_ids,
             audit=scope.audit_context(),
         )
-        session.add(Branch(code="RB-2", name="sau khi phục hồi"))
+        BranchService(session).create(code="RB-2", name="sau khi phục hồi")
         session.commit()
     finally:
         session.close()
@@ -132,7 +130,7 @@ def test_created_snapshot_holds_real_values_not_pre_flush_nulls(
     cột có default. Từ phase 4 thì đó là `status`, `posted`, `row_version`.
     """
     with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
-        session.add(Branch(code="SNAP-1", name="kiểm tra ảnh chụp"))
+        BranchService(session).create(code="SNAP-1", name="kiểm tra ảnh chụp")
 
     with dataset_session(
         session_factory, dataset_schema=dataset_alpha.schema_name, branch_ids=(), audit=ACTOR

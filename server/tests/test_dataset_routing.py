@@ -27,10 +27,10 @@ from ket.kernel.errors import (
     InvalidSchemaNameError,
 )
 from ket.kernel.numbering.models import NumberSequence
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.base import DatasetBase
 from ket.kernel.persistence.session import dataset_session
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
-from ket.kernel.security.models import Branch
 
 pytestmark = pytest.mark.db
 
@@ -56,7 +56,7 @@ def test_data_written_in_one_dataset_is_absent_from_the_other(
     dataset_beta: DatasetRef,
 ) -> None:
     with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
-        session.add(Branch(code="ONLY-ALPHA", name="Chỉ có ở Alpha"))
+        BranchService(session).create(code="ONLY-ALPHA", name="Chỉ có ở Alpha")
 
     with dataset_session(
         session_factory,
@@ -102,7 +102,7 @@ def test_audit_log_is_per_dataset(
 ) -> None:
     """Nhật ký của doanh nghiệp này không xuất hiện trong nhật ký doanh nghiệp kia."""
     with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
-        session.add(Branch(code="AUDIT-SPLIT", name="Kiểm tra tách nhật ký"))
+        BranchService(session).create(code="AUDIT-SPLIT", name="Kiểm tra tách nhật ký")
 
     counts = {}
     for dataset in (dataset_alpha, dataset_beta):
