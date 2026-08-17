@@ -4,6 +4,93 @@
  */
 
 export interface paths {
+    "/api/v1/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Attachments
+         * @description Tệp đang đính vào một bản ghi.
+         */
+        get: operations["list_attachments_api_v1_attachments_get"];
+        put?: never;
+        /**
+         * Upload Attachment
+         * @description Đính một tệp vào một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Tệp ghi xuống đĩa **trước** khi mở transaction, và phải như vậy: vân tay
+         *     idempotency của lượt này là hash nội dung, nên không có cách nào biết hai
+         *     lần gửi có phải cùng một tệp trước khi đọc hết tệp. Hệ quả là một lượt gửi
+         *     lại để lại một tệp trùng trên đĩa — nhưng kho định địa chỉ theo nội dung nên
+         *     "trùng" ở đây nghĩa là **cùng một tệp**, không tốn thêm byte nào.
+         *
+         *     Chi nhánh của tệp = chi nhánh đang thao tác của người tải lên, không phải
+         *     tham số client gửi. Đó là thứ quyết định ai còn thấy tệp này sau đó.
+         */
+        post: operations["upload_attachment_api_v1_attachments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Attachment
+         * @description Metadata của một tệp.
+         */
+        get: operations["get_attachment_api_v1_attachments__attachment_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Detach Attachment
+         * @description Gỡ tệp khỏi bản ghi chủ.
+         *
+         *     Tệp trên đĩa **không** bị xóa: bản ghi khác có thể đang trỏ vào cùng nội
+         *     dung, và một thao tác xóa không rollback được cùng transaction của DB là
+         *     thao tác sẽ có ngày xóa nhầm. Dọn tệp thật sự mồ côi là việc của lượt quét
+         *     đối chiếu ở phase 11.
+         */
+        delete: operations["detach_attachment_api_v1_attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attachments/{attachment_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Attachment
+         * @description Tải nội dung tệp về.
+         *
+         *     Đọc metadata trong transaction rồi **đóng** nó trước khi phát luồng byte:
+         *     một lượt tải 20 MB qua Wi-Fi văn phòng kéo dài hàng chục giây, và giữ một
+         *     transaction mở suốt thời gian đó là giữ một connection của pool cho một việc
+         *     không còn chạm tới cơ sở dữ liệu.
+         */
+        get: operations["download_attachment_api_v1_attachments__attachment_id__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/change-password": {
         parameters: {
             query?: never;
@@ -647,6 +734,46 @@ export interface components {
             /** Permissions */
             permissions: string[];
         };
+        /** AttachmentListResponse */
+        AttachmentListResponse: {
+            /** Items */
+            items: components["schemas"]["AttachmentResponse"][];
+        };
+        /**
+         * AttachmentResponse
+         * @description Metadata của một tệp đính kèm — **không** kèm nội dung.
+         *
+         *     Nội dung tải riêng qua `/{id}/content`: danh sách đính kèm của một chứng từ
+         *     hiện ra cùng màn hình chứng từ, và nhúng vài chục MB base64 vào đó là cách
+         *     chắc chắn nhất để màn hình ấy chậm.
+         */
+        AttachmentResponse: {
+            /** Branch Id */
+            branch_id: number;
+            /** Byte Size */
+            byte_size: number;
+            /** Content Hash */
+            content_hash: string;
+            /** Detached At */
+            detached_at: string | null;
+            /** Entity Id */
+            entity_id: string;
+            /** Entity Type */
+            entity_type: string;
+            /** File Name */
+            file_name: string;
+            /** Id */
+            id: number;
+            /** Media Type */
+            media_type: string;
+            /**
+             * Uploaded At
+             * Format: date-time
+             */
+            uploaded_at: string;
+            /** Uploaded By */
+            uploaded_by: number;
+        };
         /**
          * AuditEntryResponse
          * @description Một dòng nhật ký nghiệp vụ (FR-NFR-013).
@@ -676,6 +803,15 @@ export interface components {
             items: components["schemas"]["AuditEntryResponse"][];
             /** Total */
             total: number;
+        };
+        /** Body_upload_attachment_api_v1_attachments_post */
+        Body_upload_attachment_api_v1_attachments_post: {
+            /** Entity Id */
+            entity_id: string;
+            /** Entity Type */
+            entity_type: string;
+            /** File */
+            file: string;
         };
         /** BranchCreateRequest */
         BranchCreateRequest: {
@@ -1131,6 +1267,173 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_attachments_api_v1_attachments_get: {
+        parameters: {
+            query: {
+                entity_type: string;
+                entity_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    upload_attachment_api_v1_attachments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_attachment_api_v1_attachments_post"];
+            };
+        };
+        responses: {
+            /** @description Lần gửi lại: tệp đã đính */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentResponse"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_attachment_api_v1_attachments__attachment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    detach_attachment_api_v1_attachments__attachment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_attachment_api_v1_attachments__attachment_id__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Nội dung tệp */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     change_password_api_v1_auth_change_password_post: {
         parameters: {
             query?: never;

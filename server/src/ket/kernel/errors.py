@@ -560,3 +560,109 @@ class UpdatePackageNotFoundError(DomainError):
 
     error_code: ClassVar[str] = "system.update_package_not_found"
     http_status: ClassVar[int] = 404
+
+
+class AttachmentStorageNotConfiguredError(DomainError):
+    """Bản cài chưa trỏ `KET_ATTACHMENTS_DIR` tới thư mục nào (FR-NFR-053).
+
+    `503` chứ không `500`: đây là một việc người quản trị làm được trong một
+    phút, và thông điệp phải nói ra điều đó thay vì để người dùng nghĩ là phần
+    mềm hỏng. Mặc định của bản cài là **chưa bật** — thư mục tệp đính kèm phải
+    nằm trong phạm vi sao lưu, nên chọn chỗ cho nó là quyết định của người triển
+    khai chứ không phải một đường dẫn ta đoán hộ.
+    """
+
+    error_code: ClassVar[str] = "attachment.storage_not_configured"
+    http_status: ClassVar[int] = 503
+
+
+class AttachmentTooLargeError(DomainError):
+    """Tệp vượt trần dung lượng của bản cài."""
+
+    error_code: ClassVar[str] = "attachment.too_large"
+    http_status: ClassVar[int] = 413
+
+
+class AttachmentEmptyError(DomainError):
+    """Tệp rỗng.
+
+    Chặn thay vì lưu: một tệp 0 byte gần như luôn là lỗi phía client (chọn nhầm,
+    ổ mạng rớt giữa chừng), và nó sẽ nằm trong danh sách đính kèm trông y như
+    một tệp thật cho tới lúc có người mở nó ra — thường là kiểm toán viên.
+    """
+
+    error_code: ClassVar[str] = "attachment.empty"
+
+
+class AttachmentBranchRequiredError(DomainError):
+    """Người dùng nhiều chi nhánh chưa chọn chi nhánh đang thao tác.
+
+    Tệp đính kèm mang `branch_id` `NOT NULL` vì đó là neo cô lập RLS của nó
+    (RT-04). Không đoán hộ chi nhánh khi tài khoản có nhiều: đoán sai nghĩa là
+    tệp rơi vào ngăn của một chi nhánh khác và người đính nó không còn thấy nữa.
+    """
+
+    error_code: ClassVar[str] = "attachment.branch_required"
+
+
+class AttachmentNotFoundError(DomainError):
+    """Không có tệp đính kèm này trong dữ liệu kế toán đang mở (hoặc ngoài phạm vi chi nhánh)."""
+
+    error_code: ClassVar[str] = "attachment.not_found"
+    http_status: ClassVar[int] = 404
+
+
+class AttachmentAlreadyAttachedError(DomainError):
+    """Đúng tệp này đã đính vào đúng bản ghi này rồi.
+
+    `409` chứ không im lặng gật đầu: người dùng vừa chọn nhầm cùng một tệp lần
+    thứ hai, và câu trả lời hữu ích là "nó đã ở đây rồi" chứ không phải hai dòng
+    giống hệt nhau trong danh sách đính kèm. Lần **gửi lại** thật sự (mất mạng
+    rồi bấm lại) đi đường khác — khóa idempotency trả về chính bản ghi cũ.
+    """
+
+    error_code: ClassVar[str] = "attachment.already_attached"
+    http_status: ClassVar[int] = 409
+
+
+class AttachmentContentMissingError(DomainError):
+    """Metadata còn nhưng tệp không có trên đĩa.
+
+    `503` vì đây là sự cố phía máy chủ mà người quản trị sửa được (gắn lại ổ,
+    khôi phục thư mục tệp), không phải "tệp đã bị xóa" — trả `404` sẽ khiến
+    người dùng tin là mình mất tệp và đi tải lên lại, che mất một thư mục sao
+    lưu chưa được gắn.
+    """
+
+    error_code: ClassVar[str] = "attachment.content_missing"
+    http_status: ClassVar[int] = 503
+
+
+class RequestBodyTooLargeError(DomainError):
+    """Thân request vượt trần của bản cài (C1, FR-NFR-053).
+
+    Khác `AttachmentTooLargeError` ở **nơi** phát hiện, và khác biệt đó có thật:
+    lỗi này do middleware ném **trước khi** một byte nào chạm đĩa hoặc chạm tầng
+    xác thực, còn `AttachmentTooLargeError` do kho tệp ném khi đã ghi tới ngưỡng.
+    Hai lớp phòng thủ cho cùng một ngưỡng — lớp ngoài chặn kẻ chưa đăng nhập,
+    lớp trong canh mọi đường gọi khác (job nhập liệu ở phase sau không đi qua
+    HTTP).
+
+    `413` ở cả hai, nên client xử lý y hệt nhau; mã lỗi khác nhau để nhật ký nói
+    rõ request dừng ở đâu.
+    """
+
+    error_code: ClassVar[str] = "request.body_too_large"
+    http_status: ClassVar[int] = 413
+
+
+class AttachmentStorageUnavailableError(DomainError):
+    """Thư mục tệp đính kèm có cấu hình nhưng máy chủ không ghi được vào đó.
+
+    Ổ mạng chưa gắn, thư mục sai quyền, đĩa đầy. `503` cùng lý do với
+    `AttachmentStorageNotConfiguredError`: người quản trị sửa được, và thông
+    điệp phải nói ra điều đó thay vì để `500 "lỗi không mong muốn"` che mất.
+    """
+
+    error_code: ClassVar[str] = "attachment.storage_unavailable"
+    http_status: ClassVar[int] = 503

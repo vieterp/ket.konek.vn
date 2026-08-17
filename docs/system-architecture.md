@@ -22,8 +22,8 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | --- | --- |
 | Vai trò DB `ket_owner` / `ket_app`, tách quyền sở hữu | ✅ chạy thật |
 | Schema-per-dataset: schema điều khiển, provisioning, định tuyến `search_path` | ✅ chạy thật |
-| Migration `0001` — 11 bảng nền (RBAC, settings, audit, idempotency, jobs, numbering, branches) | ✅ chạy thật |
-| RLS cô lập chi nhánh theo GUC `ket.branch_ids` | ✅ chạy thật (trên `audit_log`, `jobs`) |
+| Migration `0001` — 12 bảng nền (RBAC, settings, audit, idempotency, jobs, numbering, branches, attachments) | ✅ chạy thật |
+| RLS cô lập chi nhánh theo GUC `ket.branch_ids` | ✅ chạy thật (trên `audit_log`, `jobs`, `attachments`) |
 | Nhật ký bất biến ghi cùng transaction | ✅ chạy thật |
 | `ket.kernel.money` — Decimal, ROUND_HALF_UP | ✅ chạy thật |
 | Kiểm phiên bản schema lúc khởi động (LD-05) | ✅ chạy thật |
@@ -43,6 +43,7 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | **i18n tự viết** (vi/en) — khóa phẳng + nội suy, kiểu enforce TypeScript | ✅ chạy thật (2C-1) |
 | **Máy trạng thái phiên client** (7 trạng thái) — quyết định duy nhất ở `SessionGate` | ✅ chạy thật (2C-1) |
 | **Bộ test client** vitest + testing-library, có cổng CI `make client-test` | ✅ chạy thật (2C-1) |
+| **Tệp đính kèm** (FR-NFR-053) — kho định địa chỉ theo nội dung tách theo dataset, `/api/v1/attachments` có RBAC + RLS + idempotency, gỡ-không-xóa | ✅ chạy thật (2C-5) |
 | Posting engine, báo cáo, và toàn bộ phân hệ nghiệp vụ | ⏳ phase 4 trở đi |
 
 Bảng còn lại trong §11 và phần lớn §12 là **thiết kế đích**, chưa có mã.
@@ -456,6 +457,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | `ar_ap_ledger` | Công nợ subledger (đối tác + TK + số tiền nợ) | 7 | `receivables` |
 | `inventory_balances` | Tồn kho (warehouse, item, lot, serial, qty) | 8 | `inventory` |
 | `audit_log` | Nhật ký bất biến (người, hành động, giá trị trước–sau) | 2 | `ket_owner` |
+| `attachments` | Metadata tệp đính kèm (`entity_type`+`entity_id`, `content_hash`, `branch_id`, `detached_at`). Nội dung nằm ngoài DB | 2 | `kernel` |
 | `config_packages` | Gói cấu hình pháp lý (TT200/TT133, hiệu lực từ…) | 5 | `kernel` |
 | `report_definitions` | Báo cáo metadata (layout, tham số, query) | 5 | `reporting` |
 | `number_sequences` | Bộ đếm đánh số chứng từ (`scope_key` gói cả chi nhánh + năm) | 2 (bảng), 3 (cấp số) | `kernel` |
@@ -490,7 +492,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | **Sao lưu/khôi phục (RT-03)** | `pg_dump`/`pg_restore` **per-schema dataset**, theo lịch + yêu cầu, checksum. **Bắt buộc mã hóa** backup chứa PII (khóa OS keystore) | FR-NFR-020..023, FR-NFR-073 | 11 |
 | **Tác vụ nặng (RT-13)** | Hàng đợi job trong DB + **worker tiến trình riêng** (không FastAPI), có tiến độ + hủy + **lease/heartbeat/reaper chống job mồ côi**. Vai trò `ket_worker` giành việc dưới danh tính của nó, rồi chạy thân job dưới `SET ROLE ds_<mã>_app`. **Set-based SQL**, Python chỉ điều phối (LD-14) | FR-NFR-042/044 | 2, 8, 9 |
 | **Lỗi** | Mã lỗi nghiệp vụ + thông điệp Việt nêu nguyên nhân + cách xử lý; không lộ exception | FR-NFR-050 | 2 |
-| **Đính kèm** | File lưu ngoài DB theo content-hash; DB lưu metadata | FR-NFR-053 | 6 |
+| **Đính kèm** | File lưu ngoài DB theo content-hash, thư mục tách **theo schema dataset**; DB lưu metadata (`attachments`, RLS chi nhánh). Gỡ đính kèm không xóa tệp — nhiều bản ghi trỏ chung một nội dung. Tải về luôn `Content-Disposition: attachment` + `nosniff` | FR-NFR-053 | 2 |
 
 ---
 
@@ -518,6 +520,48 @@ Các kết luận **độc lập ngôn ngữ** từ báo cáo giữ nguyên: 3-t
 - **Tauri + C# server**: giữ design system web-first nhưng vẫn lệch năng lực đội.
 
 Hợp đồng client-server = **REST + OpenAPI** → đổi tầng nào cũng không kéo tầng kia.
+
+---
+
+## 14b. Mốc hiệu năng nền (đo 2026-08-17, lát 2C-5)
+
+Đo bằng `server/scripts/measure_baseline.py --requests 200`. Đây **không** phải
+benchmark FR-NFR-040..044 — những ngưỡng đó nói về báo cáo và tính toán trên dữ
+liệu một năm, mà nền tảng chưa có nghiệp vụ nào để tính. Cái đo ở đây là **chi
+phí nền**: một tiến trình mất bao lâu để sẵn sàng, và một request tối giản tốn
+bao nhiêu trước khi có nghiệp vụ nào chạy.
+
+Ghi lại ngay bây giờ vì mốc này **không dựng lại được về sau**: đo lại ở phase 11
+thì nền đã mang theo mọi thứ của mười phase, và câu hỏi "cái gì làm nó chậm đi"
+sẽ không còn cách nào trả lời.
+
+| Phép đo | p50 | p95 | max |
+| --- | --- | --- | --- |
+| **Nhập mô-đun** `import ket.main`, tiến trình mới, đã trừ khởi động Python | **467 ms** | 489 ms | 489 ms |
+| Dựng ứng dụng (`create_app`, không DB) | 0,26 ms | 0,38 ms | 0,76 ms |
+| Khởi động (`lifespan`: pool + kiểm phiên bản cụm và schema từng dataset) | 14,4 ms | 17,5 ms | 24,5 ms |
+| `GET /health` (qua đủ middleware, không chạm DB) | 0,63 ms | 0,74 ms | 0,96 ms |
+| `GET /api/v1/system/handshake` | 0,83 ms | 0,92 ms | 19,2 ms |
+
+**Đọc bảng này theo đúng thứ tự người dùng cảm nhận:** "bấm mở phần mềm tới lúc
+đăng nhập được" ≈ **nhập mô-đun + dựng ứng dụng + khởi động ≈ 0,5 giây**, và
+**hơn 95% nằm ở dòng đầu tiên** — nạp FastAPI, SQLAlchemy, Pydantic và cây model.
+`create_app` chỉ mắc router nên nó rẻ; đọc riêng nó sẽ cho một bức tranh sai hẳn
+về khởi động.
+
+**Máy đo:** MacBook (Apple Silicon), PostgreSQL 16 cục bộ, 2 dataset trong cụm
+test, Python 3.12.
+
+**Ranh giới của các số này, nói thẳng:** đo **trong tiến trình** bằng
+`TestClient`, nên chúng không gồm mạng LAN và không gồm uvicorn. Đây là **sàn**,
+không phải con số người dùng cảm nhận. Giá trị của nó nằm ở chỗ so sánh giữa hai
+lần đo, không ở giá trị tuyệt đối.
+
+**Điều đáng theo dõi:** thời gian khởi động tăng **tuyến tính theo số dataset**
+— `lifespan` kiểm phiên bản schema của từng dataset một (`main.verify_schema_versions`).
+Với 2 dataset là 10 ms; một bản cài 30 dữ liệu kế toán sẽ phải đo lại. Đó là
+chi phí có chủ đích (thà không khởi động còn hơn ghi sổ vào schema cũ), nhưng nó
+là thứ đầu tiên cần nhìn nếu phase 11 thấy khởi động chậm.
 
 ---
 

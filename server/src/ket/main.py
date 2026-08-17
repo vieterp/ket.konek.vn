@@ -14,7 +14,11 @@ Lát 2B-2b thêm **hàng đợi tác vụ nền**: bảng `jobs` + tiến trình
 (`python -m ket.worker`) với lease/heartbeat/reaper (RT-13), và đường ống sinh
 type TypeScript từ OpenAPI cho client.
 
-Còn lại của phase 2: client + bắt tay schema-version (2C).
+Lát 2C-5 thêm **tệp đính kèm** (FR-NFR-053): nội dung nằm ngoài DB trong kho
+định địa chỉ theo nội dung, bảng `attachments` giữ metadata và chịu cùng luật
+RLS chi nhánh như mọi bảng nghiệp vụ.
+
+Còn lại của phase 2: spike S1 (esign) và S4 (đóng gói) — cả hai chờ phần cứng.
 
 Luồng nghiệp vụ đi qua REST + OpenAPI (LD-03). Client **không bao giờ** nối
 thẳng PostgreSQL và **không** dùng API Tauri cho nghiệp vụ — giữ đường mở lên
@@ -33,6 +37,10 @@ from sqlalchemy import Engine
 from ket import __version__
 from ket.api.dependencies import BRANCH_HEADER, DATASET_HEADER
 from ket.api.idempotency import IDEMPOTENCY_HEADER
+from ket.api.middleware.body_size_limit import (
+    MULTIPART_OVERHEAD_BYTES,
+    BodySizeLimitMiddleware,
+)
 from ket.api.middleware.problem_details import ProblemDetails, register_problem_handlers
 from ket.api.middleware.rate_limit import RateLimitMiddleware
 from ket.api.middleware.request_context import CORRELATION_HEADER, RequestContextMiddleware
@@ -40,6 +48,8 @@ from ket.api.middleware.schema_version_gate import (
     CLIENT_VERSION_HEADER,
     SchemaVersionGateMiddleware,
 )
+from ket.api.routers.attachments import ATTACHMENTS_PREFIX
+from ket.api.routers.attachments import router as attachments_router
 from ket.api.routers.auth import router as auth_router
 from ket.api.routers.jobs import router as jobs_router
 from ket.api.routers.system import router as system_router
@@ -165,6 +175,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         SchemaVersionGateMiddleware,
         minimum=parse_required_version(resolved.minimum_client_version),
     )
+    # Trần thân request nằm **trong** hạn mức nhưng **ngoài** router: nó phải
+    # chạy trước khi FastAPI đọc `multipart/form-data`, vì phép đọc đó ghi trọn
+    # tệp xuống đĩa trước cả lớp xác thực (xem `body_size_limit`). Đặt sau
+    # `RateLimitMiddleware` trong danh sách nghĩa là nó nằm **trong** hạn mức,
+    # nên một kẻ gọi dồn dập vẫn chạm trần request/phút trước.
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        overrides=(
+            (
+                ATTACHMENTS_PREFIX,
+                resolved.attachment_max_bytes + MULTIPART_OVERHEAD_BYTES,
+            ),
+        ),
+    )
     app.add_middleware(
         RateLimitMiddleware,
         default_per_minute=resolved.rate_limit_per_minute,
@@ -202,6 +226,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(system_router)
     app.include_router(settings_router)
     app.include_router(jobs_router)
+    app.include_router(attachments_router)
     app.include_router(updates_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])

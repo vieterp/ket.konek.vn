@@ -113,6 +113,26 @@ class Settings(BaseSettings):
     cập nhật, và tiếng ồn đó che mất lỗi thật.
     """
 
+    attachments_dir: Path | None = None
+    """Thư mục gốc chứa tệp đính kèm của chứng từ và danh mục (FR-NFR-053).
+
+    Tệp nằm **ngoài** cơ sở dữ liệu (DB chỉ giữ metadata), chia thư mục con theo
+    schema dataset để một dữ liệu kế toán sao lưu/khôi phục được độc lập (RT-03).
+
+    `None` (mặc định) = **chưa bật đường đính kèm**, và mọi endpoint đính kèm trả
+    `503` kèm tên biến cần đặt. Không đoán hộ một đường dẫn: thư mục này phải nằm
+    trong phạm vi sao lưu của khách hàng, mà chỗ ấy ở đâu thì chỉ người triển
+    khai biết — một mặc định kiểu `./attachments` sẽ chạy êm suốt nhiều tháng rồi
+    lộ ra vào đúng ngày cần khôi phục.
+    """
+
+    attachment_max_bytes: int = Field(default=25 * 1024 * 1024, ge=1)
+    """Trần dung lượng một tệp đính kèm (25 MiB).
+
+    Đủ cho hợp đồng scan vài chục trang và ảnh chụp chứng từ — hai thứ chiếm gần
+    hết lượng đính kèm thật. Trần này chặn **trong lúc ghi** (xem
+    `kernel/attachments/storage.py`), không tin `Content-Length` client khai."""
+
     cors_allowed_origins: tuple[str, ...] = (
         "tauri://localhost",
         "http://tauri.localhost",

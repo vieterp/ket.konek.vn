@@ -1,6 +1,6 @@
 [project]
 name = "ket-server"
-version = "0.10.0"
+version = "0.11.0"
 description = "Konek Két — app server phần mềm kế toán VN (TT200/TT133), chạy LAN hoặc offline một máy"
 requires-python = "==3.12.*"
 license = { text = "Proprietary" }
@@ -22,6 +22,10 @@ dependencies = [
     "cryptography>=46",    # Fernet cho bí mật lưu trong DB (ADR-019, RT-05)
     "pyotp>=2.9",          # TOTP RFC 6238 (FR-NFR-016)
     "keyring>=25.6",       # OS keystore: Keychain / Credential Manager (ADR-019)
+    # Đính kèm tệp (lát 2C-5). FastAPI đọc `multipart/form-data` qua thư viện
+    # này; thiếu nó thì endpoint tải tệp lên hỏng **lúc dựng ứng dụng**, không
+    # phải lúc có ai gọi (FR-NFR-053).
+    "python-multipart>=0.0.20",
 ]
 
 [dependency-groups]
