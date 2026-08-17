@@ -61,6 +61,18 @@ class SettingDefinition:
     minimum: int | None = None
     maximum: int | None = None
 
+    decided_once: bool = False
+    """Đổi được bất kỳ lúc nào, hay **chốt một lần** (nguyên tắc U14).
+
+    Không phải chuyện trình bày: hai nhóm khác nhau ở chỗ hậu quả. Đổi ngôn ngữ
+    giao diện thì màn hình vẽ lại; đổi số chữ số thập phân khi sổ đã có số dư thì
+    mọi phép làm tròn từ đó về sau lệch với những gì đã ghi, mà không có gì trên
+    màn hình nói ra điều đó.
+
+    Khai **cạnh chính khóa** chứ không trong một bảng phân nhóm đặt ở tầng API:
+    bảng phân nhóm là chỗ khóa thứ mười sẽ vắng mặt, và mặc định của vắng mặt
+    luôn là nhóm sai (nhóm "đổi thoải mái")."""
+
     def __post_init__(self) -> None:
         # Mặc định phải tự đi qua chính bộ kiểm của nó — nếu không, một khóa
         # khai sai sẽ chỉ lộ ra khi có người đầu tiên đọc nó.
@@ -136,6 +148,10 @@ CATALOG: Final[dict[str, SettingDefinition]] = {
             description="Số chữ số thập phân khi làm tròn tiền",
             minimum=0,
             maximum=MONEY_SCALE_MAX,
+            # Chốt một lần (U14): đổi khi sổ đã có số dư nghĩa là từ đó về sau
+            # làm tròn theo một luật khác với những gì đã ghi — chênh lệch không
+            # ai đối chiếu lại được vì cả hai bên đều "đúng theo cấu hình lúc đó".
+            decided_once=True,
         ),
         SettingDefinition(
             key=LOCALE_KEY,

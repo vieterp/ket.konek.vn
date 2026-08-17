@@ -1,6 +1,6 @@
 # Tóm tắt mã nguồn — Konek Két
 
-**Cập nhật:** 2026-08-17 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); phase 3 xong lát 3A + 3B-1 (registry + 15 danh mục + chiều phân tích).
+**Cập nhật:** 2026-08-17 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); phase 3 xong lát 3A + 3B-1 + 3B-2 (registry + 19 danh mục + chiều phân tích + gộp bản ghi).
 
 Tài liệu này mô tả **thứ đang có thật trong repo**. Kiến trúc đích của cả v1
 nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó chưa dựng.
@@ -18,8 +18,8 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | Bảng chứng từ / `gl_postings` / số dư |
 | **RBAC tới cấp `{module}.{chứng từ}.{hành vi}`** + `require_permission`, **định tuyến dataset theo header `X-Dataset`**, phạm vi chi nhánh cho RLS | Bảng chứng từ / `gl_postings` / số dư |
 | **Idempotency cùng transaction** (giành khóa → làm việc → điền kết quả), **khóa lạc quan `row_version`**, **tùy chọn hai cấp**, **hạn mức request** | Bảng chứng từ / `gl_postings` / số dư |
-| **Sổ đăng ký danh mục** — `CatalogRegistry` + `CatalogSpec` (slug, model, extra_fields); **router sinh tự động từ registry** — 6 thao tác/danh mục (GET danh sách/một, POST/PUT/DELETE/chuyển nhánh), 102 operation tổng; phạm vi chi nhánh trong cấu trúc | — |
-| **15 danh mục SRS 7 + 3 chiều lõi**: `projects`, `project_types`, `contracts`, `warehouses`, `units_of_measure`, `asset_types`, `tool_types`, `payment_terms`, `banks`, `timekeeping_symbols`, `document_types`, `invoice_forms`, `pit_tables`, `excise_tax_tables`, `resource_tax_tables` | Dòng 4–6 của SRS §1–2 hoãn tới phase 5/7/9 |
+| **Sổ đăng ký danh mục** — `CatalogRegistry` + `CatalogSpec` (slug, model, extra_fields, flags, references); **router sinh tự động từ registry** — 7 thao tác/danh mục (GET danh sách/một, POST/PUT/DELETE/chuyển nhánh, gộp bản ghi), 175 operation tổng; phạm vi chi nhánh trong cấu trúc; `CatalogFlag` (bộ lọc `?flag=` theo cột boolean); `CatalogReference` (kiểm khóa ngoại sang danh mục khác từ DB lúc chạy) | — |
+| **19 danh mục** — 15 danh mục lát 3B-1 + 2 chiều lõi lát 3A + `partners`/`employees` lát 3B-2: `projects`, `project_types`, `contracts`, `warehouses`, `units_of_measure`, `asset_types`, `tool_types`, `payment_terms`, `banks`, `timekeeping_symbols`, `document_types`, `invoice_forms`, `pit_tables`, `excise_tax_tables`, `resource_tax_tables`, `partners`, `employees`, `cost_objects`, `expense_items` | Dòng 4–6 của SRS §1–2 hoãn tới phase 5/7/9 |
 | **Chiều phân tích mở rộng** — hai bảng `analysis_dimensions` + `analysis_dimension_values`, `DimensionService`, gieo mầm "Mã thống kê" (STAT, FR-SYS-051) lúc cấp dữ liệu kế toán; `value_source` + `master_slug` phân tách (không chuỗi ghép) | — |
 | **Hàng đợi job + tiến trình worker riêng** (không FastAPI); **lease/heartbeat/reaper** chống job mồ côi; **vai trò `ket_worker`**; **API `/api/v1/jobs` + OpenAPI → type TypeScript** | Các module nghiệp vụ kế toán (phase 4 trở đi) |
 | Schema-per-dataset + provisioning + `ensure_cluster` + `repair_dataset_privileges_statements` + **gieo mã quyền/vai trò `admin`** | API nghiệp vụ (mới có `/health`, `/api/v1/auth/*`, `/api/v1/system/*`) |
@@ -64,7 +64,7 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | `kernel/periods/` | **`models` (`fiscal_years`/`accounting_periods`), `service` (sinh 12 kỳ, tra kỳ, khóa/mở có vết)** | Chạm kỳ kế toán, khóa sổ |
 | `kernel/organization/service.py` | **`BranchService`** — cây chi nhánh. Bảng `Branch` vẫn ở `kernel/security/models.py` vì nó là neo cô lập dữ liệu của luồng đăng nhập | Thêm/chuyển chi nhánh |
 | `kernel/persistence/sequences.py` | **`reserve_id`** — lấy khóa chính trước khi `INSERT` để `path` chứa đúng id | Bảng cây mới |
-| `api/routers/master_data` | **Router sinh tự động từ registry** — 6 thao tác × 17 danh mục = 102 operation. Endpoint `/api/v1/master/{slug}` (GET danh sách/một, POST, PUT, DELETE, PUT .../parent). Response model sinh động từ `pydantic.create_model` + `extra_fields`. RLS chi nhánh + quyền theo danh mục | Danh mục mới = không cần đổi router |
+| `api/routers/master_data` | **Router sinh tự động từ registry** — 7 thao tác × 19 danh mục = 175 operation. Endpoint `/api/v1/master/{slug}` (GET danh sách/một, POST, PUT, DELETE, PUT .../parent, POST .../actions/merge). Response model sinh động từ `pydantic.create_model` + `extra_fields`. RLS chi nhánh + quyền theo danh mục | Danh mục mới = không cần đổi router |
 | `api/routers/dimensions` | **API `/api/v1/dimensions`** — đọc chiều + cây giá trị, khai chiều mới, thêm giá trị (chưa có sửa/xóa; UI người dùng cuối hoãn v1.1 theo RT-20) | Chiều mở rộng, giá trị mới |
 | `api/routers/jobs` | **API `/api/v1/jobs/{types,list,detail,cancel}`** + schema request/response | Thêm loại job, đổi hợp đồng |
 | `worker/` | **`__main__.py` (điểm vào `python -m ket.worker`), `runner` (vòng lặp), `progress` (tiến độ + hủy), `contracts`** | Đổi cơ chế giành/chạy job |
@@ -200,7 +200,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 
 ---
 
-## 5. Bộ test (**743 case**: 437 cần PostgreSQL 16, 306 không) — lát 3B-1 tăng 145 test
+## 5. Bộ test (**847 case**: 493 cần PostgreSQL 16, 354 không) — lát 3B-1 tăng 145 test; lát 3B-2 tăng 104 test
 
 | Tệp | Chứng minh điều gì |
 | --- | --- |
@@ -242,7 +242,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_master_data_api.py` (db) | **Lát 3B-1**: CRUD danh mục cây thuần + danh mục có cột riêng; validator liên-trường; phạm vi chi nhánh (404 không phải 403); quyền từng danh mục; chuyển nhánh; idempotency; khóa lạc quan |
 | `test_analysis_dimensions.py` (db) | **Lát 3B-1**: gieo mầm + chạy lại; mã quyền tới bảng permissions; cây giá trị; duy nhất trong chiều; `subtree_of` không rò sang chiều khác; cha khác chiều bị từ chối; nguồn `master` trỏ slug có thật |
 
-Tổng **743 test** (437 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
+Tổng **847 test** (493 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
 
 ---
 

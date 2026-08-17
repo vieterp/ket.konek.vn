@@ -723,6 +723,31 @@ class MasterDataGroupNotPostableError(DomainError):
     error_code: ClassVar[str] = "master_data.group_not_postable"
 
 
+class MasterDataFilterUnknownError(DomainError):
+    """`?flag=` mang một giá trị danh mục này không khai (`CatalogFlag`).
+
+    Trả lỗi thay vì lặng lẽ bỏ qua bộ lọc: bỏ qua nghĩa là danh sách "khách
+    hàng" trả về cả nhà cung cấp khi client gõ sai một chữ, và không ai phát
+    hiện cho tới lúc có người gửi nhầm thư mời.
+    """
+
+    error_code: ClassVar[str] = "master_data.filter_unknown"
+
+
+class MasterDataMergeRefusedError(DomainError):
+    """Gộp hai bản ghi danh mục nhưng trạng thái hiện tại không cho phép (FR-SYS-016).
+
+    `409` cùng lý do với `MasterDataInUseError`: yêu cầu hợp lệ, chỉ là phải làm
+    một việc khác trước (chuyển nhánh con đi, gỡ tệp đính kèm, chọn bản ghi đích
+    có phạm vi chi nhánh phủ được bản ghi nguồn). `details.reason` nêu **việc
+    phải làm**, vì gộp là thao tác không hoàn tác được và một câu từ chối trống
+    rỗng sẽ đẩy người dùng đi thử lại một cách ngẫu nhiên.
+    """
+
+    error_code: ClassVar[str] = "master_data.merge_refused"
+    http_status: ClassVar[int] = 409
+
+
 class DimensionNotFoundError(DomainError):
     """Không có chiều phân tích mở rộng với mã này (LD-08, FR-SYS-051)."""
 

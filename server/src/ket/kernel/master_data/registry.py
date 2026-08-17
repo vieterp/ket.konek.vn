@@ -26,19 +26,23 @@ tách được sẽ hoặc nổ, hoặc làm bẩn registry thật cho các test
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Protocol
 
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from ket.kernel.master_data.bank_account_service import PartnerBankAccountMergeHook
 from ket.kernel.master_data.base import MasterDataRow
 from ket.kernel.master_data.models.asset_type import AssetType, AssetTypeFields
 from ket.kernel.master_data.models.bank import Bank, BankFields
 from ket.kernel.master_data.models.contract import Contract
 from ket.kernel.master_data.models.cost_object import CostObject
 from ket.kernel.master_data.models.document_type import DocumentTypeCatalog
+from ket.kernel.master_data.models.employee import Employee, EmployeeFields
 from ket.kernel.master_data.models.excise_tax_table import ExciseTaxTable
 from ket.kernel.master_data.models.expense_item import ExpenseItem
 from ket.kernel.master_data.models.invoice_form import InvoiceForm
+from ket.kernel.master_data.models.partner import Partner, PartnerFields
 from ket.kernel.master_data.models.payment_term import PaymentTerm, PaymentTermFields
 from ket.kernel.master_data.models.pit_table import PitTable
 from ket.kernel.master_data.models.project import Project
@@ -58,6 +62,70 @@ from ket.kernel.security.permissions import (
 )
 from ket.kernel.security.permissions import REGISTRY as PERMISSION_REGISTRY
 from ket.kernel.security.rls import validate_identifier
+
+
+class MergeHook(Protocol):
+    """Luật hợp nhất riêng của một danh mục khi gộp hai bản ghi (FR-SYS-016).
+
+    `merge_service` chuyển khóa ngoại bằng một câu `UPDATE` vô danh — nó không
+    biết bảng con nào mang ràng buộc duy nhất theo cột danh mục, và cũng không
+    nên biết. Danh mục nào có bảng con như vậy thì **tự khai** cách chuẩn bị,
+    ngay cạnh dịch vụ quản lý bảng con đó.
+
+    Cổng `test_master_data_merge.py` canh chiều ngược lại: bảng có khóa ngoại tới
+    một danh mục **và** một ràng buộc duy nhất chứa cột đó thì danh mục ấy phải
+    khai hook. Bảng con thứ hai ra đời ở phase sau sẽ làm nó đỏ.
+    """
+
+    def before_move(self, session: Session, *, source_id: int, target_id: int) -> None:
+        """Chạy trước khi chuyển khóa ngoại, trong cùng transaction."""
+        ...
+
+    def after_move(self, session: Session, *, target_id: int) -> None:
+        """Chạy sau khi chuyển xong, trước khi xóa bản ghi nguồn."""
+        ...
+
+
+@dataclass(frozen=True)
+class CatalogFlag:
+    """Một bộ lọc `?flag=` trên đường đọc danh sách, dựa vào một cột boolean.
+
+    Sinh ra vì đối tác (FR-SYS-031): một bản ghi mang cả `is_customer` lẫn
+    `is_vendor`, nhưng giao diện có **hai** danh sách. Lọc ở máy khách không thay
+    thế được — danh sách có phân trang (H52), nên "trang 1 của khách hàng" phải
+    là câu hỏi của máy chủ.
+
+    Khai ở registry thay vì viết một route riêng cho đối tác: route riêng là
+    đường đọc thứ hai trên cùng bảng, và hai đường đọc là hai chỗ để phép lọc
+    chi nhánh trôi lệch nhau — đúng bài học `_visible_to` của lát 3A.
+    """
+
+    value: str
+    """Giá trị trên URL: `?flag=customer`."""
+
+    column: str
+    """Cột boolean phải `TRUE`. Đối chiếu với cột đã ánh xạ trong test registry."""
+
+    title: str
+    """Nhãn tiếng Việt cho mô tả OpenAPI."""
+
+
+@dataclass(frozen=True)
+class CatalogReference:
+    """Một cột của danh mục trỏ sang **danh mục khác** bằng khóa ngoại.
+
+    Router dùng nó để kiểm bản ghi được trỏ tới có **nhìn thấy được** từ chi
+    nhánh đang thao tác hay không. Không có bước đó thì khóa ngoại chỉ trả lời
+    "id có tồn tại", và một đối tác của chi nhánh A gắn được điều khoản thanh
+    toán riêng của chi nhánh B: giá trị hiện ra rỗng trên màn hình của A (đường
+    đọc lọc chi nhánh) trong khi hạn nợ vẫn tính theo nó.
+    """
+
+    field: str
+    """Tên cột trên chính danh mục này (`payment_term_id`)."""
+
+    slug: str
+    """`slug` của danh mục đích trong registry (`payment_terms`)."""
 
 
 @dataclass(frozen=True)
@@ -90,8 +158,20 @@ class CatalogSpec:
     ai đặt được. `test_master_data_registry.py` canh cả hai chiều.
     """
 
+    flags: tuple[CatalogFlag, ...] = ()
+    """Bộ lọc boolean cho đường đọc danh sách — xem `CatalogFlag`."""
+
+    references: tuple[CatalogReference, ...] = ()
+    """Cột khóa ngoại trỏ sang danh mục khác — xem `CatalogReference`."""
+
+    merge_hook: MergeHook | None = None
+    """Luật hợp nhất bảng con khi gộp hai bản ghi — xem `MergeHook`."""
+
     def __post_init__(self) -> None:
         validate_identifier(self.slug)
+
+    def flag(self, value: str) -> CatalogFlag | None:
+        return next((item for item in self.flags if item.value == value), None)
 
     @property
     def entity_type(self) -> str:
@@ -160,7 +240,7 @@ dữ liệu kế toán mới — đều thấy đủ mã quyền danh mục.
 
 
 def _register_all() -> None:
-    """Mười bảy danh mục của lát 3A + 3B-1.
+    """Mười chín danh mục của lát 3A + 3B-1 + 3B-2.
 
     Xếp theo nhóm nghiệp vụ chứ không theo bảng chữ cái: người đọc tệp này đang
     tìm "danh mục kho nằm ở đâu", không tìm chữ cái. Thứ tự **xuất ra** thì đã
@@ -169,6 +249,29 @@ def _register_all() -> None:
     # Sáu chiều phân tích lõi của LD-08. `branch_id` là chiều thứ sáu và nằm ở
     # `branches` — bảng đó không phải danh mục (H38) nên không có mặt ở đây.
     for spec in (
+        # Đối tượng công nợ và con người
+        CatalogSpec(
+            slug="partners",
+            model=Partner,
+            title="Đối tác",
+            extra_fields=PartnerFields,
+            # FR-SYS-031: **một** bản ghi, hai danh sách.
+            flags=(
+                CatalogFlag(value="customer", column="is_customer", title="Khách hàng"),
+                CatalogFlag(value="vendor", column="is_vendor", title="Nhà cung cấp"),
+            ),
+            references=(CatalogReference(field="payment_term_id", slug="payment_terms"),),
+            # Bảng con `partner_bank_accounts` mang hai ràng buộc duy nhất theo
+            # `partner_id`, nên gộp phải có bước chuẩn bị (review H1).
+            merge_hook=PartnerBankAccountMergeHook(),
+        ),
+        CatalogSpec(
+            slug="employees",
+            model=Employee,
+            title="Nhân viên",
+            extra_fields=EmployeeFields,
+            references=(CatalogReference(field="bank_id", slug="banks"),),
+        ),
         CatalogSpec(slug="cost_objects", model=CostObject, title="Đối tượng tập hợp chi phí"),
         CatalogSpec(slug="expense_items", model=ExpenseItem, title="Khoản mục chi phí"),
         CatalogSpec(slug="projects", model=Project, title="Công trình"),
