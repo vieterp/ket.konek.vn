@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.routing import APIRoute
+from sqlalchemy import Boolean, inspect
 
 from ket.api.idempotency import iter_api_routes
 from ket.api.routers.master_data import PREFIX
@@ -180,6 +181,53 @@ def test_every_catalog_gets_the_same_six_routes(spec: CatalogSpec) -> None:
     assert (f"{PREFIX}/{spec.slug}/{{record_id}}", "PUT") in paths
     assert (f"{PREFIX}/{spec.slug}/{{record_id}}/parent", "PUT") in paths
     assert (f"{PREFIX}/{spec.slug}/{{record_id}}", "DELETE") in paths
+    # Lát 3B-2 thêm thao tác thứ bảy — gộp bản ghi (FR-SYS-016). Cũng sinh cho
+    # **mọi** danh mục, cùng lý do: danh mục thứ hai mươi không được là danh mục
+    # duy nhất không gộp được.
+    assert (f"{PREFIX}/{spec.slug}/actions/merge", "POST") in paths
+
+
+@pytest.mark.parametrize("spec", REGISTRY.specs(), ids=lambda spec: spec.slug)
+def test_flags_point_at_real_boolean_columns(spec: CatalogSpec) -> None:
+    """Bộ lọc `?flag=` phải trỏ vào một cột boolean có thật của chính danh mục.
+
+    Sai tên cột thì lỗi chỉ nổ ra ở request đầu tiên có người lọc — mà đường lọc
+    là đường mà giao diện dùng để dựng danh sách khách hàng, tức lỗi nổ ở màn
+    hình chính chứ không ở CI.
+    """
+    columns = inspect(spec.model).columns
+    values = [flag.value for flag in spec.flags]
+
+    assert len(values) == len(set(values)), f"{spec.slug}: hai bộ lọc trùng giá trị `?flag=`"
+    for flag in spec.flags:
+        assert flag.column in columns, f"{spec.slug}: cột {flag.column!r} không có trong bảng"
+        assert isinstance(columns[flag.column].type, Boolean), (
+            f"{spec.slug}: {flag.column!r} không phải cột boolean nên `?flag=` sẽ lọc sai"
+        )
+
+
+@pytest.mark.parametrize("spec", REGISTRY.specs(), ids=lambda spec: spec.slug)
+def test_references_point_at_registered_catalogs(spec: CatalogSpec) -> None:
+    """Khóa ngoại khai trong `references` phải là cột thật **và** trỏ danh mục có đăng ký.
+
+    Danh mục đích phải có trong registry vì phép kiểm phạm vi (`ensure_catalog_choice`)
+    tra nó ở đó: một `slug` gõ sai sẽ biến phép kiểm thành `404` cho **mọi** giá
+    trị hợp lệ, tức người dùng không gán được điều khoản thanh toán nào cả.
+    """
+    columns = inspect(spec.model).columns
+
+    for reference in spec.references:
+        assert reference.field in columns, f"{spec.slug}: {reference.field!r} không phải cột"
+        assert columns[reference.field].foreign_keys, (
+            f"{spec.slug}: {reference.field!r} khai là tham chiếu nhưng không có khóa ngoại"
+        )
+        target = REGISTRY.get(reference.slug)
+        assert target is not None, f"{spec.slug}: danh mục đích {reference.slug!r} chưa đăng ký"
+        referenced_tables = {key.column.table.name for key in columns[reference.field].foreign_keys}
+        assert target.entity_type in referenced_tables, (
+            f"{spec.slug}: {reference.field!r} trỏ tới {referenced_tables} "
+            f"nhưng khai là {target.entity_type}"
+        )
 
 
 def test_registering_a_catalog_also_registers_its_permission_type() -> None:

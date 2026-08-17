@@ -139,6 +139,7 @@ class MasterDataService[ModelT: MasterDataRow]:
         parent_id: int | None,
         *,
         branch_id: int | None = None,
+        flag_column: str | None = None,
         limit: int | None = None,
         offset: int = 0,
     ) -> Page[ModelT]:
@@ -150,13 +151,33 @@ class MasterDataService[ModelT: MasterDataRow]:
             if parent_id is not None
             else self._model.parent_id.is_(None)
         )
-        return self._page(statement, limit=limit, offset=offset)
+        return self._page(self._with_flag(statement, flag_column), limit=limit, offset=offset)
+
+    def _with_flag(
+        self, statement: Select[tuple[ModelT]], flag_column: str | None
+    ) -> Select[tuple[ModelT]]:
+        """Lọc theo một cột boolean của danh mục (`CatalogFlag`).
+
+        Nhận **tên cột** chứ không một biểu thức dựng sẵn: tên đến từ registry,
+        và `_ensure_mapped_column` là chỗ duy nhất trong tệp này biết cột nào có
+        thật. Nhận biểu thức thì mỗi nơi gọi tự dựng lấy — tức tự quyết luôn cả
+        việc kiểm hay không kiểm.
+
+        Nút **nhóm** cũng bị lọc theo cờ, có chủ đích: một nhóm chỉ chứa nhà cung
+        cấp không có việc gì trên cây khách hàng, và giữ nó lại sẽ vẽ ra những
+        nhánh rỗng.
+        """
+        if flag_column is None:
+            return statement
+        self._ensure_mapped_column(flag_column)
+        return statement.where(inspect(self._model).columns[flag_column].is_(True))
 
     def subtree_of(
         self,
         record_id: int,
         *,
         branch_id: int | None = None,
+        flag_column: str | None = None,
         limit: int | None = None,
         offset: int = 0,
     ) -> Page[ModelT]:
@@ -172,7 +193,7 @@ class MasterDataService[ModelT: MasterDataRow]:
             .where(self._visible_to(branch_id))
             .order_by(self._model.path)
         )
-        return self._page(statement, limit=limit, offset=offset)
+        return self._page(self._with_flag(statement, flag_column), limit=limit, offset=offset)
 
     def _page(
         self, statement: Select[tuple[ModelT]], *, limit: int | None, offset: int

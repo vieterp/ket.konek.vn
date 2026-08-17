@@ -71,6 +71,8 @@ _EXEMPT: dict[str, str] = {
     "pit_tables": "danh mục, NULL = dùng chung toàn công ty",
     "excise_tax_tables": "danh mục, NULL = dùng chung toàn công ty",
     "resource_tax_tables": "danh mục, NULL = dùng chung toàn công ty",
+    "partners": "danh mục, NULL = dùng chung toàn công ty",
+    "employees": "danh mục, NULL = dùng chung toàn công ty",
 }
 
 

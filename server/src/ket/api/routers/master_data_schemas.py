@@ -106,6 +106,47 @@ class MasterDataMoveRequest(BaseModel):
     """`None` = đưa nút lên làm nút gốc."""
 
 
+class MasterDataMergeRequest(BaseModel):
+    """Gộp hai bản ghi trùng nhau (FR-SYS-016).
+
+    Hai id, không có tùy chọn nào khác: mọi câu hỏi phụ ("giữ tên bên nào",
+    "gộp cả nhánh con không") đều là quyết định người dùng phải nhìn thấy trên
+    màn hình *trước* khi bấm, chứ không phải cờ trong thân request. Bản ghi đích
+    giữ nguyên mọi thuộc tính của nó; muốn đổi tên thì sửa sau bằng `PUT`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: int = Field(ge=1)
+    """Bản ghi **sẽ biến mất** sau khi mọi tham chiếu chuyển đi."""
+
+    target_id: int = Field(ge=1)
+    """Bản ghi giữ lại."""
+
+
+class MovedReferenceResponse(BaseModel):
+    """Một cột khóa ngoại đã được trỏ lại, kèm số dòng."""
+
+    table: str
+    column: str
+    rows: int
+
+
+class MasterDataMergeResponse(BaseModel):
+    """Báo cáo của một lần gộp — thứ màn hình dựng câu "đã chuyển 143 dòng"."""
+
+    entity_type: str
+    source_id: int
+    source_code: str | None
+    """`None` ở lần **gửi lại** một khóa idempotency đã dùng: bản ghi nguồn không
+    còn để đọc mã, và dựng lại một giá trị từ khóa đã lưu sẽ là bịa một con số
+    cho một lần chạy không xảy ra."""
+
+    target_id: int
+    total_rows_moved: int
+    moved: list[MovedReferenceResponse]
+
+
 @dataclass(frozen=True)
 class CatalogSchemas:
     """Bốn model của một danh mục, dựng một lần lúc nạp module."""

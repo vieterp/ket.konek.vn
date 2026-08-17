@@ -470,6 +470,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/asset_types/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại tài sản cố định — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_asset_types_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/asset_types/{record_id}": {
         parameters: {
             query?: never;
@@ -552,6 +581,35 @@ export interface paths {
          *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
          */
         post: operations["create_record_api_v1_master_banks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/banks/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ngân hàng — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_banks_actions_merge_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -646,6 +704,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/contracts/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hợp đồng — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_contracts_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/contracts/{record_id}": {
         parameters: {
             query?: never;
@@ -728,6 +815,35 @@ export interface paths {
          *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
          */
         post: operations["create_record_api_v1_master_cost_objects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/cost_objects/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đối tượng tập hợp chi phí — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_cost_objects_actions_merge_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -822,6 +938,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/document_types/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại chứng từ — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_document_types_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/document_types/{record_id}": {
         parameters: {
             query?: never;
@@ -870,6 +1015,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Nhân viên — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_employees_get"];
+        put?: never;
+        /**
+         * Nhân viên — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_employees_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/employees/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Nhân viên — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_employees_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/employees/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Nhân viên — một bản ghi */
+        get: operations["get_record_api_v1_master_employees__record_id__get"];
+        /**
+         * Nhân viên — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_employees__record_id__put"];
+        post?: never;
+        /**
+         * Nhân viên — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_employees__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/employees/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Nhân viên — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_employees__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/excise_tax_tables": {
         parameters: {
             query?: never;
@@ -904,6 +1166,35 @@ export interface paths {
          *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
          */
         post: operations["create_record_api_v1_master_excise_tax_tables_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/excise_tax_tables/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Biểu thuế tiêu thụ đặc biệt — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_excise_tax_tables_actions_merge_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -998,6 +1289,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/expense_items/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Khoản mục chi phí — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_expense_items_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/expense_items/{record_id}": {
         parameters: {
             query?: never;
@@ -1086,6 +1406,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/invoice_forms/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mẫu số hóa đơn — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_invoice_forms_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/invoice_forms/{record_id}": {
         parameters: {
             query?: never;
@@ -1134,6 +1483,175 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/partners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Đối tác — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_partners_get"];
+        put?: never;
+        /**
+         * Đối tác — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_partners_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/partners/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đối tác — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_partners_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/partners/{partner_id}/bank-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Bank Accounts
+         * @description Tài khoản của một đối tác — mặc định trước.
+         *
+         *     **Không** phân trang, khác đường đọc danh mục: một đối tác có vài tài khoản,
+         *     không phải vài nghìn. Thêm phân trang ở đây là thêm hai tham số mà mọi màn
+         *     hình sẽ truyền giá trị mặc định.
+         */
+        get: operations["list_bank_accounts_api_v1_master_partners__partner_id__bank_accounts_get"];
+        put?: never;
+        /**
+         * Add Bank Account
+         * @description Thêm một tài khoản ngân hàng cho đối tác — thực hiện đúng một lần (FR-NFR-004).
+         */
+        post: operations["add_bank_account_api_v1_master_partners__partner_id__bank_accounts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/partners/{partner_id}/bank-accounts/{account_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Bank Account
+         * @description Sửa một tài khoản, gồm cả cờ mặc định và cờ còn dùng.
+         */
+        put: operations["update_bank_account_api_v1_master_partners__partner_id__bank_accounts__account_id__put"];
+        post?: never;
+        /**
+         * Delete Bank Account
+         * @description Xóa một tài khoản khỏi hồ sơ đối tác.
+         */
+        delete: operations["delete_bank_account_api_v1_master_partners__partner_id__bank_accounts__account_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/partners/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Đối tác — một bản ghi */
+        get: operations["get_record_api_v1_master_partners__record_id__get"];
+        /**
+         * Đối tác — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_partners__record_id__put"];
+        post?: never;
+        /**
+         * Đối tác — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_partners__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/partners/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Đối tác — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_partners__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/payment_terms": {
         parameters: {
             query?: never;
@@ -1168,6 +1686,35 @@ export interface paths {
          *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
          */
         post: operations["create_record_api_v1_master_payment_terms_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/payment_terms/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Điều khoản thanh toán — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_payment_terms_actions_merge_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1262,6 +1809,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/pit_tables/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Biểu tính thuế thu nhập cá nhân — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_pit_tables_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/pit_tables/{record_id}": {
         parameters: {
             query?: never;
@@ -1344,6 +1920,35 @@ export interface paths {
          *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
          */
         post: operations["create_record_api_v1_master_project_types_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/project_types/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại công trình — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_project_types_actions_merge_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1438,6 +2043,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/projects/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Công trình — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_projects_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/projects/{record_id}": {
         parameters: {
             query?: never;
@@ -1520,6 +2154,35 @@ export interface paths {
          *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
          */
         post: operations["create_record_api_v1_master_resource_tax_tables_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/resource_tax_tables/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Biểu thuế tài nguyên — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_resource_tax_tables_actions_merge_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1614,6 +2277,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/timekeeping_symbols/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ký hiệu chấm công — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_timekeeping_symbols_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/timekeeping_symbols/{record_id}": {
         parameters: {
             query?: never;
@@ -1696,6 +2388,35 @@ export interface paths {
          *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
          */
         post: operations["create_record_api_v1_master_tool_types_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/tool_types/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại công cụ dụng cụ — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_tool_types_actions_merge_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1790,6 +2511,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/units_of_measure/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đơn vị tính — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_units_of_measure_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/units_of_measure/{record_id}": {
         parameters: {
             query?: never;
@@ -1878,6 +2628,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/warehouses/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Kho — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_warehouses_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/warehouses/{record_id}": {
         parameters: {
             query?: never;
@@ -1919,6 +2698,31 @@ export interface paths {
          * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
          */
         put: operations["move_record_api_v1_master_warehouses__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup/settings-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Settings Groups
+         * @description Thiết lập chia hai nhóm: đổi bất kỳ lúc nào / chốt một lần (U14).
+         *
+         *     Phân nhóm theo hệ quả là toàn bộ điểm của màn hình này. Một danh sách phẳng
+         *     xếp "ngôn ngữ giao diện" cạnh "phương pháp tính giá xuất kho" nói rằng hai
+         *     thứ đó cùng mức rủi ro — trong khi đổi cái thứ hai giữa năm làm giá vốn của
+         *     mọi phiếu xuất còn lại tính theo một luật khác.
+         */
+        get: operations["settings_groups_api_v1_setup_settings_groups_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2998,6 +3802,137 @@ export interface components {
             row_version: number;
         };
         /**
+         * EmployeesCreateRequest
+         * @description Nhân viên — tạo mới.
+         */
+        EmployeesCreateRequest: {
+            /** Bank Account Holder */
+            bank_account_holder?: string | null;
+            /** Bank Account Number */
+            bank_account_number?: string | null;
+            /** Bank Id */
+            bank_id?: number | null;
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /** Department */
+            department?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Id Number */
+            id_number?: string | null;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Phone */
+            phone?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Tax Code */
+            tax_code?: string | null;
+        };
+        /**
+         * EmployeesListResponse
+         * @description Nhân viên — một trang bản ghi.
+         */
+        EmployeesListResponse: {
+            /** Items */
+            items: components["schemas"]["EmployeesResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * EmployeesResponse
+         * @description Nhân viên — một bản ghi.
+         */
+        EmployeesResponse: {
+            /** Bank Account Holder */
+            bank_account_holder?: string | null;
+            /** Bank Account Number */
+            bank_account_number?: string | null;
+            /** Bank Id */
+            bank_id?: number | null;
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Department */
+            department?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Id */
+            id: number;
+            /** Id Number */
+            id_number?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Phone */
+            phone?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Row Version */
+            row_version: number;
+            /** Tax Code */
+            tax_code?: string | null;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * EmployeesUpdateRequest
+         * @description Nhân viên — sửa.
+         */
+        EmployeesUpdateRequest: {
+            /** Bank Account Holder */
+            bank_account_holder?: string | null;
+            /** Bank Account Number */
+            bank_account_number?: string | null;
+            /** Bank Id */
+            bank_id?: number | null;
+            /** Code */
+            code: string;
+            /** Department */
+            department?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Id Number */
+            id_number?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Row Version */
+            row_version: number;
+            /** Tax Code */
+            tax_code?: string | null;
+        };
+        /**
          * ExciseTaxTablesCreateRequest
          * @description Biểu thuế tiêu thụ đặc biệt — tạo mới.
          */
@@ -3402,6 +4337,39 @@ export interface components {
             token: string;
         };
         /**
+         * MasterDataMergeRequest
+         * @description Gộp hai bản ghi trùng nhau (FR-SYS-016).
+         *
+         *     Hai id, không có tùy chọn nào khác: mọi câu hỏi phụ ("giữ tên bên nào",
+         *     "gộp cả nhánh con không") đều là quyết định người dùng phải nhìn thấy trên
+         *     màn hình *trước* khi bấm, chứ không phải cờ trong thân request. Bản ghi đích
+         *     giữ nguyên mọi thuộc tính của nó; muốn đổi tên thì sửa sau bằng `PUT`.
+         */
+        MasterDataMergeRequest: {
+            /** Source Id */
+            source_id: number;
+            /** Target Id */
+            target_id: number;
+        };
+        /**
+         * MasterDataMergeResponse
+         * @description Báo cáo của một lần gộp — thứ màn hình dựng câu "đã chuyển 143 dòng".
+         */
+        MasterDataMergeResponse: {
+            /** Entity Type */
+            entity_type: string;
+            /** Moved */
+            moved: components["schemas"]["MovedReferenceResponse"][];
+            /** Source Code */
+            source_code: string | null;
+            /** Source Id */
+            source_id: number;
+            /** Target Id */
+            target_id: number;
+            /** Total Rows Moved */
+            total_rows_moved: number;
+        };
+        /**
          * MasterDataMoveRequest
          * @description Chuyển một nút (và cả nhánh dưới nó) sang nhóm cha khác (FR-SYS-011).
          */
@@ -3433,6 +4401,299 @@ export interface components {
             user_id: number;
             /** Username */
             username: string;
+        };
+        /**
+         * MovedReferenceResponse
+         * @description Một cột khóa ngoại đã được trỏ lại, kèm số dòng.
+         */
+        MovedReferenceResponse: {
+            /** Column */
+            column: string;
+            /** Rows */
+            rows: number;
+            /** Table */
+            table: string;
+        };
+        /**
+         * PartnerBankAccountCreateRequest
+         * @description Thêm một tài khoản.
+         *
+         *     `is_default = false` **không** bảo đảm tài khoản này không thành mặc định:
+         *     tài khoản đầu tiên của một đối tác luôn là mặc định (xem
+         *     `PartnerBankAccountService.add`). Phản hồi trả về cờ thật, nên màn hình luôn
+         *     thấy đúng trạng thái sau khi ghi.
+         */
+        PartnerBankAccountCreateRequest: {
+            /** Account Holder */
+            account_holder: string;
+            /** Account Number */
+            account_number: string;
+            /** Bank Branch */
+            bank_branch?: string | null;
+            /** Bank Id */
+            bank_id: number;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
+        };
+        /**
+         * PartnerBankAccountListResponse
+         * @description Toàn bộ tài khoản của một đối tác — không phân trang, xem router.
+         */
+        PartnerBankAccountListResponse: {
+            /** Items */
+            items: components["schemas"]["PartnerBankAccountResponse"][];
+        };
+        /**
+         * PartnerBankAccountResponse
+         * @description Một tài khoản ngân hàng của đối tác.
+         */
+        PartnerBankAccountResponse: {
+            /** Account Holder */
+            account_holder: string;
+            /** Account Number */
+            account_number: string;
+            /** Bank Branch */
+            bank_branch: string | null;
+            /** Bank Id */
+            bank_id: number;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Default */
+            is_default: boolean;
+            /** Partner Id */
+            partner_id: number;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * PartnerBankAccountUpdateRequest
+         * @description Sửa một tài khoản — gửi **trọn** giá trị mới, có kiểm phiên bản (FR-NFR-005).
+         *
+         *     Mọi trường bắt buộc chứ không "chỉ gửi phần đổi", cùng lối
+         *     `MasterDataBaseUpdateRequest` đã đi: form sửa hiện đủ các ô, nên thân request
+         *     thiếu ô nào nghĩa là client tự quyết bỏ qua ô đó — và một cờ boolean thiếu
+         *     không phân biệt được với `false`.
+         */
+        PartnerBankAccountUpdateRequest: {
+            /** Account Holder */
+            account_holder: string;
+            /** Account Number */
+            account_number: string;
+            /** Bank Branch */
+            bank_branch?: string | null;
+            /** Bank Id */
+            bank_id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Default */
+            is_default: boolean;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * PartnersCreateRequest
+         * @description Đối tác — tạo mới.
+         */
+        PartnersCreateRequest: {
+            /** Address */
+            address?: string | null;
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /** Contact Name */
+            contact_name?: string | null;
+            /** Country */
+            country?: string | null;
+            /** Credit Limit */
+            credit_limit?: number | string | null;
+            /** District */
+            district?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Invoice Email */
+            invoice_email?: string | null;
+            /** Invoice Recipient */
+            invoice_recipient?: string | null;
+            /**
+             * Is Customer
+             * @default false
+             */
+            is_customer: boolean;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /**
+             * Is Organization
+             * @default true
+             */
+            is_organization: boolean;
+            /**
+             * Is Vendor
+             * @default false
+             */
+            is_vendor: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Payment Term Id */
+            payment_term_id?: number | null;
+            /** Phone */
+            phone?: string | null;
+            /** Province */
+            province?: string | null;
+            /** Tax Code */
+            tax_code?: string | null;
+            /** Website */
+            website?: string | null;
+        };
+        /**
+         * PartnersListResponse
+         * @description Đối tác — một trang bản ghi.
+         */
+        PartnersListResponse: {
+            /** Items */
+            items: components["schemas"]["PartnersResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * PartnersResponse
+         * @description Đối tác — một bản ghi.
+         */
+        PartnersResponse: {
+            /** Address */
+            address?: string | null;
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Contact Name */
+            contact_name?: string | null;
+            /** Country */
+            country?: string | null;
+            /** Credit Limit */
+            credit_limit?: string | null;
+            /** District */
+            district?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Id */
+            id: number;
+            /** Invoice Email */
+            invoice_email?: string | null;
+            /** Invoice Recipient */
+            invoice_recipient?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /**
+             * Is Customer
+             * @default false
+             */
+            is_customer: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /**
+             * Is Organization
+             * @default true
+             */
+            is_organization: boolean;
+            /**
+             * Is Vendor
+             * @default false
+             */
+            is_vendor: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Payment Term Id */
+            payment_term_id?: number | null;
+            /** Phone */
+            phone?: string | null;
+            /** Province */
+            province?: string | null;
+            /** Row Version */
+            row_version: number;
+            /** Tax Code */
+            tax_code?: string | null;
+            /** Uid */
+            uid: string;
+            /** Website */
+            website?: string | null;
+        };
+        /**
+         * PartnersUpdateRequest
+         * @description Đối tác — sửa.
+         */
+        PartnersUpdateRequest: {
+            /** Address */
+            address?: string | null;
+            /** Code */
+            code: string;
+            /** Contact Name */
+            contact_name?: string | null;
+            /** Country */
+            country?: string | null;
+            /** Credit Limit */
+            credit_limit?: number | string | null;
+            /** District */
+            district?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Invoice Email */
+            invoice_email?: string | null;
+            /** Invoice Recipient */
+            invoice_recipient?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /**
+             * Is Customer
+             * @default false
+             */
+            is_customer: boolean;
+            /**
+             * Is Organization
+             * @default true
+             */
+            is_organization: boolean;
+            /**
+             * Is Vendor
+             * @default false
+             */
+            is_vendor: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Payment Term Id */
+            payment_term_id?: number | null;
+            /** Phone */
+            phone?: string | null;
+            /** Province */
+            province?: string | null;
+            /** Row Version */
+            row_version: number;
+            /** Tax Code */
+            tax_code?: string | null;
+            /** Website */
+            website?: string | null;
         };
         /**
          * PaymentTermsCreateRequest
@@ -3975,6 +5236,51 @@ export interface components {
             /** Row Version */
             row_version?: number | null;
             scope: components["schemas"]["SettingScope"];
+            /** Value */
+            value: string;
+        };
+        /**
+         * SettingsGroupsResponse
+         * @description Hai nhóm của màn hình Thiết lập: đổi bất kỳ lúc nào / chốt một lần.
+         */
+        SettingsGroupsResponse: {
+            /** Groups */
+            groups: components["schemas"]["SetupGroup"][];
+        };
+        /**
+         * SetupGroup
+         * @description Một nhóm quyết định, phân theo **hệ quả** chứ không theo màn hình.
+         */
+        SetupGroup: {
+            /** Description */
+            description: string;
+            /** Items */
+            items: components["schemas"]["SetupItem"][];
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * SetupItem
+         * @description Một quyết định thiết lập, dù nó đến từ bảng tùy chọn hay từ năm tài chính.
+         */
+        SetupItem: {
+            /** Fiscal Year Code */
+            fiscal_year_code: string | null;
+            /** Is Editable */
+            is_editable: boolean;
+            /** Key */
+            key: string;
+            /** Locked Reason */
+            locked_reason: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "setting" | "fiscal_year";
+            /** Title */
+            title: string;
             /** Value */
             value: string;
         };
@@ -5029,6 +6335,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -5078,6 +6386,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_asset_types_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -5226,6 +6567,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -5275,6 +6618,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BanksResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_banks_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -5423,6 +6799,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -5472,6 +6850,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContractsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_contracts_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -5620,6 +7031,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -5669,6 +7082,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CostObjectsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_cost_objects_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -5817,6 +7263,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -5866,6 +7314,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_document_types_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -6009,11 +7490,245 @@ export interface operations {
             };
         };
     };
+    list_records_api_v1_master_employees_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeesListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_employees_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployeesCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_employees_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_employees__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_employees__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployeesUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_employees__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_employees__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_records_api_v1_master_excise_tax_tables_get: {
         parameters: {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -6063,6 +7778,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExciseTaxTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_excise_tax_tables_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -6211,6 +7959,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -6260,6 +8010,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExpenseItemsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_expense_items_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -6408,6 +8191,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -6457,6 +8242,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InvoiceFormsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_invoice_forms_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -6600,11 +8418,379 @@ export interface operations {
             };
         };
     };
+    list_records_api_v1_master_partners_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                /** @description Lọc theo: `customer` (Khách hàng), `vendor` (Nhà cung cấp) */
+                flag?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnersListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_partners_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnersCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnersResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_partners_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_bank_accounts_api_v1_master_partners__partner_id__bank_accounts_get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path: {
+                partner_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBankAccountListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    add_bank_account_api_v1_master_partners__partner_id__bank_accounts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partner_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerBankAccountCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBankAccountResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_bank_account_api_v1_master_partners__partner_id__bank_accounts__account_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partner_id: number;
+                account_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerBankAccountUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBankAccountResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_bank_account_api_v1_master_partners__partner_id__bank_accounts__account_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partner_id: number;
+                account_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_partners__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnersResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_partners__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnersUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnersResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_partners__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_partners__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnersResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_records_api_v1_master_payment_terms_get: {
         parameters: {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -6654,6 +8840,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentTermsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_payment_terms_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -6802,6 +9021,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -6851,6 +9072,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PitTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_pit_tables_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -6999,6 +9253,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -7048,6 +9304,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_project_types_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -7196,6 +9485,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -7245,6 +9536,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_projects_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -7393,6 +9717,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -7442,6 +9768,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResourceTaxTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_resource_tax_tables_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -7590,6 +9949,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -7639,6 +10000,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TimekeepingSymbolsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_timekeeping_symbols_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -7787,6 +10181,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -7836,6 +10232,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ToolTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_tool_types_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -7984,6 +10413,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -8033,6 +10464,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnitsOfMeasureResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_units_of_measure_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -8181,6 +10645,8 @@ export interface operations {
             query?: {
                 parent_id?: number | null;
                 subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -8230,6 +10696,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WarehousesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_warehouses_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -8360,6 +10859,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WarehousesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    settings_groups_api_v1_setup_settings_groups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsGroupsResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

@@ -14,34 +14,37 @@ rẽ nhánh. Chạy cả mười bảy chỉ nhân thời gian với mười b�
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, select, text
+from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from catalog_api_support import (
+    UserFactory,
+    actor,
+    branch_ids,
+    catalog_codes,
+    create_record,
+    ensure_branches,
+    ensure_role,
+    unique_code,
+)
 from conftest import api_test_client
-from ket.api.dependencies import BRANCH_HEADER, DATASET_HEADER
+from ket.api.dependencies import BRANCH_HEADER
 from ket.api.idempotency import IDEMPOTENCY_HEADER
 from ket.api.routers.master_data import MAX_PAGE_SIZE
-from ket.kernel.datasets.models import User
 from ket.kernel.datasets.provisioning import DatasetRef
-from ket.kernel.master_data.registry import REGISTRY
 from ket.kernel.master_data.usage import record_use
-from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
-from ket.kernel.security import role_service
-from ket.kernel.security.models import Branch, Permission, Role, RolePermission
 from ket.kernel.security.permissions import MASTER_MODULE, Action, permission_code
 from ket.main import create_app
 from ket.settings import Settings
 
 pytestmark = pytest.mark.db
-
-UserFactory = Callable[..., User]
 
 PLAIN = "warehouses"
 """Danh mục thuần cây — không cột riêng nào."""
@@ -68,18 +71,6 @@ READER_ROLE = "chi_xem_danh_muc"
 BRANCH_CODES = ["CN_DM_A", "CN_DM_B"]
 
 
-def _spec(slug: str) -> object:
-    spec = REGISTRY.get(slug)
-    assert spec is not None, f"test viết cho danh mục {slug} nhưng nó không còn đăng ký"
-    return spec
-
-
-def _codes(slug: str, *actions: Action) -> list[str]:
-    spec = REGISTRY.get(slug)
-    assert spec is not None
-    return [spec.permission_code(action) for action in actions]
-
-
 @pytest.fixture
 def client(
     test_settings: Settings, app_engine: Engine, session_factory: sessionmaker[Session]
@@ -89,42 +80,16 @@ def client(
         yield instance
 
 
-def _ensure_role(
-    session_factory: sessionmaker[Session],
-    dataset: DatasetRef,
-    code: str,
-    permissions: list[str],
-) -> str:
-    scope = RequestScope(dataset_schema=dataset.schema_name, user_id=1, branch_ids=())
-    with unit_of_work(session_factory, scope) as session:
-        if session.scalar(select(Role.id).where(Role.code == code)) is None:
-            role = Role(code=code, name=f"Vai trò {code}")
-            session.add(role)
-            session.flush()
-            for permission in permissions:
-                permission_id = session.scalar(
-                    select(Permission.id).where(Permission.code == permission)
-                )
-                assert permission_id is not None, (
-                    f"chưa gieo mã quyền {permission} — registry danh mục chưa được nạp "
-                    "lúc cấp dữ liệu kế toán"
-                )
-                session.add(
-                    RolePermission(role_id=role.id, permission_id=permission_id, allow=True)
-                )
-    return code
-
-
 @pytest.fixture(scope="module")
 def editor_role(session_factory: sessionmaker[Session], dataset_alpha: DatasetRef) -> str:
-    return _ensure_role(
+    return ensure_role(
         session_factory,
         dataset_alpha,
         EDITOR_ROLE,
         [
-            *_codes(PLAIN, Action.VIEW, Action.CREATE, Action.EDIT, Action.DELETE),
-            *_codes(WITH_EXTRAS, Action.VIEW, Action.CREATE, Action.EDIT, Action.DELETE),
-            *_codes(SECOND_PLAIN, Action.VIEW, Action.CREATE),
+            *catalog_codes(PLAIN, Action.VIEW, Action.CREATE, Action.EDIT, Action.DELETE),
+            *catalog_codes(WITH_EXTRAS, Action.VIEW, Action.CREATE, Action.EDIT, Action.DELETE),
+            *catalog_codes(SECOND_PLAIN, Action.VIEW, Action.CREATE),
             permission_code(MASTER_MODULE, DIMENSION, Action.VIEW),
             permission_code(MASTER_MODULE, DIMENSION, Action.CREATE),
         ],
@@ -134,11 +99,11 @@ def editor_role(session_factory: sessionmaker[Session], dataset_alpha: DatasetRe
 @pytest.fixture(scope="module")
 def reader_role(session_factory: sessionmaker[Session], dataset_alpha: DatasetRef) -> str:
     """Chỉ `view` — dùng để chứng minh xem được không có nghĩa là sửa được."""
-    return _ensure_role(
+    return ensure_role(
         session_factory,
         dataset_alpha,
         READER_ROLE,
-        [*_codes(PLAIN, Action.VIEW), *_codes(WITH_EXTRAS, Action.VIEW)],
+        [*catalog_codes(PLAIN, Action.VIEW), *catalog_codes(WITH_EXTRAS, Action.VIEW)],
     )
 
 
@@ -146,64 +111,7 @@ def reader_role(session_factory: sessionmaker[Session], dataset_alpha: DatasetRe
 def catalog_branches(
     session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
 ) -> list[str]:
-    scope = RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=())
-    with unit_of_work(session_factory, scope) as session:
-        existing = set(
-            session.scalars(select(Branch.code).where(Branch.code.in_(BRANCH_CODES))).all()
-        )
-        for code in BRANCH_CODES:
-            if code not in existing:
-                BranchService(session).create(code=code, name=f"Chi nhánh {code}")
-    return BRANCH_CODES
-
-
-def _branch_ids(
-    session_factory: sessionmaker[Session], dataset: DatasetRef, codes: list[str]
-) -> dict[str, int]:
-    scope = RequestScope(dataset_schema=dataset.schema_name, user_id=1, branch_ids=())
-    with unit_of_work(session_factory, scope) as session:
-        return {
-            code: session.scalar(select(Branch.id).where(Branch.code == code)) or 0
-            for code in codes
-        }
-
-
-def _actor(
-    client: TestClient,
-    session_factory: sessionmaker[Session],
-    dataset: DatasetRef,
-    user_factory: UserFactory,
-    role_code: str,
-    prefix: str,
-    test_password: str,
-    *,
-    branch_codes: list[str],
-) -> dict[str, str]:
-    user = user_factory(prefix)
-    role_service.grant_role(
-        session_factory,
-        dataset_schema=dataset.schema_name,
-        user_id=user.id,
-        role_code=role_code,
-        actor_user_id=user.id,
-    )
-    for branch_code in branch_codes:
-        role_service.assign_branch(
-            session_factory,
-            dataset_schema=dataset.schema_name,
-            user_id=user.id,
-            branch_code=branch_code,
-            actor_user_id=user.id,
-            actor_branch_ids=None,
-        )
-    response = client.post(
-        "/api/v1/auth/login", json={"username": user.username, "password": test_password}
-    )
-    assert response.status_code == 200, response.text
-    return {
-        "Authorization": f"Bearer {response.json()['token']}",
-        DATASET_HEADER: dataset.code,
-    }
+    return ensure_branches(session_factory, dataset_alpha, BRANCH_CODES)
 
 
 @pytest.fixture
@@ -217,7 +125,7 @@ def editor(
     test_password: str,
 ) -> dict[str, str]:
     """Kế toán viên của **một** chi nhánh — nên không phải gửi `X-Branch`."""
-    return _actor(
+    return actor(
         client,
         session_factory,
         dataset_alpha,
@@ -239,7 +147,7 @@ def reader(
     catalog_branches: list[str],
     test_password: str,
 ) -> dict[str, str]:
-    return _actor(
+    return actor(
         client,
         session_factory,
         dataset_alpha,
@@ -262,7 +170,7 @@ def two_branch_editor(
     test_password: str,
 ) -> dict[str, str]:
     """Kế toán viên được gán **cả hai** chi nhánh."""
-    return _actor(
+    return actor(
         client,
         session_factory,
         dataset_alpha,
@@ -288,42 +196,23 @@ def both_branches_record(
     chi nhánh ngoài phạm vi của mình bị chặn — xem
     `test_creating_a_record_for_a_branch_outside_the_scope_is_refused`.
     """
-    ids = _branch_ids(session_factory, dataset_alpha, catalog_branches)
+    ids = branch_ids(session_factory, dataset_alpha, catalog_branches)
     # `X-Branch` phải trỏ đúng chi nhánh B: phạm vi **ghi** bằng phạm vi **đọc**
     # (xem `_ensure_branch_in_scope`), nên tạo bản ghi riêng cho B đòi người thực
     # hiện đang thao tác ở B — không chỉ "được gán cả A lẫn B".
     at_b = {**two_branch_editor, BRANCH_HEADER: str(ids[catalog_branches[1]])}
-    response = _create(
+    response = create_record(
         client,
         at_b,
         PLAIN,
         {
-            "code": _unique_code("KZ"),
+            "code": unique_code("KZ"),
             "name": "Kho của chi nhánh B",
             "branch_id": ids[catalog_branches[1]],
         },
     )
     assert response.status_code == 201, response.text
     return dict(response.json())
-
-
-def _unique_code(prefix: str) -> str:
-    return f"{prefix}_{uuid4().hex[:8].upper()}"
-
-
-def _create(
-    client: TestClient,
-    headers: dict[str, str],
-    slug: str,
-    body: dict[str, object],
-    *,
-    key: str | None = None,
-) -> object:
-    return client.post(
-        f"/api/v1/master/{slug}",
-        json=body,
-        headers={**headers, IDEMPOTENCY_HEADER: key or uuid4().hex},
-    )
 
 
 # --------------------------------------------------------------- vòng đời cơ bản
@@ -333,8 +222,8 @@ def test_create_read_update_delete_on_a_plain_catalog(
     client: TestClient, editor: dict[str, str]
 ) -> None:
     """Vòng đời đầy đủ trên danh mục không có cột riêng nào."""
-    code = _unique_code("KHO")
-    created = _create(client, editor, PLAIN, {"code": code, "name": "Kho trung tâm"})
+    code = unique_code("KHO")
+    created = create_record(client, editor, PLAIN, {"code": code, "name": "Kho trung tâm"})
     assert created.status_code == 201, created.text
     record = created.json()
     assert record["code"] == code
@@ -377,8 +266,8 @@ def test_extra_columns_round_trip_through_the_generated_routes(
     `discount_percent` khẳng định bằng `Decimal`: một `float` lọt vào đường này
     sẽ trả về `2.0000000000000004` ở đâu đó, và con số ấy nhân vào tiền.
     """
-    code = _unique_code("DKTT")
-    created = _create(
+    code = unique_code("DKTT")
+    created = create_record(
         client,
         editor,
         WITH_EXTRAS,
@@ -424,12 +313,12 @@ def test_the_cross_field_rule_of_a_catalog_is_enforced_by_the_api(
     thay vì sao chép trường. Sao chép sẽ để luật này lại phía sau và không gì
     báo — model vẫn dựng được, vẫn nhận đúng các trường.
     """
-    response = _create(
+    response = create_record(
         client,
         editor,
         WITH_EXTRAS,
         {
-            "code": _unique_code("DKXAU"),
+            "code": unique_code("DKXAU"),
             "name": "Cửa sổ chiết khấu dài hơn hạn nợ",
             "due_days": 10,
             "discount_days": 30,
@@ -456,11 +345,11 @@ def test_unknown_fields_are_refused_instead_of_dropped(
     Bỏ qua im lặng nghĩa là người dùng thấy form lưu thành công còn giá trị vừa
     nhập thì biến mất ở lần tải lại.
     """
-    response = _create(
+    response = create_record(
         client,
         editor,
         WITH_EXTRAS,
-        {"code": _unique_code("DKSAI"), "name": "Sai tên trường", "due_dayz": 30},
+        {"code": unique_code("DKSAI"), "name": "Sai tên trường", "due_dayz": 30},
     )
     assert response.status_code == 422
 
@@ -473,8 +362,8 @@ def test_a_plain_catalog_refuses_the_extra_fields_of_another_catalog(
     Nếu bộ sinh trượt về một model chung thì `due_days` sẽ được nhận ở đây và
     lặng lẽ rơi đi.
     """
-    response = _create(
-        client, editor, PLAIN, {"code": _unique_code("KHO"), "name": "Kho", "due_days": 30}
+    response = create_record(
+        client, editor, PLAIN, {"code": unique_code("KHO"), "name": "Kho", "due_days": 30}
     )
     assert response.status_code == 422
 
@@ -486,23 +375,23 @@ def test_moving_a_node_rewrites_the_whole_subtree(
     client: TestClient, editor: dict[str, str]
 ) -> None:
     """Chuyển nhánh cập nhật `path`/`level` của **con cháu**, không chỉ của nút được chọn."""
-    root_a = _create(
-        client, editor, PLAIN, {"code": _unique_code("KA"), "name": "Nhóm A", "is_group": True}
+    root_a = create_record(
+        client, editor, PLAIN, {"code": unique_code("KA"), "name": "Nhóm A", "is_group": True}
     ).json()
-    root_b = _create(
-        client, editor, PLAIN, {"code": _unique_code("KB"), "name": "Nhóm B", "is_group": True}
+    root_b = create_record(
+        client, editor, PLAIN, {"code": unique_code("KB"), "name": "Nhóm B", "is_group": True}
     ).json()
-    child = _create(
+    child = create_record(
         client,
         editor,
         PLAIN,
-        {"code": _unique_code("KC"), "name": "Kho con", "parent_id": root_a["id"]},
+        {"code": unique_code("KC"), "name": "Kho con", "parent_id": root_a["id"]},
     ).json()
-    grandchild = _create(
+    grandchild = create_record(
         client,
         editor,
         PLAIN,
-        {"code": _unique_code("KD"), "name": "Ngăn", "parent_id": child["id"]},
+        {"code": unique_code("KD"), "name": "Ngăn", "parent_id": child["id"]},
     ).json()
     assert grandchild["level"] == 3
 
@@ -526,14 +415,14 @@ def test_a_node_cannot_be_moved_into_its_own_subtree(
     client: TestClient, editor: dict[str, str]
 ) -> None:
     """Kéo-thả sai của người dùng, không phải lỗi lập trình — nên là lỗi nghiệp vụ có mã."""
-    root = _create(
-        client, editor, PLAIN, {"code": _unique_code("KV"), "name": "Nhóm", "is_group": True}
+    root = create_record(
+        client, editor, PLAIN, {"code": unique_code("KV"), "name": "Nhóm", "is_group": True}
     ).json()
-    child = _create(
+    child = create_record(
         client,
         editor,
         PLAIN,
-        {"code": _unique_code("KW"), "name": "Con", "parent_id": root["id"]},
+        {"code": unique_code("KW"), "name": "Con", "parent_id": root["id"]},
     ).json()
 
     response = client.put(
@@ -547,20 +436,20 @@ def test_a_node_cannot_be_moved_into_its_own_subtree(
 
 def test_listing_walks_the_tree_two_ways(client: TestClient, editor: dict[str, str]) -> None:
     """`parent_id` mở dần từng cấp; `subtree_of` lấy trọn nhánh."""
-    root = _create(
-        client, editor, PLAIN, {"code": _unique_code("KL"), "name": "Gốc", "is_group": True}
+    root = create_record(
+        client, editor, PLAIN, {"code": unique_code("KL"), "name": "Gốc", "is_group": True}
     ).json()
-    child = _create(
+    child = create_record(
         client,
         editor,
         PLAIN,
-        {"code": _unique_code("KM"), "name": "Con", "parent_id": root["id"]},
+        {"code": unique_code("KM"), "name": "Con", "parent_id": root["id"]},
     ).json()
-    _create(
+    create_record(
         client,
         editor,
         PLAIN,
-        {"code": _unique_code("KN"), "name": "Cháu", "parent_id": child["id"]},
+        {"code": unique_code("KN"), "name": "Cháu", "parent_id": child["id"]},
     )
 
     children = client.get(
@@ -581,7 +470,7 @@ def test_listing_walks_the_tree_two_ways(client: TestClient, editor: dict[str, s
 
 def test_view_permission_does_not_grant_write(client: TestClient, reader: dict[str, str]) -> None:
     """Bốn hành vi tách nhau, và mỗi danh mục có bộ riêng (H48)."""
-    response = _create(client, reader, PLAIN, {"code": _unique_code("KX"), "name": "Kho"})
+    response = create_record(client, reader, PLAIN, {"code": unique_code("KX"), "name": "Kho"})
     assert response.status_code == 403
     assert response.json()["error_code"] == "auth.permission_denied"
 
@@ -599,13 +488,13 @@ def test_permission_is_per_catalog_not_shared(
     Đây là toàn bộ nội dung của H48. Với một mã quyền chung `master.*`, người
     được thêm một kho cũng đổi được điều kiện công nợ của cả doanh nghiệp.
     """
-    role = _ensure_role(
+    role = ensure_role(
         session_factory,
         dataset_alpha,
         "chi_sua_kho",
-        _codes(PLAIN, Action.VIEW, Action.CREATE),
+        catalog_codes(PLAIN, Action.VIEW, Action.CREATE),
     )
-    headers = _actor(
+    headers = actor(
         client,
         session_factory,
         dataset_alpha,
@@ -617,15 +506,17 @@ def test_permission_is_per_catalog_not_shared(
     )
 
     assert (
-        _create(client, headers, PLAIN, {"code": _unique_code("KY"), "name": "Kho"}).status_code
+        create_record(
+            client, headers, PLAIN, {"code": unique_code("KY"), "name": "Kho"}
+        ).status_code
         == 201
     )
     assert (
-        _create(
+        create_record(
             client,
             headers,
             WITH_EXTRAS,
-            {"code": _unique_code("DK"), "name": "Điều khoản", "due_days": 7},
+            {"code": unique_code("DK"), "name": "Điều khoản", "due_days": 7},
         ).status_code
         == 403
     )
@@ -663,13 +554,13 @@ def test_creating_a_record_for_a_branch_outside_the_scope_is_refused(
     ngăn của chi nhánh khác — và vì chính họ không nhìn thấy nó sau đó, bản ghi
     ấy thành thứ chỉ chi nhánh kia thấy mà không ai bên đó tạo ra.
     """
-    ids = _branch_ids(session_factory, dataset_alpha, catalog_branches)
-    response = _create(
+    ids = branch_ids(session_factory, dataset_alpha, catalog_branches)
+    response = create_record(
         client,
         editor,
         PLAIN,
         {
-            "code": _unique_code("KNGOAI"),
+            "code": unique_code("KNGOAI"),
             "name": "Kho cắm vào chi nhánh khác",
             "branch_id": ids[catalog_branches[1]],
         },
@@ -687,8 +578,8 @@ def test_shared_records_are_visible_from_every_branch(
     RLS (H39): policy chi nhánh sẽ giấu đúng những dòng `NULL` này khỏi mọi
     người.
     """
-    shared = _create(
-        client, editor, PLAIN, {"code": _unique_code("KCHUNG"), "name": "Kho dùng chung"}
+    shared = create_record(
+        client, editor, PLAIN, {"code": unique_code("KCHUNG"), "name": "Kho dùng chung"}
     ).json()
     assert shared["branch_id"] is None
 
@@ -705,7 +596,7 @@ def test_the_branch_scope_cannot_be_widened_from_the_query_string(
     catalog_branches: list[str],
 ) -> None:
     """Không có tham số `branch_id` trên đường đọc — sửa URL không mở rộng tầm nhìn."""
-    ids = _branch_ids(session_factory, dataset_alpha, catalog_branches)
+    ids = branch_ids(session_factory, dataset_alpha, catalog_branches)
 
     listed = client.get(
         f"/api/v1/master/{PLAIN}",
@@ -725,7 +616,7 @@ def test_the_acting_branch_header_selects_which_private_records_are_visible(
     test_password: str,
 ) -> None:
     """Người dùng nhiều chi nhánh thấy đúng chi nhánh **đang thao tác**."""
-    headers = _actor(
+    headers = actor(
         client,
         session_factory,
         dataset_alpha,
@@ -735,15 +626,15 @@ def test_the_acting_branch_header_selects_which_private_records_are_visible(
         test_password,
         branch_codes=catalog_branches,
     )
-    ids = _branch_ids(session_factory, dataset_alpha, catalog_branches)
+    ids = branch_ids(session_factory, dataset_alpha, catalog_branches)
     at_b = {**headers, BRANCH_HEADER: str(ids[catalog_branches[1]])}
 
-    record = _create(
+    record = create_record(
         client,
         at_b,
         PLAIN,
         {
-            "code": _unique_code("KR"),
+            "code": unique_code("KR"),
             "name": "Kho B",
             "branch_id": ids[catalog_branches[1]],
         },
@@ -766,10 +657,10 @@ def test_replaying_a_create_returns_the_same_record(
     biết được lần này có tạo thêm gì hay không.
     """
     key = uuid4().hex
-    body = {"code": _unique_code("KI"), "name": "Kho gửi lại"}
+    body = {"code": unique_code("KI"), "name": "Kho gửi lại"}
 
-    first = _create(client, editor, PLAIN, body, key=key)
-    second = _create(client, editor, PLAIN, body, key=key)
+    first = create_record(client, editor, PLAIN, body, key=key)
+    second = create_record(client, editor, PLAIN, body, key=key)
 
     assert first.status_code == 201
     assert second.status_code == 200
@@ -782,7 +673,7 @@ def test_creating_without_an_idempotency_key_is_refused(
     """Cổng `test_idempotency_route_coverage` canh việc *khai*; đây canh việc *ép*."""
     response = client.post(
         f"/api/v1/master/{PLAIN}",
-        json={"code": _unique_code("KJ"), "name": "Không khóa"},
+        json={"code": unique_code("KJ"), "name": "Không khóa"},
         headers=editor,
     )
     assert response.status_code == 400
@@ -791,7 +682,7 @@ def test_creating_without_an_idempotency_key_is_refused(
 
 def test_a_stale_row_version_is_refused(client: TestClient, editor: dict[str, str]) -> None:
     """Hai người cùng sửa một bản ghi — người thứ hai nhận `409`, không ghi đè (FR-NFR-005)."""
-    record = _create(client, editor, PLAIN, {"code": _unique_code("KK"), "name": "Kho"}).json()
+    record = create_record(client, editor, PLAIN, {"code": unique_code("KK"), "name": "Kho"}).json()
     body = {
         "row_version": record["row_version"],
         "code": record["code"],
@@ -825,7 +716,7 @@ def test_a_record_in_use_cannot_be_deleted(
     6, còn luật cần kiểm ở đây là luật của **bộ đếm** — nó đã là cổng duy nhất
     mà `delete` hỏi.
     """
-    record = _create(client, editor, PLAIN, {"code": _unique_code("KU"), "name": "Kho"}).json()
+    record = create_record(client, editor, PLAIN, {"code": unique_code("KU"), "name": "Kho"}).json()
     scope = RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=())
     with unit_of_work(session_factory, scope) as session:
         record_use(session, entity_type="warehouses", entity_id=record["id"])
@@ -840,14 +731,14 @@ def test_a_group_with_children_cannot_be_deleted(
     client: TestClient, editor: dict[str, str]
 ) -> None:
     """Chuyển nhánh con đi trước — và chính lúc đó người dùng thấy mình có bao nhiêu thứ."""
-    root = _create(
-        client, editor, PLAIN, {"code": _unique_code("KG"), "name": "Nhóm", "is_group": True}
+    root = create_record(
+        client, editor, PLAIN, {"code": unique_code("KG"), "name": "Nhóm", "is_group": True}
     ).json()
-    _create(
+    create_record(
         client,
         editor,
         PLAIN,
-        {"code": _unique_code("KH"), "name": "Con", "parent_id": root["id"]},
+        {"code": unique_code("KH"), "name": "Con", "parent_id": root["id"]},
     )
 
     response = client.delete(f"/api/v1/master/{PLAIN}/{root['id']}", headers=editor)
@@ -1081,17 +972,17 @@ def test_a_parent_of_another_branch_is_not_an_id_oracle(
     (id chi nhánh kia — dữ liệu người gọi chưa từng gõ vào), cha không tồn tại →
     `404`. Hai rò trong một.
     """
-    foreign = _create(
+    foreign = create_record(
         client,
         editor,
         PLAIN,
-        {"code": _unique_code("KCHA"), "name": "Con", "parent_id": both_branches_record["id"]},
+        {"code": unique_code("KCHA"), "name": "Con", "parent_id": both_branches_record["id"]},
     )
-    missing = _create(
+    missing = create_record(
         client,
         editor,
         PLAIN,
-        {"code": _unique_code("KCHB"), "name": "Con", "parent_id": 99_999_999},
+        {"code": unique_code("KCHB"), "name": "Con", "parent_id": 99_999_999},
     )
 
     assert foreign.status_code == 404
@@ -1113,15 +1004,15 @@ def test_creating_for_a_branch_other_than_the_acting_one_is_refused(
     `acting_branch_id`, nên bản ghi vừa tạo biến mất khỏi chính màn hình vừa tạo
     ra nó.
     """
-    ids = _branch_ids(session_factory, dataset_alpha, catalog_branches)
+    ids = branch_ids(session_factory, dataset_alpha, catalog_branches)
     at_a = {**two_branch_editor, BRANCH_HEADER: str(ids[catalog_branches[0]])}
 
-    response = _create(
+    response = create_record(
         client,
         at_a,
         PLAIN,
         {
-            "code": _unique_code("KLECH"),
+            "code": unique_code("KLECH"),
             "name": "Tạo cho chi nhánh không đang thao tác",
             "branch_id": ids[catalog_branches[1]],
         },
@@ -1142,13 +1033,13 @@ def test_a_record_of_my_own_branch_is_listed(
     Không có test này thì `_visible_to` trả về hằng `False` vẫn xanh: mọi khẳng
     định còn lại chỉ nói "không thấy bản ghi của người khác".
     """
-    ids = _branch_ids(session_factory, dataset_alpha, catalog_branches)
-    mine = _create(
+    ids = branch_ids(session_factory, dataset_alpha, catalog_branches)
+    mine = create_record(
         client,
         editor,
         PLAIN,
         {
-            "code": _unique_code("KMINE"),
+            "code": unique_code("KMINE"),
             "name": "Kho riêng chi nhánh mình",
             "branch_id": ids[catalog_branches[0]],
         },
@@ -1177,12 +1068,12 @@ def test_a_record_with_extra_columns_is_born_with_one_audit_row(
     So sánh **cạnh nhau** với danh mục thuần cây: hai nửa của cùng một API không
     được có hai chất lượng nhật ký khác nhau.
     """
-    plain = _create(client, editor, PLAIN, {"code": _unique_code("KNK"), "name": "Kho"}).json()
-    with_extras = _create(
+    plain = create_record(client, editor, PLAIN, {"code": unique_code("KNK"), "name": "Kho"}).json()
+    with_extras = create_record(
         client,
         editor,
         WITH_EXTRAS,
-        {"code": _unique_code("DKNK"), "name": "Điều khoản", "due_days": 30},
+        {"code": unique_code("DKNK"), "name": "Điều khoản", "due_days": 30},
     ).json()
 
     assert plain["row_version"] == 1
@@ -1192,7 +1083,7 @@ def test_a_record_with_extra_columns_is_born_with_one_audit_row(
     # `audit_log` **có** bật RLS theo chi nhánh, nên phạm vi rỗng sẽ chỉ thấy
     # dòng `branch_id IS NULL` — tức là không thấy gì, và test sẽ xanh-rỗng theo
     # đúng kiểu nó sinh ra để bắt. Đọc bằng phạm vi của chính chi nhánh đã ghi.
-    ids = _branch_ids(session_factory, dataset_alpha, catalog_branches)
+    ids = branch_ids(session_factory, dataset_alpha, catalog_branches)
     scope = RequestScope(
         dataset_schema=dataset_alpha.schema_name,
         user_id=1,
@@ -1220,10 +1111,10 @@ def test_the_same_idempotency_key_is_scoped_per_catalog(
     khác** — đúng loại lỗi mà không màn hình nào phát hiện được.
     """
     key = uuid4().hex
-    body = {"code": _unique_code("KTRUNG"), "name": "Trùng khóa, khác danh mục"}
+    body = {"code": unique_code("KTRUNG"), "name": "Trùng khóa, khác danh mục"}
 
-    first = _create(client, editor, PLAIN, body, key=key)
-    second = _create(client, editor, SECOND_PLAIN, body, key=key)
+    first = create_record(client, editor, PLAIN, body, key=key)
+    second = create_record(client, editor, SECOND_PLAIN, body, key=key)
 
     assert first.status_code == 201, first.text
     assert second.status_code == 201, second.text
@@ -1237,11 +1128,11 @@ def test_a_different_body_under_the_same_key_is_refused(
     Vân tay hằng số cũng làm test trên xanh; chỉ khẳng định này giết được nó.
     """
     key = uuid4().hex
-    first = _create(
-        client, editor, PLAIN, {"code": _unique_code("KVT"), "name": "Bản đầu"}, key=key
+    first = create_record(
+        client, editor, PLAIN, {"code": unique_code("KVT"), "name": "Bản đầu"}, key=key
     )
-    second = _create(
-        client, editor, PLAIN, {"code": _unique_code("KVT"), "name": "Thân khác"}, key=key
+    second = create_record(
+        client, editor, PLAIN, {"code": unique_code("KVT"), "name": "Thân khác"}, key=key
     )
 
     assert first.status_code == 201, first.text
@@ -1258,15 +1149,15 @@ def test_listing_is_paginated_with_a_total(client: TestClient, editor: dict[str,
     `total` là tổng trước khi cắt trang: màn hình cần nó để vẽ thanh cuộn và nói
     "1–2 trong 5", thứ không suy ra được từ độ dài trang.
     """
-    root = _create(
-        client, editor, PLAIN, {"code": _unique_code("KP"), "name": "Nhóm", "is_group": True}
+    root = create_record(
+        client, editor, PLAIN, {"code": unique_code("KP"), "name": "Nhóm", "is_group": True}
     ).json()
     created = [
-        _create(
+        create_record(
             client,
             editor,
             PLAIN,
-            {"code": _unique_code(f"KP{index}"), "name": f"Kho {index}", "parent_id": root["id"]},
+            {"code": unique_code(f"KP{index}"), "name": f"Kho {index}", "parent_id": root["id"]},
         ).json()
         for index in range(5)
     ]
