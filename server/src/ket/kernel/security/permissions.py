@@ -204,6 +204,21 @@ REGISTRY.register(
 REGISTRY.register(
     DocumentType(
         module=SYSTEM_MODULE,
+        code="attachment",
+        # Tệp đính kèm (FR-NFR-053). Ba hành vi, không có `edit`: nội dung một
+        # tệp không sửa được tại chỗ — thay tệp = gỡ tệp cũ, đính tệp mới, và
+        # hai vết đó là thứ kiểm toán viên cần thấy.
+        #
+        # Một mã quyền **riêng** ở phase này, không suy theo chứng từ chủ: chưa
+        # có loại chứng từ nghiệp vụ nào tồn tại để suy. Từ phase 6, khi đính
+        # kèm gắn vào phiếu chi và hóa đơn thật, quyền có thể siết thêm bằng
+        # cách kiểm quyền của chứng từ chủ — mã này vẫn là cổng thứ nhất.
+        actions=frozenset({Action.VIEW, Action.CREATE, Action.DELETE}),
+    )
+)
+REGISTRY.register(
+    DocumentType(
+        module=SYSTEM_MODULE,
         code="maintenance",
         # Tác vụ dọn dẹp chạy tại máy chủ (dọn khóa idempotency, dọn phiên đăng
         # nhập). Tách khỏi `job` vì hai câu hỏi khác nhau: `job.create` cho phép

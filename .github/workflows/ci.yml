@@ -355,10 +355,12 @@ jobs:
   client:
     name: client · kiểu, lint, test, build
     needs: changes
+    # `rust != 'true'` tạm gỡ khỏi điều kiện trong lúc `desktop-bundle` bị tắt
+    # (xem ghi chú ở job đó): job kia là nơi PR đụng `src-tauri` được kiểm, nên
+    # để nguyên loại trừ này sẽ tạo ra một khoảng mù đúng ở những PR đó.
     if: >-
       github.event_name == 'pull_request'
       && needs.changes.outputs.client == 'true'
-      && needs.changes.outputs.rust != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -514,9 +516,28 @@ jobs:
   desktop-bundle:
     name: desktop · đóng gói (${{ matrix.os }})
     needs: changes
+    # TẠM TẮT (2026-08-17, quyết định của chủ dự án): job này chiếm phần lớn phút
+    # GitHub Actions của kho — hai runner tính phí (Windows ×2, macOS ×10) tới 45
+    # phút mỗi nền tảng — trong khi bộ cài desktop chưa tới tay ai. `ci-ok` coi
+    # job bị bỏ qua là chấp nhận được nên cổng bắt buộc vẫn xanh.
+    #
+    # Hai job bù lại khoảng mù trong lúc job này tắt:
+    #
+    # * `client` được nới điều kiện (bỏ loại trừ `rust != 'true'`) nên PR đụng
+    #   `src-tauri` vẫn qua cổng kiểu/lint/test phía web;
+    # * `rust-quality` chạy `cargo fmt`/`cargo clippy` trên Ubuntu — job này vốn
+    #   là nơi duy nhất chạy chúng.
+    #
+    # Cái **không** bù được: bản dựng thật cho Windows/macOS. Đường đó chỉ được
+    # kiểm lại khi bật lại job này.
+    #
+    # MỞ LẠI: xóa dòng `false &&` dưới đây, và khôi phục `rust != 'true'` trong
+    # `if:` của job `client`. Giữ `rust-quality` — nó cho phản hồi trong vài phút
+    # thay vì chờ hết lượt đóng gói.
     if: >-
-      needs.changes.outputs.rust == 'true'
-      || (github.event_name != 'pull_request' && needs.changes.outputs.client == 'true')
+      false &&
+      (needs.changes.outputs.rust == 'true'
+      || (github.event_name != 'pull_request' && needs.changes.outputs.client == 'true'))
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -596,6 +617,56 @@ jobs:
         run: pnpm exec tauri build
 
   # ---------------------------------------------------------------------------
+  # Cổng Rust tách khỏi job đóng gói.
+  #
+  # Tồn tại vì `desktop-bundle` đang tắt (xem ghi chú ở job đó) mà nó lại là nơi
+  # DUY NHẤT chạy `cargo fmt`/`cargo clippy` — tắt đi thì `client/src-tauri`
+  # không còn cổng nào, và `ci-ok` coi job bị bỏ qua là đạt nên không ai thấy.
+  #
+  # Chạy trên Ubuntu: hai lệnh này không phụ thuộc hệ điều hành, và runner Linux
+  # tính phút 1x thay vì 2x (Windows) hoặc 10x (macOS). Cái **không** kiểm được ở
+  # đây là bản dựng thật cho Windows/macOS — đó vẫn là việc của `desktop-bundle`
+  # khi bật lại. Giữ job này khi ấy cũng không thừa: nó cho phản hồi trong vài
+  # phút thay vì chờ hết lượt đóng gói.
+  # ---------------------------------------------------------------------------
+  rust-quality:
+    name: rust · fmt & clippy
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: client/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client/src-tauri -> target
+
+      # Phụ thuộc hệ thống của Tauri trên Linux. Cần cả cho `clippy` chứ không
+      # chỉ cho `build`: crate `tauri` liên kết tới webkit2gtk qua `pkg-config`
+      # ngay ở bước phân giải, nên thiếu chúng thì clippy đổ ở lỗi liên kết chứ
+      # không phải ở lỗi mã nguồn.
+      - name: Phụ thuộc hệ thống của Tauri
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo clippy (warning = lỗi)
+        run: cargo clippy --all-targets -- -D warnings
+
+  # ---------------------------------------------------------------------------
   # Cổng duy nhất để đặt vào branch protection.
   #
   # Job con dùng `if:` nên có thể bị BỎ QUA; đặt từng job làm required check sẽ
@@ -614,6 +685,7 @@ jobs:
         client,
         client-bench,
         api-types,
+        rust-quality,
         desktop-bundle,
       ]
     runs-on: ubuntu-latest

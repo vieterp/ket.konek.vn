@@ -1,4 +1,4 @@
-"""Nền tảng: phân quyền, nhật ký bất biến, idempotency, hàng đợi job, đánh số.
+"""Nền tảng: phân quyền, nhật ký bất biến, idempotency, hàng đợi job, đánh số, đính kèm.
 
 Revision ID: 0001
 Revises:
@@ -73,6 +73,40 @@ def upgrade() -> None:
     )
     op.create_index("ix_audit_log_occurred_at", "audit_log", ["occurred_at"], unique=False)
     op.create_index("ix_audit_log_user", "audit_log", ["user_id", "occurred_at"], unique=False)
+    op.create_table(
+        "attachments",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("entity_type", sa.String(length=150), nullable=False),
+        sa.Column("entity_id", sa.String(length=200), nullable=False),
+        sa.Column("content_hash", sa.String(length=64), nullable=False),
+        sa.Column("byte_size", sa.BigInteger(), nullable=False),
+        sa.Column("media_type", sa.String(length=150), nullable=False),
+        sa.Column("file_name", sa.String(length=255), nullable=False),
+        sa.Column("branch_id", sa.Integer(), nullable=False),
+        sa.Column("uploaded_by", sa.Integer(), nullable=False),
+        sa.Column(
+            "uploaded_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("detached_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("detached_by", sa.Integer(), nullable=True),
+        sa.CheckConstraint("byte_size > 0", name=op.f("ck_attachments_byte_size_positive")),
+        sa.CheckConstraint(
+            "content_hash ~ '^[0-9a-f]{64}$'",
+            name=op.f("ck_attachments_content_hash_is_sha256_hex"),
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_attachments")),
+    )
+    op.create_index("ix_attachments_entity", "attachments", ["entity_type", "entity_id"])
+    op.create_index(
+        "uq_attachments_live",
+        "attachments",
+        ["branch_id", "entity_type", "entity_id", "content_hash"],
+        unique=True,
+        postgresql_where=sa.text("detached_at IS NULL"),
+    )
     op.create_table(
         "branches",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -261,6 +295,7 @@ def _apply_grants() -> None:
     thì "bất biến" chỉ còn là lời hứa.
     """
     tables_with_serial_id = {
+        "attachments",
         "branches",
         "roles",
         "permissions",
@@ -270,6 +305,7 @@ def _apply_grants() -> None:
     }
     all_tables = (
         AUDIT_TABLE_NAME,
+        "attachments",
         "branches",
         "roles",
         "permissions",
@@ -344,6 +380,14 @@ def _apply_row_level_security() -> None:
         for statement in enable_branch_rls_statements(table, allow_null_branch=True):
             op.execute(statement)
 
+    # `attachments` khác hai bảng trên ở chỗ **không** cho NULL: mỗi tệp đính kèm
+    # thuộc về một bản ghi của một chi nhánh cụ thể (cột `branch_id NOT NULL`),
+    # nên một ngăn "không chi nhánh" mà mọi người cùng thấy sẽ là lỗ duy nhất
+    # trong cơ chế cô lập của nhóm này. Hợp đồng, bảng lương scan và ủy nhiệm chi
+    # là đúng loại tệp không được rò sang chi nhánh khác.
+    for statement in enable_branch_rls_statements("attachments", allow_null_branch=False):
+        op.execute(statement)
+
     # Ngoại lệ đúng một vai trò, đúng một bảng: tiến trình chạy tác vụ nền không
     # thuộc chi nhánh nào, nên policy chi nhánh sẽ giấu toàn bộ hàng đợi khỏi nó.
     # Chi tiết đánh đổi ở `rls.worker_queue_policy_statements`.
@@ -376,6 +420,13 @@ def downgrade() -> None:
     op.drop_index("ix_idempotency_keys_expires_at", table_name="idempotency_keys")
     op.drop_table("idempotency_keys")
     op.drop_table("branches")
+    op.drop_index(
+        "uq_attachments_live",
+        table_name="attachments",
+        postgresql_where=sa.text("detached_at IS NULL"),
+    )
+    op.drop_index("ix_attachments_entity", table_name="attachments")
+    op.drop_table("attachments")
     op.drop_index("ix_audit_log_user", table_name="audit_log")
     op.drop_index("ix_audit_log_occurred_at", table_name="audit_log")
     op.drop_index("ix_audit_log_entity", table_name="audit_log")

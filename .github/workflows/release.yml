@@ -26,9 +26,15 @@ name: Release
 # — chuyện đó chỉ xảy ra đúng vào lần cắt bản, và đổi lại `ci.yml` giữ được ý
 # nghĩa độc lập "master còn đóng gói được không".
 
+# TẠM TẮT tự động phát hành (2026-08-17, quyết định của chủ dự án): trong lúc
+# phần mềm còn đang xây, mỗi lần merge đổi phiên bản đều đốt hai runner đắt tiền
+# (Windows + macOS) cho một bộ cài chưa ai cài. Giữ nguyên toàn bộ workflow, chỉ
+# gỡ kích hoạt tự động — chạy tay vẫn được bằng nút "Run workflow".
+#
+# MỞ LẠI: bỏ dấu chú thích ở hai dòng `push:` dưới đây.
 on:
-  push:
-    branches: [master]
+  # push:
+  #   branches: [master]
   workflow_dispatch:
     inputs:
       force:

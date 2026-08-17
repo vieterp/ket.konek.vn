@@ -22,6 +22,7 @@ Alembic không bị nhiễu bởi model điều khiển: `env.py` chỉ lấy
 
 from __future__ import annotations
 
+from ket.kernel.attachments import models as attachment_models
 from ket.kernel.auditing import control_log as control_audit_models
 from ket.kernel.auditing import models as auditing_models
 from ket.kernel.datasets import models as control_models
@@ -35,6 +36,7 @@ from ket.kernel.security import models as security_models
 __all__ = [
     "ControlBase",
     "DatasetBase",
+    "attachment_models",
     "auditing_models",
     "auth_models",
     "control_audit_models",
