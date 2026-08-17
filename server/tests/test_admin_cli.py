@@ -24,6 +24,7 @@ from ket.kernel.datasets.models import User
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.errors import NotAuthenticatedError
 from ket.kernel.idempotency.models import IdempotencyKey
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.session import control_session, create_session_factory, dataset_session
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security import auth_service, passwords
@@ -349,7 +350,7 @@ def test_grant_branch_puts_a_user_inside_the_rls_scope(
     scope = RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=user.id, branch_ids=())
     with unit_of_work(session_factory, scope) as session:
         if session.scalar(select(Branch.id).where(Branch.code == "CN_CLI")) is None:
-            session.add(Branch(code="CN_CLI", name="Chi nhánh CLI"))
+            BranchService(session).create(code="CN_CLI", name="Chi nhánh CLI")
 
     _run(
         "grant-role",

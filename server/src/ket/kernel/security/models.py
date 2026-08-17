@@ -17,6 +17,7 @@ from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Index, Integer, Str
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ket.kernel.auditing.listener import Audited
+from ket.kernel.master_data.tree_path import PATH_PATTERN, ROOT_LEVEL
 from ket.kernel.persistence.base import DatasetBase
 from ket.kernel.persistence.versioning import RowVersioned
 
@@ -39,6 +40,12 @@ class Branch(DatasetBase, Audited, RowVersioned):
     """
 
     __tablename__ = "branches"
+    __table_args__ = (
+        CheckConstraint(f"path ~ '{PATH_PATTERN}'", name="path_is_dotted_ids"),
+        CheckConstraint(f"level >= {ROOT_LEVEL}", name="level_at_least_root"),
+        Index("ix_branches_path", "path"),
+        Index("ix_branches_parent_id", "parent_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
@@ -47,6 +54,35 @@ class Branch(DatasetBase, Audited, RowVersioned):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )
+
+    # --- Cơ cấu tổ chức dạng cây, thêm ở phase 3 (FR-SYS-050) ----------------
+    #
+    # Cố ý **không** dùng `MasterDataMixin` dù hình dạng gần giống: danh mục có
+    # cột `branch_id` để chia phạm vi "dùng chung / riêng chi nhánh", mà bảng
+    # này *chính là* chi nhánh — một cột `branch_id` trên `branches` là một câu
+    # hỏi không có nghĩa. Phần dùng chung thật sự (cây materialized path) nằm ở
+    # `kernel/master_data/tree_path.py` và được cả hai dùng.
+
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("branches.id", ondelete="RESTRICT"), nullable=True
+    )
+    path: Mapped[str] = mapped_column(String(255), nullable=False)
+    level: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=ROOT_LEVEL, server_default=str(ROOT_LEVEL)
+    )
+
+    is_dependent_accounting: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    """Hạch toán phụ thuộc (số liệu gộp về trụ sở) hay độc lập (tự lập báo cáo
+    tài chính riêng). Quyết định này đổi cách lên báo cáo hợp nhất, nên nó là dữ
+    liệu của chi nhánh chứ không phải một lựa chọn lúc in."""
+
+    tax_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    """Mã số thuế riêng của chi nhánh (13 số dạng `0123456789-001`). Chi nhánh
+    hạch toán độc lập kê khai bằng mã này, và nó in trên hóa đơn của chi nhánh."""
+
+    address: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class Role(DatasetBase, Audited):

@@ -25,10 +25,10 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.session import LOCK_TIMEOUT_MS, create_session_factory
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security.grants import APP_ROLE
-from ket.kernel.security.models import Branch
 
 pytestmark = pytest.mark.db
 
@@ -52,8 +52,9 @@ def test_next_transaction_on_the_same_connection_starts_clean(
         pooled_factory,
         RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=()),
     ) as session:
-        branch = Branch(code="POOL-LEAK-BRANCH", name="Chi nhánh cho phép dò GUC")
-        session.add(branch)
+        branch = BranchService(session).create(
+            code="POOL-LEAK-BRANCH", name="Chi nhánh cho phép dò GUC"
+        )
         session.flush()
         branch_id = branch.id
 
@@ -63,7 +64,7 @@ def test_next_transaction_on_the_same_connection_starts_clean(
         branch_ids=(branch_id,),
     )
     with unit_of_work(pooled_factory, scope) as session:
-        session.add(Branch(code="POOL-LEAK-PROBE", name="Dò rò trạng thái qua pool"))
+        BranchService(session).create(code="POOL-LEAK-PROBE", name="Dò rò trạng thái qua pool")
 
     # Pool chỉ có một connection nên đây chắc chắn là chính connection vừa trả về.
     with pooled_app_engine.connect() as connection:
@@ -98,7 +99,7 @@ def test_a_leaked_role_would_actually_expose_the_other_dataset(
     """
     scope = RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=())
     with unit_of_work(pooled_factory, scope) as session:
-        session.add(Branch(code="POOL-LEAK-PROBE-2", name="Dò rò lần hai"))
+        BranchService(session).create(code="POOL-LEAK-PROBE-2", name="Dò rò lần hai")
 
     from sqlalchemy.exc import ProgrammingError
 

@@ -53,7 +53,13 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | `kernel/config/` | **`catalog` (danh mục khóa tùy chọn, đóng), `settings_service` (phân giải user → system → mặc định)** | Thêm một tùy chọn cấu hình |
 | `kernel/persistence/versioning.py` | **Mixin `RowVersioned` + `require_row_version`** — khóa lạc quan hai lớp | Bảng người dùng sửa qua form |
 | `kernel/jobs/` | `models` (bảng `jobs`, `ResumeSemantics`, `JobStatus`), **`registry` (loại job + quyền + semantics), `queue` (giành job), `reaper` (dọn mồ côi), `builtin` (ba loại job mẫu)** | Thêm loại job mới, chạm job metadata |
-| `kernel/numbering/models.py` | Bảng `number_sequences`, dịch vụ chưa viết | — |
+| `kernel/numbering/` | `models` (`number_sequences` + sổ cấp số `allocated_numbers`, `ResetRule`), **`service` (`NumberingRule` + `NumberingService`: `FOR UPDATE` trong transaction của người gọi, nên rollback trả lại số)** | Cấp số chứng từ, đổi quy tắc đánh số |
+| `kernel/identifiers.py` | **`uuid7()` RFC 9562 tự viết** — `uid` ổn định của danh mục (RT-19). Khóa bảo vệ **tính đơn điệu**, không phải tính duy nhất | Đụng khóa danh mục |
+| `kernel/master_data/` | **`tree_path` (materialized path, chuyển nhánh bằng một UPDATE), `base` (`MasterDataRow` + ràng buộc/chỉ mục chung), `service` (`MasterDataService[ModelT]` generic), `usage` (bộ đếm tham chiếu), `models/` (`cost_objects`, `expense_items`)** | Thêm một danh mục mới |
+| `kernel/currency/` | **`models` (`currencies`/`exchange_rates`), `money_fc` (`MoneyFc` kiểm bất biến lúc dựng), `exchange_rate_service` (tra tỷ giá gần nhất ≤ ngày; thiếu → lỗi, **không bao giờ dùng 1**)** | Chạm nguyên tệ hoặc quy đổi |
+| `kernel/periods/` | **`models` (`fiscal_years`/`accounting_periods`), `service` (sinh 12 kỳ, tra kỳ, khóa/mở có vết)** | Chạm kỳ kế toán, khóa sổ |
+| `kernel/organization/service.py` | **`BranchService`** — cây chi nhánh. Bảng `Branch` vẫn ở `kernel/security/models.py` vì nó là neo cô lập dữ liệu của luồng đăng nhập | Thêm/chuyển chi nhánh |
+| `kernel/persistence/sequences.py` | **`reserve_id`** — lấy khóa chính trước khi `INSERT` để `path` chứa đúng id | Bảng cây mới |
 | `api/routers/jobs` | **API `/api/v1/jobs/{types,list,detail,cancel}`** + schema request/response | Thêm loại job, đổi hợp đồng |
 | `worker/` | **`__main__.py` (điểm vào `python -m ket.worker`), `runner` (vòng lặp), `progress` (tiến độ + hủy), `contracts`** | Đổi cơ chế giành/chạy job |
 | `modules/*`, `posting/`, `reporting/` | Chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase sau | — |

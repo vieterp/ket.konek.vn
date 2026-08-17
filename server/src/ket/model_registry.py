@@ -25,10 +25,14 @@ from __future__ import annotations
 from ket.kernel.attachments import models as attachment_models
 from ket.kernel.auditing import control_log as control_audit_models
 from ket.kernel.auditing import models as auditing_models
+from ket.kernel.currency import models as currency_models
 from ket.kernel.datasets import models as control_models
 from ket.kernel.idempotency import models as idempotency_models
 from ket.kernel.jobs import models as jobs_models
+from ket.kernel.master_data import models as master_data_models
+from ket.kernel.master_data import usage as master_data_usage_models
 from ket.kernel.numbering import models as numbering_models
+from ket.kernel.periods import models as period_models
 from ket.kernel.persistence.base import ControlBase, DatasetBase
 from ket.kernel.security import auth_models
 from ket.kernel.security import models as security_models
@@ -41,8 +45,12 @@ __all__ = [
     "auth_models",
     "control_audit_models",
     "control_models",
+    "currency_models",
     "idempotency_models",
     "jobs_models",
+    "master_data_models",
+    "master_data_usage_models",
     "numbering_models",
+    "period_models",
     "security_models",
 ]

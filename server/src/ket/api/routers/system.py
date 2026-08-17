@@ -59,6 +59,7 @@ from ket.kernel.datasets.bootstrap import CONTROL_SCHEMA_VERSION
 from ket.kernel.datasets.service import list_datasets
 from ket.kernel.errors import BranchNotFoundError
 from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.persistence.versioning import require_row_version
 from ket.kernel.security import role_service
@@ -189,9 +190,14 @@ def create_branch(
     """
 
     def work(session: Session) -> tuple[BranchResponse, IdempotentRef]:
-        branch = Branch(code=payload.code, name=payload.name, name_en=payload.name_en)
-        session.add(branch)
-        session.flush()
+        # Qua `BranchService` chứ không dựng `Branch(...)` trực tiếp: từ phase 3
+        # bảng này là một **cây** (FR-SYS-050), và `path`/`level` phải sinh từ
+        # chi nhánh cha. Một đường ghi tắt ở đây sẽ tạo ra chi nhánh không có vị
+        # trí trong cây — nó biến mất khỏi mọi truy vấn nhánh mà vẫn hiện trong
+        # danh sách phẳng.
+        branch = BranchService(session).create(
+            code=payload.code, name=payload.name, name_en=payload.name_en
+        )
         return _branch_response(branch), IdempotentRef(
             result_type=Branch.__tablename__, result_id=str(branch.id)
         )

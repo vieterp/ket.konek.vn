@@ -29,6 +29,7 @@ from conftest import api_test_client
 from ket.api.dependencies import BRANCH_HEADER, DATASET_HEADER
 from ket.kernel.datasets.models import User
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security import role_service, totp
 from ket.kernel.security.models import Branch, Permission, Role, RolePermission
@@ -92,7 +93,7 @@ def api_branches(session_factory: sessionmaker[Session], dataset_alpha: DatasetR
         existing = set(session.scalars(select(Branch.code).where(Branch.code.in_(codes))).all())
         for code in codes:
             if code not in existing:
-                session.add(Branch(code=code, name=f"Chi nhánh {code}"))
+                BranchService(session).create(code=code, name=f"Chi nhánh {code}")
     return codes
 
 

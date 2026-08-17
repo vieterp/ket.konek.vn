@@ -24,6 +24,7 @@ from ket.kernel.errors import (
     PermissionDeniedError,
     RoleNotFoundError,
 )
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.session import control_session, dataset_session
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security import role_service
@@ -429,5 +430,5 @@ def branch_codes(
         existing = set(session.scalars(select(Branch.code).where(Branch.code.in_(codes))).all())
         for code in codes:
             if code not in existing:
-                session.add(Branch(code=code, name=f"Chi nhánh {code}"))
+                BranchService(session).create(code=code, name=f"Chi nhánh {code}")
     yield codes

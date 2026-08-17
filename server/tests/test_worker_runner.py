@@ -30,9 +30,9 @@ from ket.kernel.jobs.registry import (
     JobResult,
     JobType,
 )
+from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.session import create_session_factory
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
-from ket.kernel.security.models import Branch
 from ket.settings import Settings
 from ket.worker.runner import Worker
 
@@ -333,8 +333,9 @@ def test_the_job_body_runs_under_the_dataset_role_and_branch_scope(
     registry.register(probe_type)
 
     with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
-        branch = Branch(code=f"CN_P_{uuid4().hex[:6].upper()}", name="Chi nhánh thăm dò")
-        session.add(branch)
+        branch = BranchService(session).create(
+            code=f"CN_P_{uuid4().hex[:6].upper()}", name="Chi nhánh thăm dò"
+        )
         session.flush()
         branch_id = branch.id
 
