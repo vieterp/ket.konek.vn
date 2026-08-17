@@ -1047,12 +1047,46 @@
         ],
         "title": "TotpEnrollResponse",
         "type": "object"
+      },
+      "UpdateManifest": {
+        "description": "Khuôn manifest của updater Tauri v2 — **tên trường do Tauri định**.\n\nĐổi tên bất kỳ trường nào ở đây là updater bỏ qua bản cập nhật trong im\nlặng: nó không báo lỗi khuôn, nó chỉ coi như không có gì mới.",
+        "properties": {
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          },
+          "pub_date": {
+            "title": "Pub Date",
+            "type": "string"
+          },
+          "signature": {
+            "title": "Signature",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "pub_date",
+          "url",
+          "signature"
+        ],
+        "title": "UpdateManifest",
+        "type": "object"
       }
     }
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.9.0"
+    "version": "0.10.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2091,6 +2125,129 @@
         "summary": "Health",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/updates/download/{target}/{arch}/{file_name}": {
+      "get": {
+        "description": "Phục vụ gói — **chỉ** những tệp có tên trong danh mục.\n\nDanh sách trắng chứ không lọc chuỗi: đường dẫn duy nhất chạm đĩa được dựng\ntừ tên đã nằm sẵn trong `index.json`, nên không có phép ghép nào để `..` hay\nmột đường tuyệt đối lọt vào. Lọc chuỗi thì phải nghĩ ra đủ mọi cách viết\n`..`; danh sách trắng thì không cần nghĩ ra cách nào.",
+        "operationId": "download_package_updates_download__target___arch___file_name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "arch",
+            "required": true,
+            "schema": {
+              "title": "Arch",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_name",
+            "required": true,
+            "schema": {
+              "title": "File Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Download Package",
+        "tags": [
+          "updates"
+        ]
+      }
+    },
+    "/updates/{target}/{arch}/{current_version}": {
+      "get": {
+        "description": "Trả manifest khi có bản mới hơn; `204 No Content` khi không.\n\nMọi lối \"không có gì để giao\" đều đi về `204`, kể cả khi đường tự cập nhật\nchưa được bật hay `current_version` không đọc được. Updater hiểu đúng một\ntín hiệu đó, và một máy trạm không cập nhật được vẫn phải làm việc bình\nthường — hôm nay nó vẫn ghi sổ được, chỉ là chưa lên bản mới.",
+        "operationId": "check_for_update_updates__target___arch___current_version__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "arch",
+            "required": true,
+            "schema": {
+              "title": "Arch",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "current_version",
+            "required": true,
+            "schema": {
+              "title": "Current Version",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateManifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "204": {
+            "description": "Không có bản nào mới hơn"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Check For Update",
+        "tags": [
+          "updates"
         ]
       }
     }

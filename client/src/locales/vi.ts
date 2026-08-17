@@ -60,13 +60,28 @@ export const vi = {
   'totp.confirmed': 'Đã đăng ký thiết bị. Đăng nhập lại và nhập mã để vào ứng dụng.',
   'totp.qrAlt': 'Mã QR đăng ký thiết bị xác thực',
 
+  'server.addressLabel': 'Địa chỉ máy chủ',
+  'server.addressHint': 'Ví dụ: https://may-chu.noi-bo:5443. Hỏi người quản trị nếu chưa biết.',
+  'server.addressSave': 'Lưu và kết nối lại',
+  'server.addressInvalid': 'Địa chỉ phải bắt đầu bằng http:// hoặc https://',
+  'server.addressMissing':
+    'Chưa khai địa chỉ máy chủ. Nhập địa chỉ app server của đơn vị bạn để bắt đầu.',
   'update.title': 'Cần cập nhật ứng dụng',
   'update.body':
     'Bản đang chạy trên máy này cũ hơn bản tối thiểu mà máy chủ chấp nhận. Tra cứu sổ sách vẫn dùng được, nhưng mọi thao tác lưu đều bị từ chối cho tới khi cập nhật.',
   'update.currentVersion': 'Bản đang chạy: {version}',
   'update.requiredVersion': 'Bản tối thiểu: {version}',
-  'update.howTo': 'Ứng dụng sẽ tự cập nhật khi khởi động lại. Không được thì báo người quản trị.',
+  'update.howTo': 'Bấm "Cập nhật ngay" để tải bản mới từ chính máy chủ này. Không cần internet.',
   'update.continueReadOnly': 'Tiếp tục ở chế độ chỉ đọc',
+  'update.installNow': 'Cập nhật ngay',
+  'update.installing': 'Đang tải và cài bản mới…',
+  'update.installed': 'Đã cài xong bản mới. Khởi động lại để dùng.',
+  'update.restart': 'Khởi động lại',
+  'update.upToDate':
+    'Máy chủ chưa có bản nào mới hơn bản đang chạy. Báo người quản trị đẩy bản cập nhật lên.',
+  'update.unsupported':
+    'Bản chạy trong trình duyệt không tự cập nhật được. Mở ứng dụng trên máy, hoặc báo người quản trị.',
+  'update.failed': 'Cập nhật không thành công: {reason}',
 
   'handshake.serverBehind':
     'Bản trên máy này ({client}) mới hơn máy chủ ({server}). Vẫn làm việc được, nhưng nên cập nhật máy chủ.',

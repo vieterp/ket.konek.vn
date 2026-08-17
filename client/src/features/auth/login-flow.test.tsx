@@ -298,6 +298,23 @@ describe('bắt tay phiên bản', () => {
     expect(screen.queryByLabelText('Mật khẩu')).not.toBeInTheDocument()
   })
 
+  it('trong trình duyệt, nút cập nhật nói thẳng là không tự cập nhật được', async () => {
+    mockServer({
+      '/system/handshake': handshake({ min_client_version: '99.0.0', server_version: '99.0.0' }),
+    })
+
+    renderApp()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Cập nhật ngay' }))
+
+    // Bộ test chạy trong jsdom, tức là không có shell Tauri — đúng bằng chế độ
+    // "trình duyệt trong LAN" của v1.x. Ở đó phải nói thẳng thay vì hiện một
+    // cái nút bấm vào không làm gì, vì người dùng đang bị chặn mọi lệnh ghi.
+    expect(
+      await screen.findByText(/Bản chạy trong trình duyệt không tự cập nhật được/),
+    ).toBeInTheDocument()
+  })
+
   it('vẫn tra cứu được sau khi chọn chế độ chỉ đọc', async () => {
     mockServer({
       '/system/handshake': handshake({ min_client_version: '99.0.0', server_version: '99.0.0' }),

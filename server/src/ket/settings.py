@@ -99,6 +99,20 @@ class Settings(BaseSettings):
     trả `426` — xem `api/middleware/schema_version_gate.py`.
     """
 
+    updates_dir: Path | None = None
+    """Thư mục chứa gói cập nhật client mà app server tự phục vụ (LD-05).
+
+    Bản cài LAN **không có internet**, nên máy trạm không đi hỏi được CDN nào —
+    app server là nơi duy nhất mọi máy trạm đều với tới. Đẩy gói lên bằng
+    `python -m ket.admin publish-update`; lệnh đó ghi `index.json` trong thư mục
+    này, và endpoint chỉ phục vụ tệp có tên trong danh mục ấy.
+
+    `None` (mặc định) = **chưa bật đường tự cập nhật**. Endpoint vẫn tồn tại và
+    trả `204` — máy trạm hiểu là "chưa có bản mới" và chạy bình thường. Hướng
+    hỏng ngược lại, trả lỗi, sẽ dội một lỗi lên mọi máy trạm mỗi lần chúng kiểm
+    cập nhật, và tiếng ồn đó che mất lỗi thật.
+    """
+
     cors_allowed_origins: tuple[str, ...] = (
         "tauri://localhost",
         "http://tauri.localhost",

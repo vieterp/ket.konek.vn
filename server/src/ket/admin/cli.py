@@ -37,7 +37,8 @@ import argparse
 import getpass
 import sys
 from collections.abc import Sequence
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
@@ -51,6 +52,7 @@ from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security import account_service, auth_service, role_service
 from ket.kernel.security.auth_service import DEFAULT_SESSION_RETENTION
 from ket.kernel.security.keystore import generate_app_key, store_app_key
+from ket.kernel.updates import catalog
 from ket.settings import Settings, get_settings
 
 # S105 báo nhầm: chuỗi nhắc nhập, không phải mật khẩu.
@@ -354,6 +356,44 @@ def command_prune_idempotency_keys(_args: argparse.Namespace, settings: Settings
     print(f"Đã xóa {total} khóa idempotency đã hết hạn.")  # noqa: T201
 
 
+def command_publish_update(args: argparse.Namespace, settings: Settings) -> None:
+    """Đưa một gói client đã dựng vào kho cập nhật của bản cài này (LD-05).
+
+    Lệnh **không chạm cơ sở dữ liệu** — kho cập nhật là thư mục trên đĩa, không
+    phải dữ liệu kế toán. Đặt ở CLI vì đây là thao tác của người triển khai tại
+    máy chủ, đúng lúc họ vừa chép bản dựng mới sang: mở một đường HTTP để đẩy
+    gói lên nghĩa là mở một đường ghi tệp thực thi vào máy chủ, và không màn
+    hình nghiệp vụ nào cần tới nó.
+
+    `--target` và `--arch` phải gõ tường minh chứ không suy từ tên tệp: tên
+    artifact của Tauri đổi theo phiên bản và theo định dạng gói, nên suy sai một
+    lần là cả một nền tảng không nhận được bản cập nhật mà không có gì báo. Gõ
+    sai thì lệnh từ chối ngay, trước khi copy.
+    """
+    if settings.updates_dir is None:
+        raise DomainError(
+            "Chưa khai KET_UPDATES_DIR nên bản cài này chưa có kho cập nhật. "
+            "Đặt biến môi trường đó tới một thư mục app server đọc được rồi chạy lại."
+        )
+    try:
+        release = catalog.publish(
+            settings.updates_dir,
+            package=args.package,
+            version=args.version,
+            target=args.target,
+            arch=args.arch,
+            pub_date=datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            notes=args.notes,
+        )
+    except ValueError as error:
+        raise DomainError(str(error)) from error
+
+    print(  # noqa: T201
+        f"Đã đưa {release.file_name} (bản {release.version}, {release.target}/{release.arch}) "
+        f"vào {settings.updates_dir}."
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Bộ phân tích tham số. Tách khỏi `main` để test gọi thẳng được."""
     parser = argparse.ArgumentParser(
@@ -432,6 +472,28 @@ def build_parser() -> argparse.ArgumentParser:
         "prune-idempotency-keys", help="Xóa khóa idempotency đã hết hạn ở mọi dữ liệu kế toán"
     )
     prune_keys.set_defaults(handler=command_prune_idempotency_keys)
+
+    publish = subparsers.add_parser(
+        "publish-update",
+        help="Đưa một gói client đã dựng vào kho cập nhật (LD-05)",
+    )
+    publish.add_argument(
+        "package", type=Path, help="Đường dẫn tới gói đã dựng (cạnh nó phải có .sig)"
+    )
+    publish.add_argument(
+        "--version", required=True, help="Phiên bản của gói, dạng MAJOR.MINOR.PATCH"
+    )
+    publish.add_argument(
+        "--target",
+        required=True,
+        choices=sorted(catalog.SUPPORTED_TARGETS),
+        help="Nền tảng, theo từ vựng updater Tauri",
+    )
+    publish.add_argument(
+        "--arch", required=True, choices=sorted(catalog.SUPPORTED_ARCHS), help="Kiến trúc CPU"
+    )
+    publish.add_argument("--notes", default="", help="Ghi chú phát hành hiện trên máy trạm")
+    publish.set_defaults(handler=command_publish_update)
 
     return parser
 

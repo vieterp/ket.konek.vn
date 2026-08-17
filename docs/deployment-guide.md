@@ -82,16 +82,23 @@ KET_CORS_ALLOWED_ORIGINS='["tauri://localhost","http://tauri.localhost","https:/
 Chế độ **trình duyệt trong LAN** (v1.x) không cần thêm mục nào: khi ấy app server
 tự phục vụ chính bundle web đó nên request là same-origin.
 
-### `VITE_KET_SERVER_URL` — cấu hình lúc **dựng** của web UI
+### `VITE_KET_SERVER_URL` — **giá trị mặc định** cho địa chỉ app server
 
-Địa chỉ app server mà bundle web sẽ gọi. Khác hai biến trên ở chỗ nó đọc lúc
-`vite build`, không phải lúc chạy — nên đổi nó đòi dựng lại gói.
+Địa chỉ app server mà bundle web sẽ gọi, đọc lúc `vite build`.
+
+**Từ lát 2C-4 đây chỉ là mặc định cho lần chạy đầu, không còn là thứ chốt hạ.**
+Người dùng khai lại địa chỉ ngay trên màn hình "không tới được máy chủ", và giá
+trị ấy lưu tại máy trạm rồi **thắng** giá trị ghim lúc dựng. Đổi máy host không
+còn đòi dựng lại gói và cài lại trên từng máy.
+
+Cùng địa chỉ đó dùng cho **cả** lời gọi API lẫn đường tự cập nhật — khai một lần
+là xong cả hai, không có hai chỗ cấu hình để trôi lệch khỏi nhau.
 
 | Tình huống | Giá trị |
 | --- | --- |
 | App server tự phục vụ bundle (trình duyệt LAN, chế độ một máy) | **để trống** — client gọi chính origin đang phục vụ trang |
 | `pnpm dev` trên máy lập trình | `http://127.0.0.1:5443` |
-| Bản đóng gói Tauri | địa chỉ máy host, ví dụ `https://host.lan:5443` |
+| Bản đóng gói Tauri | địa chỉ máy host thường gặp, ví dụ `https://host.lan:5443` — hoặc **để trống** và để người dùng khai ở lần chạy đầu |
 
 Hai tình huống dưới là **xuyên origin**, nên origin tương ứng phải có trong
 `KET_CORS_ALLOWED_ORIGINS` — thiếu thì trình duyệt chặn request trước khi nó rời
@@ -373,6 +380,57 @@ server/src/ket/__init__.py       client/src-tauri/Cargo.toml
 
 Chạy cục bộ: `make version-check`.
 
+### 6.1. App server tự phục vụ gói cập nhật (lát 2C-4)
+
+Bản cài LAN **không có internet** (LD-01), nên máy trạm không đi hỏi GitHub
+Releases được. App server là nơi duy nhất mọi máy trạm đều với tới, nên nó cũng
+là nguồn cập nhật.
+
+**Bật lên:** đặt `KET_UPDATES_DIR` tới một thư mục app server đọc được. Chưa đặt
+= chưa bật, và endpoint trả `204` — máy trạm hiểu là "chưa có bản mới" và chạy
+bình thường, không nhận lỗi nào.
+
+**Đẩy một bản lên** (chạy tại máy chủ, sau khi đã tải sản phẩm từ release):
+
+```bash
+python -m ket.admin publish-update /duong/dan/Ket_0.9.0_x64-setup.exe \
+  --version 0.9.0 --target windows --arch x86_64 --notes "Lưới nhập liệu"
+```
+
+Cạnh gói **phải có tệp `.sig`** cùng tên — `tauri build` sinh nó khi
+`createUpdaterArtifacts` bật. Thiếu chữ ký thì lệnh từ chối ngay: mọi máy trạm
+sẽ khước từ một gói không ký, và phát hiện điều đó sau khi đã copy 80MB lên máy
+chủ là quá muộn.
+
+`--target` / `--arch` gõ tường minh theo từ vựng updater Tauri
+(`darwin|windows|linux`, `x86_64|aarch64|i686|armv7`). Gõ sai thì lệnh từ chối;
+nếu suy từ tên tệp thì một lần suy sai là cả một nền tảng không nhận được bản
+cập nhật mà không có gì báo.
+
+Lệnh ghi `index.json` trong thư mục đó. **Endpoint chỉ phục vụ tệp có tên trong
+danh mục ấy** — kể cả `.sig` nằm ngay cạnh cũng không tải được.
+
+**Máy trạm biết hỏi ở đâu:** shell dựng địa chỉ từ chính app server mà client
+đang dùng — cùng địa chỉ với mọi lời gọi API, khai được lúc chạy (xem
+`VITE_KET_SERVER_URL` ở §3). Trước lát 2C-4, endpoint updater ghim
+`https://localhost:5443` **độc lập** với địa chỉ ấy, nên ngay cả một bản đóng
+gói dựng đúng cho khách cũng có updater hỏng: mỗi máy trạm đi hỏi chính nó, im
+lặng, mãi mãi.
+
+Thứ giữ an toàn cho việc lấy địa chỉ lúc chạy là **khóa công khai ghim trong
+`tauri.conf.json`**: gói không mang chữ ký khớp khóa ấy thì updater từ chối cài.
+Vì thế khóa ký **không bao giờ** được cấu hình lúc chạy.
+
+**Kho xếp theo `{target}/{arch}/`** nên hai nền tảng cùng tên gói
+(`Ket_0.9.0.tar.gz` trên cả macOS lẫn Linux là chuyện bình thường) không đè lên
+nhau. Đường tải vì thế cũng mang cả ba khóa:
+`/updates/download/{target}/{arch}/{tên}`.
+
+**Danh mục hỏng không làm sập gì.** `index.json` sửa tay lỗi, mất quyền đọc, hay
+do một bản server mới hơn ghi → endpoint trả `204`/`404` và ghi log mức `error`.
+Bản cài vẫn ghi sổ bình thường: một sự cố cập nhật không được thành một sự cố kế
+toán.
+
 ---
 
 ## 7. Chạy tiến trình worker
@@ -415,7 +473,7 @@ job vào hàng để worker khác chạy. Chi tiết: ADR-014, RT-13.
 | --- | --- | --- |
 | 1 | **Đường build Windows chưa chạy lần nào** — máy phát triển là macOS | `.msi`/NSIS và gói updater Windows chỉ xác minh được ở lần chạy `release.yml` đầu tiên |
 | 2 | **Chưa ký chứng thư hệ điều hành** | macOS Gatekeeper và Windows SmartScreen sẽ cảnh báo. Cần Apple Developer ID + chứng thư Authenticode (phase 11) |
-| 3 | **Plugin updater runtime chưa dựng** | Bộ cài chưa tự kiểm tra bản mới. Endpoint là địa chỉ app server của từng bản cài nên không biết lúc build — thuộc lát 2C / phase 11 |
+| 3 | ~~**Plugin updater runtime chưa dựng**~~ **XONG (lát 2C-4)** | Endpoint đặt ở tầng Rust lúc chạy, theo địa chỉ app server người dùng đang dùng — xem §6.1. Còn lại: bộ cài chưa ký chứng thư OS (mục 2) và chưa dựng thử trên Windows (mục 1) |
 | 4 | **Chưa có bộ cài app server** | Server chạy từ mã nguồn (`uv run uvicorn`). Đóng gói Python + native deps là spike S4 |
 | 5 | Cụm dev đã tạo dataset bằng mã **trước** lát 2B-0 còn quyền bảng cấp thẳng cho `ket_app` | Chạy `python -m ket.admin ensure-cluster` một lần để thu hồi |
 | 6 | Cụm cài bằng mã **trước** lát 2B-1b còn cấp `INSERT/UPDATE` trên `users` và `auth_sessions` cho nhóm `ket_control` (tức mọi vai trò dataset) | `ensure-cluster` thu hồi. Chạy nó sau **mọi** lần nâng cấp — đây là đường leo thang từ một lỗ tiêm SQL bất kỳ tới việc tự cấp phiên |
