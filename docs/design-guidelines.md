@@ -196,6 +196,7 @@ Thêm biến thể chỉ khi có màn hình thật đòi, không thêm trước:
 | `StatusPill` | `status-pill.tsx` | `neutral`, `pending`, `success`, `danger`; luôn có chữ, không chỉ có màu |
 | `NextActionCell` | `next-action-cell.tsx` | ô "Việc tiếp theo" (U1); `action={null}` hiện nhãn "đã xong" chứ không để ô trống |
 | `DataTable` | `data-table.tsx` | bảng **chỉ-đọc**: `align:'right'` + `tabular-nums` cho cột số, sắp xếp **do chỗ gọi điều khiển**, trạng thái rỗng/đang tải, `caption` bắt buộc |
+| `DataGrid` | `data-grid/` | lưới **nhập liệu** nhiều dòng: một ô nhập tại một thời điểm + cuộn ảo, ô đang gõ không controlled (IME), dán vùng từ Excel, cột `readOnly` cho số server tính. Xem §Lưới nhập liệu bên dưới |
 | `Drawer` | `drawer.tsx` | panel phải qua portal; Esc đóng, **bấm ra nền KHÔNG đóng**; bẫy focus; trả focus về chỗ mở; focus vào ô đầu của thân |
 | `SplitPane` | `split-pane.tsx` | chia trái/phải kéo bằng chuột **và bằng bàn phím** (`role="separator"`, mũi tên/Home/End); nhớ tỉ lệ qua `storageKey` |
 | `ChecklistPanel` | `checklist-panel.tsx` | danh mục kiểm tra (U11); mỗi mục hỏng có đường dẫn tới chỗ sửa; câu tổng kết do chỗ gọi truyền vào |
@@ -217,6 +218,7 @@ chiếu lại cột này chứ đừng đối chiếu trí nhớ.
 | `.w2-side` / `.w2-nav.on` | sidebar trong `app-layout` | rộng 212px; mục chọn = nền navy-50 + gạch trái 3px inset |
 | `.w2-top` | topbar | gạch dưới **2px navy** |
 | — (không có trong design) | `Drawer`, `SplitPane` | design không dùng overlay; xem ghi chú dưới |
+| — (design chưa vẽ màn nhập chứng từ) | `DataGrid` | dùng lại quy ước bảng của `.w2-t`: `th` nền `#F5F7FA`, cột số căn phải + `tabular-nums`, viền 1px `#C5D3E8`. Ô do server tính có nền `surface` |
 
 **Design KHÔNG có drawer/modal/overlay nào** (0 lần trong cả file). Nguyên tắc là
 drill-down **tại chỗ** (U10). `Drawer` được giữ cho những màn hình design chưa
@@ -244,16 +246,73 @@ Nhờ vậy component vẽ được trong test không cần provider, trang `/ki
 mở được khi chưa đăng nhập, và cùng bộ này dùng lại được cho mẫu in render ở
 server (ADR-009) nơi không có ngữ cảnh React.
 
-**Lưới nhập liệu `DataGrid` chưa có** — nền công nghệ do spike S3 quyết (lát
-2C-3). `DataTable` là bảng chỉ-đọc, không thay thế được.
+### Lưới nhập liệu `DataGrid`
 
-### Trang duyệt `/kitchen-sink`
+`client/src/design-system/components/data-grid/`. **Khác `DataTable`**: cái kia
+là bảng chỉ-đọc của màn hình danh sách, cái này là chỗ gõ chứng từ nhiều dòng.
+Không dùng lẫn.
 
-`client/src/features/kitchen-sink/` — toàn bộ component trong đúng vỏ thật
-(token thật, chế độ tối thật, font offline thật). **Chỉ có ở bản dev**: gác bằng
-`import.meta.env.DEV` trong `router.tsx` nên bản giao khách không có route này,
-và có test khóa lại điều đó. Nằm **ngoài** `SessionGate` để người thiết kế mở
-`pnpm dev` là xem được ngay, không cần server và không cần tài khoản.
+Nền công nghệ do spike S3 chốt (lát 2C-3): **tự viết, không thư viện lưới**. Ba
+quyết định làm nên hiệu năng của nó, và đây là ba thứ **không được gỡ**:
+
+| # | Quyết định | Mất nó thì sao |
+| --- | --- | --- |
+| H11 | Đúng **một** `<input>` tồn tại tại một thời điểm; ô không được chọn chỉ là chữ. Cộng cuộn ảo (`use-row-window.ts`) | 500 dòng × 8 cột = 4.000 node có trạng thái riêng nằm trên đường tính toán mỗi phím gõ |
+| H12 | Ô đang gõ **không controlled**; giá trị đi lên chỗ gọi khi rời ô (`commitMode='on-leave'`). Mọi phím **bỏ qua khi đang có tổ hợp IME** — cả hai vế (`compositionstart` của ta lẫn `isComposing` của sự kiện) | React ghi đè `value` giữa chừng một tổ hợp Telex là **nuốt dấu**; phím Enter kết thúc tổ hợp bị hiểu thành "xuống dòng dưới" |
+| — | **Ô nhập bị tháo phải chốt giá trị trước** (layout effect đọc node đã rời DOM) | Trình duyệt **không** bắn `blur` khi phần tử đang focus bị gỡ khỏi DOM. Lăn chuột cho dòng đang gõ rời cửa sổ cuộn là **mất trắng** chữ vừa gõ, không một tín hiệu nào — đo được trên Chromium trước khi có đoạn này |
+| H15 | Lưới **không tính tiền** — giá trị đi qua là chuỗi; cột "Thành tiền" khai `readOnly`, do server tính | Một phép nhân `number` trong JavaScript là một con số sai trên BCTC (LD-03) |
+
+Số đo trên Chromium, lưới 500 dòng (ngưỡng: phím < 50ms, dán 200 dòng < 1s):
+
+| Chế độ | p50 | p95 | max |
+| --- | --- | --- | --- |
+| `on-leave` (mặc định) | 12–14ms | ~17ms | 22–40ms |
+| `live` (cam kết từng phím) | 8–12ms | ~16ms | 32–46ms |
+| Dán 200 dòng × 5 cột | — | — | ~50ms (đo trong `onCommit`, có đối chứng đủ 1.000 ô) |
+
+`commitMode='live'` chỉ dùng cho màn hình phải cộng dồn ngay khi gõ (bảng lương,
+nguyên tắc U9) — nó đắt hơn hẳn và nằm sát trần hơn.
+
+Bàn phím: `Tab`/`Shift+Tab` sang ô sửa được kế tiếp (bỏ qua cột `readOnly`, vắt
+sang dòng sau, tới cuối lưới thì **thả** cho trình duyệt để ra được nút Lưu);
+`Enter`/mũi tên dọc đi theo cột; mũi tên **ngang** di con trỏ trong chữ và chỉ
+nhảy ô khi con trỏ đã ở mép; `Escape` trả ô về giá trị **lúc vào ô** (ở `live`
+thì phát thêm một cam kết hoàn tác, vì những phím đã gõ đã đi lên chỗ gọi rồi).
+
+**`rowKey` phải là định danh thật của bản ghi, không phải chỉ số dòng.** Đó là
+hàng rào cho ca chỗ gọi đổi dữ liệu dưới chân ô đang gõ (xóa dòng bằng phím tắt,
+dữ liệu về từ server): khóa đổi thì dòng và ô nhập được dựng lại, chữ chưa cam
+kết bị bỏ — đúng thứ phải xảy ra, vì `rowIndex` giờ trỏ sang chứng từ khác.
+
+Dán: `clipboard-tsv.ts` cài đúng quy tắc TSV của bảng tính (ô bọc ngoặc kép chứa
+tab/xuống dòng). Dán **một ô đơn** để nguyên cho trình duyệt; vùng nhiều ô đi
+lên chỗ gọi trong **một** lượt `onCommit`. Vùng dán dài hơn số dòng hiện có vẫn
+báo đủ — **chỗ gọi tự nới dòng**, lưới không tự đẻ dòng vì nó không biết một
+dòng chứng từ trống gồm những gì.
+
+Đo lại: `make client-bench` (Playwright + Chromium thật, trang `/bench/data-grid`
+chỉ có ở bản dev). CI có job riêng canh ngưỡng — xem `client-bench` trong
+`.github/workflows/ci.yml`. Vì sao canh bằng CI: kết luận của spike chỉ đúng
+chừng nào H11/H12/H15 còn nguyên, mà chúng là thứ một lần refactor thiện chí sẽ
+gỡ mất, và triệu chứng — gõ hơi khựng — không ai nhìn thấy trong diff.
+
+### Hai trang chỉ có ở bản dev
+
+| Route | Dùng để | Tệp |
+| --- | --- | --- |
+| `/kitchen-sink` | Duyệt toàn bộ component trong đúng vỏ thật (token thật, chế độ tối thật, font offline thật) | `client/src/features/kitchen-sink/` |
+| `/bench/data-grid` | Đo hiệu năng lưới nhập liệu (spike S3); tham số `?rows=`, `?mode=live` | `client/src/features/bench/` |
+
+Cả hai gác bằng hằng lúc dựng **`__DEV_TOOLS__`** (`command === 'serve'` trong
+`vite.config.ts`), **không** phải `import.meta.env.DEV`: cờ `DEV` đọc `NODE_ENV`,
+nên `NODE_ENV=development pnpm build` từng cho ra một bản giao khách **có**
+`/kitchen-sink` — một đường vào ứng dụng không qua `SessionGate` — kèm sourcemap
+toàn bộ mã nguồn. Bất biến thật do `make client-bundle-check` canh (dựng thử
+trong chính môi trường đó rồi grep bundle); `router.test.ts` canh phần mã.
+
+Cả hai nằm **ngoài** `SessionGate` để mở `pnpm dev` là xem được ngay, không cần
+server và không cần tài khoản — đó là toàn bộ lý do chúng tồn tại, và cũng là lý
+do cổng dev phải chặt.
 
 Không dùng Storybook: ở đây component hiện trong chính cái vỏ sẽ chạy thật, và
 không phải nuôi thêm một bộ công cụ thứ hai bên cạnh vitest + vite.

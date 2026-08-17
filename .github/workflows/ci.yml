@@ -406,6 +406,57 @@ jobs:
         run: ./.github/scripts/check-client-bundle.sh
 
   # ---------------------------------------------------------------------------
+  # Hiệu năng lưới nhập liệu (spike S3, phase 2 bước 17).
+  #
+  # Job riêng chứ không nhét vào job `client`: nó cần tải Chromium (~95MB) và
+  # chạy một máy chủ dev, nên nó chậm hơn hẳn phần còn lại; và nó phải chạy CẢ
+  # KHI PR đụng `src-tauri/**` (lúc đó job `client` tự tắt để nhường cho job
+  # đóng gói, mà job đóng gói thì không đo gì).
+  #
+  # Vì sao canh hiệu năng bằng CI thay vì đo một lần rồi ghi vào báo cáo: kết
+  # luận của spike S3 chỉ đúng chừng nào ba quyết định H11/H12/H15 còn nguyên.
+  # Chúng là những thứ một lần refactor thiện chí sẽ gỡ mất ("sao ô nhập lại
+  # không controlled?"), và triệu chứng — gõ hơi khựng — không ai nhìn thấy
+  # trong diff. Đo được: gỡ cuộn ảo ra thì p95 nhảy từ 16,4ms lên 69,7ms.
+  # ---------------------------------------------------------------------------
+  client-bench:
+    name: client · hiệu năng lưới nhập liệu (spike S3)
+    needs: changes
+    # Không giới hạn ở `pull_request` như job `client`: ở đó job đóng gói desktop
+    # bao trọn phần việc khi merge, còn ở đây **không job nào khác đo hiệu năng**.
+    # Lượt chạy định kỳ cũng cần: Chromium và Playwright tự cập nhật là đúng loại
+    # trôi mà một bộ đo phải bắt, dù mã của ta không đổi dòng nào.
+    if: needs.changes.outputs.client == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+
+      - name: Cài phụ thuộc
+        run: pnpm install --frozen-lockfile
+
+      - name: Cài Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Ngưỡng nằm trong chính bài đo (p95 < 50ms mỗi phím, dán 200 dòng < 1s).
+      # Số đo từng lượt in ra log để so được giữa các PR.
+      - name: Đo lưới nhập liệu
+        run: pnpm exec playwright test
+
+  # ---------------------------------------------------------------------------
   # Hợp đồng client↔server: type TypeScript phải là bản sinh từ mã server đang
   # có (bước 14 của phase 2). Job riêng vì nó cần **cả hai** toolchain — Python
   # để xuất OpenAPI, Node để sinh type — nên nó không thuộc về job `server-*`
@@ -554,7 +605,17 @@ jobs:
   ci-ok:
     name: CI
     if: always()
-    needs: [changes, server-quality, server-tests, server-db, client, api-types, desktop-bundle]
+    needs:
+      [
+        changes,
+        server-quality,
+        server-tests,
+        server-db,
+        client,
+        client-bench,
+        api-types,
+        desktop-bundle,
+      ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

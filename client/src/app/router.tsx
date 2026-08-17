@@ -33,13 +33,19 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { NAVIGATION } from '@/app/navigation'
 import { PlaceholderPage } from '@/app/placeholder-page'
 import { SessionGate } from '@/app/session-gate'
+import { DataGridBenchPage } from '@/features/bench/data-grid-bench-page'
 import { KitchenSinkPage } from '@/features/kitchen-sink/kitchen-sink-page'
 
 const [home, ...groups] = NAVIGATION
 
 /** Rỗng trong MỌI bản dựng — xem ghi chú đầu tệp. */
 export const devOnlyRoutes: RouteObject[] = __DEV_TOOLS__
-  ? [{ path: '/kitchen-sink', element: <KitchenSinkPage /> }]
+  ? [
+      { path: '/kitchen-sink', element: <KitchenSinkPage /> },
+      // Trang đo lưới nhập liệu (spike S3). Cùng cổng, cùng lý do: nó phơi một
+      // kênh đo trên `window` và không đi qua `SessionGate`.
+      { path: '/bench/data-grid', element: <DataGridBenchPage /> },
+    ]
   : []
 
 const router = createBrowserRouter([

@@ -30,7 +30,7 @@ DB_TEST_ENV := \
         server-install server-lint server-format server-typecheck server-imports \
         server-test server-test-db server-coverage server-check version-check \
         client-install client-typecheck client-lint client-test client-build client-check \
-        client-bundle-check \
+        client-bundle-check client-bench \
         api-types api-types-check \
         shell-fmt shell-lint tauri-build clean
 
@@ -94,6 +94,13 @@ client-build: ## vite build
 
 client-bundle-check: ## Bundle giao khách KHÔNG được chứa công cụ dev (dựng thử với NODE_ENV=development)
 	./.github/scripts/check-client-bundle.sh
+
+client-bench: ## Đo lưới nhập liệu trên Chromium thật (spike S3 — ngưỡng phím <50ms, dán 200 dòng <1s)
+	@# Không nằm trong `client-check`: nó cần một trình duyệt tải về (~95MB) và
+	@# một máy chủ dev đang chạy, mà `client-check` phải chạy được trên máy lập
+	@# trình trong vài giây. CI có job riêng cho việc này.
+	cd $(CLIENT) && pnpm exec playwright install --with-deps chromium
+	cd $(CLIENT) && pnpm exec playwright test
 
 client-check: api-types-check client-typecheck client-lint client-test client-build client-bundle-check ## Toàn bộ cổng phía client
 
