@@ -43,3 +43,7 @@ client/src-tauri/gen/
 ket-page*.yml
 server/.claude/
 docs/journals/
+
+# --- Playwright (bộ đo hiệu năng lưới nhập liệu, spike S3) ---
+client/test-results/
+client/playwright-report/

@@ -40,5 +40,5 @@
       "@api-types/*": ["./packages/api-types/*"]
     }
   },
-  "include": ["src", "packages", "vite.config.ts", "eslint.config.js"]
+  "include": ["src", "packages", "bench", "vite.config.ts", "playwright.config.ts", "eslint.config.js"]
 }

@@ -12,9 +12,8 @@
  * component này còn phải dùng lại cho mẫu in render ở server (ADR-009), nơi
  * không có ngữ cảnh React nào cả.
  *
- * Lưới **nhập liệu** nhiều dòng (`DataGrid`) chưa có ở đây: nền công nghệ của
- * nó do spike S3 quyết (lát 2C-3, quyết định H7). `DataTable` dưới đây là bảng
- * **chỉ-đọc**, không thay thế được.
+ * `DataTable` là bảng **chỉ-đọc**; lưới **nhập liệu** nhiều dòng là `DataGrid`
+ * (thư mục `data-grid/`). Hai component vì hai bài toán — xem quyết định H7.
  */
 
 export { Alert } from './alert'
@@ -32,6 +31,15 @@ export type {
   DataTableTotalRow,
   SortDirection,
 } from './data-table'
+export { DataGrid, parseClipboardTable } from './data-grid'
+export type {
+  DataGridAlign,
+  DataGridCell,
+  DataGridChange,
+  DataGridColumn,
+  DataGridCommitMode,
+  DataGridProps,
+} from './data-grid'
 export { Drawer } from './drawer'
 export type { DrawerProps } from './drawer'
 export { NextActionCell } from './next-action-cell'

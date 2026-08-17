@@ -1,11 +1,12 @@
 /**
- * Trang duyệt design system chỉ được tồn tại khi đang chạy máy chủ dev.
+ * Trang công cụ dev chỉ được tồn tại khi đang chạy máy chủ dev.
  *
- * Vì sao đáng một bài test riêng: `/kitchen-sink` nằm **ngoài** `SessionGate`,
- * nên nếu nó lọt vào bản giao khách thì đó là một đường vào ứng dụng **không
- * qua đăng nhập**. Trang đó không đọc dữ liệu thật nên không lộ số liệu, nhưng
- * một route bỏ qua cổng phiên là thứ không được có mặt trong sản phẩm — và
- * "quên gác" là loại lỗi không ai nhìn thấy khi review diff.
+ * Vì sao đáng một bài test riêng: `/kitchen-sink` và `/bench/data-grid` nằm
+ * **ngoài** `SessionGate`, nên nếu chúng lọt vào bản giao khách thì đó là một
+ * đường vào ứng dụng **không qua đăng nhập**. Hai trang đó không đọc dữ liệu
+ * thật nên không lộ số liệu, nhưng một route bỏ qua cổng phiên là thứ không
+ * được có mặt trong sản phẩm — và "quên gác" là loại lỗi không ai nhìn thấy khi
+ * review diff. Trang đo còn phơi thêm một kênh trên `window`.
  *
  * **Giới hạn của chính bài test này:** nó ép `__DEV_TOOLS__` rồi khẳng định cái
  * ternary, nên nó chứng minh *mã* phản ứng đúng với cờ — KHÔNG chứng minh được
@@ -28,10 +29,10 @@ async function loadRoutes(devTools: boolean): Promise<{ path?: string }[]> {
 }
 
 describe('devOnlyRoutes', () => {
-  it('có /kitchen-sink khi chạy máy chủ dev', async () => {
+  it('có đủ trang công cụ khi chạy máy chủ dev', async () => {
     const routes = await loadRoutes(true)
 
-    expect(routes.map((route) => route.path)).toEqual(['/kitchen-sink'])
+    expect(routes.map((route) => route.path)).toEqual(['/kitchen-sink', '/bench/data-grid'])
   })
 
   it('RỖNG trong bản dựng', async () => {

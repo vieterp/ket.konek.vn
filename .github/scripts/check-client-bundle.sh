@@ -34,6 +34,10 @@ NODE_ENV=development pnpm exec vite build --outDir "$OUT_DIR" --emptyOutDir >/de
 FORBIDDEN=(
   'kitchen-sink'
   'Design system — trang duyệt'
+  # Trang đo lưới nhập liệu (spike S3). Ngoài việc bỏ qua `SessionGate`, nó còn
+  # phơi một kênh đo trên `window` (`__gridBench`).
+  'bench/data-grid'
+  '__gridBench'
 )
 
 status=0

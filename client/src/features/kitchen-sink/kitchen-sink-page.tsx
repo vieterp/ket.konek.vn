@@ -27,6 +27,7 @@ import {
   Alert,
   Button,
   ChecklistPanel,
+  DataGrid,
   DataTable,
   Drawer,
   NextActionCell,
@@ -39,6 +40,7 @@ import {
 } from '@/design-system/components'
 import type {
   ChecklistItem,
+  DataGridColumn,
   DataTableColumn,
   DataTableSort,
   DataTableTotalRow,
@@ -158,6 +160,65 @@ const CHECKLIST_ITEMS: readonly ChecklistItem[] = [
   },
 ]
 
+interface GridLine {
+  readonly id: string
+  readonly item: string
+  readonly quantity: string
+  readonly unitPrice: string
+  readonly amount: string
+}
+
+const GRID_COLUMNS: readonly DataGridColumn<GridLine>[] = [
+  { key: 'item', header: 'Hàng hóa, dịch vụ', value: (row) => row.item },
+  {
+    key: 'quantity',
+    header: 'Số lượng',
+    width: 100,
+    align: 'right',
+    inputMode: 'decimal',
+    value: (row) => row.quantity,
+  },
+  {
+    key: 'unitPrice',
+    header: 'Đơn giá',
+    width: 130,
+    align: 'right',
+    inputMode: 'decimal',
+    value: (row) => row.unitPrice,
+  },
+  // Ô nền xám = server tính. Lưới không nhân số lượng với đơn giá (H15).
+  {
+    key: 'amount',
+    header: 'Thành tiền',
+    width: 130,
+    align: 'right',
+    readOnly: true,
+    value: (row) => row.amount,
+    display: (row) => formatMoney(row.amount, 'vi'),
+  },
+]
+
+/** Hai dòng trống cuối là có chủ đích: chứng từ luôn mở sẵn chỗ gõ tiếp. */
+const GRID_LINES: readonly GridLine[] = [
+  {
+    id: 'g1',
+    item: 'Bút bi Thiên Long TL-027',
+    quantity: '100',
+    unitPrice: '4500',
+    amount: '450000',
+  },
+  {
+    id: 'g2',
+    item: 'Giấy A4 Double A 70gsm',
+    quantity: '20',
+    unitPrice: '78000',
+    amount: '1560000',
+  },
+  { id: 'g3', item: 'Mực in Canon 328', quantity: '3', unitPrice: '425000', amount: '1275000' },
+  { id: 'g4', item: '', quantity: '', unitPrice: '', amount: '0' },
+  { id: 'g5', item: '', quantity: '', unitPrice: '', amount: '0' },
+]
+
 function Section({
   title,
   note,
@@ -182,6 +243,7 @@ export function KitchenSinkPage(): ReactElement {
   const [sort, setSort] = useState<DataTableSort>({ key: 'issuedOn', direction: 'desc' })
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [declared, setDeclared] = useState('no')
+  const [gridLines, setGridLines] = useState<readonly GridLine[]>(GRID_LINES)
 
   const columns: readonly DataTableColumn<DemoRow>[] = [
     { key: 'code', header: 'Số chứng từ', sortable: true, render: (row) => row.code },
@@ -384,6 +446,29 @@ export function KitchenSinkPage(): ReactElement {
               Mở panel
             </Button>
           </div>
+        </Section>
+
+        <Section
+          title="DataGrid"
+          note="Lưới NHẬP LIỆU (khác DataTable chỉ-đọc). Tab/Enter đi ô, mũi tên ngang chỉ nhảy ô khi con trỏ đã ở mép, dán được cả vùng từ Excel. Đo hiệu năng ở /bench/data-grid."
+        >
+          <DataGrid
+            columns={GRID_COLUMNS}
+            rows={gridLines}
+            rowKey={(row) => row.id}
+            caption="Chi tiết chứng từ bán hàng"
+            cellLabel={(header, rowNumber) => `${header}, dòng ${rowNumber}`}
+            rowHeight={30}
+            height={150}
+            onCommit={(changes) => {
+              setGridLines((previous) =>
+                previous.map((line, index) => {
+                  const change = changes.find((item) => item.rowIndex === index)
+                  return change === undefined ? line : { ...line, [change.columnKey]: change.value }
+                }),
+              )
+            }}
+          />
         </Section>
       </div>
 

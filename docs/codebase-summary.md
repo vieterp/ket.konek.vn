@@ -65,7 +65,8 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | `server/migrations/` | `env.py` (chạy per-schema) + `versions/0001_core_platform.py` |
 | `server/scripts/export_openapi.py` | **Xuất OpenAPI từ `create_app()` ra JSON**, không cần DB. Chạy: `uv run python scripts/export_openapi.py <đường-dẫn.json>` hay `make api-types` |
 | `client/packages/api-types/` | **Sinh từ OpenAPI**: `schema.d.ts` (type TypeScript), `openapi.json` (spec). Cả hai **được COMMIT** là bản ghi hợp đồng. Tạo bằng `openapi-typescript` |
-| `client/src/` | **Lát 2C-1:** `main.tsx`; `app/{providers,router,session-gate,app-layout,navigation,placeholder-page}`; `design-system/{base,tokens}.css` + `components/{button,text-field,select-field,alert}`; `lib/{api-client,session,session-storage,app-version,i18n,formatters,access}`; `features/auth/*` (đăng nhập, đổi mật khẩu tạm, đăng ký 2FA, cần cập nhật, mất kết nối) + `features/dataset`; `locales/{vi,en}.ts` |
+| `client/src/` | **Lát 2C-1..2C-3:** `main.tsx`; `app/{providers,router,session-gate,app-layout,navigation,placeholder-page,error-boundary}`; `design-system/{base,tokens}.css` + 13 component (`button`, `text-field`, `select-field`, `alert`, `tabs`, `seg`, `status-pill`, `next-action-cell`, `data-table`, `drawer`, `split-pane`, `checklist-panel`, và **`data-grid/`** = lưới nhập liệu, spike S3); `lib/{api-client,session,session-storage,app-version,i18n,formatters,access,theme,safe-storage}`; `features/auth/*` (đăng nhập, đổi mật khẩu tạm, đăng ký 2FA, cần cập nhật, mất kết nối) + `features/dataset`; `locales/{vi,en}.ts`. **Chỉ có ở bản dev** (gác bằng `__DEV_TOOLS__`): `features/kitchen-sink/` và `features/bench/` |
+| `client/bench/` | Bộ đo hiệu năng lưới nhập liệu trên Chromium thật (`make client-bench`, job CI `client-bench`). Ngưỡng spike S3 nằm trong chính bài đo |
 | `client/src-tauri/` | Shell Rust, edition 2024, plugin `dialog` + `opener` |
 
 ---
