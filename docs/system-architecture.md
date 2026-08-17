@@ -23,7 +23,8 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | Vai trò DB `ket_owner` / `ket_app`, tách quyền sở hữu | ✅ chạy thật |
 | Schema-per-dataset: schema điều khiển, provisioning, định tuyến `search_path` | ✅ chạy thật |
 | Migration `0001` — 12 bảng nền (RBAC, settings, audit, idempotency, jobs, numbering, branches, attachments) | ✅ chạy thật |
-| RLS cô lập chi nhánh theo GUC `ket.branch_ids` | ✅ chạy thật (trên `audit_log`, `jobs`, `attachments`) |
+| Migration `0003` — 15 bảng danh mục + 2 bảng chiều phân tích | ✅ chạy thật (3B-1) |
+| RLS cô lập chi nhánh theo GUC `ket.branch_ids` | ✅ chạy thật (trên `audit_log`, `jobs`, `attachments`). **Danh mục cố ý KHÔNG bật RLS** — `branch_id IS NULL` = dùng chung toàn công ty (FR-SYS-018), mà policy chi nhánh sẽ giấu đúng những dòng đó; lọc theo chi nhánh nằm ở `MasterDataService._visible_to` + tầng HTTP (H39) |
 | Nhật ký bất biến ghi cùng transaction | ✅ chạy thật |
 | `ket.kernel.money` — Decimal, ROUND_HALF_UP | ✅ chạy thật |
 | Kiểm phiên bản schema lúc khởi động (LD-05) | ✅ chạy thật |
@@ -45,6 +46,9 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | **Bộ test client** vitest + testing-library, có cổng CI `make client-test` | ✅ chạy thật (2C-1) |
 | **Tệp đính kèm** (FR-NFR-053) — kho định địa chỉ theo nội dung tách theo dataset, `/api/v1/attachments` có RBAC + RLS + idempotency, gỡ-không-xóa | ✅ chạy thật (2C-5) |
 | **Khung danh mục dùng chung** — materialized path (cây ≥6 cấp, chuyển nhánh bằng **một** UPDATE), `MasterDataService[ModelT]` generic có kiểu, mã duy nhất theo phạm vi dùng-chung/riêng-chi-nhánh (BR-SYS-01), bộ đếm tham chiếu chặn xóa (BR-SYS-02) | ✅ chạy thật (3A) |
+| **Sổ đăng ký danh mục** — `CatalogRegistry` + `CatalogSpec` (slug, model, extra_fields); **router sinh tự động** từ registry — 6 thao tác/danh mục (GET/POST/PUT/DELETE/chuyển nhánh), endpoint `/api/v1/master/{slug}`; quyền theo từng danh mục không mã chung `master.*` (H48) | ✅ chạy thật (3B-1) |
+| **15 danh mục SRS 7 + 3 chiều lõi** — `projects`, `contracts`, `project_types`, `warehouses`, `units_of_measure`, `asset_types`, `tool_types`, `payment_terms`, `banks`, `timekeeping_symbols`, `document_types`, `invoice_forms`, `pit_tables`, `excise_tax_tables`, `resource_tax_tables`; `cost_objects`, `expense_items`. **Không** bật RLS — miễn trừ khai từng bảng trong `test_rls_policy_coverage.py` (H39, H53) | ✅ chạy thật (3B-1) |
+| **Chiều phân tích mở rộng** — `analysis_dimensions` + `analysis_dimension_values`, `DimensionService`; gieo mầm chiều "Mã thống kê" (STAT, FR-SYS-051); `value_source` + `master_slug` phân tách (không chuỗi ghép, cho phép `CHECK` kiểm bất biến) | ✅ chạy thật (3B-1) |
 | **`uuid7` tự viết** (RFC 9562) cho cột `uid` ổn định của danh mục (RT-19) — Python 3.12 chưa có `uuid.uuid7()`, và `uuid-utils` là extension Rust nên tránh trước spike đóng gói S4 | ✅ chạy thật (3A) |
 | **Đa tiền tệ** — `currencies`/`exchange_rates`, `MoneyFc` kiểm bất biến lúc dựng, tra tỷ giá gần nhất ≤ ngày; **thiếu tỷ giá là lỗi nghiệp vụ, không bao giờ mặc định 1** | ✅ chạy thật (3A) |
 | **Năm tài chính & kỳ kế toán** — sinh đủ 12 kỳ liền mạch (hỗ trợ niên độ lệch), khóa/mở kỳ có vết người thực hiện, chồng lấn niên độ chặn bằng `EXCLUDE USING gist` ở DB | ✅ chạy thật (3A) |

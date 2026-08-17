@@ -1,6 +1,6 @@
 # Tóm tắt mã nguồn — Konek Két
 
-**Cập nhật:** 2026-08-15 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A (nền dữ liệu), 2B-0 (cô lập dataset + release pipeline), 2B-1a (danh tính lõi), 2B-1b (phân quyền & định tuyến request), 2B-2a (hợp đồng ghi), 2B-2b (tiến trình worker + API jobs + OpenAPI).
+**Cập nhật:** 2026-08-17 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); phase 3 xong lát 3A + 3B-1 (registry + 15 danh mục + chiều phân tích).
 
 Tài liệu này mô tả **thứ đang có thật trong repo**. Kiến trúc đích của cả v1
 nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó chưa dựng.
@@ -18,6 +18,9 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | Bảng chứng từ / `gl_postings` / số dư |
 | **RBAC tới cấp `{module}.{chứng từ}.{hành vi}`** + `require_permission`, **định tuyến dataset theo header `X-Dataset`**, phạm vi chi nhánh cho RLS | Bảng chứng từ / `gl_postings` / số dư |
 | **Idempotency cùng transaction** (giành khóa → làm việc → điền kết quả), **khóa lạc quan `row_version`**, **tùy chọn hai cấp**, **hạn mức request** | Bảng chứng từ / `gl_postings` / số dư |
+| **Sổ đăng ký danh mục** — `CatalogRegistry` + `CatalogSpec` (slug, model, extra_fields); **router sinh tự động từ registry** — 6 thao tác/danh mục (GET danh sách/một, POST/PUT/DELETE/chuyển nhánh), 102 operation tổng; phạm vi chi nhánh trong cấu trúc | — |
+| **15 danh mục SRS 7 + 3 chiều lõi**: `projects`, `project_types`, `contracts`, `warehouses`, `units_of_measure`, `asset_types`, `tool_types`, `payment_terms`, `banks`, `timekeeping_symbols`, `document_types`, `invoice_forms`, `pit_tables`, `excise_tax_tables`, `resource_tax_tables` | Dòng 4–6 của SRS §1–2 hoãn tới phase 5/7/9 |
+| **Chiều phân tích mở rộng** — hai bảng `analysis_dimensions` + `analysis_dimension_values`, `DimensionService`, gieo mầm "Mã thống kê" (STAT, FR-SYS-051) lúc cấp dữ liệu kế toán; `value_source` + `master_slug` phân tách (không chuỗi ghép) | — |
 | **Hàng đợi job + tiến trình worker riêng** (không FastAPI); **lease/heartbeat/reaper** chống job mồ côi; **vai trò `ket_worker`**; **API `/api/v1/jobs` + OpenAPI → type TypeScript** | Các module nghiệp vụ kế toán (phase 4 trở đi) |
 | Schema-per-dataset + provisioning + `ensure_cluster` + `repair_dataset_privileges_statements` + **gieo mã quyền/vai trò `admin`** | API nghiệp vụ (mới có `/health`, `/api/v1/auth/*`, `/api/v1/system/*`) |
 | **Đăng nhập Argon2id (có trần đồng thời), phiên lưu DB thu hồi được ngay, 2FA TOTP chống phát lại, khóa tạm khi dò mật khẩu** | Client (mới là bộ khung rỗng) |
@@ -55,11 +58,14 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | `kernel/jobs/` | `models` (bảng `jobs`, `ResumeSemantics`, `JobStatus`), **`registry` (loại job + quyền + semantics), `queue` (giành job), `reaper` (dọn mồ côi), `builtin` (ba loại job mẫu)** | Thêm loại job mới, chạm job metadata |
 | `kernel/numbering/` | `models` (`number_sequences` + sổ cấp số `allocated_numbers`, `ResetRule`), **`service` (`NumberingRule` + `NumberingService`: `FOR UPDATE` trong transaction của người gọi, nên rollback trả lại số)** | Cấp số chứng từ, đổi quy tắc đánh số |
 | `kernel/identifiers.py` | **`uuid7()` RFC 9562 tự viết** — `uid` ổn định của danh mục (RT-19). Khóa bảo vệ **tính đơn điệu**, không phải tính duy nhất | Đụng khóa danh mục |
-| `kernel/master_data/` | **`tree_path` (materialized path, chuyển nhánh bằng một UPDATE), `base` (`MasterDataRow` + ràng buộc/chỉ mục chung), `service` (`MasterDataService[ModelT]` generic), `usage` (bộ đếm tham chiếu), `models/` (`cost_objects`, `expense_items`)** | Thêm một danh mục mới |
+| `kernel/master_data/` | **`registry` (đăng ký danh mục + loại quyền), `tree_path` (materialized path, chuyển nhánh bằng một UPDATE), `base` (`MasterDataRow`), `service` (`MasterDataService[ModelT]` generic), `usage` (bộ đếm tham chiếu), `models/` (15 danh mục + 2 danh mục lõi)** | Thêm một danh mục → thêm model + khai registry |
+| `kernel/dimensions/` | **`models` (`analysis_dimensions`/`analysis_dimension_values`), `service` (API cây giá trị + kiểm nguồn), `seed` (gieo chiều lõi)** | Thêm chiều → thêm dòng vào bảng giá trị |
 | `kernel/currency/` | **`models` (`currencies`/`exchange_rates`), `money_fc` (`MoneyFc` kiểm bất biến lúc dựng), `exchange_rate_service` (tra tỷ giá gần nhất ≤ ngày; thiếu → lỗi, **không bao giờ dùng 1**)** | Chạm nguyên tệ hoặc quy đổi |
 | `kernel/periods/` | **`models` (`fiscal_years`/`accounting_periods`), `service` (sinh 12 kỳ, tra kỳ, khóa/mở có vết)** | Chạm kỳ kế toán, khóa sổ |
 | `kernel/organization/service.py` | **`BranchService`** — cây chi nhánh. Bảng `Branch` vẫn ở `kernel/security/models.py` vì nó là neo cô lập dữ liệu của luồng đăng nhập | Thêm/chuyển chi nhánh |
 | `kernel/persistence/sequences.py` | **`reserve_id`** — lấy khóa chính trước khi `INSERT` để `path` chứa đúng id | Bảng cây mới |
+| `api/routers/master_data` | **Router sinh tự động từ registry** — 6 thao tác × 17 danh mục = 102 operation. Endpoint `/api/v1/master/{slug}` (GET danh sách/một, POST, PUT, DELETE, PUT .../parent). Response model sinh động từ `pydantic.create_model` + `extra_fields`. RLS chi nhánh + quyền theo danh mục | Danh mục mới = không cần đổi router |
+| `api/routers/dimensions` | **API `/api/v1/dimensions`** — đọc chiều + cây giá trị, khai chiều mới, thêm giá trị (chưa có sửa/xóa; UI người dùng cuối hoãn v1.1 theo RT-20) | Chiều mở rộng, giá trị mới |
 | `api/routers/jobs` | **API `/api/v1/jobs/{types,list,detail,cancel}`** + schema request/response | Thêm loại job, đổi hợp đồng |
 | `worker/` | **`__main__.py` (điểm vào `python -m ket.worker`), `runner` (vòng lặp), `progress` (tiến độ + hủy), `contracts`** | Đổi cơ chế giành/chạy job |
 | `modules/*`, `posting/`, `reporting/` | Chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase sau | — |
@@ -194,14 +200,14 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 
 ---
 
-## 5. Bộ test (**265 case**: 185 cần PostgreSQL 16, 80 không)
+## 5. Bộ test (**743 case**: 437 cần PostgreSQL 16, 306 không) — lát 3B-1 tăng 145 test
 
 | Tệp | Chứng minh điều gì |
 | --- | --- |
 | `test_audit_immutability_owner_split.py` (8) | `ket_app` không UPDATE/DELETE/TRUNCATE/DROP/DISABLE-RLS được `audit_log`; không sở hữu bảng nào |
 | `test_audit_pending_batch_lifecycle.py` (3) | Flush hỏng không để lại dòng nhật ký cho thao tác đã bị hủy; ảnh chụp bản ghi mới mang giá trị thật |
 | `test_rls_branch_isolation.py` (6) | Chi nhánh A không thấy B, **kể cả qua `count() OVER ()`**; GUC không sống qua transaction |
-| `test_rls_policy_coverage.py` (3) | **Theo metadata**: mọi bảng có `branch_id` phải có policy — canh cho các phase sau |
+| `test_rls_policy_coverage.py` (4) | **Theo metadata**: mọi bảng có `branch_id` phải có policy — canh cho các phase sau. Lát 3B-1 thêm cổng ngược lại: mọi danh mục phải được **khai miễn trừ từng bảng** (thử miễn trừ "suy theo lớp gốc" rồi đảo lại — đối trọng của nó là hằng đúng, H53) |
 | `test_dataset_routing.py` (21) | Hai dataset không thấy dữ liệu/đánh số/nhật ký của nhau; whitelist tên schema |
 | `test_search_path_shadowing.py` (4) | Không che được bảng thật bằng `pg_temp` (kiểm **từng lớp** phòng thủ riêng) |
 | `test_startup_schema_version_gate.py` (8) | App khởi động được khi đã có dataset; lệch revision **hoặc** PostgreSQL cũ hơn phiên bản đích → **từ chối khởi động** |
@@ -224,16 +230,19 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_totp_second_factor.py` (9) | **Mới**: cửa sổ chấp nhận và chống dùng lại mã |
 | `test_keystore_secret_box.py` (8) | Thiếu khóa/sai khóa/keystore hỏng đều fail-closed, không rơi về lưu dạng rõ |
 | `test_permission_registry.py` (15) | **Mới**: thêm loại chứng từ mới **không** phải đụng schema quyền; mã quyền đúng ba phần; nhật ký không có mã ghi |
-| `test_authorization_access.py` (14) | **Mới**: cấm thắng cho phép; không vai trò = `dataset.access_denied`; gieo mầm chạy lại được và cấp mã quyền mới cho `admin`; **thứ tự fail-safe** — ghi vai trò hỏng vẫn để lại cờ 2FA đã bật |
-| `test_idempotency_same_txn.py` (11) | **Mới**: gửi lại → đúng một bản ghi; lệnh ghi hỏng → **khóa cũng biến mất**; khóa hết hạn fail-closed; khóa của người khác không dùng lại được; **4 luồng cùng khóa → đúng một lần thực hiện**; lỗi ràng buộc nghiệp vụ không bị hóa trang thành tranh chấp khóa |
+| `test_authorization_access.py` (14) | **Mới lát 2B-2b**: cấm thắng cho phép; không vai trò = `dataset.access_denied`; gieo mầm chạy lại được và cấp mã quyền mới cho `admin`; **thứ tự fail-safe** — ghi vai trò hỏng vẫn để lại cờ 2FA đã bật |
+| `test_idempotency_same_txn.py` (11) | **Mới lát 2B-2b**: gửi lại → đúng một bản ghi; lệnh ghi hỏng → **khóa cũng biến mất**; khóa hết hạn fail-closed; khóa của người khác không dùng lại được; **4 luồng cùng khóa → đúng một lần thực hiện**; lỗi ràng buộc nghiệp vụ không bị hóa trang thành tranh chấp khóa |
 | `test_idempotency_route_coverage.py` (6) | **Mới**: mọi route `POST` phải khai idempotency hoặc nằm trong danh sách miễn trừ **trong mã nguồn**; khóa route không trùng và vừa cột |
 | `test_optimistic_locking.py` (2) | **Mới**: hai transaction cùng đọc một phiên bản → chỉ một ghi được (`StaleDataError`); handler đổi nó thành `409`, không phải `500` |
 | `test_settings_service.py` (9) | **Mới**: user đè system đè mặc định; ràng buộc kiểu/khoảng/danh sách chọn; **4 luồng cùng ghi lần đầu → một thắng, ba nhận `409` chứ không phải lỗi DB thô** |
 | `test_rate_limit.py` (9) | **Mới**: chặn quá hạn mức kèm `Retry-After`; `429` vẫn là RFC 7807 **có `correlation_id`** (khóa thứ tự middleware); nhóm `auth` có ngân sách riêng; `/health` miễn trừ; hai người gọi không dùng chung ngân sách; **header `Authorization` bịa không mua được ngân sách mới, và bơm định danh giả không xóa được bộ đếm người thật** |
 | `test_write_contract_api.py` (16) | **Mới**: chuỗi hợp đồng ghi qua HTTP — thiếu `X-Idempotency-Key` là `400`, gửi lại là `200` (không phải `201`), cùng khóa khác nội dung là `409`; người lưu sau nhận `409` **kèm bản mới nhất**; `row_version` không lọt vào nhật ký; tùy chọn riêng không rò sang người khác; sửa tùy chọn cấp hệ thống cần quyền riêng |
-| `test_api_authorization.py` (16) | **Mới**: chuỗi định tuyến đầu-cuối qua HTTP; thiếu/sai `X-Dataset`; thiếu quyền nêu đúng mã còn thiếu; **RLS cắt `/system/audit-log` dù câu truy vấn không lọc chi nhánh**; mật khẩu tạm và phiên hạn chế chặn ở server; vòng đăng ký 2FA đi trọn bằng HTTP |
+| `test_api_authorization.py` (16) | **Mới lát 2B-2b**: chuỗi định tuyến đầu-cuối qua HTTP; thiếu/sai `X-Dataset`; thiếu quyền nêu đúng mã còn thiếu; **RLS cắt `/system/audit-log` dù câu truy vấn không lọc chi nhánh**; mật khẩu tạm và phiên hạn chế chặn ở server; vòng đăng ký 2FA đi trọn bằng HTTP |
+| `test_master_data_registry.py` (non-db) | **Lát 3B-1**: mọi lớp con `MasterDataRow` phải có trong registry; `extra_fields` khớp cột hai chiều; response model không thiếu trường; đủ 4 mã quyền, không thừa `post`/`print`; đủ 6 route cho **mỗi** danh mục; slug phải là identifier; đăng ký trùng bị từ chối |
+| `test_master_data_api.py` (db) | **Lát 3B-1**: CRUD danh mục cây thuần + danh mục có cột riêng; validator liên-trường; phạm vi chi nhánh (404 không phải 403); quyền từng danh mục; chuyển nhánh; idempotency; khóa lạc quan |
+| `test_analysis_dimensions.py` (db) | **Lát 3B-1**: gieo mầm + chạy lại; mã quyền tới bảng permissions; cây giá trị; duy nhất trong chiều; `subtree_of` không rò sang chiều khác; cha khác chiều bị từ chối; nguồn `master` trỏ slug có thật |
 
-Tổng **409 test** (293 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
+Tổng **743 test** (437 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
 
 ---
 

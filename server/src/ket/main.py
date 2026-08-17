@@ -51,7 +51,9 @@ from ket.api.middleware.schema_version_gate import (
 from ket.api.routers.attachments import ATTACHMENTS_PREFIX
 from ket.api.routers.attachments import router as attachments_router
 from ket.api.routers.auth import router as auth_router
+from ket.api.routers.dimensions import router as dimensions_router
 from ket.api.routers.jobs import router as jobs_router
+from ket.api.routers.master_data import router as master_data_router
 from ket.api.routers.system import router as system_router
 from ket.api.routers.system_settings import router as settings_router
 from ket.api.routers.updates import router as updates_router
@@ -228,6 +230,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(jobs_router)
     app.include_router(attachments_router)
     app.include_router(updates_router)
+    app.include_router(master_data_router)
+    app.include_router(dimensions_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

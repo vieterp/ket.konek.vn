@@ -16,7 +16,9 @@ Hai bất biến mà tệp này giữ:
 
 from __future__ import annotations
 
-from typing import Final
+import json
+from collections.abc import Sequence
+from typing import Any, Final
 
 import structlog
 from fastapi import FastAPI
@@ -147,11 +149,65 @@ async def handle_domain_error(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
+def _serializable_errors(errors: Sequence[Any]) -> list[dict[str, Any]]:
+    """Danh sách lỗi của Pydantic, đã bỏ những giá trị không tuần tự hóa được.
+
+    Pydantic v2 gắn **chính đối tượng ngoại lệ** vào `ctx["error"]` cho lỗi loại
+    `value_error` — tức là mọi `@field_validator` / `@model_validator` ném
+    `ValueError`. `json.dumps` không mã hóa được nó, nên phản hồi `422` đổ ngay
+    trong handler và người dùng nhận `500 lỗi không mong muốn` cho một lỗi nhập
+    liệu bình thường.
+
+    Đây không phải trường hợp lý thuyết: nó lộ ra ở luật liên-trường đầu tiên
+    của repo (`PaymentTermFields`, lát 3B-1), và từ phase 6 mỗi chứng từ có vài
+    luật như vậy. `ctx` được **giữ lại** dưới dạng chuỗi thay vì bỏ đi, vì nó
+    chứa tham số của thông điệp (`{'le': 100}`, `{'max_length': 50}`) mà client
+    dựng câu tiếng Việt từ đó.
+    """
+    cleaned: list[dict[str, Any]] = []
+    for error in errors:
+        entry = {key: _json_safe(value) for key, value in dict(error).items()}
+        # `url` là đường dẫn tài liệu của Pydantic, không phải thông tin về lỗi.
+        entry.pop("url", None)
+        cleaned.append(entry)
+    return cleaned
+
+
+def _json_safe(value: object) -> object:
+    """Giá trị nếu `json.dumps` mã hóa được nó, ngược lại là bản đã làm sạch.
+
+    Thử mã hóa chứ không liệt kê kiểu được phép: danh sách kiểu là thứ sẽ thiếu
+    một dòng khi Pydantic thêm một loại `ctx` mới, và thiếu ở đây nghĩa là `500`.
+    Phép thử thì đúng theo định nghĩa — câu hỏi cần trả lời **chính là** "cái
+    này tuần tự hóa được không".
+
+    Đi **đệ quy** vào `dict`/`list` thay vì `str()` cả cụm (sửa sau review M-1):
+    `ctx` là hợp đồng công khai (đã sinh type TypeScript) mà client đọc để dựng
+    câu tiếng Việt — `{"le": 100}` phải ra một object có trường `le`, không phải
+    chuỗi `"{'le': Decimal('100')}"`. Chỉ `str()` cả cụm thì hình dạng của `ctx`
+    đổi tùy theo bên trong nó có gì, tức là kiểu **không ổn định** ở đúng chỗ
+    client phải phân giải.
+    """
+    try:
+        json.dumps(value)
+    except (TypeError, ValueError):
+        pass
+    else:
+        return value
+
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_json_safe(item) for item in value]
+    return str(value)
+
+
 async def handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
     """Thân/tham số request sai kiểu — lỗi của client, không phải của nghiệp vụ.
 
-    Giữ nguyên danh sách `errors()` của Pydantic: nó nêu đúng trường nào sai và
-    sai thế nào, và đây là loại lỗi mà người đọc là **lập trình viên client**.
+    Giữ danh sách `errors()` của Pydantic: nó nêu đúng trường nào sai và sai thế
+    nào, và người đọc loại lỗi này là **lập trình viên client**. Chỉ lọc phần
+    không tuần tự hóa được — xem `_serializable_errors`.
     """
     if not isinstance(exc, RequestValidationError):  # pragma: no cover
         raise exc
@@ -160,7 +216,7 @@ async def handle_validation_error(request: Request, exc: Exception) -> JSONRespo
         error_code=VALIDATION_ERROR_CODE,
         detail="Dữ liệu gửi lên không hợp lệ",
         request=request,
-        extra={"errors": exc.errors()},
+        extra={"errors": _serializable_errors(exc.errors())},
     )
 
 

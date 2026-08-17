@@ -133,6 +133,18 @@ class PermissionRegistry:
 
 SYSTEM_MODULE: Final[str] = "system"
 
+MASTER_MODULE: Final[str] = "master"
+"""Phân hệ của mã quyền **danh mục và chiều phân tích**: `master.{code}.{action}`.
+
+Tách khỏi `system` vì hai nhóm trả lời hai câu hỏi khác nhau: `system.*` là
+quyền **quản trị bản cài** (tài khoản, vai trò, nhật ký), còn thêm một mã hàng
+là việc hằng ngày của kế toán viên. Gộp chung sẽ buộc phải cấp một quyền quản
+trị cho người chỉ cần sửa danh mục.
+
+Khai ở đây chứ không ở `kernel/master_data/registry.py`: tên phân hệ là một
+khái niệm **của hệ phân quyền**, và cả danh mục lẫn chiều phân tích đều cần nó —
+để nó ở một trong hai chỗ dùng sẽ buộc chỗ còn lại import ngược."""
+
 REGISTRY: Final[PermissionRegistry] = PermissionRegistry()
 """Registry của tiến trình. Module nghiệp vụ đăng ký loại của mình lúc import."""
 
@@ -214,6 +226,18 @@ REGISTRY.register(
         # kèm gắn vào phiếu chi và hóa đơn thật, quyền có thể siết thêm bằng
         # cách kiểm quyền của chứng từ chủ — mã này vẫn là cổng thứ nhất.
         actions=frozenset({Action.VIEW, Action.CREATE, Action.DELETE}),
+    )
+)
+REGISTRY.register(
+    DocumentType(
+        module=MASTER_MODULE,
+        code="analysis_dimension",
+        # Chiều phân tích mở rộng (LD-08, FR-SYS-051). Khai ở đây chứ không sinh
+        # từ `CatalogRegistry`: nó **không** phải một danh mục — nó là thứ định
+        # nghĩa ra một chiều mà danh mục và chứng từ gắn giá trị vào. Người được
+        # thêm một mã vật tư không đương nhiên được thêm một chiều phân tích
+        # mới cho cả doanh nghiệp.
+        actions=CATALOG_ACTIONS,
     )
 )
 REGISTRY.register(

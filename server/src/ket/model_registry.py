@@ -27,6 +27,7 @@ from ket.kernel.auditing import control_log as control_audit_models
 from ket.kernel.auditing import models as auditing_models
 from ket.kernel.currency import models as currency_models
 from ket.kernel.datasets import models as control_models
+from ket.kernel.dimensions import models as dimension_models
 from ket.kernel.idempotency import models as idempotency_models
 from ket.kernel.jobs import models as jobs_models
 from ket.kernel.master_data import models as master_data_models
@@ -46,6 +47,7 @@ __all__ = [
     "control_audit_models",
     "control_models",
     "currency_models",
+    "dimension_models",
     "idempotency_models",
     "jobs_models",
     "master_data_models",

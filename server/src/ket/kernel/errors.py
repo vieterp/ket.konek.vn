@@ -723,6 +723,38 @@ class MasterDataGroupNotPostableError(DomainError):
     error_code: ClassVar[str] = "master_data.group_not_postable"
 
 
+class DimensionNotFoundError(DomainError):
+    """Không có chiều phân tích mở rộng với mã này (LD-08, FR-SYS-051)."""
+
+    error_code: ClassVar[str] = "dimension.not_found"
+    http_status: ClassVar[int] = 404
+
+
+class DimensionValueNotFoundError(DomainError):
+    """Giá trị không thuộc chiều đã cho, hoặc đã ngừng theo dõi.
+
+    Gộp "không có" với "đã ngừng theo dõi" vào một mã, khác lối `MasterData*`
+    tách đôi: ở đây cả hai đều dẫn tới đúng một việc người dùng phải làm — chọn
+    một giá trị khác trong ô chọn. Tách mã chỉ có ích khi hai nhánh dẫn tới hai
+    hành động khác nhau.
+    """
+
+    error_code: ClassVar[str] = "dimension.value_not_found"
+    http_status: ClassVar[int] = 404
+
+
+class DimensionValueSourceMismatchError(DomainError):
+    """Thao tác không khớp nguồn giá trị của chiều (`list` vs `master`).
+
+    Ví dụ: xin danh sách giá trị riêng của một chiều vốn lấy giá trị từ danh mục
+    vật tư, hoặc khai một chiều `master` trỏ tới một `slug` không có thật. Cả hai
+    là lỗi **cấu hình**, và chúng lộ ra ở lúc khai chứ không phải lúc có người mở
+    ô chọn rồi thấy nó rỗng.
+    """
+
+    error_code: ClassVar[str] = "dimension.value_source_mismatch"
+
+
 class ExchangeRateNotFoundError(DomainError):
     """Không có tỷ giá cho cặp (loại tiền, ngày, loại tỷ giá) (N5, FR-NFR-032).
 
