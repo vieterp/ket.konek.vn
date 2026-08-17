@@ -175,8 +175,14 @@ class TestDownload:
             )
 
         with _client(updates_dir) as client:
-            assert client.get("/updates/download/darwin/x86_64/Ket_0.9.0.tar.gz").content == b"ban-macos"
-            assert client.get("/updates/download/linux/x86_64/Ket_0.9.0.tar.gz").content == b"ban-linux"
+            assert (
+                client.get("/updates/download/darwin/x86_64/Ket_0.9.0.tar.gz").content
+                == b"ban-macos"
+            )
+            assert (
+                client.get("/updates/download/linux/x86_64/Ket_0.9.0.tar.gz").content
+                == b"ban-linux"
+            )
 
     @pytest.mark.parametrize(
         "attempt",
