@@ -103,7 +103,7 @@ def test_moving_a_branch_rewrites_every_descendant_in_one_statement(
         ]
         assert len(path_updates) == 1, path_updates
 
-        subtree = service.subtree_of(moved)
+        subtree = service.subtree_of(moved).items
         assert [node.code for node in subtree] == ["CHUYEN-1", "CHUYEN-2", "CHUYEN-3"]
         for node in subtree:
             assert node.path.startswith(new_root.path)
@@ -178,17 +178,17 @@ def test_one_branch_never_sees_the_private_catalog_of_another(
     with unit_of_work(session_factory, _scope(dataset_alpha, (alpha.id,))) as session:
         service = MasterDataService(session, ExpenseItem)
 
-        seen = {node.code for node in service.children_of(group_id, branch_id=alpha.id)}
+        seen = {node.code for node in service.children_of(group_id, branch_id=alpha.id).items}
         assert seen == {"CHEO-CHUNG", "CHEO-RIENG-A"}
 
-        in_subtree = {node.code for node in service.subtree_of(group_id, branch_id=alpha.id)}
+        in_subtree = {node.code for node in service.subtree_of(group_id, branch_id=alpha.id).items}
         assert "CHEO-RIENG-B" not in in_subtree
 
         with pytest.raises(MasterDataNotFoundError):
             service.resolve_by_code("CHEO-RIENG-B", branch_id=alpha.id)
 
         # Không truyền chi nhánh = **chỉ phần dùng chung**, không phải "thấy tất".
-        shared_only = {node.code for node in service.children_of(group_id)}
+        shared_only = {node.code for node in service.children_of(group_id).items}
         assert shared_only == {"CHEO-CHUNG"}
 
 

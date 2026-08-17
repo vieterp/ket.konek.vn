@@ -16,9 +16,10 @@ generic, gộp bản ghi, khung nhập/xuất Excel.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
-from sqlalchemy import ColumnElement, Select, func, select, text
+from sqlalchemy import ColumnElement, Select, func, inspect, select, text
 from sqlalchemy.orm import Session
 
 from ket.kernel.errors import (
@@ -41,6 +42,19 @@ from ket.kernel.master_data.tree_path import (
 from ket.kernel.master_data.usage import ensure_deletable
 from ket.kernel.persistence.sequences import reserve_id
 from ket.kernel.persistence.versioning import require_row_version
+
+
+@dataclass(frozen=True)
+class Page[RowT: MasterDataRow]:
+    """Một trang kết quả kèm **tổng trước khi cắt trang**.
+
+    `total` là thứ không suy ra được từ `items`: màn hình cần nó để vẽ thanh cuộn
+    và để nói "1–100 trong 3.412". Trả về cùng nhau chứ không hai lời gọi, vì hai
+    lời gọi ở hai transaction khác nhau cho ra một `total` không khớp trang.
+    """
+
+    items: Sequence[RowT]
+    total: int
 
 
 class MasterDataService[ModelT: MasterDataRow]:
@@ -121,8 +135,13 @@ class MasterDataService[ModelT: MasterDataRow]:
         return shared | (self._model.branch_id == branch_id)
 
     def children_of(
-        self, parent_id: int | None, *, branch_id: int | None = None
-    ) -> Sequence[ModelT]:
+        self,
+        parent_id: int | None,
+        *,
+        branch_id: int | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> Page[ModelT]:
         statement = (
             select(self._model).where(self._visible_to(branch_id)).order_by(self._model.code)
         )
@@ -131,9 +150,16 @@ class MasterDataService[ModelT: MasterDataRow]:
             if parent_id is not None
             else self._model.parent_id.is_(None)
         )
-        return self._session.execute(statement).scalars().all()
+        return self._page(statement, limit=limit, offset=offset)
 
-    def subtree_of(self, record_id: int, *, branch_id: int | None = None) -> Sequence[ModelT]:
+    def subtree_of(
+        self,
+        record_id: int,
+        *,
+        branch_id: int | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> Page[ModelT]:
         """Nút đó và toàn bộ con cháu, theo thứ tự cây.
 
         `ORDER BY path` cho ra đúng thứ tự duyệt trước (cha rồi tới con) mà giao
@@ -146,7 +172,26 @@ class MasterDataService[ModelT: MasterDataRow]:
             .where(self._visible_to(branch_id))
             .order_by(self._model.path)
         )
-        return self._session.execute(statement).scalars().all()
+        return self._page(statement, limit=limit, offset=offset)
+
+    def _page(
+        self, statement: Select[tuple[ModelT]], *, limit: int | None, offset: int
+    ) -> Page[ModelT]:
+        """Cắt một trang và đếm tổng bằng **hai** câu lệnh.
+
+        Không dùng `count(*) OVER ()` gộp vào cùng câu: cửa sổ đó chạy trên mọi
+        dòng của kết quả **trước** khi `LIMIT` cắt, nên nó bỏ mất đúng cái lợi mà
+        `LIMIT` mang lại trên danh mục vật tư mười nghìn dòng. Hai câu lệnh cùng
+        chạy trong một transaction nên chúng thấy cùng một ảnh chụp dữ liệu —
+        `total` không lệch với trang trả về.
+        """
+        total_statement: Select[tuple[int]] = select(func.count()).select_from(
+            statement.order_by(None).subquery()
+        )
+        total = self._session.execute(total_statement).scalar_one()
+        if limit is not None:
+            statement = statement.limit(limit).offset(offset)
+        return Page(items=self._session.execute(statement).scalars().all(), total=total)
 
     def count_children(self, record_id: int) -> int:
         """Đếm con **không** lọc chi nhánh, có chủ đích.
@@ -171,6 +216,7 @@ class MasterDataService[ModelT: MasterDataRow]:
         parent_id: int | None = None,
         is_group: bool = False,
         branch_id: int | None = None,
+        extra: Mapping[str, object] | None = None,
     ) -> ModelT:
         """Thêm một bản ghi, tự dựng `path`/`level` từ cha.
 
@@ -179,6 +225,12 @@ class MasterDataService[ModelT: MasterDataRow]:
         một bản ghi mới toanh đã mang `row_version = 2` cùng một dòng nhật ký
         "vừa tạo xong đã sửa" — hai thứ nhiễu mà kiểm toán viên phải tự loại
         suốt vòng đời sản phẩm.
+
+        `extra` (cột riêng của danh mục — `CatalogSpec.extra_fields`) đặt **ở
+        đây**, trước `flush()`, chính vì lý do trên: gọi `create` rồi `update`
+        để đặt cột riêng sẽ tái lập đúng cái mà đoạn trên dựng ra để tránh, và
+        chỉ cho những danh mục có cột riêng — tức là một nửa danh mục có nhật ký
+        sạch còn nửa kia thì không.
         """
         parent = self.get(parent_id) if parent_id is not None else None
         self._ensure_parent_scope(parent, branch_id)
@@ -195,24 +247,40 @@ class MasterDataService[ModelT: MasterDataRow]:
             path=child_path(parent.path if parent else None, record_id),
             level=(parent.level + 1) if parent else ROOT_LEVEL,
         )
+        for field, value in (extra or {}).items():
+            self._ensure_mapped_column(field)
+            setattr(record, field, value)
         self._session.add(record)
         self._session.flush()
         return record
 
-    def rename(
+    def update(
         self,
         record_id: int,
         *,
         expected_row_version: int,
+        code: str | None = None,
         name: str | None = None,
         name_en: str | None = None,
-        code: str | None = None,
+        is_active: bool | None = None,
+        extra: Mapping[str, object] | None = None,
     ) -> ModelT:
-        """Sửa phần mô tả. Đổi `code` **không** đổi `uid` (RT-19).
+        """Sửa một bản ghi tại chỗ. `None` = không đụng tới trường đó.
 
-        Đó là toàn bộ lý do `uid` tồn tại: mã là dữ liệu người dùng sửa được, còn
-        việc nối dữ liệu giữa các bản cài thì không được đứt mỗi lần ai đó chuẩn
-        hóa lại bảng mã.
+        **Một** đường ghi cho cả phần mô tả lẫn cờ "Ngừng theo dõi", vì hai thứ
+        đó nằm trên cùng một form và được lưu bằng cùng một cú bấm. Tách làm hai
+        lời gọi thì lời gọi thứ hai mang `row_version` đã cũ đi một nhịp — người
+        dùng nhận `409` do chính thao tác của mình gây ra.
+
+        Đổi `code` **không** đổi `uid` (RT-19). Đó là toàn bộ lý do `uid` tồn
+        tại: mã là dữ liệu người dùng sửa được, còn việc nối dữ liệu giữa các bản
+        cài thì không được đứt mỗi lần ai đó chuẩn hóa lại bảng mã.
+
+        `extra` là cột riêng của danh mục (`CatalogSpec.extra_fields`) — tên
+        trường được kiểm là **cột thật đã ánh xạ** trước khi gán. Không kiểm thì
+        một trường thừa trong thân request sẽ lặng lẽ thành thuộc tính Python
+        trên đối tượng ORM: nó qua được cả `flush()` mà không có gì lưu, và màn
+        hình hiện đúng giá trị vừa nhập cho tới lần tải lại đầu tiên.
         """
         record = self.get(record_id)
         require_row_version(
@@ -226,8 +294,31 @@ class MasterDataService[ModelT: MasterDataRow]:
             record.name = name
         if name_en is not None:
             record.name_en = name_en
+        if is_active is not None:
+            record.is_active = is_active
+        for field, value in (extra or {}).items():
+            self._ensure_mapped_column(field)
+            setattr(record, field, value)
         self._session.flush()
         return record
+
+    def rename(
+        self,
+        record_id: int,
+        *,
+        expected_row_version: int,
+        name: str | None = None,
+        name_en: str | None = None,
+        code: str | None = None,
+    ) -> ModelT:
+        """Chỉ sửa phần mô tả — lối tắt đọc được cho đường nhập liệu và gộp bản ghi."""
+        return self.update(
+            record_id,
+            expected_row_version=expected_row_version,
+            code=code,
+            name=name,
+            name_en=name_en,
+        )
 
     def set_active(self, record_id: int, *, active: bool, expected_row_version: int) -> ModelT:
         """Bật/tắt "Ngừng theo dõi" (FR-SYS-012).
@@ -237,15 +328,15 @@ class MasterDataService[ModelT: MasterDataRow]:
         ngừng, và một thao tác lan ngầm xuống hàng trăm dòng là thao tác không
         ai hoàn tác được bằng cách bấm lại.
         """
-        record = self.get(record_id)
-        require_row_version(
-            current=record.row_version,
-            expected=expected_row_version,
-            entity=self.entity_type,
-        )
-        record.is_active = active
-        self._session.flush()
-        return record
+        return self.update(record_id, expected_row_version=expected_row_version, is_active=active)
+
+    def _ensure_mapped_column(self, field: str) -> None:
+        """Tên trường phải là một cột đã ánh xạ của chính model này."""
+        if field not in inspect(self._model).columns:
+            raise ValueError(
+                f"{self.entity_type} không có cột {field!r} — `CatalogSpec.extra_fields` "
+                "đã lệch khỏi model ORM"
+            )
 
     def move(self, record_id: int, *, new_parent_id: int | None, expected_row_version: int) -> None:
         """Chuyển một nút (và cả nhánh dưới nó) sang cha khác — **một** câu UPDATE.

@@ -29,6 +29,7 @@ from ket.kernel.datasets.naming import (
     validate_dataset_code,
     validate_schema_name,
 )
+from ket.kernel.dimensions.seed import ensure_builtin_dimensions
 from ket.kernel.errors import (
     DatasetAlreadyExistsError,
     DatasetNotFoundError,
@@ -221,6 +222,11 @@ def provision_dataset(
     # ký" — vô hình với ứng dụng, dọn được.
     with owner_engine.begin() as connection:
         ensure_admin_role(connection, schema)
+        # Cùng transaction với vai trò, có chủ đích: chiều "Mã thống kê" là dữ
+        # liệu mà gói cấu hình và mẫu báo cáo tham chiếu theo mã (FR-SYS-051),
+        # nên một dữ liệu kế toán có vai trò nhưng thiếu nó là trạng thái dở
+        # dang mà không lệnh nào sửa về sau.
+        ensure_builtin_dimensions(connection, schema)
 
     try:
         with Session(owner_engine) as session, session.begin():

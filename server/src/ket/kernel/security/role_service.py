@@ -37,7 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from sqlalchemy import Connection, Engine, insert, select, text
+from sqlalchemy import Connection, Engine, insert, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.auditing.control_log import ControlAuditAction, record_control_action
@@ -49,6 +49,7 @@ from ket.kernel.errors import (
     RoleNotFoundError,
     UserNotFoundError,
 )
+from ket.kernel.persistence.seeding import bind_seed_schema
 from ket.kernel.persistence.session import control_session, dataset_session
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security.models import (
@@ -60,7 +61,6 @@ from ket.kernel.security.models import (
     UserRole,
 )
 from ket.kernel.security.permissions import REGISTRY, PermissionRegistry
-from ket.kernel.security.rls import set_search_path_statement
 
 ADMIN_ROLE_CODE = "admin"
 """Vai trò hệ thống duy nhất được gieo sẵn.
@@ -84,28 +84,13 @@ class SeedResult:
 
 
 def _bind_schema(connection: Connection, schema: str) -> None:
-    """Trỏ `search_path` của connection vào một schema dataset.
+    """Chuẩn bị connection cho một hàm gieo mầm — xem `persistence/seeding.py`.
 
-    Dùng lại `rls.set_search_path_statement` chứ không tự ghép câu lệnh: nó là
-    **chỗ duy nhất** được phép nối tên schema vào SQL, và nó mang theo hai thứ
-    dễ quên — kiểm tên schema, và `pg_temp` nêu tường minh ở cuối để một bảng
-    tạm không che được bảng thật.
-
-    Không `SET ROLE`: hàm gieo mầm chạy bằng `ket_owner` (chủ sở hữu bảng), và
-    đó là vai trò duy nhất có quyền lúc dữ liệu kế toán vừa được tạo.
-
-    Kèm một **khóa cố vấn theo schema**, giữ tới hết transaction: gieo mầm là
-    đọc-rồi-ghi (`SELECT` mã đã có → `INSERT` mã còn thiếu), và hai đường thật
-    gặp nhau được — `provision_dataset` tạo dữ liệu kế toán mới trong lúc ai đó
-    chạy `ket.admin ensure-cluster`. Đo được trên schema **trống**: 4 lời gọi
-    song song → 3 lỗi `UniqueViolation`, và lệnh nâng cấp cụm đổ giữa chừng.
-
-    Khóa cố vấn chứ không `ON CONFLICT DO NOTHING`: khóa giữ được **cả cụm hàm**
-    (`permissions` rồi `roles` rồi `role_permissions`) nhất quán với nhau, còn
-    upsert chỉ vá được từng câu lệnh một.
+    Giữ lại tên riêng ở đây thay vì gọi thẳng khắp tệp: mọi hàm gieo của module
+    này gọi nó ở dòng đầu, và một cái tên ngắn tại chỗ đọc dễ hơn một đường dẫn
+    import dài lặp lại năm lần.
     """
-    connection.exec_driver_sql(set_search_path_statement(schema))
-    connection.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": schema})
+    bind_seed_schema(connection, schema)
 
 
 def sync_permissions(

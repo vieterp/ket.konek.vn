@@ -236,6 +236,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dimensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Dimensions
+         * @description Chiều phân tích đã khai trong dữ liệu kế toán đang mở.
+         *
+         *     Mặc định **ẩn** chiều đã ngừng theo dõi: đây là nguồn dựng ô chọn trên form
+         *     nhập liệu, và một chiều đã tắt hiện ra ở đó thì việc tắt nó chẳng có tác
+         *     dụng gì. Màn hình cấu hình gọi kèm `include_inactive=true`.
+         */
+        get: operations["list_dimensions_api_v1_dimensions_get"];
+        put?: never;
+        /**
+         * Declare Dimension
+         * @description Khai một chiều phân tích mới — thêm một dòng, không migration.
+         *
+         *     Đi đường idempotency đầy đủ như mọi `POST` tạo bản ghi khác, dù
+         *     `analysis_dimensions.code` đã có ràng buộc `UNIQUE`. Ràng buộc chỉ chặn được
+         *     **bản ghi thứ hai**; nó không cho người gửi lại biết lần trước đã thành công
+         *     — họ nhận `409` và phải tự đoán xem chiều đó là của mình hay của đồng
+         *     nghiệp. Với khóa, lần bấm lại trả về chính bản ghi đã tạo và `200`.
+         */
+        post: operations["declare_dimension_api_v1_dimensions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dimensions/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dimension */
+        get: operations["get_dimension_api_v1_dimensions__code__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dimensions/{code}/values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Dimension Values
+         * @description Giá trị của một chiều `list`, theo thứ tự cây.
+         *
+         *     Chiều lấy giá trị từ danh mục (`value_source = master`) trả lỗi ở đây chứ
+         *     không trả danh sách rỗng: rỗng nghĩa là "chưa ai khai giá trị nào", còn đây
+         *     là "hỏi nhầm chỗ" — và client phải đi đọc `/api/v1/master/{master_slug}`.
+         */
+        get: operations["list_dimension_values_api_v1_dimensions__code__values_get"];
+        put?: never;
+        /**
+         * Add Dimension Value
+         * @description Thêm một giá trị vào chiều `list` — cùng lối idempotency như `declare`.
+         *
+         *     Dấu vân tay **kèm mã chiều**: khóa idempotency có phạm vi theo route khai
+         *     báo (`/api/v1/dimensions/{code}/values`, chưa điền `code`), nên hai lời gọi
+         *     thêm giá trị `BAC` cho hai chiều khác nhau sẽ dùng cùng một phạm vi. Không
+         *     đưa `code` vào vân tay thì lời gọi thứ hai bị coi là "gửi lại" và nhận về
+         *     giá trị của chiều thứ nhất.
+         */
+        post: operations["add_dimension_value_api_v1_dimensions__code__values_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs": {
         parameters: {
             query?: never;
@@ -339,6 +424,1502 @@ export interface paths {
          *     "đã ghi nhận", không phải "đã dừng" — trạng thái thật đọc ở lần `GET` sau.
          */
         post: operations["cancel_job_api_v1_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/asset_types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại tài sản cố định — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_asset_types_get"];
+        put?: never;
+        /**
+         * Loại tài sản cố định — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_asset_types_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/asset_types/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loại tài sản cố định — một bản ghi */
+        get: operations["get_record_api_v1_master_asset_types__record_id__get"];
+        /**
+         * Loại tài sản cố định — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_asset_types__record_id__put"];
+        post?: never;
+        /**
+         * Loại tài sản cố định — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_asset_types__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/asset_types/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Loại tài sản cố định — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_asset_types__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/banks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ngân hàng — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_banks_get"];
+        put?: never;
+        /**
+         * Ngân hàng — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_banks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/banks/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ngân hàng — một bản ghi */
+        get: operations["get_record_api_v1_master_banks__record_id__get"];
+        /**
+         * Ngân hàng — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_banks__record_id__put"];
+        post?: never;
+        /**
+         * Ngân hàng — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_banks__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/banks/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Ngân hàng — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_banks__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/contracts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hợp đồng — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_contracts_get"];
+        put?: never;
+        /**
+         * Hợp đồng — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_contracts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/contracts/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hợp đồng — một bản ghi */
+        get: operations["get_record_api_v1_master_contracts__record_id__get"];
+        /**
+         * Hợp đồng — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_contracts__record_id__put"];
+        post?: never;
+        /**
+         * Hợp đồng — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_contracts__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/contracts/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Hợp đồng — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_contracts__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/cost_objects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Đối tượng tập hợp chi phí — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_cost_objects_get"];
+        put?: never;
+        /**
+         * Đối tượng tập hợp chi phí — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_cost_objects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/cost_objects/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Đối tượng tập hợp chi phí — một bản ghi */
+        get: operations["get_record_api_v1_master_cost_objects__record_id__get"];
+        /**
+         * Đối tượng tập hợp chi phí — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_cost_objects__record_id__put"];
+        post?: never;
+        /**
+         * Đối tượng tập hợp chi phí — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_cost_objects__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/cost_objects/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Đối tượng tập hợp chi phí — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_cost_objects__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/document_types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại chứng từ — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_document_types_get"];
+        put?: never;
+        /**
+         * Loại chứng từ — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_document_types_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/document_types/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loại chứng từ — một bản ghi */
+        get: operations["get_record_api_v1_master_document_types__record_id__get"];
+        /**
+         * Loại chứng từ — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_document_types__record_id__put"];
+        post?: never;
+        /**
+         * Loại chứng từ — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_document_types__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/document_types/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Loại chứng từ — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_document_types__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/excise_tax_tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Biểu thuế tiêu thụ đặc biệt — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_excise_tax_tables_get"];
+        put?: never;
+        /**
+         * Biểu thuế tiêu thụ đặc biệt — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_excise_tax_tables_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/excise_tax_tables/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Biểu thuế tiêu thụ đặc biệt — một bản ghi */
+        get: operations["get_record_api_v1_master_excise_tax_tables__record_id__get"];
+        /**
+         * Biểu thuế tiêu thụ đặc biệt — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_excise_tax_tables__record_id__put"];
+        post?: never;
+        /**
+         * Biểu thuế tiêu thụ đặc biệt — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_excise_tax_tables__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/excise_tax_tables/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Biểu thuế tiêu thụ đặc biệt — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_excise_tax_tables__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/expense_items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Khoản mục chi phí — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_expense_items_get"];
+        put?: never;
+        /**
+         * Khoản mục chi phí — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_expense_items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/expense_items/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Khoản mục chi phí — một bản ghi */
+        get: operations["get_record_api_v1_master_expense_items__record_id__get"];
+        /**
+         * Khoản mục chi phí — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_expense_items__record_id__put"];
+        post?: never;
+        /**
+         * Khoản mục chi phí — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_expense_items__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/expense_items/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Khoản mục chi phí — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_expense_items__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/invoice_forms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mẫu số hóa đơn — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_invoice_forms_get"];
+        put?: never;
+        /**
+         * Mẫu số hóa đơn — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_invoice_forms_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/invoice_forms/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mẫu số hóa đơn — một bản ghi */
+        get: operations["get_record_api_v1_master_invoice_forms__record_id__get"];
+        /**
+         * Mẫu số hóa đơn — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_invoice_forms__record_id__put"];
+        post?: never;
+        /**
+         * Mẫu số hóa đơn — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_invoice_forms__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/invoice_forms/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mẫu số hóa đơn — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_invoice_forms__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/payment_terms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Điều khoản thanh toán — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_payment_terms_get"];
+        put?: never;
+        /**
+         * Điều khoản thanh toán — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_payment_terms_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/payment_terms/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Điều khoản thanh toán — một bản ghi */
+        get: operations["get_record_api_v1_master_payment_terms__record_id__get"];
+        /**
+         * Điều khoản thanh toán — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_payment_terms__record_id__put"];
+        post?: never;
+        /**
+         * Điều khoản thanh toán — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_payment_terms__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/payment_terms/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Điều khoản thanh toán — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_payment_terms__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/pit_tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Biểu tính thuế thu nhập cá nhân — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_pit_tables_get"];
+        put?: never;
+        /**
+         * Biểu tính thuế thu nhập cá nhân — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_pit_tables_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/pit_tables/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Biểu tính thuế thu nhập cá nhân — một bản ghi */
+        get: operations["get_record_api_v1_master_pit_tables__record_id__get"];
+        /**
+         * Biểu tính thuế thu nhập cá nhân — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_pit_tables__record_id__put"];
+        post?: never;
+        /**
+         * Biểu tính thuế thu nhập cá nhân — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_pit_tables__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/pit_tables/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Biểu tính thuế thu nhập cá nhân — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_pit_tables__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/project_types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại công trình — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_project_types_get"];
+        put?: never;
+        /**
+         * Loại công trình — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_project_types_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/project_types/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loại công trình — một bản ghi */
+        get: operations["get_record_api_v1_master_project_types__record_id__get"];
+        /**
+         * Loại công trình — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_project_types__record_id__put"];
+        post?: never;
+        /**
+         * Loại công trình — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_project_types__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/project_types/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Loại công trình — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_project_types__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Công trình — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_projects_get"];
+        put?: never;
+        /**
+         * Công trình — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/projects/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Công trình — một bản ghi */
+        get: operations["get_record_api_v1_master_projects__record_id__get"];
+        /**
+         * Công trình — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_projects__record_id__put"];
+        post?: never;
+        /**
+         * Công trình — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_projects__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/projects/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Công trình — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_projects__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/resource_tax_tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Biểu thuế tài nguyên — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_resource_tax_tables_get"];
+        put?: never;
+        /**
+         * Biểu thuế tài nguyên — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_resource_tax_tables_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/resource_tax_tables/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Biểu thuế tài nguyên — một bản ghi */
+        get: operations["get_record_api_v1_master_resource_tax_tables__record_id__get"];
+        /**
+         * Biểu thuế tài nguyên — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_resource_tax_tables__record_id__put"];
+        post?: never;
+        /**
+         * Biểu thuế tài nguyên — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_resource_tax_tables__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/resource_tax_tables/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Biểu thuế tài nguyên — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_resource_tax_tables__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/timekeeping_symbols": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ký hiệu chấm công — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_timekeeping_symbols_get"];
+        put?: never;
+        /**
+         * Ký hiệu chấm công — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_timekeeping_symbols_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/timekeeping_symbols/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ký hiệu chấm công — một bản ghi */
+        get: operations["get_record_api_v1_master_timekeeping_symbols__record_id__get"];
+        /**
+         * Ký hiệu chấm công — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_timekeeping_symbols__record_id__put"];
+        post?: never;
+        /**
+         * Ký hiệu chấm công — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_timekeeping_symbols__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/timekeeping_symbols/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Ký hiệu chấm công — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_timekeeping_symbols__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/tool_types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại công cụ dụng cụ — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_tool_types_get"];
+        put?: never;
+        /**
+         * Loại công cụ dụng cụ — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_tool_types_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/tool_types/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loại công cụ dụng cụ — một bản ghi */
+        get: operations["get_record_api_v1_master_tool_types__record_id__get"];
+        /**
+         * Loại công cụ dụng cụ — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_tool_types__record_id__put"];
+        post?: never;
+        /**
+         * Loại công cụ dụng cụ — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_tool_types__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/tool_types/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Loại công cụ dụng cụ — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_tool_types__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/units_of_measure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Đơn vị tính — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_units_of_measure_get"];
+        put?: never;
+        /**
+         * Đơn vị tính — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_units_of_measure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/units_of_measure/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Đơn vị tính — một bản ghi */
+        get: operations["get_record_api_v1_master_units_of_measure__record_id__get"];
+        /**
+         * Đơn vị tính — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_units_of_measure__record_id__put"];
+        post?: never;
+        /**
+         * Đơn vị tính — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_units_of_measure__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/units_of_measure/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Đơn vị tính — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_units_of_measure__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/warehouses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Kho — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_warehouses_get"];
+        put?: never;
+        /**
+         * Kho — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_warehouses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/warehouses/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Kho — một bản ghi */
+        get: operations["get_record_api_v1_master_warehouses__record_id__get"];
+        /**
+         * Kho — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_warehouses__record_id__put"];
+        post?: never;
+        /**
+         * Kho — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_warehouses__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/warehouses/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Kho — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_warehouses__record_id__parent_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -734,6 +2315,89 @@ export interface components {
             /** Permissions */
             permissions: string[];
         };
+        /**
+         * AssetTypesCreateRequest
+         * @description Loại tài sản cố định — tạo mới.
+         */
+        AssetTypesCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /** Default Useful Life Months */
+            default_useful_life_months?: number | null;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * AssetTypesListResponse
+         * @description Loại tài sản cố định — một trang bản ghi.
+         */
+        AssetTypesListResponse: {
+            /** Items */
+            items: components["schemas"]["AssetTypesResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * AssetTypesResponse
+         * @description Loại tài sản cố định — một bản ghi.
+         */
+        AssetTypesResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Default Useful Life Months */
+            default_useful_life_months?: number | null;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * AssetTypesUpdateRequest
+         * @description Loại tài sản cố định — sửa.
+         */
+        AssetTypesUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Default Useful Life Months */
+            default_useful_life_months?: number | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
         /** AttachmentListResponse */
         AttachmentListResponse: {
             /** Items */
@@ -803,6 +2467,95 @@ export interface components {
             items: components["schemas"]["AuditEntryResponse"][];
             /** Total */
             total: number;
+        };
+        /**
+         * BanksCreateRequest
+         * @description Ngân hàng — tạo mới.
+         */
+        BanksCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Short Name */
+            short_name?: string | null;
+            /** Swift Code */
+            swift_code?: string | null;
+        };
+        /**
+         * BanksListResponse
+         * @description Ngân hàng — một trang bản ghi.
+         */
+        BanksListResponse: {
+            /** Items */
+            items: components["schemas"]["BanksResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * BanksResponse
+         * @description Ngân hàng — một bản ghi.
+         */
+        BanksResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Short Name */
+            short_name?: string | null;
+            /** Swift Code */
+            swift_code?: string | null;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * BanksUpdateRequest
+         * @description Ngân hàng — sửa.
+         */
+        BanksUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+            /** Short Name */
+            short_name?: string | null;
+            /** Swift Code */
+            swift_code?: string | null;
         };
         /** Body_upload_attachment_api_v1_attachments_post */
         Body_upload_attachment_api_v1_attachments_post: {
@@ -878,6 +2631,160 @@ export interface components {
              */
             new_password: string;
         };
+        /**
+         * ContractsCreateRequest
+         * @description Hợp đồng — tạo mới.
+         */
+        ContractsCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * ContractsListResponse
+         * @description Hợp đồng — một trang bản ghi.
+         */
+        ContractsListResponse: {
+            /** Items */
+            items: components["schemas"]["ContractsResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ContractsResponse
+         * @description Hợp đồng — một bản ghi.
+         */
+        ContractsResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * ContractsUpdateRequest
+         * @description Hợp đồng — sửa.
+         */
+        ContractsUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * CostObjectsCreateRequest
+         * @description Đối tượng tập hợp chi phí — tạo mới.
+         */
+        CostObjectsCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * CostObjectsListResponse
+         * @description Đối tượng tập hợp chi phí — một trang bản ghi.
+         */
+        CostObjectsListResponse: {
+            /** Items */
+            items: components["schemas"]["CostObjectsResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * CostObjectsResponse
+         * @description Đối tượng tập hợp chi phí — một bản ghi.
+         */
+        CostObjectsResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * CostObjectsUpdateRequest
+         * @description Đối tượng tập hợp chi phí — sửa.
+         */
+        CostObjectsUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
         /** DatasetListResponse */
         DatasetListResponse: {
             /** Items */
@@ -894,6 +2801,355 @@ export interface components {
             name: string;
             /** Scheme */
             scheme: string;
+        };
+        /**
+         * DimensionDeclareRequest
+         * @description Khai một chiều mới — thao tác **cấu hình**, không phải nhập liệu hằng ngày.
+         *
+         *     Đây là đường mà tiêu chí "chiều mở rộng khai bằng cấu hình, không sửa code"
+         *     đi qua ở v1. Màn hình cho người dùng cuối hoãn tới v1.1 (RT-20), nên ở v1
+         *     người gọi là công cụ quản trị và gói cấu hình phase 5.
+         */
+        DimensionDeclareRequest: {
+            /**
+             * Applies To Accounts
+             * @description Tiền tố số hiệu tài khoản; bỏ trống = mọi TK
+             */
+            applies_to_accounts?: string[] | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Required
+             * @default false
+             */
+            is_required: boolean;
+            /** Master Slug */
+            master_slug?: string | null;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** @default list */
+            value_source: components["schemas"]["DimensionValueSource"];
+        };
+        /** DimensionListResponse */
+        DimensionListResponse: {
+            /** Items */
+            items: components["schemas"]["DimensionResponse"][];
+        };
+        /**
+         * DimensionResponse
+         * @description Định nghĩa một chiều.
+         */
+        DimensionResponse: {
+            /** Applies To Accounts */
+            applies_to_accounts: string[] | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Required */
+            is_required: boolean;
+            /** Master Slug */
+            master_slug: string | null;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Row Version */
+            row_version: number;
+            value_source: components["schemas"]["DimensionValueSource"];
+        };
+        /**
+         * DimensionValueAddRequest
+         * @description Thêm một giá trị vào chiều `list`.
+         */
+        DimensionValueAddRequest: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /** DimensionValueListResponse */
+        DimensionValueListResponse: {
+            /** Items */
+            items: components["schemas"]["DimensionValueResponse"][];
+        };
+        /**
+         * DimensionValueResponse
+         * @description Một giá trị của chiều `list`.
+         */
+        DimensionValueResponse: {
+            /** Code */
+            code: string;
+            /** Dimension Id */
+            dimension_id: number;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * DimensionValueSource
+         * @description Giá trị của một chiều lấy từ đâu.
+         *
+         *     `plan.md` phác nguồn dưới dạng một chuỗi ghép (`'master:partners'`). Ở đây
+         *     tách thành **hai cột** (`value_source` + `master_slug`) vì một chuỗi ghép
+         *     buộc mọi nơi đọc phải tự tách lấy phần sau dấu hai chấm, và chỗ thứ ba quên
+         *     tách sẽ đi tìm một danh mục tên `"master:partners"`. Với hai cột, ràng buộc
+         *     `CHECK` nói được điều mà một chuỗi không nói được: có `master` thì phải có
+         *     slug, không có `master` thì không được có slug.
+         * @enum {string}
+         */
+        DimensionValueSource: "list" | "master";
+        /**
+         * DocumentTypesCreateRequest
+         * @description Loại chứng từ — tạo mới.
+         */
+        DocumentTypesCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * DocumentTypesListResponse
+         * @description Loại chứng từ — một trang bản ghi.
+         */
+        DocumentTypesListResponse: {
+            /** Items */
+            items: components["schemas"]["DocumentTypesResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * DocumentTypesResponse
+         * @description Loại chứng từ — một bản ghi.
+         */
+        DocumentTypesResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * DocumentTypesUpdateRequest
+         * @description Loại chứng từ — sửa.
+         */
+        DocumentTypesUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * ExciseTaxTablesCreateRequest
+         * @description Biểu thuế tiêu thụ đặc biệt — tạo mới.
+         */
+        ExciseTaxTablesCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * ExciseTaxTablesListResponse
+         * @description Biểu thuế tiêu thụ đặc biệt — một trang bản ghi.
+         */
+        ExciseTaxTablesListResponse: {
+            /** Items */
+            items: components["schemas"]["ExciseTaxTablesResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ExciseTaxTablesResponse
+         * @description Biểu thuế tiêu thụ đặc biệt — một bản ghi.
+         */
+        ExciseTaxTablesResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * ExciseTaxTablesUpdateRequest
+         * @description Biểu thuế tiêu thụ đặc biệt — sửa.
+         */
+        ExciseTaxTablesUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * ExpenseItemsCreateRequest
+         * @description Khoản mục chi phí — tạo mới.
+         */
+        ExpenseItemsCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * ExpenseItemsListResponse
+         * @description Khoản mục chi phí — một trang bản ghi.
+         */
+        ExpenseItemsListResponse: {
+            /** Items */
+            items: components["schemas"]["ExpenseItemsResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ExpenseItemsResponse
+         * @description Khoản mục chi phí — một bản ghi.
+         */
+        ExpenseItemsResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * ExpenseItemsUpdateRequest
+         * @description Khoản mục chi phí — sửa.
+         */
+        ExpenseItemsUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
         };
         /**
          * GrantResponse
@@ -943,6 +3199,83 @@ export interface components {
             status: "ok";
             /** Version */
             version: string;
+        };
+        /**
+         * InvoiceFormsCreateRequest
+         * @description Mẫu số hóa đơn — tạo mới.
+         */
+        InvoiceFormsCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * InvoiceFormsListResponse
+         * @description Mẫu số hóa đơn — một trang bản ghi.
+         */
+        InvoiceFormsListResponse: {
+            /** Items */
+            items: components["schemas"]["InvoiceFormsResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * InvoiceFormsResponse
+         * @description Mẫu số hóa đơn — một bản ghi.
+         */
+        InvoiceFormsResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * InvoiceFormsUpdateRequest
+         * @description Mẫu số hóa đơn — sửa.
+         */
+        InvoiceFormsUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
         };
         /**
          * JobEnqueueRequest
@@ -1069,6 +3402,16 @@ export interface components {
             token: string;
         };
         /**
+         * MasterDataMoveRequest
+         * @description Chuyển một nút (và cả nhánh dưới nó) sang nhóm cha khác (FR-SYS-011).
+         */
+        MasterDataMoveRequest: {
+            /** New Parent Id */
+            new_parent_id?: number | null;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
          * MeResponse
          * @description Danh tính của phiên hiện tại. Chưa có vai trò/quyền — chúng per-dataset.
          *
@@ -1090,6 +3433,205 @@ export interface components {
             user_id: number;
             /** Username */
             username: string;
+        };
+        /**
+         * PaymentTermsCreateRequest
+         * @description Điều khoản thanh toán — tạo mới.
+         */
+        PaymentTermsCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Discount Days
+             * @default 0
+             */
+            discount_days: number;
+            /**
+             * Discount Percent
+             * @default 0
+             */
+            discount_percent: number | string;
+            /**
+             * Due Days
+             * @default 0
+             */
+            due_days: number;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * PaymentTermsListResponse
+         * @description Điều khoản thanh toán — một trang bản ghi.
+         */
+        PaymentTermsListResponse: {
+            /** Items */
+            items: components["schemas"]["PaymentTermsResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * PaymentTermsResponse
+         * @description Điều khoản thanh toán — một bản ghi.
+         */
+        PaymentTermsResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Discount Days
+             * @default 0
+             */
+            discount_days: number;
+            /**
+             * Discount Percent
+             * @default 0
+             */
+            discount_percent: string;
+            /**
+             * Due Days
+             * @default 0
+             */
+            due_days: number;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * PaymentTermsUpdateRequest
+         * @description Điều khoản thanh toán — sửa.
+         */
+        PaymentTermsUpdateRequest: {
+            /** Code */
+            code: string;
+            /**
+             * Discount Days
+             * @default 0
+             */
+            discount_days: number;
+            /**
+             * Discount Percent
+             * @default 0
+             */
+            discount_percent: number | string;
+            /**
+             * Due Days
+             * @default 0
+             */
+            due_days: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * PitTablesCreateRequest
+         * @description Biểu tính thuế thu nhập cá nhân — tạo mới.
+         */
+        PitTablesCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * PitTablesListResponse
+         * @description Biểu tính thuế thu nhập cá nhân — một trang bản ghi.
+         */
+        PitTablesListResponse: {
+            /** Items */
+            items: components["schemas"]["PitTablesResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * PitTablesResponse
+         * @description Biểu tính thuế thu nhập cá nhân — một bản ghi.
+         */
+        PitTablesResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * PitTablesUpdateRequest
+         * @description Biểu tính thuế thu nhập cá nhân — sửa.
+         */
+        PitTablesUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
         };
         /**
          * ProblemDetails
@@ -1133,6 +3675,237 @@ export interface components {
             type: string;
         } & {
             [key: string]: unknown;
+        };
+        /**
+         * ProjectTypesCreateRequest
+         * @description Loại công trình — tạo mới.
+         */
+        ProjectTypesCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * ProjectTypesListResponse
+         * @description Loại công trình — một trang bản ghi.
+         */
+        ProjectTypesListResponse: {
+            /** Items */
+            items: components["schemas"]["ProjectTypesResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ProjectTypesResponse
+         * @description Loại công trình — một bản ghi.
+         */
+        ProjectTypesResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * ProjectTypesUpdateRequest
+         * @description Loại công trình — sửa.
+         */
+        ProjectTypesUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * ProjectsCreateRequest
+         * @description Công trình — tạo mới.
+         */
+        ProjectsCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * ProjectsListResponse
+         * @description Công trình — một trang bản ghi.
+         */
+        ProjectsListResponse: {
+            /** Items */
+            items: components["schemas"]["ProjectsResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ProjectsResponse
+         * @description Công trình — một bản ghi.
+         */
+        ProjectsResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * ProjectsUpdateRequest
+         * @description Công trình — sửa.
+         */
+        ProjectsUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * ResourceTaxTablesCreateRequest
+         * @description Biểu thuế tài nguyên — tạo mới.
+         */
+        ResourceTaxTablesCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * ResourceTaxTablesListResponse
+         * @description Biểu thuế tài nguyên — một trang bản ghi.
+         */
+        ResourceTaxTablesListResponse: {
+            /** Items */
+            items: components["schemas"]["ResourceTaxTablesResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ResourceTaxTablesResponse
+         * @description Biểu thuế tài nguyên — một bản ghi.
+         */
+        ResourceTaxTablesResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * ResourceTaxTablesUpdateRequest
+         * @description Biểu thuế tài nguyên — sửa.
+         */
+        ResourceTaxTablesUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
         };
         /** RoleGrantRequest */
         RoleGrantRequest: {
@@ -1205,6 +3978,166 @@ export interface components {
             /** Value */
             value: string;
         };
+        /**
+         * TimekeepingSymbolsCreateRequest
+         * @description Ký hiệu chấm công — tạo mới.
+         */
+        TimekeepingSymbolsCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * TimekeepingSymbolsListResponse
+         * @description Ký hiệu chấm công — một trang bản ghi.
+         */
+        TimekeepingSymbolsListResponse: {
+            /** Items */
+            items: components["schemas"]["TimekeepingSymbolsResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * TimekeepingSymbolsResponse
+         * @description Ký hiệu chấm công — một bản ghi.
+         */
+        TimekeepingSymbolsResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * TimekeepingSymbolsUpdateRequest
+         * @description Ký hiệu chấm công — sửa.
+         */
+        TimekeepingSymbolsUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * ToolTypesCreateRequest
+         * @description Loại công cụ dụng cụ — tạo mới.
+         */
+        ToolTypesCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /** Default Allocation Months */
+            default_allocation_months?: number | null;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * ToolTypesListResponse
+         * @description Loại công cụ dụng cụ — một trang bản ghi.
+         */
+        ToolTypesListResponse: {
+            /** Items */
+            items: components["schemas"]["ToolTypesResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ToolTypesResponse
+         * @description Loại công cụ dụng cụ — một bản ghi.
+         */
+        ToolTypesResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Default Allocation Months */
+            default_allocation_months?: number | null;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * ToolTypesUpdateRequest
+         * @description Loại công cụ dụng cụ — sửa.
+         */
+        ToolTypesUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Default Allocation Months */
+            default_allocation_months?: number | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
         /** TotpConfirmRequest */
         TotpConfirmRequest: {
             /** Code */
@@ -1237,6 +4170,83 @@ export interface components {
             provisioning_uri: string;
         };
         /**
+         * UnitsOfMeasureCreateRequest
+         * @description Đơn vị tính — tạo mới.
+         */
+        UnitsOfMeasureCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * UnitsOfMeasureListResponse
+         * @description Đơn vị tính — một trang bản ghi.
+         */
+        UnitsOfMeasureListResponse: {
+            /** Items */
+            items: components["schemas"]["UnitsOfMeasureResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * UnitsOfMeasureResponse
+         * @description Đơn vị tính — một bản ghi.
+         */
+        UnitsOfMeasureResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * UnitsOfMeasureUpdateRequest
+         * @description Đơn vị tính — sửa.
+         */
+        UnitsOfMeasureUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
          * UpdateManifest
          * @description Khuôn manifest của updater Tauri v2 — **tên trường do Tauri định**.
          *
@@ -1257,6 +4267,83 @@ export interface components {
             url: string;
             /** Version */
             version: string;
+        };
+        /**
+         * WarehousesCreateRequest
+         * @description Kho — tạo mới.
+         */
+        WarehousesCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * WarehousesListResponse
+         * @description Kho — một trang bản ghi.
+         */
+        WarehousesListResponse: {
+            /** Items */
+            items: components["schemas"]["WarehousesResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * WarehousesResponse
+         * @description Kho — một bản ghi.
+         */
+        WarehousesResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * WarehousesUpdateRequest
+         * @description Kho — sửa.
+         */
+        WarehousesUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
         };
     };
     responses: never;
@@ -1618,6 +4705,169 @@ export interface operations {
             };
         };
     };
+    list_dimensions_api_v1_dimensions_get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DimensionListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    declare_dimension_api_v1_dimensions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DimensionDeclareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DimensionResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_dimension_api_v1_dimensions__code__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DimensionResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_dimension_values_api_v1_dimensions__code__values_get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DimensionValueListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    add_dimension_value_api_v1_dimensions__code__values_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DimensionValueAddRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DimensionValueResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_jobs_api_v1_jobs_get: {
         parameters: {
             query?: {
@@ -1761,6 +5011,3355 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_asset_types_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetTypesListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_asset_types_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetTypesCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_asset_types__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_asset_types__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetTypesUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_asset_types__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_asset_types__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_banks_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanksListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_banks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanksCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanksResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_banks__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanksResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_banks__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanksUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanksResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_banks__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_banks__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanksResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_contracts_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractsListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_contracts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContractsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_contracts__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_contracts__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContractsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_contracts__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_contracts__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_cost_objects_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostObjectsListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_cost_objects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CostObjectsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostObjectsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_cost_objects__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostObjectsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_cost_objects__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CostObjectsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostObjectsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_cost_objects__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_cost_objects__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostObjectsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_document_types_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentTypesListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_document_types_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentTypesCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_document_types__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_document_types__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentTypesUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_document_types__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_document_types__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_excise_tax_tables_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExciseTaxTablesListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_excise_tax_tables_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExciseTaxTablesCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExciseTaxTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_excise_tax_tables__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExciseTaxTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_excise_tax_tables__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExciseTaxTablesUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExciseTaxTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_excise_tax_tables__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_excise_tax_tables__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExciseTaxTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_expense_items_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseItemsListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_expense_items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpenseItemsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseItemsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_expense_items__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseItemsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_expense_items__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpenseItemsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseItemsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_expense_items__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_expense_items__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseItemsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_invoice_forms_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceFormsListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_invoice_forms_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvoiceFormsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceFormsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_invoice_forms__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceFormsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_invoice_forms__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvoiceFormsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceFormsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_invoice_forms__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_invoice_forms__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceFormsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_payment_terms_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentTermsListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_payment_terms_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentTermsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentTermsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_payment_terms__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentTermsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_payment_terms__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentTermsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentTermsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_payment_terms__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_payment_terms__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentTermsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_pit_tables_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PitTablesListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_pit_tables_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PitTablesCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PitTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_pit_tables__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PitTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_pit_tables__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PitTablesUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PitTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_pit_tables__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_pit_tables__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PitTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_project_types_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTypesListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_project_types_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTypesCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_project_types__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_project_types__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTypesUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_project_types__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_project_types__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_projects_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectsListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_projects__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_projects__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_projects__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_projects__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_resource_tax_tables_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceTaxTablesListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_resource_tax_tables_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResourceTaxTablesCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceTaxTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_resource_tax_tables__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceTaxTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_resource_tax_tables__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResourceTaxTablesUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceTaxTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_resource_tax_tables__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_resource_tax_tables__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceTaxTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_timekeeping_symbols_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimekeepingSymbolsListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_timekeeping_symbols_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimekeepingSymbolsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimekeepingSymbolsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_timekeeping_symbols__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimekeepingSymbolsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_timekeeping_symbols__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimekeepingSymbolsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimekeepingSymbolsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_timekeeping_symbols__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_timekeeping_symbols__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimekeepingSymbolsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_tool_types_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolTypesListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_tool_types_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolTypesCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_tool_types__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_tool_types__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolTypesUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_tool_types__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_tool_types__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolTypesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_units_of_measure_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitsOfMeasureListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_units_of_measure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnitsOfMeasureCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitsOfMeasureResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_units_of_measure__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitsOfMeasureResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_units_of_measure__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnitsOfMeasureUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitsOfMeasureResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_units_of_measure__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_units_of_measure__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitsOfMeasureResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_warehouses_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehousesListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_warehouses_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WarehousesCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehousesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_warehouses__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehousesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_warehouses__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WarehousesUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehousesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_warehouses__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_warehouses__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehousesResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
