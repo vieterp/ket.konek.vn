@@ -547,3 +547,16 @@ class JobPrivilegeUnavailableError(DomainError):
 
     error_code: ClassVar[str] = "job.privilege_unavailable"
     http_status: ClassVar[int] = 503
+
+
+class UpdatePackageNotFoundError(DomainError):
+    """Máy trạm xin một gói cập nhật không có trong danh mục.
+
+    Đường bình thường không bao giờ tới đây: updater chỉ tải đúng cái `url` mà
+    manifest vừa trả cho nó. Tới đây nghĩa là ai đó gọi tay, hoặc kho vừa bị dọn
+    giữa lúc một máy trạm đang tải — cả hai đều đáng trả `404` rõ ràng thay vì
+    một luồng byte rỗng mà updater sẽ báo là "chữ ký sai".
+    """
+
+    error_code: ClassVar[str] = "system.update_package_not_found"
+    http_status: ClassVar[int] = 404

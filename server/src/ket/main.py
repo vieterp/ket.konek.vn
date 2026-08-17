@@ -44,6 +44,7 @@ from ket.api.routers.auth import router as auth_router
 from ket.api.routers.jobs import router as jobs_router
 from ket.api.routers.system import router as system_router
 from ket.api.routers.system_settings import router as settings_router
+from ket.api.routers.updates import router as updates_router
 from ket.kernel.datasets.bootstrap import verify_control_schema
 from ket.kernel.datasets.provisioning import find_alembic_config, verify_dataset_schema_version
 from ket.kernel.datasets.service import list_datasets
@@ -201,6 +202,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(system_router)
     app.include_router(settings_router)
     app.include_router(jobs_router)
+    app.include_router(updates_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

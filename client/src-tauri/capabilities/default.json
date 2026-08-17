@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Quyền tối thiểu của shell. Phase 1 chưa có luồng nào chạm tệp nên chỉ mở hộp thoại chọn/lưu và mở tệp bằng ứng dụng hệ thống. Quyền đọc/ghi tệp (fs:*) cấp ở phase cần nó, theo phạm vi hẹp của đường dẫn do hộp thoại trả về — không cấp đệ quy cả Documents/Downloads. Không quyền nào phục vụ luồng nghiệp vụ: nghiệp vụ đi qua REST tới app server.",
+  "description": "Quyền tối thiểu của shell. Chỉ mở hộp thoại chọn/lưu tệp, mở tệp bằng ứng dụng hệ thống, và đường tự cập nhật. Quyền đọc/ghi tệp (fs:*) cấp ở phase cần nó, theo phạm vi hẹp của đường dẫn do hộp thoại trả về — không cấp đệ quy cả Documents/Downloads. Không quyền nào phục vụ luồng nghiệp vụ: nghiệp vụ đi qua REST tới app server. Web UI KHÔNG được cấp `updater:default` — nó gọi lệnh `check_and_install_update` của shell, và chính lệnh đó mới quyết định địa chỉ máy chủ cập nhật.",
   "windows": ["main"],
   "permissions": [
     "core:default",

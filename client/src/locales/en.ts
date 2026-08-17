@@ -58,13 +58,26 @@ export const en: Record<TranslationKey, string> = {
   'totp.confirmed': 'Device registered. Sign in again and enter a code.',
   'totp.qrAlt': 'QR code for registering the authenticator device',
 
+  'server.addressLabel': 'Server address',
+  'server.addressHint': 'For example https://server.lan:5443. Ask your administrator if unsure.',
+  'server.addressSave': 'Save and reconnect',
+  'server.addressInvalid': 'The address must start with http:// or https://',
+  'server.addressMissing': 'No server address configured. Enter your app server address to begin.',
   'update.title': 'Update required',
   'update.body':
     'This workstation runs an older build than the server accepts. Reading the books still works, but every save is refused until the app is updated.',
   'update.currentVersion': 'Installed: {version}',
   'update.requiredVersion': 'Minimum: {version}',
-  'update.howTo': 'The app updates itself on restart. If it does not, tell your administrator.',
+  'update.howTo': 'Press "Update now" to fetch the new build from this server. No internet needed.',
   'update.continueReadOnly': 'Continue read-only',
+  'update.installNow': 'Update now',
+  'update.installing': 'Downloading and installing…',
+  'update.installed': 'Update installed. Restart to use it.',
+  'update.restart': 'Restart',
+  'update.upToDate': 'This server has no newer build. Ask your administrator to publish one.',
+  'update.unsupported':
+    'The browser build cannot update itself. Open the desktop app, or ask your administrator.',
+  'update.failed': 'Update failed: {reason}',
 
   'handshake.serverBehind':
     'This workstation ({client}) is newer than the server ({server}). Work continues, but the server should be updated.',

@@ -1,6 +1,6 @@
 [package]
 name = "ket"
-version = "0.9.0"
+version = "0.10.0"
 description = "Konek Két — desktop shell"
 edition = "2024"
 rust-version = "1.85"
@@ -39,3 +39,4 @@ tauri-plugin-opener = "2"
 # build đỏ với "could not find `serde_json`", một thông điệp không hề nhắc tới
 # tệp cấu hình vừa sửa.
 serde_json = "1"
+tauri-plugin-updater = "2"

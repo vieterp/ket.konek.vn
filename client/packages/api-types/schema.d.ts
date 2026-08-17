@@ -575,6 +575,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/updates/download/{target}/{arch}/{file_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Package
+         * @description Phục vụ gói — **chỉ** những tệp có tên trong danh mục.
+         *
+         *     Danh sách trắng chứ không lọc chuỗi: đường dẫn duy nhất chạm đĩa được dựng
+         *     từ tên đã nằm sẵn trong `index.json`, nên không có phép ghép nào để `..` hay
+         *     một đường tuyệt đối lọt vào. Lọc chuỗi thì phải nghĩ ra đủ mọi cách viết
+         *     `..`; danh sách trắng thì không cần nghĩ ra cách nào.
+         */
+        get: operations["download_package_updates_download__target___arch___file_name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/updates/{target}/{arch}/{current_version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check For Update
+         * @description Trả manifest khi có bản mới hơn; `204 No Content` khi không.
+         *
+         *     Mọi lối "không có gì để giao" đều đi về `204`, kể cả khi đường tự cập nhật
+         *     chưa được bật hay `current_version` không đọc được. Updater hiểu đúng một
+         *     tín hiệu đó, và một máy trạm không cập nhật được vẫn phải làm việc bình
+         *     thường — hôm nay nó vẫn ghi sổ được, chỉ là chưa lên bản mới.
+         */
+        get: operations["check_for_update_updates__target___arch___current_version__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1049,6 +1099,28 @@ export interface components {
         TotpEnrollResponse: {
             /** Provisioning Uri */
             provisioning_uri: string;
+        };
+        /**
+         * UpdateManifest
+         * @description Khuôn manifest của updater Tauri v2 — **tên trường do Tauri định**.
+         *
+         *     Đổi tên bất kỳ trường nào ở đây là updater bỏ qua bản cập nhật trong im
+         *     lặng: nó không báo lỗi khuôn, nó chỉ coi như không có gì mới.
+         */
+        UpdateManifest: {
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /** Pub Date */
+            pub_date: string;
+            /** Signature */
+            signature: string;
+            /** Url */
+            url: string;
+            /** Version */
+            version: string;
         };
     };
     responses: never;
@@ -1830,6 +1902,79 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_package_updates_download__target___arch___file_name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                arch: string;
+                file_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    check_for_update_updates__target___arch___current_version__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                arch: string;
+                current_version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateManifest"];
+                };
+            };
+            /** @description Không có bản nào mới hơn */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {

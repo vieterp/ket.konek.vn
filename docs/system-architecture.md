@@ -287,7 +287,7 @@ Tải lại trang không bị bắt đăng nhập lại — đây là ứng dụ
 theo `baseUrl` để một máy trạm mở hai bản cài (thật + demo) không giẫm phiên của
 nhau.
 
-Địa chỉ app server đến từ `VITE_KET_SERVER_URL` lúc dựng, mặc định là chính
+Địa chỉ app server: giá trị người dùng khai ở máy trạm (lát 2C-4) → `VITE_KET_SERVER_URL` lúc dựng → mặc định là chính
 origin đang phục vụ trang (`client/.env.example`). Chế độ trình duyệt LAN và chế
 độ một máy không cần khai; `pnpm dev` và bản đóng gói Tauri thì phải khai, kèm
 origin tương ứng ở `KET_CORS_ALLOWED_ORIGINS`.

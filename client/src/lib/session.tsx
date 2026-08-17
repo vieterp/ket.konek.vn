@@ -32,13 +32,14 @@ import { createContext, use, useCallback, useEffect, useMemo, useState } from 'r
 import type { Schemas } from '@api-types'
 
 import type { Handshake } from '@/lib/api-client'
-import { ApiClient, ApiError, resolveServerUrl } from '@/lib/api-client'
+import { ApiClient, ApiError } from '@/lib/api-client'
 import { APP_VERSION, checkVersion } from '@/lib/app-version'
 import {
   clearStoredSession,
   readStoredSession,
   writeStoredSession,
 } from '@/lib/session-storage'
+import { resolveServerUrl } from '@/lib/server-url'
 
 type Me = Schemas['MeResponse']
 type LoginResponse = Schemas['LoginResponse']
@@ -101,7 +102,16 @@ function stageFor(me: Me): SessionStage {
 }
 
 export function SessionProvider({ children }: { children: ReactNode }): ReactElement {
-  const [serverUrl] = useState(resolveServerUrl)
+  // `null` = chưa có địa chỉ nào gọi được. Ca thật: bản đóng gói Tauri chưa
+  // cấu hình gì, nơi `window.location.origin` là `tauri://localhost`. Khi ấy
+  // phải hiện màn hình khai địa chỉ thay vì chạy một lượt bắt tay chắc chắn
+  // hỏng rồi báo "không tới được máy chủ" kèm một địa chỉ vô nghĩa.
+  // `null` = chưa có địa chỉ nào gọi được. Ca thật: bản đóng gói Tauri chưa
+  // cấu hình gì, nơi `window.location.origin` là `tauri://localhost`. Khi ấy
+  // phải hiện màn hình khai địa chỉ thay vì chạy một lượt bắt tay chắc chắn
+  // hỏng rồi báo "không tới được máy chủ" kèm một địa chỉ vô nghĩa.
+  const [resolvedServerUrl] = useState(resolveServerUrl)
+  const serverUrl = resolvedServerUrl ?? ''
 
   const [stage, setStage] = useState<SessionStage>('starting')
   const [handshake, setHandshake] = useState<Handshake | null>(null)
@@ -163,6 +173,10 @@ export function SessionProvider({ children }: { children: ReactNode }): ReactEle
     let cancelled = false
 
     async function boot(): Promise<void> {
+      if (resolvedServerUrl === null) {
+        setStage('unreachable')
+        return
+      }
       let greeting: Handshake
       try {
         greeting = await client.handshake()
@@ -205,7 +219,7 @@ export function SessionProvider({ children }: { children: ReactNode }): ReactEle
     return () => {
       cancelled = true
     }
-  }, [adoptToken, client, serverUrl])
+  }, [adoptToken, client, resolvedServerUrl, serverUrl])
 
   const login = useCallback(
     async (username: string, password: string, totpCode?: string): Promise<void> => {
