@@ -29,14 +29,17 @@ danh mục. Với annotation hoãn (chuỗi), FastAPI sẽ đi tìm tên `schema
 dòng import đó, annotation được tính ngay lúc định nghĩa hàm và FastAPI nhận
 đúng lớp.
 
-Cái giá là mypy không kiểm được hai tham số thân request (chúng thành `Any`).
-Bù lại ngay trong thân hàm: dòng đầu tiên gán chúng vào một biến mang **kiểu
-tĩnh** của bộ trường chung, nên phần dùng chung cho mười bảy danh mục vẫn được
-kiểm đầy đủ. Phần cột riêng thì có cổng khác canh —
-`tests/test_master_data_registry.py` đối chiếu `extra_fields` với cột đã ánh xạ
-theo cả hai chiều.
+Hai endpoint có **thân request** vì thế không gắn bằng decorator: chữ ký của
+chúng khai kiểu **tĩnh** (bộ trường chung) để mypy kiểm được trọn thân hàm, rồi
+`_register_with_body` thay annotation bằng lớp của đúng danh mục ngay trước khi
+gắn route. Nhờ vậy không tệp nào trong `src/` cần một dòng miễn trừ kiểm kiểu —
+ADR-015 đặt ngưỡng cho chúng ở **0** và có cổng CI đếm.
+
+Phần cột riêng thì có cổng khác canh — `tests/test_master_data_registry.py` đối
+chiếu `extra_fields` với cột đã ánh xạ theo cả hai chiều.
 """
 
+from collections.abc import Callable
 from datetime import timedelta
 from typing import Annotated, Final
 
@@ -154,6 +157,31 @@ def _ensure_parent_visible(
     _ensure_visible(service.get(parent_id), authorized.scope.acting_branch_id, spec)
 
 
+def _register_with_body(
+    decorator: Callable[[Callable[..., object]], object],
+    endpoint: Callable[..., object],
+    body_model: type[BaseModel],
+) -> None:
+    """Gắn một endpoint sau khi thay annotation thân request bằng lớp của danh mục.
+
+    Vì sao không khai thẳng `payload: schemas.create` ở chữ ký: đó là cú pháp
+    **kiểu** đặt trên một biến, mà lớp Pydantic ở đây dựng lúc chạy — mypy chỉ
+    chấp nhận nếu có một dòng miễn trừ kiểm kiểu, và ADR-015 đặt ngưỡng cho loại
+    miễn trừ ấy ở **0**, có cổng CI đếm.
+
+    Cách này tốt hơn cả về mặt kiểm kiểu, không chỉ để lách cổng: chữ ký khai bộ
+    trường **chung** nên mypy kiểm được toàn bộ thân hàm (trước đó `payload` là
+    `Any`, tức phần mã dùng chung cho mười bảy danh mục không được kiểm gì). Chỉ
+    đúng một thứ đổi lúc chạy — kiểu mà FastAPI đọc để phân giải thân request.
+
+    An toàn vì `inspect.signature` (thứ FastAPI dùng) đọc `__annotations__`, và
+    module này cố ý không bật `from __future__ import annotations` nên chúng là
+    đối tượng thật chứ không phải chuỗi.
+    """
+    endpoint.__annotations__["payload"] = body_model
+    decorator(endpoint)
+
+
 def _mount(spec: CatalogSpec) -> None:
     """Gắn sáu route của một danh mục vào router.
 
@@ -247,15 +275,8 @@ def _mount(spec: CatalogSpec) -> None:
             _ensure_visible(record, authorized.scope.acting_branch_id, spec)
             return to_response(record)
 
-    @router.post(
-        f"/{spec.slug}",
-        response_model=response_model,
-        status_code=status.HTTP_201_CREATED,
-        summary=f"{spec.title} — tạo mới",
-    )
     def create_record(
-        # `type: ignore[name-defined]` — lớp dựng lúc chạy, xem docstring module.
-        payload: schemas.create,  # type: ignore[name-defined]
+        payload: MasterDataBaseCreateRequest,
         authorized: Annotated[
             AuthorizedRequest, Depends(require_permission(spec.permission_code(Action.CREATE)))
         ],
@@ -269,7 +290,7 @@ def _mount(spec: CatalogSpec) -> None:
         Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
         trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
         """
-        body: MasterDataBaseCreateRequest = payload
+        body = payload
         _ensure_branch_in_scope(body.branch_id, authorized)
 
         def work(session: Session) -> tuple[BaseModel, IdempotentRef]:
@@ -325,22 +346,16 @@ def _mount(spec: CatalogSpec) -> None:
         response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return created_record
 
-    @router.put(
-        f"/{spec.slug}/{{record_id}}",
-        response_model=response_model,
-        summary=f"{spec.title} — sửa",
-    )
     def update_record(
         record_id: int,
-        # `type: ignore[name-defined]` — lớp dựng lúc chạy, xem docstring module.
-        payload: schemas.update,  # type: ignore[name-defined]
+        payload: MasterDataBaseUpdateRequest,
         authorized: Annotated[
             AuthorizedRequest, Depends(require_permission(spec.permission_code(Action.EDIT)))
         ],
         factory: SessionFactory,
     ) -> BaseModel:
         """Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`."""
-        body: MasterDataBaseUpdateRequest = payload
+        body = payload
         with unit_of_work(factory, authorized.scope) as session:
             service = service_for(session)
             _ensure_visible(service.get(record_id), authorized.scope.acting_branch_id, spec)
@@ -384,6 +399,30 @@ def _mount(spec: CatalogSpec) -> None:
             # hết hạn mọi đối tượng trong session, nên bản sao đang cầm mang
             # `path`/`level`/`row_version` cũ.
             return to_response(service.get(record_id))
+
+    # Hai endpoint có **thân request** không gắn bằng decorator như bốn cái kia:
+    # chữ ký của chúng khai kiểu tĩnh (bộ trường chung) để mypy kiểm được thân
+    # hàm, rồi annotation được thay bằng lớp dựng lúc chạy của đúng danh mục
+    # ngay trước khi gắn route. Xem `_register_with_body` bên dưới.
+    _register_with_body(
+        router.post(
+            f"/{spec.slug}",
+            response_model=response_model,
+            status_code=status.HTTP_201_CREATED,
+            summary=f"{spec.title} — tạo mới",
+        ),
+        create_record,
+        schemas.create,
+    )
+    _register_with_body(
+        router.put(
+            f"/{spec.slug}/{{record_id}}",
+            response_model=response_model,
+            summary=f"{spec.title} — sửa",
+        ),
+        update_record,
+        schemas.update,
+    )
 
     @router.delete(
         f"/{spec.slug}/{{record_id}}",

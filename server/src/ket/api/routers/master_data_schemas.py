@@ -20,6 +20,7 @@ mục là `extra_fields` — khai cạnh chính model ORM, nơi người thêm c
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import GenericAlias
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
@@ -143,10 +144,17 @@ def build_schemas(spec: CatalogSpec) -> CatalogSchemas:
         __base__=(MasterDataBaseResponse, extra) if extra else MasterDataBaseResponse,
         __doc__=f"{spec.title} — một bản ghi.",
     )
+    # `GenericAlias(list, (response,))` thay vì viết `list[response]`: cả hai cho
+    # ra **cùng một** đối tượng lúc chạy, nhưng dạng viết tay là cú pháp *kiểu*
+    # đặt trên một biến, nên mypy đòi `response` phải là tên kiểu tĩnh — mà nó là
+    # lớp dựng lúc chạy. Gọi hàm dựng thẳng thì đây là một biểu thức bình thường,
+    # không cần khai miễn trừ kiểm kiểu nào — ADR-015 đặt ngưỡng miễn trừ ở **0**
+    # và có cổng CI đếm.
+    item_list = GenericAlias(list, (response,))
     list_response: type[BaseModel] = create_model(
         f"{prefix}ListResponse",
         __doc__=f"{spec.title} — một trang bản ghi.",
-        items=(list[response], ...),  # type: ignore[valid-type]  # lớp dựng lúc chạy
+        items=(item_list, ...),
         # Tổng **trước** khi cắt trang — xem `MasterDataService.Page`.
         total=(int, ...),
     )
