@@ -23,6 +23,7 @@ phase sau sẽ làm đỏ `test_merge_service.py` cho tới khi có người quy
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -152,7 +153,7 @@ def merge_records[ModelT: MasterDataRow](
     source_id: int,
     target_id: int,
     actor_branch_ids: frozenset[int],
-    hook: MergeHook | None = None,
+    hooks: Sequence[MergeHook] = (),
 ) -> MergeReport:
     """Chuyển mọi tham chiếu từ bản ghi nguồn sang đích, rồi xóa nguồn.
 
@@ -190,6 +191,7 @@ def merge_records[ModelT: MasterDataRow](
     target = service.get(target_id)
 
     _ensure_scope_covers(entity_type, source=source, target=target)
+    _ensure_target_is_not_a_group(entity_type, target=target)
     _ensure_no_children(service, entity_type, source_id=source_id)
     _ensure_no_attachments(session, entity_type, source_id=source_id)
 
@@ -198,13 +200,13 @@ def merge_records[ModelT: MasterDataRow](
     source_code = source.code
     target_branch_id = target.branch_id
 
-    if hook is not None:
+    for hook in hooks:
         hook.before_move(session, source_id=source_id, target_id=target_id)
 
     moved = _move_foreign_keys(session, entity_type, source_id=source_id, target_id=target_id)
     _move_usage_counter(session, entity_type, source_id=source_id, target_id=target_id)
 
-    if hook is not None:
+    for hook in hooks:
         hook.after_move(session, target_id=target_id)
 
     service.delete(source_id)
@@ -282,6 +284,35 @@ def _ensure_scope_covers(entity_type: str, *, source: MasterDataRow, target: Mas
         entity_type=entity_type,
         entity_id=source.id,
         reason="target_scope_narrower",
+    )
+
+
+def _ensure_target_is_not_a_group(entity_type: str, *, target: MasterDataRow) -> None:
+    """Không gộp vào một nút **nhóm** (review H-2).
+
+    Nhóm chỉ để gom cây; nó không lên chứng từ và không nhận giá trị nào
+    (`ensure_catalog_choice` → `master_data.group_not_postable`). Chuyển tham
+    chiếu **vào** nó tạo ra đúng trạng thái mà mọi đường ghi khác đã từ chối, và
+    lần này thì không có đường sửa lại:
+
+    * bảng con đi theo bản ghi nguồn (tài khoản ngân hàng của đối tác, đơn vị quy
+      đổi và mã quy cách của vật tư) rơi vào một bản ghi mà router bảng con trả
+      `404` — chúng không đọc, không sửa, không xóa được bằng endpoint nào, chỉ
+      chết theo `CASCADE` khi ai đó xóa nhóm;
+    * khóa ngoại trỏ tới danh mục (`items.base_unit_id`, `items.warehouse_id`,
+      `partners.payment_term_id`, `employees.bank_id`) cắm vào một nút nhóm — và
+      những cột chốt một lần như `base_unit_id` thì không sửa lại được.
+
+    Nguồn là nhóm thì không cần chặn riêng: `_ensure_no_children` đã loại nhóm có
+    con, còn một nhóm rỗng thì không có tham chiếu nào để chuyển.
+    """
+    if not target.is_group:
+        return
+    raise MasterDataMergeRefusedError(
+        "Bản ghi đích là một nhóm — hãy chọn một mục con làm bản ghi giữ lại",
+        entity_type=entity_type,
+        entity_id=target.id,
+        reason="target_is_group",
     )
 
 

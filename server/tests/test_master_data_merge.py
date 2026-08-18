@@ -106,8 +106,10 @@ def test_a_child_table_with_a_unique_constraint_forces_its_catalog_to_declare_a_
     **cả hai** đều đã khai dòng con (review lát này, H1). Cổng này bắt bảng con
     thứ hai ra đời ở phase sau, khi người thêm nó chưa đọc lại chỗ gộp.
 
-    Đối chiếu **hai chiều** để nó không thành hằng đúng: hôm nay đúng một danh
-    mục cần hook (`partners`), và test khẳng định cả tập cần lẫn tập đã khai.
+    Đối chiếu **hai chiều** để nó không thành hằng đúng: hôm nay ba danh mục cần
+    hook (`partners`, `items`, và `units_of_measure` — vì `uq_item_units_item_unit`
+    chứa **cả hai** cột danh mục của bảng con ấy), và test khẳng định cả tập cần
+    lẫn tập đã khai.
     """
     catalog_tables = {str(spec.model.__tablename__): spec.slug for spec in REGISTRY.specs()}
     needs_hook: set[str] = set()
@@ -123,10 +125,10 @@ def test_a_child_table_with_a_unique_constraint_forces_its_catalog_to_declare_a_
             if owner is not None and foreign_key.parent.name in unique_columns:
                 needs_hook.add(owner)
 
-    declared = {spec.slug for spec in REGISTRY.specs() if spec.merge_hook is not None}
+    declared = {spec.slug for spec in REGISTRY.specs() if spec.merge_hooks}
 
     assert needs_hook == declared, (
-        f"Danh mục cần khai `merge_hook`: {sorted(needs_hook)}; đang khai: {sorted(declared)}. "
+        f"Danh mục cần khai `merge_hooks`: {sorted(needs_hook)}; đang khai: {sorted(declared)}. "
         "Bảng con có ràng buộc duy nhất theo cột danh mục thì gộp phải có bước hợp nhất, "
         "nếu không nó đổ ngay ở ca hai bản ghi cùng có dòng con."
     )

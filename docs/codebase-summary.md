@@ -1,6 +1,6 @@
 # Tóm tắt mã nguồn — Konek Két
 
-**Cập nhật:** 2026-08-17 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); phase 3 xong lát 3A + 3B-1 + 3B-2 (registry + 19 danh mục + chiều phân tích + gộp bản ghi).
+**Cập nhật:** 2026-08-18 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); phase 3 xong lát 3A + 3B-1 + 3B-2 + 3B-3 (registry + 20 danh mục + 2 bảng con vật tư + chiều phân tích + gộp bản ghi + ba cơ chế chung).
 
 Tài liệu này mô tả **thứ đang có thật trong repo**. Kiến trúc đích của cả v1
 nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó chưa dựng.
@@ -18,8 +18,9 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | Bảng chứng từ / `gl_postings` / số dư |
 | **RBAC tới cấp `{module}.{chứng từ}.{hành vi}`** + `require_permission`, **định tuyến dataset theo header `X-Dataset`**, phạm vi chi nhánh cho RLS | Bảng chứng từ / `gl_postings` / số dư |
 | **Idempotency cùng transaction** (giành khóa → làm việc → điền kết quả), **khóa lạc quan `row_version`**, **tùy chọn hai cấp**, **hạn mức request** | Bảng chứng từ / `gl_postings` / số dư |
-| **Sổ đăng ký danh mục** — `CatalogRegistry` + `CatalogSpec` (slug, model, extra_fields, flags, references); **router sinh tự động từ registry** — 7 thao tác/danh mục (GET danh sách/một, POST/PUT/DELETE/chuyển nhánh, gộp bản ghi), 175 operation tổng; phạm vi chi nhánh trong cấu trúc; `CatalogFlag` (bộ lọc `?flag=` theo cột boolean); `CatalogReference` (kiểm khóa ngoại sang danh mục khác từ DB lúc chạy) | — |
-| **19 danh mục** — 15 danh mục lát 3B-1 + 2 chiều lõi lát 3A + `partners`/`employees` lát 3B-2: `projects`, `project_types`, `contracts`, `warehouses`, `units_of_measure`, `asset_types`, `tool_types`, `payment_terms`, `banks`, `timekeeping_symbols`, `document_types`, `invoice_forms`, `pit_tables`, `excise_tax_tables`, `resource_tax_tables`, `partners`, `employees`, `cost_objects`, `expense_items` | Dòng 4–6 của SRS §1–2 hoãn tới phase 5/7/9 |
+| **Sổ đăng ký danh mục** — `CatalogRegistry` + `CatalogSpec` (slug, model, extra_fields, flags, references); **router sinh tự động từ registry** — 7 thao tác/danh mục (GET danh sách/một, POST/PUT/DELETE/chuyển nhánh, gộp bản ghi), 190 operation tổng; phạm vi chi nhánh trong cấu trúc; `CatalogFlag` (bộ lọc `?flag=` theo cột boolean); `CatalogReference` (kiểm khóa ngoại sang danh mục khác từ DB lúc chạy) | — |
+| **Ba cơ chế chung** — `merge_hooks` (số nhiều, từ chối/chuẩn bị gộp bản ghi), `extra_update_fields` (trường chốt một lần), `update_guard` (luật liên-trường ở đường sửa) | Lát 3B-3: người dùng thứ nhất là vật tư, bảng con đơn vị quy đổi + mã quy cách |
+| **20 danh mục** — 15 danh mục lát 3B-1 + 2 chiều lõi lát 3A + `partners`/`employees` lát 3B-2 + `items` lát 3B-3: `projects`, `project_types`, `contracts`, `warehouses`, `units_of_measure`, `asset_types`, `tool_types`, `payment_terms`, `banks`, `timekeeping_symbols`, `document_types`, `invoice_forms`, `pit_tables`, `excise_tax_tables`, `resource_tax_tables`, `partners`, `employees`, `cost_objects`, `expense_items`, `items` | Dòng 4–6 của SRS §1–2 hoãn tới phase 5/7/9 |
 | **Chiều phân tích mở rộng** — hai bảng `analysis_dimensions` + `analysis_dimension_values`, `DimensionService`, gieo mầm "Mã thống kê" (STAT, FR-SYS-051) lúc cấp dữ liệu kế toán; `value_source` + `master_slug` phân tách (không chuỗi ghép) | — |
 | **Hàng đợi job + tiến trình worker riêng** (không FastAPI); **lease/heartbeat/reaper** chống job mồ côi; **vai trò `ket_worker`**; **API `/api/v1/jobs` + OpenAPI → type TypeScript** | Các module nghiệp vụ kế toán (phase 4 trở đi) |
 | Schema-per-dataset + provisioning + `ensure_cluster` + `repair_dataset_privileges_statements` + **gieo mã quyền/vai trò `admin`** | API nghiệp vụ (mới có `/health`, `/api/v1/auth/*`, `/api/v1/system/*`) |
@@ -58,7 +59,9 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | `kernel/jobs/` | `models` (bảng `jobs`, `ResumeSemantics`, `JobStatus`), **`registry` (loại job + quyền + semantics), `queue` (giành job), `reaper` (dọn mồ côi), `builtin` (ba loại job mẫu)** | Thêm loại job mới, chạm job metadata |
 | `kernel/numbering/` | `models` (`number_sequences` + sổ cấp số `allocated_numbers`, `ResetRule`), **`service` (`NumberingRule` + `NumberingService`: `FOR UPDATE` trong transaction của người gọi, nên rollback trả lại số)** | Cấp số chứng từ, đổi quy tắc đánh số |
 | `kernel/identifiers.py` | **`uuid7()` RFC 9562 tự viết** — `uid` ổn định của danh mục (RT-19). Khóa bảo vệ **tính đơn điệu**, không phải tính duy nhất | Đụng khóa danh mục |
-| `kernel/master_data/` | **`registry` (đăng ký danh mục + loại quyền), `tree_path` (materialized path, chuyển nhánh bằng một UPDATE), `base` (`MasterDataRow`), `service` (`MasterDataService[ModelT]` generic), `usage` (bộ đếm tham chiếu), `models/` (15 danh mục + 2 danh mục lõi)** | Thêm một danh mục → thêm model + khai registry |
+| `kernel/master_data/` | **`registry` (đăng ký danh mục + loại quyền + ba cơ chế chung), `tree_path` (materialized path, chuyển nhánh bằng một UPDATE), `base` (`MasterDataRow`), `service` (`MasterDataService[ModelT]` generic), `usage` (bộ đếm tham chiếu), `models/` (20 danh mục + 2 danh mục lõi)** | Thêm một danh mục → thêm model + khai registry |
+| `kernel/quantity.py` | **Kiểu `NUMERIC(20,6)` cho số lượng + tỷ lệ quy đổi** — khóa `quantity.scale` hoãn phase 8 | Phép tính số lượng, quy đổi |
+| `api/routers/master_data_guards.py` | **Phép kiểm phạm vi trích từ `master_data.py`** — bảng con vật tư (đơn vị quy đổi, mã quy cách) + đối tác (tài khoản ngân hàng) là ba người dùng | Thêm bảng con mới → cô lập kiểm phạm vi ở đây |
 | `kernel/dimensions/` | **`models` (`analysis_dimensions`/`analysis_dimension_values`), `service` (API cây giá trị + kiểm nguồn), `seed` (gieo chiều lõi)** | Thêm chiều → thêm dòng vào bảng giá trị |
 | `kernel/currency/` | **`models` (`currencies`/`exchange_rates`), `money_fc` (`MoneyFc` kiểm bất biến lúc dựng), `exchange_rate_service` (tra tỷ giá gần nhất ≤ ngày; thiếu → lỗi, **không bao giờ dùng 1**)** | Chạm nguyên tệ hoặc quy đổi |
 | `kernel/periods/` | **`models` (`fiscal_years`/`accounting_periods`), `service` (sinh 12 kỳ, tra kỳ, khóa/mở có vết)** | Chạm kỳ kế toán, khóa sổ |
@@ -200,7 +203,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 
 ---
 
-## 5. Bộ test (**847 case**: 493 cần PostgreSQL 16, 354 không) — lát 3B-1 tăng 145 test; lát 3B-2 tăng 104 test
+## 5. Bộ test (**922 case**: 541 cần PostgreSQL 16, 381 không) — lát 3B-1 tăng 145 test; lát 3B-2 tăng 104 test; lát 3B-3 tăng 49 test
 
 | Tệp | Chứng minh điều gì |
 | --- | --- |
@@ -241,8 +244,9 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_master_data_registry.py` (non-db) | **Lát 3B-1**: mọi lớp con `MasterDataRow` phải có trong registry; `extra_fields` khớp cột hai chiều; response model không thiếu trường; đủ 4 mã quyền, không thừa `post`/`print`; đủ 6 route cho **mỗi** danh mục; slug phải là identifier; đăng ký trùng bị từ chối |
 | `test_master_data_api.py` (db) | **Lát 3B-1**: CRUD danh mục cây thuần + danh mục có cột riêng; validator liên-trường; phạm vi chi nhánh (404 không phải 403); quyền từng danh mục; chuyển nhánh; idempotency; khóa lạc quan |
 | `test_analysis_dimensions.py` (db) | **Lát 3B-1**: gieo mầm + chạy lại; mã quyền tới bảng permissions; cây giá trị; duy nhất trong chiều; `subtree_of` không rò sang chiều khác; cha khác chiều bị từ chối; nguồn `master` trỏ slug có thật |
+| `test_item_catalog_api.py` (db) | **Lát 3B-3**: 47 test cho vật tư — CRUD danh mục cây, bảng con đơn vị quy đổi + mã quy cách (8 endpoint), phạm vi chi nhánh, quyền, chuyển nhánh, khóa lạc quan, idempotency; gộp bản ghi từ chối khi đơn vị chính khác (H71) hoặc bản ghi là nhóm (H74); luật liên-trường qua `update_guard` (H75); nhóm bị cấm `nature`/`base_unit_id` (H76) |
 
-Tổng **847 test** (493 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
+Tổng **922 test** (541 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
 
 ---
 

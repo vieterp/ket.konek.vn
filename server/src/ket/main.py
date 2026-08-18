@@ -52,6 +52,8 @@ from ket.api.routers.attachments import ATTACHMENTS_PREFIX
 from ket.api.routers.attachments import router as attachments_router
 from ket.api.routers.auth import router as auth_router
 from ket.api.routers.dimensions import router as dimensions_router
+from ket.api.routers.items_units import router as item_units_router
+from ket.api.routers.items_variants import router as item_variants_router
 from ket.api.routers.jobs import router as jobs_router
 from ket.api.routers.master_data import router as master_data_router
 from ket.api.routers.partners import router as partner_bank_accounts_router
@@ -234,6 +236,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(updates_router)
     app.include_router(master_data_router)
     app.include_router(partner_bank_accounts_router)
+    app.include_router(item_units_router)
+    app.include_router(item_variants_router)
     app.include_router(setup_router)
     app.include_router(dimensions_router)
 

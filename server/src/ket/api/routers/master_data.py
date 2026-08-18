@@ -37,6 +37,10 @@ ADR-015 đặt ngưỡng cho chúng ở **0** và có cổng CI đếm.
 
 Phần cột riêng thì có cổng khác canh — `tests/test_master_data_registry.py` đối
 chiếu `extra_fields` với cột đã ánh xạ theo cả hai chiều.
+
+Phép kiểm phạm vi chi nhánh nằm ở `master_data_guards.py`: chúng có ba bên gọi
+(bộ sinh này, bảng con của đối tác, hai bảng con của vật tư hàng hóa) nên chúng
+không thuộc riêng tệp nào trong ba.
 """
 
 from collections.abc import Callable
@@ -54,6 +58,13 @@ from ket.api.dependencies import (
     require_permission,
 )
 from ket.api.idempotency import idempotency_key_dependency
+from ket.api.routers.master_data_guards import (
+    ensure_branch_in_scope,
+    ensure_parent_visible,
+    ensure_references_visible,
+    ensure_visible,
+    flag_column,
+)
 from ket.api.routers.master_data_schemas import (
     CatalogSchemas,
     MasterDataBaseCreateRequest,
@@ -65,12 +76,7 @@ from ket.api.routers.master_data_schemas import (
     build_schemas,
     extra_values,
 )
-from ket.kernel.errors import (
-    BranchNotInScopeError,
-    MasterDataFilterUnknownError,
-    MasterDataGroupNotPostableError,
-    MasterDataNotFoundError,
-)
+from ket.kernel.errors import MasterDataNotFoundError
 from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
 from ket.kernel.master_data.base import MasterDataRow
 from ket.kernel.master_data.merge_service import merge_records
@@ -89,159 +95,6 @@ MAX_PAGE_SIZE: Final[int] = 200
 
 DEFAULT_PAGE_SIZE: Final[int] = 100
 """Đủ cho một màn hình cây mở hết một cấp; client xin thêm khi cần."""
-
-
-def ensure_visible(record: MasterDataRow, branch_id: int | None, spec: CatalogSpec) -> None:
-    """Bản ghi riêng của chi nhánh khác thì coi như không tồn tại.
-
-    `404` chứ không `403`, có chủ đích: `403` là lời xác nhận "có một bản ghi id
-    47 ở chi nhánh khác", và một vòng lặp qua id sẽ vẽ lại được danh mục của chi
-    nhánh bên cạnh. Cùng lập luận đã áp cho `AttachmentNotFoundError`.
-
-    Kiểm ở tầng HTTP chứ không trong `MasterDataService.get`: đường đọc theo
-    **khóa chính** có những người gọi hợp lệ ở tầng trong (gộp bản ghi, nhập
-    liệu, posting engine) vốn phải nhìn thấy mọi chi nhánh. Ranh giới chi nhánh
-    là ranh giới của một **request**.
-    """
-    if record.branch_id is None or record.branch_id == branch_id:
-        return
-    raise MasterDataNotFoundError(
-        "Không tìm thấy bản ghi danh mục",
-        entity_type=spec.entity_type,
-        entity_id=record.id,
-    )
-
-
-def _ensure_branch_in_scope(branch_id: int | None, authorized: AuthorizedRequest) -> None:
-    """Chỉ tạo được danh mục riêng cho chi nhánh **mình được gán**.
-
-    `branch_id` đến từ thân request, nên không kiểm thì bất kỳ ai có quyền tạo
-    danh mục cũng cắm được bản ghi vào ngăn của chi nhánh khác — và vì chính họ
-    không nhìn thấy nó sau đó (`ensure_visible`), bản ghi ấy trở thành thứ chỉ
-    chi nhánh kia thấy mà không ai bên đó tạo ra.
-
-    `None` luôn hợp lệ: đó là danh mục **dùng chung toàn công ty** (FR-SYS-018),
-    và quyền tạo nó là chính mã quyền `create` của danh mục đó.
-
-    `403` chứ không `404` như đường đọc: ở đây người gọi tự nêu ra một chi nhánh
-    thay vì dò một khóa chính, nên câu trả lời "ngoài phạm vi của bạn" không tiết
-    lộ gì mà họ chưa gõ vào.
-
-    So với **chi nhánh đang thao tác**, không so với cả phạm vi được gán (sửa sau
-    review L-1). Người được gán cả A lẫn B, đang thao tác ở A, mà tạo được bản
-    ghi mang `branch_id = B` thì sẽ mất dấu nó ngay lập tức — mọi đường đọc lọc
-    theo `acting_branch_id`, nên bản ghi vừa tạo biến mất khỏi chính màn hình vừa
-    tạo ra nó. Phạm vi ghi và phạm vi đọc phải là **một**.
-    """
-    acting = authorized.scope.acting_branch_id
-    if branch_id is None or branch_id == acting:
-        return
-    raise BranchNotInScopeError(
-        "Chỉ tạo được danh mục riêng cho chi nhánh đang thao tác",
-        branch=branch_id,
-        acting_branch=acting,
-    )
-
-
-def _ensure_parent_visible(
-    service: MasterDataService[MasterDataRow],
-    parent_id: int | None,
-    authorized: AuthorizedRequest,
-    spec: CatalogSpec,
-) -> None:
-    """Nhóm cha phải **nhìn thấy được** từ chi nhánh đang thao tác (sửa sau review H-4).
-
-    Không có bước này thì lỗi phạm vi của tầng dịch vụ trả lời hộ hai câu hỏi mà
-    người gọi chưa được phép hỏi: `422` nghĩa là "id này có thật, ở chi nhánh
-    khác" còn `404` nghĩa là "không có id này" — đủ để dò ra danh mục của chi
-    nhánh bên cạnh gồm những id nào. Nay cả hai đều là `404`.
-
-    `MasterDataParentScopeError` của tầng dịch vụ **vẫn giữ** và vẫn có ích: nó
-    bắt trường hợp cha nhìn thấy được nhưng phạm vi vẫn sai (cha riêng chi nhánh
-    A, con khai dùng chung). Ở đó `parent_branch_id` trong `details` không lộ gì
-    — người gọi nhìn thấy chính nhóm cha ấy.
-    """
-    if parent_id is None:
-        return
-    ensure_visible(service.get(parent_id), authorized.scope.acting_branch_id, spec)
-
-
-def _flag_column(spec: CatalogSpec, value: str | None) -> str | None:
-    """`?flag=customer` → tên cột boolean phải `TRUE`, hoặc `None` khi không lọc.
-
-    Một tham số **chung** cho mọi danh mục thay vì mỗi danh mục một tham số
-    riêng: chữ ký của endpoint sinh ra phải là kiểu tĩnh để mypy kiểm được thân
-    hàm (xem `_register_with_body`), và một tham số truy vấn khai theo từng danh
-    mục lúc chạy sẽ tái lập đúng vấn đề annotation mà tệp này đã giải một lần.
-    Danh sách giá trị hợp lệ của từng danh mục nằm trong mô tả OpenAPI.
-    """
-    if value is None:
-        return None
-    flag = spec.flag(value)
-    if flag is None:
-        allowed = ", ".join(item.value for item in spec.flags) or "(danh mục này không có bộ lọc)"
-        raise MasterDataFilterUnknownError(
-            "Bộ lọc không hợp lệ cho danh mục này",
-            entity_type=spec.entity_type,
-            flag=value,
-            allowed=allowed,
-        )
-    return flag.column
-
-
-def _ensure_references_visible(
-    session: Session,
-    spec: CatalogSpec,
-    payload: BaseModel,
-    authorized: AuthorizedRequest,
-) -> None:
-    """Mọi khóa ngoại trỏ sang danh mục khác phải **nhìn thấy được** (`CatalogReference`).
-
-    Khóa ngoại của DB chỉ trả lời "id có tồn tại", và đó là câu trả lời sai ở hai
-    mặt: bản ghi riêng của chi nhánh khác vẫn tồn tại (nên gắn được, rồi biến mất
-    khỏi màn hình của chính người vừa gắn), và một nút **nhóm** cũng tồn tại (nên
-    gắn được, dù nhóm chỉ để gom cây chứ không mang giá trị nào).
-
-    `404` cho bản ghi ngoài phạm vi, cùng mã với "không có id này" — cùng lập
-    luận H55 đã áp cho nhóm cha: hai mã khác nhau là một oracle liệt kê id.
-    """
-    for reference in spec.references:
-        value = getattr(payload, reference.field, None)
-        if value is not None:
-            ensure_catalog_choice(session, reference.slug, int(value), authorized)
-
-
-def ensure_catalog_choice(
-    session: Session, slug: str, record_id: int, authorized: AuthorizedRequest
-) -> None:
-    """Một giá trị người dùng chọn từ danh mục `slug` phải dùng được thật.
-
-    Dùng chung cho hai đường: cột khóa ngoại khai trong `CatalogSpec.references`
-    (đối tác → điều khoản thanh toán) và các bảng con viết tay
-    (`routers/partners.py` → ngân hàng của tài khoản). Một hàm cho cả hai vì câu
-    hỏi giống hệt nhau, và hai bản sao là hai chỗ để phép kiểm chi nhánh trôi
-    lệch.
-    """
-    target_spec = CATALOG_REGISTRY.get(slug)
-    if target_spec is None:  # pragma: no cover - test registry canh trước khi chạy tới đây
-        raise MasterDataNotFoundError(
-            "Danh mục đích của tham chiếu không tồn tại", entity_type=slug
-        )
-    service: MasterDataService[MasterDataRow] = MasterDataService(session, target_spec.model)
-    record = service.get(record_id)
-    ensure_visible(record, authorized.scope.acting_branch_id, target_spec)
-    if record.is_group:
-        # `MasterDataGroupNotPostableError` chứ không `404` như nhánh trên:
-        # tới đây bản ghi đã nhìn thấy được, nên nói thẳng "đây là nhóm"
-        # không lộ gì mà người gọi chưa biết — và đó là câu duy nhất giúp họ
-        # sửa. Bản ghi **đã ngừng theo dõi** thì vẫn cho gắn: chặn nó sẽ làm
-        # mọi lần sửa tên một đối tác cũ bị từ chối vì một điều khoản thanh
-        # toán mà chính lần sửa đó không đụng tới.
-        raise MasterDataGroupNotPostableError(
-            "Giá trị được chọn là một nhóm — hãy chọn một mục con",
-            entity_type=target_spec.entity_type,
-            entity_id=record.id,
-        )
 
 
 def _register_with_body(
@@ -333,7 +186,7 @@ def _mount(spec: CatalogSpec) -> None:
         và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
         """
         branch_id = authorized.scope.acting_branch_id
-        flag_column = _flag_column(spec, flag)
+        column = flag_column(spec, flag)
         with unit_of_work(factory, authorized.scope) as session:
             service = service_for(session)
             if subtree_of is not None:
@@ -345,7 +198,7 @@ def _mount(spec: CatalogSpec) -> None:
                 page = service.subtree_of(
                     subtree_of,
                     branch_id=branch_id,
-                    flag_column=flag_column,
+                    flag_column=column,
                     limit=limit,
                     offset=offset,
                 )
@@ -353,7 +206,7 @@ def _mount(spec: CatalogSpec) -> None:
                 page = service.children_of(
                     parent_id,
                     branch_id=branch_id,
-                    flag_column=flag_column,
+                    flag_column=column,
                     limit=limit,
                     offset=offset,
                 )
@@ -394,12 +247,12 @@ def _mount(spec: CatalogSpec) -> None:
         trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
         """
         body = payload
-        _ensure_branch_in_scope(body.branch_id, authorized)
+        ensure_branch_in_scope(body.branch_id, authorized)
 
         def work(session: Session) -> tuple[BaseModel, IdempotentRef]:
             service = service_for(session)
-            _ensure_parent_visible(service, body.parent_id, authorized, spec)
-            _ensure_references_visible(session, spec, body, authorized)
+            ensure_parent_visible(service, body.parent_id, authorized, spec)
+            ensure_references_visible(session, spec, body, authorized)
             # Cột riêng đi thẳng vào `create`, **không** qua một `update` nối
             # tiếp (sửa sau review M-2): tạo rồi sửa ngay sinh ra bản ghi mới
             # toanh mang `row_version = 2` cùng hai dòng nhật ký, đúng thứ mà
@@ -462,8 +315,15 @@ def _mount(spec: CatalogSpec) -> None:
         body = payload
         with unit_of_work(factory, authorized.scope) as session:
             service = service_for(session)
-            ensure_visible(service.get(record_id), authorized.scope.acting_branch_id, spec)
-            _ensure_references_visible(session, spec, body, authorized)
+            current = service.get(record_id)
+            ensure_visible(current, authorized.scope.acting_branch_id, spec)
+            ensure_references_visible(session, spec, body, authorized)
+            if spec.update_guard is not None:
+                # Luật liên-trường cần giá trị **đang có** của một cột mà thân
+                # request sửa cố ý không mang theo (trường chốt một lần). Chạy ở
+                # đây chứ không ở validator Pydantic vì đây là chỗ đầu tiên có cả
+                # bản ghi lẫn thân request — xem `registry.UpdateGuard`.
+                spec.update_guard.check(current, body)
             record = service.update(
                 record_id,
                 expected_row_version=body.row_version,
@@ -494,7 +354,7 @@ def _mount(spec: CatalogSpec) -> None:
             ensure_visible(service.get(record_id), authorized.scope.acting_branch_id, spec)
             # Cha **mới** cũng phải nhìn thấy được: chuyển một nút vào nhánh của
             # chi nhánh khác là cách đẩy nó ra khỏi tầm nhìn của chính mình.
-            _ensure_parent_visible(service, payload.new_parent_id, authorized, spec)
+            ensure_parent_visible(service, payload.new_parent_id, authorized, spec)
             service.move(
                 record_id,
                 new_parent_id=payload.new_parent_id,
@@ -574,7 +434,7 @@ def _mount(spec: CatalogSpec) -> None:
                 # đây là "người này nhìn thấy hết dữ liệu chưa", không phải "họ
                 # đang đứng ở đâu".
                 actor_branch_ids=frozenset(authorized.scope.branch_ids),
-                hook=spec.merge_hook,
+                hooks=spec.merge_hooks,
             )
             result = MasterDataMergeResponse(
                 entity_type=report.entity_type,

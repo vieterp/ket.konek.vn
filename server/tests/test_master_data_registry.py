@@ -128,6 +128,59 @@ def test_extra_fields_match_the_mapped_columns_both_ways(spec: CatalogSpec) -> N
     )
 
 
+def test_at_least_one_catalog_exercises_the_create_only_mechanism() -> None:
+    """Cổng bên dưới chạy thật ở ít nhất một danh mục (review L-2).
+
+    Nó `return` ngay với danh mục không khai `extra_update_fields` — hôm nay là
+    19/20. Không có dòng này thì ngày ai đó bỏ khai báo khỏi `items`, cổng ấy
+    lặng lẽ trở về 20/20 rỗng: xanh vì không đo gì, không vì đo được điều gì.
+    """
+    assert any(spec.extra_update_fields is not None for spec in REGISTRY.specs()), (
+        "Không danh mục nào khai `extra_update_fields` — "
+        "`test_create_only_fields_are_declared_by_inheritance` đang rỗng."
+    )
+
+
+@pytest.mark.parametrize("spec", REGISTRY.specs(), ids=lambda spec: spec.slug)
+def test_create_only_fields_are_declared_by_inheritance(spec: CatalogSpec) -> None:
+    """Tập cột sửa được phải là **lớp cha** của tập cột tạo mới (H69).
+
+    Quan hệ kế thừa là cách khai "trường này chỉ đặt lúc tạo" ở registry, và nó
+    được chọn thay cho một danh sách tên trường vì nó mang theo hai thứ mà danh
+    sách tên không mang: model tạo mới thừa hưởng trọn **validator** của model
+    sửa (không luật nào chỉ áp cho một đường), và tên cột không phải gõ lại bằng
+    chuỗi ở chỗ thứ hai.
+
+    Đảo ngược quan hệ ấy là kiểu lỗi test này tồn tại để bắt: `extra_update_fields`
+    rộng hơn `extra_fields` nghĩa là đường **sửa** nhận một trường mà đường tạo
+    không có — `extra_values` sẽ không bao giờ chuyển nó xuống dịch vụ vì nó đọc
+    danh sách trường từ `extra_fields`, nên giá trị người dùng nhập biến mất im
+    lặng.
+    """
+    if spec.extra_update_fields is None:
+        return
+
+    assert spec.extra_fields is not None, (
+        f"{spec.slug}: khai `extra_update_fields` mà không có `extra_fields` — "
+        "tập cột sửa được chỉ có nghĩa khi có tập cột riêng để hẹp hơn."
+    )
+    assert issubclass(spec.extra_fields, spec.extra_update_fields), (
+        f"{spec.slug}: `extra_fields` phải là lớp con của `extra_update_fields`. "
+        "Trường chốt một lần lúc tạo khai bằng cách **thêm** vào lớp con, "
+        "không phải bằng hai model rời."
+    )
+    create_only = set(spec.extra_fields.model_fields) - set(spec.extra_update_fields.model_fields)
+    assert create_only, (
+        f"{spec.slug}: hai model có cùng tập trường nên `extra_update_fields` không "
+        "nói thêm điều gì — bỏ nó đi thay vì để một khai báo không có tác dụng."
+    )
+    update_fields = set(build_schemas(spec).update.model_fields)
+    assert not (create_only & update_fields), (
+        f"{spec.slug}: trường chốt một lần {sorted(create_only & update_fields)} vẫn "
+        "xuất hiện trong thân request sửa."
+    )
+
+
 @pytest.mark.parametrize("spec", REGISTRY.specs(), ids=lambda spec: spec.slug)
 def test_response_model_carries_every_column(spec: CatalogSpec) -> None:
     """Model phản hồi = bộ chung + cột riêng, không thiếu trường nào.

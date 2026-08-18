@@ -12,9 +12,11 @@ cây thuần không bảng con, và phase 4 cần chúng để gắn vào dòng 
 
 Lát 3B-1 thêm mười ba danh mục còn lại thuộc loại "cây thuần" và bốn cột riêng
 lẻ (H50). Lát 3B-2 thêm đối tác (gộp khách hàng + nhà cung cấp, FR-SYS-031) cùng
-bảng con tài khoản ngân hàng của nó, và nhân viên. Còn thiếu, thuộc lát sau: vật
-tư hàng hóa cùng sáu bảng con (3B-3), hệ thống tài khoản (phase 5 — là gói cấu
-hình).
+bảng con tài khoản ngân hàng của nó, và nhân viên. Lát 3B-3 thêm vật tư hàng hóa
+cùng **hai** bảng con MUST của nó — đơn vị quy đổi (FR-SYS-041) và mã quy cách
+(FR-SYS-046, là trục khóa của bảng tồn kho phase 8 nên không hoãn được, H65);
+bảng giá, định mức nguyên vật liệu và bậc chiết khấu về phase 7/9 nơi có chỗ đọc
+chúng. Còn thiếu: hệ thống tài khoản (phase 5 — là gói cấu hình).
 
 Danh sách `__all__` ở đây là **danh sách nạp model** cho `ket.model_registry`;
 thứ quyết định danh mục nào hiện ra API là `registry.py` bên cạnh.
@@ -31,6 +33,9 @@ from ket.kernel.master_data.models.employee import Employee
 from ket.kernel.master_data.models.excise_tax_table import ExciseTaxTable
 from ket.kernel.master_data.models.expense_item import ExpenseItem
 from ket.kernel.master_data.models.invoice_form import InvoiceForm
+from ket.kernel.master_data.models.item import Item
+from ket.kernel.master_data.models.item_unit import ItemUnit
+from ket.kernel.master_data.models.item_variant import ItemVariant
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.master_data.models.partner_bank_account import PartnerBankAccount
 from ket.kernel.master_data.models.payment_term import PaymentTerm
@@ -53,6 +58,9 @@ __all__ = [
     "ExciseTaxTable",
     "ExpenseItem",
     "InvoiceForm",
+    "Item",
+    "ItemUnit",
+    "ItemVariant",
     "Partner",
     "PartnerBankAccount",
     "PaymentTerm",
