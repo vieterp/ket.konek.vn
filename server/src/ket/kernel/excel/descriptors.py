@@ -176,7 +176,13 @@ _COMMON_COLUMNS: Final[tuple[ColumnDescriptor, ...]] = (
         field="is_active",
         header="Còn theo dõi",
         kind=CellKind.BOOLEAN,
-        note="Để trống = còn theo dõi. x / không / 0 ở cột này nghĩa là đã ngừng theo dõi.",
+        # Câu cũ ("x / không / 0 ở cột này nghĩa là đã ngừng theo dõi") mô tả
+        # ngược chính `sql.is_active_expression`: ô **không** nằm trong
+        # `FALSE_WORDS` thì bản ghi còn theo dõi, nên `x` nghĩa là còn theo dõi
+        # chứ không phải đã ngừng. Người làm theo hướng dẫn ấy đánh `x` vào cả
+        # cột để "ngừng theo dõi" hàng loạt và nhận lại đúng điều ngược lại —
+        # không lỗi, không vết.
+        note="Để trống = còn theo dõi. Gõ `không` (hoặc `0`) để đánh dấu đã ngừng theo dõi.",
     ),
 )
 """Bộ cột chung của mọi danh mục, theo đúng thứ tự trên tệp mẫu.

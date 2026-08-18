@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import SchemaItem
 
 from ket.kernel.master_data.base import MasterDataRow, master_data_table_args
+from ket.kernel.master_data.row_rules import RowRule
 
 ASSET_TYPE_TABLE_NAME = "asset_types"
 
@@ -53,4 +54,21 @@ class AssetTypeFields(BaseModel):
 
     default_useful_life_months: int | None = Field(
         title="Thời gian sử dụng ngầm định (tháng)", default=None, gt=0
+    )
+
+
+def asset_type_row_rules() -> tuple[RowRule, ...]:
+    """Luật liên-trường mà bước nhập liệu phải kiểm được (H3).
+
+    `Field(gt=0)` ở trên chỉ ép đường API; nhập liệu ghi bằng `INSERT ... SELECT`
+    nên nó đi thẳng vào `CHECK` dưới DB nếu không có luật này — và người dùng đọc
+    "tệp hợp lệ" rồi nhận một `IntegrityError` thô.
+    """
+    return (
+        RowRule(
+            constraint="default_useful_life_months_positive",
+            field="default_useful_life_months",
+            message="Thời gian sử dụng ngầm định phải lớn hơn 0 (để trống nếu không gợi ý)",
+            violated=lambda row: row.value("default_useful_life_months") <= 0,
+        ),
     )

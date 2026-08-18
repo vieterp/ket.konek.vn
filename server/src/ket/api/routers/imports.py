@@ -48,8 +48,13 @@ from ket.kernel.excel.job import (
     IMPORT_VALIDATE,
     VALIDATE_IMPORT,
 )
-from ket.kernel.excel.report import ImportMode
-from ket.kernel.excel.template import build_template, template_file_name
+from ket.kernel.excel.missing_references import authorised_targets
+from ket.kernel.excel.report import ImportMode, MissingReferenceMode
+from ket.kernel.excel.template import (
+    XLSX_MEDIA_TYPE,
+    build_template,
+    template_file_name,
+)
 from ket.kernel.jobs import queue
 from ket.kernel.master_data.registry import REGISTRY as CATALOG_REGISTRY
 from ket.kernel.master_data.registry import CatalogSpec
@@ -58,8 +63,6 @@ from ket.kernel.security.permissions import Action
 from ket.settings import Settings
 
 router = APIRouter(prefix="/api/v1/master", tags=["master-data-import"])
-
-XLSX_MEDIA_TYPE: Final[str] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 IMPORT_MAX_BYTES: Final[int] = 32 * 1024 * 1024
 """Trần dung lượng một tệp nhập liệu.
@@ -78,9 +81,27 @@ def _storage_root(settings: Settings) -> Path:
     return settings.attachments_dir
 
 
+def _authorise_targets(authorized: AuthorizedRequest, targets: tuple[str, ...]) -> tuple[str, ...]:
+    """Danh mục đích mà **người này** được tạo bản ghi (FR-NFR-062, khuôn H89).
+
+    Kiểm quyền `create` trên **từng** danh mục đích rồi trả về danh sách đã
+    duyệt, thay vì `require` và ném `403`: người dùng có thể chỉ muốn tự tạo đơn
+    vị tính chứ không phải kho, và một `403` cho cả lượt nhập vì một danh mục họ
+    không đụng tới là một lời từ chối sai chỗ. Mã thiếu ở danh mục **không** được
+    duyệt vẫn là dòng lỗi như trước — người dùng thấy đúng thứ họ thiếu quyền.
+    """
+    return tuple(
+        slug
+        for slug in targets
+        if (target := CATALOG_REGISTRY.get(slug)) is not None
+        and authorized.access.has(target.permission_code(Action.CREATE))
+    )
+
+
 def _mount(spec: CatalogSpec) -> None:
     """Gắn ba endpoint nhập liệu của một danh mục."""
     descriptor = template_for(spec)
+    autocreate_targets = authorised_targets(spec, descriptor)
 
     @router.get(
         f"/{spec.slug}/template",
@@ -125,6 +146,7 @@ def _mount(spec: CatalogSpec) -> None:
         settings: AppSettings,
         file: Annotated[UploadFile, File()],
         mode: Annotated[ImportMode, Form()] = ImportMode.CREATE_ONLY,
+        missing_reference: Annotated[MissingReferenceMode, Form()] = MissingReferenceMode.ERROR,
     ) -> ImportValidateResponse:
         """Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
 
@@ -144,6 +166,7 @@ def _mount(spec: CatalogSpec) -> None:
             max_bytes=IMPORT_MAX_BYTES,
         )
         file_name = (file.filename or "nhap-lieu.xlsx")[:255]
+        allowed = _authorise_targets(authorized, autocreate_targets)
         with unit_of_work(factory, authorized.scope) as session:
             job = queue.enqueue(
                 session,
@@ -153,6 +176,8 @@ def _mount(spec: CatalogSpec) -> None:
                     "content_hash": stored.content_hash,
                     "file_name": file_name,
                     "mode": mode.value,
+                    "missing_reference": missing_reference.value,
+                    "allow_create_in": list(_authorise_targets(authorized, autocreate_targets)),
                 },
                 requested_by=authorized.scope.user_id,
                 branch_id=authorized.scope.acting_branch_id,
@@ -163,6 +188,8 @@ def _mount(spec: CatalogSpec) -> None:
                 file_name=file_name,
                 content_hash=stored.content_hash,
                 mode=mode,
+                missing_reference=missing_reference,
+                allow_create_in=allowed,
             )
 
     @router.post(
@@ -194,6 +221,7 @@ def _mount(spec: CatalogSpec) -> None:
                 job_type=COMMIT_IMPORT,
                 params={
                     "validation_job_id": str(payload.validation_job_id),
+                    "allow_create_in": list(_authorise_targets(authorized, autocreate_targets)),
                     # Danh mục mà lớp quyền ngay trên vừa xét (H89). Thân job từ
                     # chối nếu lượt kiểm được trỏ tới thuộc danh mục khác.
                     "catalog": spec.slug,

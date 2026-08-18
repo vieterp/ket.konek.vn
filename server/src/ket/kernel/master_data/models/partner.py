@@ -26,7 +26,16 @@ from __future__ import annotations
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Index, Numeric, String, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    and_,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import SchemaItem
 
@@ -35,6 +44,7 @@ from ket.kernel.master_data.base import (
     MasterDataRow,
     master_data_table_args,
 )
+from ket.kernel.master_data.row_rules import RowRule
 from ket.kernel.money import MONEY_SCALE_MAX
 
 PARTNER_TABLE_NAME = "partners"
@@ -164,3 +174,32 @@ class PartnerFields(BaseModel):
 
     payment_term_id: int | None = Field(default=None, title="Điều khoản thanh toán")
     credit_limit: Decimal | None = Field(title="Ngưỡng nợ", default=None, ge=0)
+
+
+def partner_row_rules() -> tuple[RowRule, ...]:
+    """Hai luật của đối tác (H3).
+
+    `partner_is_customer_or_vendor` là luật nghiệp vụ thật của FR-SYS-031: một
+    bản ghi không phải khách, không phải nhà cung cấp, và không phải nhóm thì nó
+    không xuất hiện ở **danh sách nào** — người dùng tạo xong rồi đi tìm mãi
+    không thấy.
+    """
+    return (
+        RowRule(
+            constraint="partner_is_customer_or_vendor",
+            field="is_customer",
+            message="Đối tác phải là khách hàng, hoặc nhà cung cấp, hoặc cả hai "
+            "(nhóm thì không cần)",
+            violated=lambda row: and_(
+                row.flag("is_group").is_(False),
+                row.flag("is_customer").is_(False),
+                row.flag("is_vendor").is_(False),
+            ),
+        ),
+        RowRule(
+            constraint="credit_limit_not_negative",
+            field="credit_limit",
+            message="Hạn mức nợ không được âm",
+            violated=lambda row: row.value("credit_limit") < 0,
+        ),
+    )

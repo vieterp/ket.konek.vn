@@ -7,6 +7,7 @@ Không cần PostgreSQL — descriptor, bộ sinh tệp và bộ đọc đều l
 from __future__ import annotations
 
 from io import BytesIO
+from typing import Final
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
@@ -418,3 +419,237 @@ def test_a_column_learns_its_length_limit_from_the_real_column() -> None:
     """
     swift = template_for(_spec("banks")).column("swift_code")
     assert swift is not None and swift.max_length == 11
+
+
+# ------------------------------------------ tiêu đề cột là hợp đồng (nợ L6)
+
+
+"""Dòng tiêu đề của **mọi** danh mục, ghim nguyên văn.
+
+Đây là một cổng chống-đổi, không phải một phép kiểm đúng-sai: `header` của một
+cột là **hợp đồng công khai** (FR-SYS-082 — tệp đổi tên cột thì không nhận), nên
+đổi `title=` của một trường ORM là một breaking change với mọi tệp mà khách hàng
+đang giữ trên máy họ. Triệu chứng không nằm ở phía người sửa: nó nằm ở một kế
+toán mở lại bảng tính đã dùng suốt quý trước và bị máy chủ từ chối.
+
+Cột `header` sinh từ `title=` của model (H77) nên nó **đổi được mà không ai
+thấy** — chính vì thế nó cần một bản ghim. Đỏ ở đây không có nghĩa là sai; nó
+có nghĩa là: hoặc trả lại tên cũ, hoặc chấp nhận phá tệp của khách hàng và cập
+nhật bản ghim cùng một lần sửa, có chủ đích.
+
+Ghim cả dấu `*` vì dấu sao cũng là một phần của tiêu đề được so từng ký tự
+(`ColumnDescriptor.display_header`) — một trường đổi từ bắt buộc sang tùy chọn
+làm hỏng tệp cũ đúng như một lần đổi tên.
+"""
+
+PINNED_HEADERS: Final[dict[str, tuple[str, ...]]] = {
+    "asset_types": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+        "Thời gian sử dụng ngầm định (tháng)",
+    ),
+    "banks": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+        "Tên viết tắt",
+        "Mã SWIFT",
+    ),
+    "contracts": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "cost_objects": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "document_types": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "employees": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+        "Phòng ban",
+        "Chức danh",
+        "Số CMND/CCCD",
+        "Mã số thuế TNCN",
+        "Điện thoại",
+        "Email",
+        "Mã ngân hàng",
+        "Số tài khoản nhận lương",
+        "Chủ tài khoản",
+    ),
+    "excise_tax_tables": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "expense_items": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "invoice_forms": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "items": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+        "Mã kho ngầm định",
+        "Diễn giải",
+        "Tính chất",
+        "Mã đơn vị chính",
+    ),
+    "partners": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+        "Là khách hàng",
+        "Là nhà cung cấp",
+        "Là tổ chức",
+        "Mã số thuế",
+        "Địa chỉ",
+        "Quốc gia",
+        "Tỉnh/Thành phố",
+        "Quận/Huyện",
+        "Người liên hệ",
+        "Điện thoại",
+        "Email",
+        "Website",
+        "Người nhận hóa đơn",
+        "Email nhận hóa đơn",
+        "Mã điều khoản thanh toán",
+        "Ngưỡng nợ",
+    ),
+    "payment_terms": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+        "Số ngày được nợ",
+        "Số ngày hưởng chiết khấu",
+        "Tỷ lệ chiết khấu (%)",
+    ),
+    "pit_tables": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "project_types": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "projects": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "resource_tax_tables": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "timekeeping_symbols": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "tool_types": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+        "Thời gian phân bổ ngầm định (tháng)",
+    ),
+    "units_of_measure": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+    "warehouses": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+    ),
+}
+
+
+def test_the_column_headers_of_every_catalog_are_unchanged() -> None:
+    """So từng danh mục một, để câu báo lỗi nói thẳng danh mục nào vừa đổi."""
+    actual = {spec.slug: template_for(spec).headers for spec in REGISTRY.specs()}
+    assert set(actual) == set(PINNED_HEADERS), (
+        "danh mục vừa được thêm hoặc gỡ — thêm (hoặc bỏ) dòng tương ứng ở PINNED_HEADERS"
+    )
+    for slug, headers in actual.items():
+        assert headers == PINNED_HEADERS[slug], (
+            f"tiêu đề cột của danh mục {slug!r} đã đổi — mọi tệp khách hàng đang giữ "
+            f"sẽ bị từ chối ở phép kiểm cấu trúc (FR-SYS-082)"
+        )

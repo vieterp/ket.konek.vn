@@ -102,6 +102,24 @@ def _sheet_of(
     return workbook, workbook[descriptor.sheet_name]
 
 
+def uncompressed_size(path_or_stream: IO[bytes]) -> int | None:
+    """Tổng kích thước **sau giải nén** đọc từ mục lục zip, hoặc `None` nếu không phải zip.
+
+    Đọc con số ghi sẵn trong mục lục (`ZipInfo.file_size`) nên không giải nén
+    byte nào. Công khai vì **bộ xuất** cũng phải hỏi đúng câu này: một tệp nó
+    sinh ra mà vượt trần của bộ nhập là một tệp hệ thống tự từ chối
+    (`exporter.build_export`).
+    """
+    position = path_or_stream.tell()
+    try:
+        with ZipFile(path_or_stream) as archive:
+            return sum(item.file_size for item in archive.infolist())
+    except BadZipFile:
+        return None
+    finally:
+        path_or_stream.seek(position)
+
+
 def _ensure_within_zip_budget(path_or_stream: IO[bytes]) -> None:
     """Từ chối tệp mà **nội dung đã giải nén** vượt trần, trước khi mở nó.
 
@@ -118,15 +136,10 @@ def _ensure_within_zip_budget(path_or_stream: IO[bytes]) -> None:
     Tệp hợp lệ 10.000 dòng × 15 cột giải nén ra khoảng vài MB, nên trần 512 MB
     rộng hơn hai bậc — nó chỉ chạm những tệp không ai soạn bằng tay.
     """
-    position = path_or_stream.tell()
-    try:
-        with ZipFile(path_or_stream) as archive:
-            total = sum(item.file_size for item in archive.infolist())
-    except BadZipFile:
+    total = uncompressed_size(path_or_stream)
+    if total is None:
         # Không phải zip: `load_workbook` sẽ nói câu đó rõ hơn ta.
         return
-    finally:
-        path_or_stream.seek(position)
     if total > MAX_UNCOMPRESSED_BYTES:
         raise ImportTooManyRowsError(
             "Tệp giải nén ra lớn hơn mức cho phép — hãy xóa vùng trống phía dưới "

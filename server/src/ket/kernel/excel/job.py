@@ -34,7 +34,7 @@ from ket.kernel.errors import (
     ImportSourceNotValidatedError,
 )
 from ket.kernel.excel.pipeline import run_import
-from ket.kernel.excel.report import ImportMode, ImportReport
+from ket.kernel.excel.report import ImportMode, ImportReport, MissingReferenceMode
 from ket.kernel.jobs.models import JobStatus, ResumeSemantics
 from ket.kernel.jobs.queue import get_job
 from ket.kernel.jobs.registry import REGISTRY, JobContext, JobResult, JobType
@@ -82,6 +82,22 @@ class ImportValidateParams(BaseModel):
     mode: ImportMode = ImportMode.CREATE_ONLY
     """Mặc định `CREATE_ONLY` (H80) — chế độ ghi đè phải do người dùng chọn."""
 
+    missing_reference: MissingReferenceMode = MissingReferenceMode.ERROR
+    """Mã tra cứu không tìm thấy: báo lỗi, hay tự tạo (FR-NFR-062)."""
+
+    allow_create_in: tuple[str, ...] = ()
+    """Danh mục đích mà **endpoint đã kiểm quyền `create`** (H89).
+
+    Thừa về mặt dữ liệu — thân job tự suy được danh sách danh mục *tự tạo được*
+    từ registry — và đó chính là điểm: nó là bằng chứng rằng tầng HTTP đã hỏi
+    lớp quyền per-danh-mục về **từng** danh mục đích. Thân job chỉ tạo trong danh
+    sách này, nên không có đường nào tự tạo vào một danh mục mà người bấm nút
+    không có quyền tạo.
+
+    Cùng khuôn với `ImportCommitParams.catalog`: hai chỗ phải khớp, và chỗ duy
+    nhất xếp hàng được job này là endpoint (`direct_enqueue=False`).
+    """
+
 
 class ImportCommitParams(BaseModel):
     """Tham số của lượt ghi: **trỏ vào một lượt kiểm đã thành công**.
@@ -92,6 +108,14 @@ class ImportCommitParams(BaseModel):
     """
 
     validation_job_id: UUID
+
+    allow_create_in: tuple[str, ...] = ()
+    """Như ở `ImportValidateParams`: danh mục đích mà endpoint vừa kiểm quyền.
+
+    Khai lại ở lượt **ghi** chứ không đọc từ báo cáo của lượt kiểm: quyền phải
+    được kiểm ở đúng lúc bấm nút ghi, bởi đúng người bấm nút ấy. Lượt kiểm có
+    thể do một người khác chạy từ hôm trước, và vai trò thì đổi được.
+    """
 
     catalog: str = Field(min_length=1, max_length=100)
     """Danh mục mà **endpoint** đã kiểm quyền trên đó (H89).
@@ -143,6 +167,8 @@ def run_validate(context: JobContext, params: ImportValidateParams) -> JobResult
             content_hash=params.content_hash,
             mode=params.mode,
             commit=False,
+            missing_reference=params.missing_reference,
+            allow_create_in=frozenset(params.allow_create_in),
         )
     return _as_result(report)
 
@@ -171,6 +197,12 @@ def run_commit(context: JobContext, params: ImportCommitParams) -> JobResult:
             content_hash=source_report.content_hash,
             mode=source_report.mode,
             commit=True,
+            # Lấy lại từ **báo cáo của lượt kiểm**, không từ tham số của lượt
+            # ghi: người dùng đã đọc con số "sẽ tạo thêm N" của đúng lượt kiểm
+            # ấy, nên lượt ghi phải làm đúng thứ đã hứa. `_validated_report` đã
+            # khẳng định báo cáo thuộc dataset này và đúng danh mục (H89).
+            missing_reference=source_report.missing_reference,
+            allow_create_in=frozenset(params.allow_create_in),
         )
     return _as_result(report)
 

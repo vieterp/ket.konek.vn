@@ -980,6 +980,54 @@ class ImportTooManyRowsError(DomainError):
     error_code: ClassVar[str] = "import.too_many_rows"
 
 
+class BankStatementFileUnreadableError(DomainError):
+    """Tệp sao kê không mở được (hỏng, sai định dạng, sai bảng mã)."""
+
+    error_code: ClassVar[str] = "bank_statement.file_unreadable"
+
+
+class BankStatementColumnMissingError(DomainError):
+    """Hồ sơ khai một cột mà tệp sao kê không có.
+
+    Lỗi **cấu trúc**, nên nó dừng cả lượt thay vì thành một dòng lỗi: hồ sơ không
+    khớp tệp thì mọi dòng đều hỏng theo cùng một cách, và vài nghìn dòng lỗi
+    giống hệt nhau che mất đúng một việc người dùng phải làm — sửa hồ sơ, hoặc
+    nộp đúng tệp.
+    """
+
+    error_code: ClassVar[str] = "bank_statement.column_missing"
+
+
+class BankStatementColumnAmbiguousError(DomainError):
+    """Tệp sao kê có nhiều cột cùng tên mà hồ sơ trỏ tới.
+
+    Lỗi **cấu trúc** như `BankStatementColumnMissingError`: lấy đại cột đầu tiên
+    là đúng loại lỗi mà việc định vị theo tên sinh ra để tránh — mọi dòng vẫn
+    đọc được, mọi con số lấy từ nhầm cột.
+    """
+
+    error_code: ClassVar[str] = "bank_statement.column_ambiguous"
+
+
+class BankStatementFormatUnsupportedError(DomainError):
+    """Dạng tệp khai trong hồ sơ chưa có bộ đọc trong bản cài này (MT940)."""
+
+    error_code: ClassVar[str] = "bank_statement.format_unsupported"
+
+
+class ExportTooManyRowsError(DomainError):
+    """Danh mục có nhiều dòng hơn mức một tệp xuất chứa được.
+
+    Ném ở **hai** ngưỡng, và cả hai đều phục vụ một bất biến: tệp xuất ra phải
+    nhập lại được. `exporter.MAX_EXPORT_ROWS` chặn theo số dòng *trước* khi dựng
+    tệp; phép đo byte sau giải nén chặn theo dung lượng *sau* khi dựng — cần cả
+    hai vì số byte mỗi dòng đổi theo **nội dung** (chữ tiếng Việt tốn 3 byte
+    UTF-8 mỗi ký tự), nên không hằng số nào đoán trước được nó.
+    """
+
+    error_code: ClassVar[str] = "export.too_many_rows"
+
+
 class ImportSourceNotValidatedError(DomainError):
     """Bước ghi trỏ vào một lượt kiểm không dùng được (H78).
 

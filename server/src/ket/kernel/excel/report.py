@@ -38,6 +38,30 @@ class ImportMode(StrEnum):
     CREATE_AND_UPDATE = "create_and_update"
 
 
+class MissingReferenceMode(StrEnum):
+    """Làm gì với một ô tra cứu mang mã chưa có trong danh mục đích (FR-NFR-062).
+
+    Mặc định `ERROR` ở mọi nơi khai giá trị này, cùng lý do với `ImportMode`:
+    `CREATE` ghi vào một danh mục **khác** danh mục người dùng đang nhập, nên nó
+    phải là thứ họ chọn — và chọn sau khi đọc con số "sẽ tạo thêm 12 đơn vị tính"
+    trong báo cáo của lượt kiểm.
+    """
+
+    ERROR = "error"
+    CREATE = "create"
+    """Tạo bản ghi tối thiểu (mã + tên bằng chính mã ấy) ở danh mục đích.
+
+    Chỉ áp cho danh mục **tự tạo được** — xem `CatalogSpec.auto_creatable`. Tên
+    đặt bằng chính cái mã để bản ghi sinh ra nhìn là biết cần đặt lại tên: một
+    bản ghi tên "Chưa đặt tên" trông như dữ liệu thật, còn một bản ghi tên `DVT01`
+    thì không.
+
+    **Không** áp cho cột mã nhóm cha: nhóm cha trỏ về chính danh mục đang nhập, và
+    tệp được phép khai cả cây trong một lượt (xem `staging._declared_in_file`).
+    Tự tạo ở đó sẽ biến một mã nhóm cha gõ sai thành một nút rác thay vì một lỗi.
+    """
+
+
 class RowError(BaseModel):
     """Một lỗi, gắn với đúng một ô.
 
@@ -77,6 +101,7 @@ class ImportReport(BaseModel):
     khác cho biết lượt nhập này thuộc danh mục nào."""
 
     mode: ImportMode
+    missing_reference: MissingReferenceMode = MissingReferenceMode.ERROR
     file_name: str
     content_hash: str
     """SHA-256 của tệp đã kiểm. Đây là mấu chốt của H78: bước ghi so lại giá trị
@@ -88,6 +113,17 @@ class ImportReport(BaseModel):
     update_rows: int = 0
     """Với `CREATE_ONLY` thì luôn 0 — mã đã tồn tại là dòng lỗi, không phải dòng
     sẽ cập nhật."""
+
+    created_references: dict[str, int] = Field(default_factory=dict)
+    """`{slug danh mục đích: số bản ghi sẽ tạo thêm}` (FR-NFR-062).
+
+    Có mặt cả ở lượt **kiểm** — nơi nó là dự báo, và là con số người dùng phải
+    đọc trước khi bật chế độ tự tạo — lẫn ở lượt **ghi**, nơi nó là kết quả. Rỗng
+    khi `missing_reference` là `ERROR`.
+
+    Khóa là `slug` chứ không nhãn tiếng Việt: client dựng câu từ registry mà nó
+    đã có, và một nhãn đi vào `jobs.result` sẽ đóng băng bản dịch của ngày hôm nay.
+    """
 
     error_rows: int = 0
     """Số dòng **có lỗi**, không phải số lỗi: một dòng sai ba ô vẫn là một dòng

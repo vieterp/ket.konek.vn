@@ -52,6 +52,7 @@ from ket.api.routers.attachments import ATTACHMENTS_PREFIX
 from ket.api.routers.attachments import router as attachments_router
 from ket.api.routers.auth import router as auth_router
 from ket.api.routers.dimensions import router as dimensions_router
+from ket.api.routers.exports import router as exports_router
 from ket.api.routers.imports import router as imports_router
 from ket.api.routers.items_units import router as item_units_router
 from ket.api.routers.items_variants import router as item_variants_router
@@ -241,6 +242,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # thì mọi lượt tải tệp mẫu nhận `422` ("template" không phải số nguyên)
     # thay vì nhận tệp. `tests/test_import_api.py` canh thứ tự này.
     app.include_router(imports_router)
+    # Cùng cái bẫy thứ tự với `imports_router` ngay trên: `GET /{slug}/export`
+    # bị `GET /{slug}/{record_id}` của `master_data_router` nuốt nếu đăng ký sau.
+    app.include_router(exports_router)
     app.include_router(master_data_router)
     app.include_router(partner_bank_accounts_router)
     app.include_router(item_units_router)

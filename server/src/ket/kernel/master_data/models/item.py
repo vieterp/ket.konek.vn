@@ -37,9 +37,10 @@ một con số sai âm thầm trong sổ kho.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Final
 
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, Index, String
+from sqlalchemy import CheckConstraint, Enum, ForeignKey, Index, String, and_, or_
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import SchemaItem
 
@@ -48,6 +49,7 @@ from ket.kernel.master_data.base import (
     MasterDataRow,
     master_data_table_args,
 )
+from ket.kernel.master_data.row_rules import RowRule
 
 ITEM_TABLE_NAME = "items"
 
@@ -125,6 +127,13 @@ _INVENTORY_NATURE_SQL = ", ".join(f"'{nature.value}'" for nature in sorted(INVEN
 
 
 _ALL_NATURE_SQL = ", ".join(f"'{nature.value}'" for nature in ItemNature)
+
+_INVENTORY_NATURE_VALUES: Final[tuple[str, ...]] = tuple(
+    nature.value for nature in sorted(INVENTORY_NATURES)
+)
+"""Cùng tập với `_INVENTORY_NATURE_SQL`, ở dạng Python dùng được trong biểu thức
+Core của `item_row_rules`. Cả hai đọc từ `INVENTORY_NATURES` nên không có bản
+sao nào để trôi — thêm một tính chất có tồn kho chỉ phải sửa một chỗ."""
 
 
 def _item_table_args() -> tuple[SchemaItem, ...]:
@@ -297,3 +306,59 @@ class ItemFields(ItemEditableFields):
         if self.nature not in INVENTORY_NATURES and self.warehouse_id is not None:
             raise ValueError("Dịch vụ và dòng diễn giải không nhận kho ngầm định")
         return self
+
+
+def item_row_rules() -> tuple[RowRule, ...]:
+    """Bốn luật của vật tư hàng hóa (H3) — bộ đắt nhất trong cả registry.
+
+    `nature_known` **không** có mặt ở đây: nó đã được `staging._allowed_value_errors`
+    kiểm từ lát 3C-1 (R2-1), bằng tập giá trị đọc từ chính kiểu cột. Khai lại là
+    hai câu báo lỗi cho một ô sai.
+
+    Vì sao cả bốn đều đáng: chúng là bộ luật mà H76 dựng ra để `nature` **quyết
+    định hành vi** (FR-SYS-040). Bước nhập liệu là đường ghi thứ ba vào chúng —
+    sau đường tạo và đường sửa — và nó là đường duy nhất tạo mười nghìn bản ghi
+    trong một lần bấm nút.
+    """
+    return (
+        RowRule(
+            constraint="nature_set_unless_group",
+            field="nature",
+            message="Vật tư hàng hóa phải có tính chất (chỉ nút nhóm được để trống)",
+            violated=lambda row: and_(
+                row.flag("is_group").is_(False), row.value("nature").is_(None)
+            ),
+        ),
+        RowRule(
+            constraint="group_carries_no_item_data",
+            field="nature",
+            message="Nút nhóm không được khai tính chất, đơn vị chính hay kho ngầm định",
+            violated=lambda row: and_(
+                row.flag("is_group"),
+                or_(
+                    row.value("nature").is_not(None),
+                    row.value("base_unit_code").is_not(None),
+                    row.value("warehouse_code").is_not(None),
+                ),
+            ),
+        ),
+        RowRule(
+            constraint="stock_item_needs_base_unit",
+            field="base_unit_code",
+            message="Hàng hóa và thành phẩm phải có đơn vị tính chính",
+            violated=lambda row: and_(
+                row.flag("is_group").is_(False),
+                row.value("nature").in_(_INVENTORY_NATURE_VALUES),
+                row.value("base_unit_code").is_(None),
+            ),
+        ),
+        RowRule(
+            constraint="default_warehouse_needs_stock_nature",
+            field="warehouse_code",
+            message="Chỉ hàng hóa và thành phẩm mới nhận kho ngầm định",
+            violated=lambda row: and_(
+                row.value("warehouse_code").is_not(None),
+                row.value("nature").notin_(_INVENTORY_NATURE_VALUES),
+            ),
+        ),
+    )
