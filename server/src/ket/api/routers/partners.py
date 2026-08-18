@@ -31,7 +31,7 @@ from ket.api.dependencies import (
     require_permission,
 )
 from ket.api.idempotency import idempotency_key_dependency
-from ket.api.routers.master_data import ensure_catalog_choice, ensure_visible
+from ket.api.routers.master_data_guards import ensure_catalog_choice, ensure_visible
 from ket.api.routers.partners_schemas import (
     PartnerBankAccountCreateRequest,
     PartnerBankAccountListResponse,
@@ -163,7 +163,10 @@ def add_bank_account(
         authorized.scope,
         route_key=ADD_ROUTE,
         key=idempotency_key,
-        fingerprint=fingerprint_of(body.model_dump_json()),
+        # `partner_id` vào vân tay — xem lập luận M-6 ở `items_units.py`: cùng
+        # khóa + cùng thân request gửi lên **đối tác khác** vốn bị coi là lượt
+        # phát lại và trả `404` thay vì tạo dòng.
+        fingerprint=fingerprint_of(f"{partner_id}:{body.model_dump_json()}"),
         work=work,
         replay=replay,
         ttl=timedelta(hours=settings.idempotency_ttl_hours),

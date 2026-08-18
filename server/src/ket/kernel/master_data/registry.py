@@ -33,6 +33,11 @@ from sqlalchemy.orm import Session
 
 from ket.kernel.master_data.bank_account_service import PartnerBankAccountMergeHook
 from ket.kernel.master_data.base import MasterDataRow
+from ket.kernel.master_data.item_unit_service import (
+    ItemUnitOfItemMergeHook,
+    UnitOfMeasureMergeHook,
+)
+from ket.kernel.master_data.item_variant_service import ItemVariantMergeHook
 from ket.kernel.master_data.models.asset_type import AssetType, AssetTypeFields
 from ket.kernel.master_data.models.bank import Bank, BankFields
 from ket.kernel.master_data.models.contract import Contract
@@ -42,6 +47,12 @@ from ket.kernel.master_data.models.employee import Employee, EmployeeFields
 from ket.kernel.master_data.models.excise_tax_table import ExciseTaxTable
 from ket.kernel.master_data.models.expense_item import ExpenseItem
 from ket.kernel.master_data.models.invoice_form import InvoiceForm
+from ket.kernel.master_data.models.item import (
+    Item,
+    ItemEditableFields,
+    ItemFields,
+    ItemUpdateGuard,
+)
 from ket.kernel.master_data.models.partner import Partner, PartnerFields
 from ket.kernel.master_data.models.payment_term import PaymentTerm, PaymentTermFields
 from ket.kernel.master_data.models.pit_table import PitTable
@@ -83,6 +94,27 @@ class MergeHook(Protocol):
 
     def after_move(self, session: Session, *, target_id: int) -> None:
         """Chạy sau khi chuyển xong, trước khi xóa bản ghi nguồn."""
+        ...
+
+
+class UpdateGuard(Protocol):
+    """Luật liên-trường của một danh mục ở đường **sửa** (review H-4).
+
+    Vì sao không phải một validator Pydantic như luật của đường tạo: những luật
+    này cần biết giá trị **đang có** của một cột mà thân request sửa cố ý không
+    mang theo (trường chốt một lần, `extra_update_fields`). Vật tư hàng hóa là ca
+    đầu tiên: "kho ngầm định chỉ cho thứ đi qua kho" cần `nature`, mà `nature`
+    khai một lần lúc tạo nên nó không có trong thân request sửa.
+
+    Không thay `CHECK` phía DB — chỗ bảo đảm vẫn là DB, vì mọi đường ghi đi qua
+    nó kể cả nhập liệu và SQL của gói cấu hình phase 5. Thứ nó thêm được là **câu
+    tiếng Việt nêu ô phải sửa**: không có nó, đường sửa trả `422` kèm tên một
+    ràng buộc nội bộ trong khi đường tạo cùng dữ liệu trả một câu đọc được — đúng
+    kiểu lệch mà review L3 của lát 3B-2 đã bắt ở nhân viên.
+    """
+
+    def check(self, record: MasterDataRow, payload: BaseModel) -> None:
+        """Ném `DomainError` khi thân request mâu thuẫn với bản ghi đang có."""
         ...
 
 
@@ -152,10 +184,29 @@ class CatalogSpec:
     extra_fields: type[BaseModel] | None = None
     """Cột riêng ngoài bộ chung của `MasterDataRow`, nếu danh mục có.
 
-    `None` cho danh mục thuần cây — mười một trong mười bảy danh mục hiện tại.
+    `None` cho danh mục thuần cây — mười một trong mười tám danh mục hiện tại.
     Khi có, model này phải khai **đúng** tập cột riêng của bảng: thừa một trường
     thì API nhận một giá trị không có chỗ lưu, thiếu một trường thì có cột không
     ai đặt được. `test_master_data_registry.py` canh cả hai chiều.
+
+    Đây là tập cột riêng của đường **tạo mới**; đường sửa dùng
+    `extra_update_fields` khi danh mục có trường chốt một lần.
+    """
+
+    extra_update_fields: type[BaseModel] | None = None
+    """Tập cột riêng **sửa được**, khi nó hẹp hơn `extra_fields` (H69).
+
+    `None` = sửa được hết, đúng bằng `extra_fields`. Có giá trị nghĩa là danh mục
+    có trường **chỉ khai lúc tạo**: vật tư hàng hóa chốt `nature` và
+    `base_unit_id` một lần, vì đổi chúng làm số tồn và mọi tỷ lệ quy đổi đã khai
+    sai lặng lẽ — con số giữ nguyên, nghĩa của nó đổi.
+
+    Diễn đạt bằng **quan hệ kế thừa** (`extra_fields` là lớp con của
+    `extra_update_fields`) chứ không bằng một danh sách tên trường: nhờ vậy thân
+    request tạo mới thừa hưởng trọn validator của thân request sửa, nên không có
+    luật nào chỉ áp cho một trong hai đường. Một danh sách tên trường thì lại là
+    một chỗ nữa gõ tên cột bằng chuỗi. `test_master_data_registry.py` khẳng định
+    đúng quan hệ ấy.
     """
 
     flags: tuple[CatalogFlag, ...] = ()
@@ -164,8 +215,28 @@ class CatalogSpec:
     references: tuple[CatalogReference, ...] = ()
     """Cột khóa ngoại trỏ sang danh mục khác — xem `CatalogReference`."""
 
-    merge_hook: MergeHook | None = None
-    """Luật hợp nhất bảng con khi gộp hai bản ghi — xem `MergeHook`."""
+    update_guard: UpdateGuard | None = None
+    """Luật liên-trường ở đường sửa, khi nó cần giá trị **đang có** — xem `UpdateGuard`.
+
+    Một, không phải tuple như `merge_hooks`: hook gộp gắn với **từng bảng con**
+    nên số lượng đi theo số bảng con, còn luật liên-trường của một danh mục thì
+    thuộc về chính danh mục ấy và viết gọn trong một chỗ.
+    """
+
+    merge_hooks: tuple[MergeHook, ...] = ()
+    """Luật hợp nhất bảng con khi gộp hai bản ghi — xem `MergeHook`.
+
+    Nhiều hook chứ không một (H70): vật tư hàng hóa có **hai** bảng con mang ràng
+    buộc duy nhất (đơn vị quy đổi và mã quy cách), và `item_units` mang ràng buộc
+    duy nhất theo **cả hai** cột danh mục của nó nên đơn vị tính cũng cần một hook.
+    Một trường đơn sẽ buộc gộp chúng vào một hook tổng hợp biết tên mọi bảng con —
+    trái đúng lý do H64 đặt luật hợp nhất cạnh dịch vụ của chính bảng con.
+
+    Chạy theo thứ tự khai. Hook nào từ chối cả lần gộp (`base_unit_differs`) nên
+    đứng trước hook chỉ dọn dữ liệu, để lần gộp không hợp lệ dừng trước khi có gì
+    bị xóa — dù transaction quay lui thì nhật ký cũng không phải kể một chuyện
+    không xảy ra.
+    """
 
     def __post_init__(self) -> None:
         validate_identifier(self.slug)
@@ -240,7 +311,7 @@ dữ liệu kế toán mới — đều thấy đủ mã quyền danh mục.
 
 
 def _register_all() -> None:
-    """Mười chín danh mục của lát 3A + 3B-1 + 3B-2.
+    """Hai mươi danh mục của lát 3A + 3B-1 + 3B-2 + 3B-3.
 
     Xếp theo nhóm nghiệp vụ chứ không theo bảng chữ cái: người đọc tệp này đang
     tìm "danh mục kho nằm ở đâu", không tìm chữ cái. Thứ tự **xuất ra** thì đã
@@ -263,7 +334,7 @@ def _register_all() -> None:
             references=(CatalogReference(field="payment_term_id", slug="payment_terms"),),
             # Bảng con `partner_bank_accounts` mang hai ràng buộc duy nhất theo
             # `partner_id`, nên gộp phải có bước chuẩn bị (review H1).
-            merge_hook=PartnerBankAccountMergeHook(),
+            merge_hooks=(PartnerBankAccountMergeHook(),),
         ),
         CatalogSpec(
             slug="employees",
@@ -278,8 +349,30 @@ def _register_all() -> None:
         CatalogSpec(slug="project_types", model=ProjectType, title="Loại công trình"),
         CatalogSpec(slug="contracts", model=Contract, title="Hợp đồng"),
         # Vật tư – kho
+        CatalogSpec(
+            slug="items",
+            model=Item,
+            title="Vật tư hàng hóa",
+            extra_fields=ItemFields,
+            # `nature` và `base_unit_id` chốt một lần lúc tạo (H69).
+            extra_update_fields=ItemEditableFields,
+            update_guard=ItemUpdateGuard(),
+            references=(
+                CatalogReference(field="base_unit_id", slug="units_of_measure"),
+                CatalogReference(field="warehouse_id", slug="warehouses"),
+            ),
+            # Hook từ chối (`base_unit_differs`) đứng trước hook dọn dữ liệu.
+            merge_hooks=(ItemUnitOfItemMergeHook(), ItemVariantMergeHook()),
+        ),
         CatalogSpec(slug="warehouses", model=Warehouse, title="Kho"),
-        CatalogSpec(slug="units_of_measure", model=UnitOfMeasure, title="Đơn vị tính"),
+        CatalogSpec(
+            slug="units_of_measure",
+            model=UnitOfMeasure,
+            title="Đơn vị tính",
+            # `item_units` mang ràng buộc duy nhất theo **cả** `unit_id`, nên gộp
+            # hai đơn vị tính đụng nó ở mọi mã hàng đã khai tỷ lệ cho cả hai.
+            merge_hooks=(UnitOfMeasureMergeHook(),),
+        ),
         # Tài sản
         CatalogSpec(
             slug="asset_types",

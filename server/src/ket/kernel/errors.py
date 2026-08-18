@@ -748,6 +748,56 @@ class MasterDataMergeRefusedError(DomainError):
     http_status: ClassVar[int] = 409
 
 
+class ItemUnitDuplicatesBaseError(DomainError):
+    """Khai đơn vị quy đổi trùng với **đơn vị chính** của mã hàng (FR-SYS-041).
+
+    Đơn vị chính luôn có tỷ lệ 1 và không nằm trong bảng đơn vị quy đổi. Nhận
+    dòng này sẽ tạo ra hai tỷ lệ cho cùng một đơn vị — một cái ngầm định bằng 1,
+    một cái người dùng khai — và không câu truy vấn nào chọn được cái đúng.
+    """
+
+    error_code: ClassVar[str] = "item.unit_duplicates_base"
+
+
+class ItemBaseUnitMissingError(DomainError):
+    """Khai đơn vị quy đổi cho mã hàng **chưa có đơn vị chính** (FR-SYS-041).
+
+    Tỷ lệ quy đổi mang nghĩa "bao nhiêu đơn vị chính cho một đơn vị này", nên khi
+    chưa có đơn vị chính thì con số ấy không quy về đâu cả. Dịch vụ và dòng diễn
+    giải được phép không có đơn vị chính; chúng cũng không có đơn vị quy đổi.
+
+    `409`: yêu cầu hợp lệ, chỉ là phải làm một việc khác trước — mà việc đó là
+    khai lại mã hàng, vì đơn vị chính chốt một lần lúc tạo (H69).
+    """
+
+    error_code: ClassVar[str] = "item.base_unit_missing"
+    http_status: ClassVar[int] = 409
+
+
+class ItemWarehouseNotAllowedError(DomainError):
+    """Đặt kho ngầm định cho mã hàng **không** đi qua kho (SRS §6.2 tab Ngầm định).
+
+    Có lớp lỗi riêng cho đường **sửa** vì đường **tạo** bắt cùng luật này ở thân
+    request (validator của `ItemFields`) và trả câu tiếng Việt; không có nó thì
+    đường sửa rơi xuống `CHECK` phía DB và trả về tên một ràng buộc nội bộ cho
+    cùng một sai sót — xem `registry.UpdateGuard`.
+    """
+
+    error_code: ClassVar[str] = "item.warehouse_not_allowed"
+
+
+class ItemVariantNotSupportedError(DomainError):
+    """Khai mã quy cách cho mã hàng **không theo dõi tồn kho** (FR-SYS-046).
+
+    Quy cách là một trục của báo cáo tồn kho (xem `models/item_variant.py`), nên
+    quy cách của một dịch vụ là một chiều phân tích không có gì để phân tích —
+    không màn hình nào hiển thị nó và không báo cáo nào cộng theo nó.
+    """
+
+    error_code: ClassVar[str] = "item.variant_not_supported"
+    http_status: ClassVar[int] = 409
+
+
 class DimensionNotFoundError(DomainError):
     """Không có chiều phân tích mở rộng với mã này (LD-08, FR-SYS-051)."""
 

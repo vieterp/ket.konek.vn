@@ -1483,6 +1483,226 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vật tư hàng hóa — danh sách
+         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         *
+         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
+         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
+         *     cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_items_get"];
+        put?: never;
+        /**
+         * Vật tư hàng hóa — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vật tư hàng hóa — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_items_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{item_id}/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vật tư hàng hóa — đơn vị quy đổi
+         * @description Đơn vị quy đổi của một mã hàng, tỷ lệ lớn trước.
+         *
+         *     **Không** phân trang, khác đường đọc danh mục: một mã hàng có vài đơn vị, không
+         *     phải vài nghìn. Thêm phân trang ở đây là thêm hai tham số mà mọi màn hình sẽ
+         *     truyền giá trị mặc định.
+         */
+        get: operations["list_item_units_api_v1_master_items__item_id__units_get"];
+        put?: never;
+        /**
+         * Vật tư hàng hóa — thêm đơn vị quy đổi
+         * @description Thêm một đơn vị quy đổi — thực hiện đúng một lần (FR-NFR-004).
+         */
+        post: operations["add_item_unit_api_v1_master_items__item_id__units_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{item_id}/units/{row_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Vật tư hàng hóa — sửa đơn vị quy đổi
+         * @description Sửa đơn vị hoặc tỷ lệ của một dòng.
+         */
+        put: operations["update_item_unit_api_v1_master_items__item_id__units__row_id__put"];
+        post?: never;
+        /**
+         * Vật tư hàng hóa — xóa đơn vị quy đổi
+         * @description Xóa một đơn vị quy đổi khỏi hồ sơ mã hàng.
+         */
+        delete: operations["delete_item_unit_api_v1_master_items__item_id__units__row_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{item_id}/variants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vật tư hàng hóa — mã quy cách
+         * @description Quy cách của một mã hàng, theo mã.
+         *
+         *     **Không** phân trang: một mã hàng có vài chục quy cách nhiều nhất (màu × size),
+         *     không phải vài nghìn.
+         */
+        get: operations["list_item_variants_api_v1_master_items__item_id__variants_get"];
+        put?: never;
+        /**
+         * Vật tư hàng hóa — thêm mã quy cách
+         * @description Thêm một mã quy cách — thực hiện đúng một lần (FR-NFR-004).
+         */
+        post: operations["add_item_variant_api_v1_master_items__item_id__variants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{item_id}/variants/{variant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Vật tư hàng hóa — sửa mã quy cách
+         * @description Sửa một quy cách, gồm cả cờ còn dùng.
+         */
+        put: operations["update_item_variant_api_v1_master_items__item_id__variants__variant_id__put"];
+        post?: never;
+        /**
+         * Vật tư hàng hóa — xóa mã quy cách
+         * @description Xóa một quy cách khỏi hồ sơ mã hàng.
+         */
+        delete: operations["delete_item_variant_api_v1_master_items__item_id__variants__variant_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vật tư hàng hóa — một bản ghi */
+        get: operations["get_record_api_v1_master_items__record_id__get"];
+        /**
+         * Vật tư hàng hóa — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_items__record_id__put"];
+        post?: never;
+        /**
+         * Vật tư hàng hóa — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_items__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Vật tư hàng hóa — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_items__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/partners": {
         parameters: {
             query?: never;
@@ -4211,6 +4431,218 @@ export interface components {
             name_en?: string | null;
             /** Row Version */
             row_version: number;
+        };
+        /**
+         * ItemNature
+         * @description Tính chất vật tư hàng hóa — SRS §6.1, FR-SYS-040.
+         *
+         *     Bốn giá trị trả lời **hai** câu hỏi độc lập ("có theo dõi tồn kho không" và
+         *     "có phát sinh doanh thu/chi phí không"), nên tại sao không hai cột boolean:
+         *     vì ba trong bốn tổ hợp có tên nghiệp vụ mà kế toán viên dùng hàng ngày, còn
+         *     tổ hợp thứ tư (theo dõi tồn nhưng không sinh doanh thu) **không tồn tại**.
+         *     Hai cột boolean sẽ cho khai được tổ hợp thứ tư ấy, và không màn hình nào
+         *     biết phải làm gì với nó.
+         *
+         *     Tách "thành phẩm" khỏi "vật tư hàng hóa" dù cả hai cùng trả lời ✔/✔: hai
+         *     tính chất này đi vào hai tài khoản kho khác nhau (152/156 so với 155) và
+         *     thành phẩm là **đầu ra** của tính giá thành ở phase 9, thứ hàng mua về bán
+         *     không bao giờ là.
+         * @enum {string}
+         */
+        ItemNature: "goods" | "finished_goods" | "service" | "description_only";
+        /**
+         * ItemUnitCreateRequest
+         * @description Thêm một đơn vị quy đổi.
+         *
+         *     `unit_id` phải **khác** đơn vị chính của mã hàng: đơn vị chính luôn có tỷ lệ 1
+         *     và không nằm trong bảng này (`ItemUnitService._ensure_convertible`).
+         */
+        ItemUnitCreateRequest: {
+            /** Factor */
+            factor: number | string;
+            /** Unit Id */
+            unit_id: number;
+        };
+        /**
+         * ItemUnitListResponse
+         * @description Toàn bộ đơn vị quy đổi của một mã hàng — không phân trang, xem router.
+         */
+        ItemUnitListResponse: {
+            /** Items */
+            items: components["schemas"]["ItemUnitResponse"][];
+        };
+        /**
+         * ItemUnitResponse
+         * @description Một đơn vị quy đổi của mã hàng.
+         */
+        ItemUnitResponse: {
+            /** Factor */
+            factor: string;
+            /** Id */
+            id: number;
+            /** Item Id */
+            item_id: number;
+            /** Row Version */
+            row_version: number;
+            /** Unit Id */
+            unit_id: number;
+        };
+        /**
+         * ItemUnitUpdateRequest
+         * @description Sửa một đơn vị quy đổi — gửi **trọn** giá trị mới, có kiểm phiên bản.
+         */
+        ItemUnitUpdateRequest: {
+            /** Factor */
+            factor: number | string;
+            /** Row Version */
+            row_version: number;
+            /** Unit Id */
+            unit_id: number;
+        };
+        /**
+         * ItemVariantCreateRequest
+         * @description Thêm một mã quy cách.
+         */
+        ItemVariantCreateRequest: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ItemVariantListResponse
+         * @description Toàn bộ quy cách của một mã hàng — không phân trang, xem router.
+         */
+        ItemVariantListResponse: {
+            /** Items */
+            items: components["schemas"]["ItemVariantResponse"][];
+        };
+        /**
+         * ItemVariantResponse
+         * @description Một mã quy cách của mã hàng.
+         */
+        ItemVariantResponse: {
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Item Id */
+            item_id: number;
+            /** Name */
+            name: string;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * ItemVariantUpdateRequest
+         * @description Sửa một mã quy cách, gồm cả cờ còn dùng — gửi **trọn** giá trị mới.
+         */
+        ItemVariantUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * ItemsCreateRequest
+         * @description Vật tư hàng hóa — tạo mới.
+         */
+        ItemsCreateRequest: {
+            /** Base Unit Id */
+            base_unit_id?: number | null;
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            nature?: components["schemas"]["ItemNature"] | null;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Warehouse Id */
+            warehouse_id?: number | null;
+        };
+        /**
+         * ItemsListResponse
+         * @description Vật tư hàng hóa — một trang bản ghi.
+         */
+        ItemsListResponse: {
+            /** Items */
+            items: components["schemas"]["ItemsResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ItemsResponse
+         * @description Vật tư hàng hóa — một bản ghi.
+         */
+        ItemsResponse: {
+            /** Base Unit Id */
+            base_unit_id?: number | null;
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            nature?: components["schemas"]["ItemNature"] | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+            /** Warehouse Id */
+            warehouse_id?: number | null;
+        };
+        /**
+         * ItemsUpdateRequest
+         * @description Vật tư hàng hóa — sửa.
+         */
+        ItemsUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Description */
+            description?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
+            /** Warehouse Id */
+            warehouse_id?: number | null;
         };
         /**
          * JobEnqueueRequest
@@ -8405,6 +8837,504 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InvoiceFormsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_items_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemsListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_items_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_item_units_api_v1_master_items__item_id__units_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemUnitListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    add_item_unit_api_v1_master_items__item_id__units_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemUnitCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemUnitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_item_unit_api_v1_master_items__item_id__units__row_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+                row_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemUnitUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemUnitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_item_unit_api_v1_master_items__item_id__units__row_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+                row_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_item_variants_api_v1_master_items__item_id__variants_get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemVariantListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    add_item_variant_api_v1_master_items__item_id__variants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemVariantCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemVariantResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_item_variant_api_v1_master_items__item_id__variants__variant_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+                variant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemVariantUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemVariantResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_item_variant_api_v1_master_items__item_id__variants__variant_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+                variant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_items__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_items__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_items__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_items__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemsResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

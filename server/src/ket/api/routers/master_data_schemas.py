@@ -179,6 +179,11 @@ def build_schemas(spec: CatalogSpec) -> CatalogSchemas:
     """
     prefix = _class_prefix(spec.slug)
     extra = spec.extra_fields
+    # Thân request **sửa** dùng tập cột hẹp hơn khi danh mục có trường chốt một
+    # lần lúc tạo (H69, `extra_update_fields`). Vì `extra_fields` là lớp **con**
+    # của nó, model tạo mới vẫn thừa hưởng trọn validator của model sửa — không
+    # luật nào chỉ áp cho một trong hai đường.
+    extra_for_update = spec.extra_update_fields or extra
 
     response: type[BaseModel] = create_model(
         f"{prefix}Response",
@@ -206,7 +211,9 @@ def build_schemas(spec: CatalogSpec) -> CatalogSchemas:
     )
     update_request: type[BaseModel] = create_model(
         f"{prefix}UpdateRequest",
-        __base__=(MasterDataBaseUpdateRequest, extra) if extra else MasterDataBaseUpdateRequest,
+        __base__=(MasterDataBaseUpdateRequest, extra_for_update)
+        if extra_for_update
+        else MasterDataBaseUpdateRequest,
         __doc__=f"{spec.title} — sửa.",
     )
     return CatalogSchemas(
@@ -223,7 +230,18 @@ def extra_values(spec: CatalogSpec, payload: BaseModel) -> dict[str, object]:
     Đọc danh sách trường từ `spec.extra_fields` chứ không lấy hiệu của hai tập
     trường: hiệu tập sẽ **im lặng đổi nghĩa** nếu một ngày nào đó bộ cột chung
     thêm trường — cột riêng của danh mục bỗng thiếu một cái mà không ai sửa gì.
+
+    Giao với trường **thật có** trên thân request đang cầm, vì thân request sửa
+    hẹp hơn thân request tạo ở danh mục có trường chốt một lần (H69). Giao chứ
+    không `getattr(..., None)`: mặc định `None` sẽ **ghi đè** cột đó thành rỗng
+    trên đường sửa — biến một trường "không sửa được" thành một trường tự xóa
+    mình mỗi lần người dùng sửa tên.
     """
     if spec.extra_fields is None:
         return {}
-    return {field: getattr(payload, field) for field in spec.extra_fields.model_fields}
+    present = type(payload).model_fields
+    return {
+        field: getattr(payload, field)
+        for field in spec.extra_fields.model_fields
+        if field in present
+    }
