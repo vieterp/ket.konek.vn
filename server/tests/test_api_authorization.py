@@ -131,6 +131,7 @@ def _staff(
         user_id=user.id,
         role_code=staff_role,
         actor_user_id=user.id,
+        actor_permissions=None,
     )
     if branch_code is not None:
         role_service.assign_branch(
@@ -353,6 +354,7 @@ def test_a_temporary_password_blocks_everything_except_changing_it(
         user_id=with_temp.id,
         role_code=staff_role,
         actor_user_id=user.id,
+        actor_permissions=None,
     )
 
     body = _login(client, with_temp.username)
@@ -422,6 +424,7 @@ def test_a_user_forced_into_two_factor_can_enrol_without_touching_the_server(
         user_id=user.id,
         role_code="admin",
         actor_user_id=user.id,
+        actor_permissions=None,
     )
 
     limited = _login(client, user.username)
@@ -471,6 +474,7 @@ def test_login_without_the_code_still_asks_for_it_once_enrolled(
         user_id=user.id,
         role_code="admin",
         actor_user_id=user.id,
+        actor_permissions=None,
     )
     limited = _login(client, user.username)
     headers = _auth(str(limited["token"]))
@@ -562,6 +566,7 @@ def test_nobody_can_widen_their_own_branch_scope(
         user_id=user.id,
         role_code=user_admin_role,
         actor_user_id=user.id,
+        actor_permissions=None,
     )
     role_service.assign_branch(
         session_factory,
@@ -617,6 +622,7 @@ def test_assigning_to_a_user_that_does_not_exist_is_a_404(
         user_id=user.id,
         role_code=user_admin_role,
         actor_user_id=user.id,
+        actor_permissions=None,
     )
     role_service.assign_branch(
         session_factory,
@@ -657,6 +663,7 @@ def test_reading_the_audit_log_needs_its_own_permission(
         user_id=user.id,
         role_code=user_admin_role,
         actor_user_id=user.id,
+        actor_permissions=None,
     )
     headers = _auth(_full_session(client, user.username), dataset_alpha.code)
 
@@ -690,3 +697,70 @@ def test_enrolling_a_second_factor_requires_the_current_password(
         # Cùng bất biến với change-password: cửa sau cũng phải đếm.
         assert reloaded.failed_login_count == 1
         assert reloaded.totp_secret_enc is None
+
+
+ROLE_EDIT = permission_code(SYSTEM_MODULE, "role", Action.EDIT)
+
+
+@pytest.fixture
+def role_admin_role(session_factory: sessionmaker[Session], dataset_alpha: DatasetRef) -> str:
+    """Vai trò chỉ có `system.role.edit` — đủ mở endpoint gán vai trò, không hơn."""
+    code = "quan_tri_vai_tro_api"
+    scope = RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=())
+    with unit_of_work(session_factory, scope) as session:
+        if session.scalar(select(Role.id).where(Role.code == code)) is None:
+            role = Role(code=code, name="Quản trị vai trò (test)")
+            session.add(role)
+            session.flush()
+            permission_id = session.scalar(
+                select(Permission.id).where(Permission.code == ROLE_EDIT)
+            )
+            assert permission_id is not None
+            session.add(RolePermission(role_id=role.id, permission_id=permission_id, allow=True))
+    return code
+
+
+def test_nobody_can_grant_a_role_wider_than_their_own_permissions(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    role_admin_role: str,
+) -> None:
+    """Người nắm `system.role.edit` **không** tự gán được vai trò rộng hơn mình.
+
+    Chiều quyền của `test_nobody_can_widen_their_own_branch_scope`: không có
+    chốt này, bất kỳ ai được giao "quản lý phân quyền" tự cấp `admin` cho chính
+    mình trong một request — và dòng nhật ký không phân biệt được với một lần
+    gán hợp lệ. Hôm nay v1 chỉ gieo một vai `admin` nên chưa ai khai thác được;
+    chốt phải có **trước** khi phase 5 mang vai trò tùy biến đầu tiên.
+    """
+    user = user_factory("tunang_vaitro")
+    role_service.grant_role(
+        session_factory,
+        dataset_schema=dataset_alpha.schema_name,
+        user_id=user.id,
+        role_code=role_admin_role,
+        actor_user_id=user.id,
+        actor_permissions=None,
+    )
+
+    headers = _auth(_full_session(client, user.username), dataset_alpha.code)
+
+    refused = client.post(
+        f"/api/v1/system/users/{user.id}/roles",
+        headers=headers,
+        json={"role_code": "admin"},
+    )
+    assert refused.status_code == 403
+    assert refused.json()["error_code"] == "auth.role_grant_too_wide"
+
+    # Đối chứng dương: phân phát đúng phần quyền mình đang có thì vẫn được.
+    colleague = user_factory("dong_nghiep_vaitro")
+    allowed = client.post(
+        f"/api/v1/system/users/{colleague.id}/roles",
+        headers=headers,
+        json={"role_code": role_admin_role},
+    )
+    assert allowed.status_code == 200, allowed.json()
+    assert allowed.json()["changed"] is True

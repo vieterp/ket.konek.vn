@@ -131,6 +131,7 @@ def import_source(
     branch_id: int | None = None,
     missing_reference: MissingReferenceMode = MissingReferenceMode.ERROR,
     allow_create_in: frozenset[str] = frozenset(),
+    progress: FakeProgress | None = None,
 ) -> ImportReport:
     """Chạy một lượt nhập trong một transaction thật, trả về báo cáo.
 
@@ -145,7 +146,7 @@ def import_source(
         context = JobContext(
             job_id=job_id,
             session=session,
-            progress=FakeProgress(reports=[]),
+            progress=progress if progress is not None else FakeProgress(reports=[]),
             attempt=1,
             dataset_schema=dataset.schema_name,
             branch_id=branch_id,

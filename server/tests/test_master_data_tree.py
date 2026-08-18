@@ -27,6 +27,7 @@ from ket.kernel.errors import (
     MasterDataGroupNotPostableError,
     MasterDataInUseError,
     MasterDataNotFoundError,
+    MasterDataParentNotGroupError,
     MasterDataParentScopeError,
 )
 from ket.kernel.master_data.models import CostObject, ExpenseItem
@@ -434,3 +435,25 @@ def captured_sql(session: Session) -> Iterator[list[str]]:
         yield statements
     finally:
         event.remove(connection, "before_cursor_execute", record)
+
+
+def test_a_leaf_node_cannot_receive_children(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
+) -> None:
+    """Cha phải là nhóm — cả lúc tạo lẫn lúc chuyển cha.
+
+    Một nút lá đang hạch toán mà nhận con thì "số của nút này" hết phân biệt
+    được với "tổng các con" ở mọi báo cáo cộng dồn theo nhóm (LD-08). `CHECK`
+    liên-dòng không viết được ở DB nên tầng dịch vụ là hàng rào duy nhất.
+    """
+    with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
+        service = MasterDataService(session, CostObject)
+        leaf = service.create(code="LA-KHONG-CON", name="Nút lá", is_group=False)
+        group = service.create(code="NHOM-CO-CON", name="Nút nhóm", is_group=True)
+
+        with pytest.raises(MasterDataParentNotGroupError):
+            service.create(code="CON-MO-COI", name="Con của lá", parent_id=leaf.id)
+
+        stray = service.create(code="SAP-DI-CHUYEN", name="Sắp chuyển", parent_id=group.id)
+        with pytest.raises(MasterDataParentNotGroupError):
+            service.move(stray.id, new_parent_id=leaf.id, expected_row_version=stray.row_version)

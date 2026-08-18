@@ -137,8 +137,10 @@ def _minimal_row(spec: CatalogSpec) -> list[object]:
     return minimal_row(spec, unique_code(f"SW{spec.slug[:5].upper()}"), f"Bản ghi thử {spec.slug}")
 
 
-def _warehouse_row(code: str, name: str, parent: str | None = None) -> list[object]:
-    return [code, name, None, parent, None, None]
+def _warehouse_row(
+    code: str, name: str, parent: str | None = None, *, is_group: str | None = None
+) -> list[object]:
+    return [code, name, None, parent, is_group, None]
 
 
 def _warehouses(
@@ -543,8 +545,10 @@ def test_a_parent_cycle_fails_loudly_instead_of_writing_nothing(run: RunImport) 
         run(
             WAREHOUSES,
             [
-                _warehouse_row(left, "Kho A", right),
-                _warehouse_row(right, "Kho B", left),
+                # Đánh dấu nhóm để qua phép kiểm cha-phải-là-nhóm (audit phase
+                # 1–3): chu trình giữa các nhóm vẫn là lỗi đồ thị chỉ pha ghi thấy.
+                _warehouse_row(left, "Kho A", right, is_group="x"),
+                _warehouse_row(right, "Kho B", left, is_group="x"),
             ],
             commit=True,
         )
@@ -554,7 +558,7 @@ def test_a_row_that_is_its_own_parent_fails_loudly(run: RunImport) -> None:
     """Cùng gốc với chu trình, chỉ ngắn hơn: một dòng trỏ vào chính mã của nó."""
     code = unique_code("SELF")
     with pytest.raises(ImportParentUnresolvableError):
-        run(WAREHOUSES, [_warehouse_row(code, "Kho tự trỏ", code)], commit=True)
+        run(WAREHOUSES, [_warehouse_row(code, "Kho tự trỏ", code, is_group="x")], commit=True)
 
 
 def test_a_branch_import_never_touches_a_company_shared_record(

@@ -148,6 +148,11 @@ def create_missing(
     Bản ghi sinh ra luôn ở **cấp gốc** (`parent_id` rỗng): không có thông tin nào
     trong tệp nói nó thuộc nhóm nào, và đoán một nhóm là đoán sai ở đúng chỗ
     người dùng sẽ không nghĩ tới việc kiểm lại.
+
+    Con số trả về là số mã **lượt này định tạo**; trong ca đua hiếm (một lượt
+    nhập khác vừa tạo cùng mã, xem `ON CONFLICT` ở `_insert_minimal_rows`), số
+    tạo thật có thể ít hơn một vài đơn vị — báo cáo khi ấy dư chứ không thiếu,
+    và bản ghi thì vẫn tồn tại đúng như báo cáo nói.
     """
     created: dict[str, int] = {}
     for slug, column in eligible_columns(descriptor, allowed):
@@ -194,8 +199,29 @@ def _insert_minimal_rows(
         wanted.c.uid,
         func.nextval(func.pg_get_serial_sequence(table.name, "id")).label("new_id"),
     ).subquery("numbered")
+    # `ON CONFLICT DO NOTHING` nhắm đúng chỉ mục duy-nhất **một phần** theo phạm
+    # vi của lượt nhập (BR-SYS-01 là hai chỉ mục partial, không phải một ràng
+    # buộc chung — xem `master_data/base.py`). Không có nó, hai lượt nhập chạy
+    # đồng thời cùng thiếu một mã sẽ cùng qua phép đếm `_missing_codes` (dòng
+    # của nhau chưa commit nên chưa nhìn thấy) rồi cùng `INSERT` — lượt thua
+    # nhận `IntegrityError` thô và cả job đổ (audit phase 1–3, H1). Với DO
+    # NOTHING, PostgreSQL bắt lượt sau chờ lượt trước phân định rồi lặng lẽ bỏ
+    # qua mã đã có; câu `INSERT` của bảng chính tra khóa ngoại **sau** thời điểm
+    # đó nên tra ra đúng bản ghi vừa thắng cuộc.
+    if branch_id is None:
+        conflict_kwargs: dict[str, Any] = {
+            "index_elements": [table.c.code],
+            "index_where": table.c.branch_id.is_(None),
+        }
+    else:
+        conflict_kwargs = {
+            "index_elements": [table.c.branch_id, table.c.code],
+            "index_where": table.c.branch_id.is_not(None),
+        }
     session.execute(
-        table.insert().from_select(
+        postgresql.insert(table)
+        .on_conflict_do_nothing(**conflict_kwargs)
+        .from_select(
             [
                 "id",
                 "uid",

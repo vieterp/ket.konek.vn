@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import Engine, create_engine, select
+from sqlalchemy import text as sa_text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -596,3 +597,54 @@ def test_prune_idempotency_keys_clears_expired_keys_in_every_dataset(
         )
 
     assert left is None
+
+
+def test_upgrade_datasets_is_idempotent_at_head(
+    dataset_alpha: DatasetRef,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`upgrade-datasets` là nửa vận hành của LD-05: chạy lại được, không phá gì.
+
+    Dataset đang ở head → báo "bỏ qua" và thoát 0. Đường nâng thật (schema cũ →
+    head) do `upgrade_dataset_schema` đảm nhận và đã có test ở provisioning;
+    lệnh này là vòng lặp per-dataset quanh nó, nên thứ phải đo ở đây là: nó tìm
+    thấy dataset đã đăng ký, không đụng schema đang đúng, và mã thoát nói thật.
+    """
+    # --force vì chính tiến trình test đang giữ pool ket_app — đúng thứ cái rào chặn.
+    code = _run("upgrade-datasets", "--force", monkeypatch=monkeypatch)
+    assert code == 0
+    printed = capsys.readouterr().out
+    assert dataset_alpha.code in printed
+    assert "bỏ qua" in printed
+
+
+def test_upgrade_datasets_refuses_an_unknown_dataset_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    code = _run(
+        "upgrade-datasets", "--force", "--dataset", "khong-ton-tai", monkeypatch=monkeypatch
+    )
+    assert code == 1
+
+
+def test_upgrade_datasets_refuses_while_runtime_sessions_are_open(
+    dataset_alpha: DatasetRef,
+    session_factory: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Còn phiên ket_app/ket_worker đang mở → dừng, trừ khi --force.
+
+    App server chỉ kiểm phiên bản schema lúc khởi động, nên migration chạy dưới
+    chân một tiến trình đang sống là ORM cũ ghi vào schema mới. Phiên của chính
+    bộ test (pool ket_app đang giữ ở fixture) đóng vai tiến trình đang sống.
+    """
+    with control_session(session_factory) as session:
+        session.execute(sa_text("SELECT 1"))
+        # `SystemExit` xuyên qua `main()` có chủ đích: với tiến trình CLI thật
+        # đó chính là mã thoát 1; `main()` chỉ dịch `DomainError` thành mã thoát.
+        with pytest.raises(SystemExit) as excinfo:
+            _run("upgrade-datasets", monkeypatch=monkeypatch)
+    assert excinfo.value.code == 1
+    assert "ket_app" in capsys.readouterr().err

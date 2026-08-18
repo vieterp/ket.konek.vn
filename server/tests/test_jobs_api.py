@@ -122,6 +122,7 @@ def _actor(
         user_id=user.id,
         role_code=role_code,
         actor_user_id=user.id,
+        actor_permissions=None,
     )
     response = client.post(
         "/api/v1/auth/login", json={"username": user.username, "password": PASSWORD}

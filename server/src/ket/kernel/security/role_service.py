@@ -46,6 +46,7 @@ from ket.kernel.datasets.models import User
 from ket.kernel.errors import (
     BranchNotFoundError,
     BranchNotInScopeError,
+    RoleGrantTooWideError,
     RoleNotFoundError,
     UserNotFoundError,
 )
@@ -173,6 +174,50 @@ def seed_registered_datasets(owner_engine: Engine, schemas: tuple[str, ...]) -> 
         connection.exec_driver_sql("SET LOCAL search_path TO public")
 
 
+def _check_actor_may_grant_role(
+    session: Session,
+    *,
+    role_id: int,
+    role_code: str,
+    actor_permissions: frozenset[str] | None,
+) -> None:
+    """Người thực hiện chỉ gán được vai trò mà quyền của nó là **tập con** quyền mình.
+
+    Cùng khuôn với `_check_actor_may_touch_branch` nhưng trên trục quyền: không
+    có luật này, bất kỳ ai giữ `system.role.edit` tự gán `admin` cho chính mình
+    trong một request, và dòng nhật ký của thao tác đó không phân biệt được với
+    một lần gán hợp lệ (audit phase 1–3, H-1). Hôm nay chưa khai thác được — v1
+    chỉ gieo một vai `admin` — nhưng phase 5 sẽ mang vai trò tùy biến, và lỗ này
+    phải đóng **trước** khi có vai trò hẹp đầu tiên cầm `system.role.edit`.
+
+    So bằng **quyền thật của vai trò đích**, không so mã vai trò: một vai trò
+    tên hiền lành được cấp thêm quyền quản trị vẫn là vai trò quản trị (cùng lập
+    luận với `_role_requires_second_factor`).
+
+    `actor_permissions is None` = đường phá-kính tại máy chủ (`ket.admin
+    grant-role`, lúc chưa ai giữ quyền nào): ai chạm được máy chủ thì đã chạm
+    được DB — thừa nhận thực tế, không phải một lỗ mới. Đường HTTP luôn truyền
+    tập quyền hiệu lực của người gọi.
+    """
+    if actor_permissions is None:
+        return
+    granted = set(
+        session.scalars(
+            select(Permission.code)
+            .join(RolePermission, RolePermission.permission_id == Permission.id)
+            .where(RolePermission.role_id == role_id, RolePermission.allow.is_(True))
+        ).all()
+    )
+    if granted - actor_permissions:
+        # Không kèm danh sách mã quyền còn thiếu: chi tiết đó là bản đồ quyền
+        # của một vai trò mà người gọi có thể không được đọc — một oracle rò
+        # cấu hình phân quyền qua thân lỗi RFC 7807 (review lát vá, L2).
+        raise RoleGrantTooWideError(
+            "Không gán được vai trò mang quyền mà chính người thực hiện không có",
+            role=role_code,
+        )
+
+
 def _role_requires_second_factor(
     session: Session, role_id: int, *, registry: PermissionRegistry = REGISTRY
 ) -> bool:
@@ -282,13 +327,21 @@ def grant_role(
     user_id: int,
     role_code: str,
     actor_user_id: int,
+    actor_permissions: frozenset[str] | None,
     correlation_id: UUID | None = None,
     client_info: str | None = None,
 ) -> bool:
     """Gán vai trò cho người dùng trong một dữ liệu kế toán. Trả `True` nếu vừa gán.
 
     Ba transaction, theo đúng thứ tự này (xem phần fail-safe ở đầu tệp):
-    đọc vai trò → kiểm người nhận + bật cờ 2FA nếu cần → ghi `user_roles`.
+    đọc vai trò + kiểm leo thang → kiểm người nhận + bật cờ 2FA nếu cần → ghi
+    `user_roles`.
+
+    `actor_permissions` bắt buộc khai, không có mặc định — cùng lý do
+    `assign_branch` bắt buộc `actor_branch_ids`: bỏ qua nó là mở lại đúng đường
+    tự nâng quyền, nên nó không được phép là thứ người gọi quên. `None` = đường
+    phá-kính tại máy chủ (`ket.admin grant-role`), xem
+    `_check_actor_may_grant_role`.
     """
     with dataset_session(
         factory,
@@ -298,6 +351,9 @@ def grant_role(
     ) as session:
         role = _find_role(session, role_code)
         role_id = role.id
+        _check_actor_may_grant_role(
+            session, role_id=role_id, role_code=role_code, actor_permissions=actor_permissions
+        )
         needs_second_factor = _role_requires_second_factor(session, role_id)
 
     _prepare_target_user(
@@ -338,9 +394,16 @@ def revoke_role(
     user_id: int,
     role_code: str,
     actor_user_id: int,
+    actor_permissions: frozenset[str] | None,
     correlation_id: UUID | None = None,
 ) -> bool:
     """Gỡ vai trò. Trả `True` nếu vừa gỡ.
+
+    **Cùng chốt với `grant_role`** (review lát vá audit, M2): chỉ gỡ được vai
+    trò mà mình cũng gán được. Không có chiều này thì người chỉ giữ
+    `system.role.edit` gỡ được vai `admin` của quản trị viên thật — một đòn
+    khóa-cửa (lockout) thay vì leo thang, nhưng cùng gốc: quyền "quản lý phân
+    quyền" không phải quyền định đoạt những vai rộng hơn mình.
 
     **Không** tắt `totp_required`. Cờ là toàn cục còn vai trò là per-dataset, nên
     "người này còn cần 2FA không" chỉ trả lời được sau khi quét mọi dữ liệu kế
@@ -350,6 +413,9 @@ def revoke_role(
     scope = _scope_for(dataset_schema, actor_user_id, correlation_id)
     with unit_of_work(factory, scope) as session:
         role = _find_role(session, role_code)
+        _check_actor_may_grant_role(
+            session, role_id=role.id, role_code=role_code, actor_permissions=actor_permissions
+        )
         session.get(Role, role.id, with_for_update=True)
         existing = session.get(UserRole, {"user_id": user_id, "role_id": role.id})
         if existing is None:

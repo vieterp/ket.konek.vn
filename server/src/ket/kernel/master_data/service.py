@@ -27,6 +27,7 @@ from ket.kernel.errors import (
     MasterDataGroupNotPostableError,
     MasterDataInUseError,
     MasterDataNotFoundError,
+    MasterDataParentNotGroupError,
     MasterDataParentScopeError,
 )
 from ket.kernel.master_data.base import MasterDataRow
@@ -255,6 +256,7 @@ class MasterDataService[ModelT: MasterDataRow]:
         """
         parent = self.get(parent_id) if parent_id is not None else None
         self._ensure_parent_scope(parent, branch_id)
+        self._ensure_parent_is_group(parent)
 
         record_id = self._reserve_id()
         record = self._model(
@@ -384,6 +386,10 @@ class MasterDataService[ModelT: MasterDataRow]:
                 entity_id=record_id,
                 new_parent_id=new_parent_id,
             )
+        # Sau phép kiểm chu trình, có chủ đích: chuyển một nhóm vào chính nhánh
+        # con của nó phải là lỗi *chu trình* kể cả khi đích tình cờ là nút lá —
+        # chu trình là lỗi cấu trúc nặng hơn và là thứ người dùng cần được báo.
+        self._ensure_parent_is_group(new_parent)
 
         old_path = record.path
         new_path = child_path(new_parent.path if new_parent else None, record_id)
@@ -438,6 +444,23 @@ class MasterDataService[ModelT: MasterDataRow]:
                 entity_type=self.entity_type,
                 entity_id=record.id,
             )
+
+    def _ensure_parent_is_group(self, parent: ModelT | None) -> None:
+        """Cha phải là nút nhóm — nút lá không được nhận con.
+
+        Không có luật này thì một vật tư đang hạch toán vẫn nhận được con, và
+        câu hỏi "số của nút này là của chính nó hay tổng các con" hết trả lời
+        được ở mọi báo cáo cộng dồn (LD-08). `CHECK` ở DB không viết được cho
+        điều kiện liên-dòng, nên tầng dịch vụ là hàng rào duy nhất — cùng lý do
+        `_ensure_parent_scope` đứng ở đây.
+        """
+        if parent is None or parent.is_group:
+            return
+        raise MasterDataParentNotGroupError(
+            "Bản ghi được chọn làm nhóm cha không phải là nhóm",
+            entity_type=self.entity_type,
+            parent_id=parent.id,
+        )
 
     def _ensure_parent_scope(self, parent: ModelT | None, branch_id: int | None) -> None:
         """Cha phải nhìn thấy được từ phạm vi của con.

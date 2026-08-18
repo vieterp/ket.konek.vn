@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import BaseModel
 from sqlalchemy import Engine, text
+from sqlalchemy import update as sa_update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -31,7 +32,7 @@ from ket.kernel.jobs.registry import (
     JobType,
 )
 from ket.kernel.organization.service import BranchService
-from ket.kernel.persistence.session import create_session_factory
+from ket.kernel.persistence.session import create_session_factory, worker_session
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.settings import Settings
 from ket.worker.runner import Worker
@@ -420,3 +421,67 @@ def test_the_loop_survives_a_failure_and_keeps_going(
     worker.run_forever()
 
     assert calls["n"] >= 2, "vòng lặp phải chạy tiếp sau lỗi, không thoát"
+
+
+def test_a_body_that_loses_its_lease_commits_no_business_data(
+    test_settings: Settings,
+    worker_session_factory: sessionmaker[Session],
+    worker_engine: Engine,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+) -> None:
+    """Mất lease trong lúc thân job chạy → transaction nghiệp vụ **không commit**.
+
+    Khoảng hở mà `queue.finish` không che được: `finish` có hàng rào nhưng chạy
+    *sau* khi `unit_of_work` đã commit — nên một worker bị reaper thu hồi giữa
+    chừng vẫn commit trọn dữ liệu nghiệp vụ của mình, song song với lượt chạy
+    mới. `Worker._fence_before_commit` gia hạn lease bằng chính session nghiệp
+    vụ ngay trước commit; test này dựng đúng chuỗi "job bị giành lại giữa
+    chừng" và đòi dữ liệu của lượt cũ biến mất cùng transaction.
+    """
+    stolen_code = f"CN_FENCE_{uuid4().hex[:6].upper()}"
+
+    def body(context: JobContext, _params: _ProbeParams) -> JobResult:
+        BranchService(context.session).create(code=stolen_code, name="Chi nhánh lượt cũ")
+        # Giả lập reaper + worker khác: lượt giành mới mang số hiệu mới. Xong
+        # việc này, mọi lệnh ghi mang số hiệu cũ phải bị từ chối.
+        with worker_session(
+            worker_session_factory, dataset_schema=dataset_alpha.schema_name
+        ) as thief:
+            thief.execute(
+                sa_update(Job).where(Job.id == context.job_id).values(attempt=Job.attempt + 1)
+            )
+        return None
+
+    registry = JobRegistry()
+    fence_type: JobType[Any] = JobType(
+        code="test.probe.fence",
+        permission="system.job.create",
+        resume_semantics=ResumeSemantics.IDEMPOTENT_RESTART,
+        params_model=_ProbeParams,
+        handler=body,
+    )
+    registry.register(fence_type)
+
+    with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
+        job = queue.enqueue(session, job_type=fence_type, requested_by=USER_ID)
+        job_id = UUID(str(job.id))
+
+    fenced_worker = Worker(
+        test_settings,
+        worker_factory=worker_session_factory,
+        owner_factory=None,
+        engine=worker_engine,
+        registry=registry,
+    )
+    fenced_worker.run_once()
+
+    with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
+        leaked = session.execute(
+            text("SELECT count(*) FROM branches WHERE code = :code"), {"code": stolen_code}
+        ).scalar_one()
+        status = session.execute(
+            text("SELECT status FROM jobs WHERE id = :id"), {"id": job_id}
+        ).scalar_one()
+    assert leaked == 0, "dữ liệu nghiệp vụ của lượt chạy đã mất lease vẫn được commit"
+    assert status != JobStatus.DONE.value, "lượt chạy cũ không được phép kết thúc dòng job"

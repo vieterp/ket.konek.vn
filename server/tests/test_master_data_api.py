@@ -385,7 +385,7 @@ def test_moving_a_node_rewrites_the_whole_subtree(
         client,
         editor,
         PLAIN,
-        {"code": unique_code("KC"), "name": "Kho con", "parent_id": root_a["id"]},
+        {"code": unique_code("KC"), "name": "Kho con", "parent_id": root_a["id"], "is_group": True},
     ).json()
     grandchild = create_record(
         client,
@@ -422,7 +422,7 @@ def test_a_node_cannot_be_moved_into_its_own_subtree(
         client,
         editor,
         PLAIN,
-        {"code": unique_code("KW"), "name": "Con", "parent_id": root["id"]},
+        {"code": unique_code("KW"), "name": "Con", "parent_id": root["id"], "is_group": True},
     ).json()
 
     response = client.put(
@@ -443,7 +443,7 @@ def test_listing_walks_the_tree_two_ways(client: TestClient, editor: dict[str, s
         client,
         editor,
         PLAIN,
-        {"code": unique_code("KM"), "name": "Con", "parent_id": root["id"]},
+        {"code": unique_code("KM"), "name": "Con", "parent_id": root["id"], "is_group": True},
     ).json()
     create_record(
         client,

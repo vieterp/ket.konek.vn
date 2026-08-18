@@ -15,6 +15,7 @@ chối.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import IO, Any, Final
 from uuid import UUID
 
@@ -61,7 +62,7 @@ from ket.kernel.excel.sql import (
     visible_to,
 )
 from ket.kernel.excel.staging import StagingTable
-from ket.kernel.jobs.registry import JobContext
+from ket.kernel.jobs.registry import JobCancelled, JobContext
 from ket.kernel.master_data.registry import REGISTRY as CATALOG_REGISTRY
 from ket.kernel.master_data.registry import CatalogSpec
 from ket.kernel.master_data.tree_path import ROOT_LEVEL
@@ -70,7 +71,22 @@ PROGRESS_LOADED: Final[int] = 40
 PROGRESS_VALIDATED: Final[int] = 80
 PROGRESS_DONE: Final[int] = 100
 """Ba mốc tiến độ. Đọc tệp là phần lâu nhất (nó chạy ở Python) nên nó chiếm phần
-lớn thanh; kiểm và ghi đều chỉ là một nhúm câu SQL."""
+lớn thanh; kiểm và ghi đều chỉ là một nhúm câu SQL.
+
+Giữa các mốc, thân job vẫn báo tiến độ **theo lô** (xem `_batch_pulse`): lượt
+`report` không chỉ là thanh phần trăm — nó là nhịp gia hạn lease. Ba mốc cố định
+từng là ba nhịp duy nhất, và một pha chạy quá 60 giây (lease mặc định) là đủ để
+reaper coi worker đã chết rồi giao job cho tiến trình khác (audit phase 1–3, C1).
+"""
+
+ESTIMATED_ROWS_FOR_PROGRESS: Final[int] = 10_000
+"""Mẫu số ước lượng cho thanh tiến độ pha đọc, khi chưa biết tổng số dòng.
+
+Chỉ ảnh hưởng con số phần trăm hiển thị (5..39%), không ảnh hưởng nhịp gia hạn
+lease — nhịp là "mỗi lô", bất kể phần trăm tính ra bao nhiêu. Lấy đúng trần
+FR-NFR-043 nên tệp nhỏ tiến chậm hơn thực tế một chút rồi nhảy về 40% khi đọc
+xong — vô hại; chiều ngược lại (ước lượng thấp, phần trăm vượt 40 giữa chừng)
+mới là thứ gây hiểu nhầm."""
 
 MAX_TREE_DEPTH: Final[int] = 25
 """Số vòng tối đa khi tạo bản ghi theo cấp cây.
@@ -120,12 +136,20 @@ def run_import(
         total_rows=0,
     )
     try:
-        report.total_rows = staging.load(iter_rows(source, descriptor))
+        report.total_rows = staging.load(
+            iter_rows(source, descriptor), on_batch=_batch_pulse(context)
+        )
         context.progress.report(PROGRESS_LOADED, f"Đã đọc {report.total_rows} dòng")
 
         branch_id = context.branch_id
         failed_rows: set[int] = set()
-        for error in staging.errors(spec, mode=mode, branch_id=branch_id, autocreate=autocreate):
+        for error in staging.errors(
+            spec,
+            mode=mode,
+            branch_id=branch_id,
+            autocreate=autocreate,
+            on_check=_check_pulse(context),
+        ):
             failed_rows.add(error.row)
             report.add(error)
         report.error_rows = len(failed_rows)
@@ -163,6 +187,7 @@ def run_import(
                 context.job_id,
                 branch_id=branch_id,
                 mode=mode,
+                on_level=_level_pulse(context),
             )
             report.committed = True
             _record_import(context, spec=spec, report=report)
@@ -172,6 +197,74 @@ def run_import(
         # Kể cả khi job hỏng giữa chừng: bảng đệm là nơi duy nhất trong dataset
         # giữ một bản sao nguyên văn dữ liệu người dùng ngoài bản ghi nghiệp vụ.
         staging.clear()
+
+
+def _batch_pulse(context: JobContext) -> Callable[[int], None]:
+    """Nhịp tại ranh giới lô của pha đọc: kiểm cờ hủy, rồi gia hạn lease.
+
+    Hai việc trong một nhịp, đúng thứ tự đó:
+
+    * **Hủy trước** — `request_cancel` hứa "worker dừng ở ranh giới lô gần
+      nhất", và trước lượt vá này lời hứa đó chỉ đúng với job chưa bắt đầu
+      (audit C2). Ném `JobCancelled` ở đây làm transaction của thân job rollback
+      trọn — không dòng đệm nào, bản ghi nào được giữ lại.
+    * **Gia hạn sau** — `report` vừa là tiến độ vừa là heartbeat; gọi mỗi lô
+      (500 dòng) là thừa đủ dày so với lease 60 giây, và đủ thưa để hai lượt
+      ghi DB một lô không thành gánh nặng.
+    """
+
+    def pulse(loaded: int) -> None:
+        if context.progress.cancel_requested():
+            raise JobCancelled(f"Tác vụ {context.job_id} bị hủy ở ranh giới lô {loaded} dòng")
+        # Số học nguyên thuần — cổng ADR-015 cấm float ở mọi mã nghiệp vụ, kể
+        # cả một thanh phần trăm: ngoại lệ nhỏ là chỗ ngoại lệ lớn chui vào.
+        capped = min(loaded, ESTIMATED_ROWS_FOR_PROGRESS)
+        percent = 5 + (capped * (PROGRESS_LOADED - 6)) // ESTIMATED_ROWS_FOR_PROGRESS
+        context.progress.report(percent, f"Đang đọc… {loaded} dòng")
+
+    return pulse
+
+
+def _check_pulse(context: JobContext) -> Callable[[], None]:
+    """Nhịp giữa các **nhóm phép kiểm** của pha kiểm — cùng hợp đồng với hai nhịp kia.
+
+    Phần trăm nhích dần trong dải (40..79) nhưng không mang nghĩa tiến độ chính
+    xác (số nhóm phép kiểm thay đổi theo danh mục); thứ có nghĩa là **nhịp** —
+    mỗi lượt gọi là một lần gia hạn lease và một lần kiểm cờ hủy (review lát vá
+    audit, M1: tệp cây lớn làm pha kiểm dài mà bản trước không có nhịp nào).
+    """
+    ticked = 0
+
+    def pulse() -> None:
+        nonlocal ticked
+        if context.progress.cancel_requested():
+            raise JobCancelled(f"Tác vụ {context.job_id} bị hủy giữa pha kiểm dữ liệu")
+        ticked += 1
+        percent = min(PROGRESS_LOADED + ticked, PROGRESS_VALIDATED - 1)
+        context.progress.report(percent, "Đang kiểm dữ liệu…")
+
+    return pulse
+
+
+def _level_pulse(context: JobContext) -> Callable[[int], None]:
+    """Nhịp tại ranh giới **cấp cây** của pha ghi — cùng hợp đồng với `_batch_pulse`.
+
+    Mỗi cấp là một câu `INSERT … SELECT`; giữa hai câu là chỗ duy nhất đứng
+    được. Một câu lệnh *đơn lẻ* chạy quá lease thì không nhịp nào cứu được —
+    giới hạn đó thuộc về `_fence_before_commit` của worker: mất lease giữa
+    chừng thì cả transaction rollback thay vì commit đè.
+    """
+
+    def pulse(level: int) -> None:
+        if context.progress.cancel_requested():
+            raise JobCancelled(
+                f"Tác vụ {context.job_id} bị hủy ở ranh giới cấp cây thứ {level} của pha ghi"
+            )
+        context.progress.report(
+            min(PROGRESS_VALIDATED + level, PROGRESS_DONE - 1), f"Đang ghi… cấp {level}"
+        )
+
+    return pulse
 
 
 def _summary(report: ImportReport) -> str:
@@ -248,6 +341,7 @@ def _write(
     *,
     branch_id: int | None,
     mode: ImportMode,
+    on_level: Callable[[int], None] | None = None,
 ) -> None:
     """Ghi dòng đã kiểm vào bảng danh mục (H82).
 
@@ -258,9 +352,11 @@ def _write(
     `INSERT`.
     """
     remaining = _rows_to_create(session, spec, job_id, branch_id=branch_id)
-    for _ in range(MAX_TREE_DEPTH):
+    for level in range(MAX_TREE_DEPTH):
         if remaining == 0:
             break
+        if on_level is not None:
+            on_level(level + 1)
         _insert_one_level(session, spec, descriptor, job_id, branch_id=branch_id)
         after = _rows_to_create(session, spec, job_id, branch_id=branch_id)
         if after == remaining:

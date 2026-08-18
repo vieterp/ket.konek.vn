@@ -418,13 +418,32 @@ def test_auto_created_records_roll_back_with_the_rest_of_a_failed_import(
     unit = unique_code("DVT_ROLL")
     left, right = unique_code("VT_CYC_A"), unique_code("VT_CYC_B")
     descriptor = template_for(spec_of(ITEMS))
-    rows = []
-    for code, parent in ((left, right), (right, left)):
-        row = _item_row(code, unit=unit)
+
+    # Chu trình dựng bằng hai dòng **nhóm thuần** (nhóm không được mang tính
+    # chất/đơn vị — CHECK `group_carries_no_leaf_fields`), còn tham chiếu đơn vị
+    # tính nằm trên một dòng **lá** treo dưới nhóm. Trước audit phase 1–3, hai
+    # dòng lá trần cũng dựng được chu trình; nay phép kiểm cha-phải-là-nhóm bắt
+    # ca đó ngay ở bước kiểm — chu trình chỉ còn dựng được giữa các nhóm, và đó
+    # vẫn là lỗi **đồ thị** chỉ nổ ở pha ghi, đúng cửa sổ "sau khi đã tự tạo
+    # danh mục" mà test này đo.
+    def _group_row(code: str, parent: str) -> list[object]:
+        row: list[object] = [None] * len(descriptor.columns)
         for index, column in enumerate(descriptor.columns):
-            if column.field == "parent_code":
+            if column.field == "code":
+                row[index] = code
+            elif column.field == "name":
+                row[index] = f"Nhóm {code}"
+            elif column.field == "parent_code":
                 row[index] = parent
-        rows.append(row)
+            elif column.field == "is_group":
+                row[index] = "x"
+        return row
+
+    leaf = _item_row(unique_code("VT_LA"), unit=unit)
+    for index, column in enumerate(descriptor.columns):
+        if column.field == "parent_code":
+            leaf[index] = left
+    rows = [_group_row(left, right), _group_row(right, left), leaf]
 
     with pytest.raises(Exception):  # noqa: B017 — lớp lỗi đã có test riêng ở pipeline
         _run(
@@ -582,3 +601,39 @@ def test_auto_created_records_leave_an_audit_trail_on_their_own_catalog(
     assert entry.new_values is not None
     assert entry.new_values["created_by_import_of"] == ITEMS
     assert entry.new_values["created_rows"] == 1
+
+
+def test_creating_the_same_missing_code_twice_is_a_silent_no_op(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+) -> None:
+    """`ON CONFLICT DO NOTHING` nhắm đúng chỉ mục duy-nhất một phần (BR-SYS-01).
+
+    Ca đua thật: hai lượt nhập đồng thời cùng thiếu một mã đơn vị tính — cả hai
+    qua phép đếm (dòng của nhau chưa commit nên chưa thấy) rồi cùng `INSERT`.
+    Không tái hiện được hai transaction chồng nhau trong một test tất định, nên
+    đo đúng **cơ chế**: chèn lần hai cùng mã phải lặng lẽ bỏ qua thay vì ném
+    `IntegrityError` thô làm cả job đổ. Cả hai phạm vi — dùng chung và riêng
+    chi nhánh — vì BR-SYS-01 là hai chỉ mục khác nhau.
+    """
+    from ket.kernel.excel.missing_references import _insert_minimal_rows
+
+    scope = RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=())
+    code_shared = unique_code("DVT_DUA")
+    with unit_of_work(session_factory, scope) as session:
+        _insert_minimal_rows(session, "units_of_measure", [code_shared], branch_id=None)
+        _insert_minimal_rows(session, "units_of_measure", [code_shared], branch_id=None)
+        rows = session.scalars(select(UnitOfMeasure).where(UnitOfMeasure.code == code_shared)).all()
+        assert len(rows) == 1
+
+    ensure_branches(session_factory, dataset_alpha, ["CN_DVT_DUA"])
+    branch = branch_ids(session_factory, dataset_alpha, ["CN_DVT_DUA"])["CN_DVT_DUA"]
+    branch_scope = RequestScope(
+        dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=(branch,)
+    )
+    code_branch = unique_code("DVT_CN")
+    with unit_of_work(session_factory, branch_scope) as session:
+        _insert_minimal_rows(session, "units_of_measure", [code_branch], branch_id=branch)
+        _insert_minimal_rows(session, "units_of_measure", [code_branch], branch_id=branch)
+        rows = session.scalars(select(UnitOfMeasure).where(UnitOfMeasure.code == code_branch)).all()
+        assert len(rows) == 1

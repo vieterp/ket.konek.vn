@@ -16,7 +16,7 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 
 ---
 
-## 1b. Trạng thái hiện thực hóa (2026-08-17)
+## 1b. Trạng thái hiện thực hóa (2026-08-19)
 
 | Thành phần | Trạng thái |
 | --- | --- |
@@ -62,6 +62,10 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | **Năm tài chính & kỳ kế toán** — sinh đủ 12 kỳ liền mạch (hỗ trợ niên độ lệch), khóa/mở kỳ có vết người thực hiện, chồng lấn niên độ chặn bằng `EXCLUDE USING gist` ở DB | ✅ chạy thật (3A) |
 | **Đánh số chứng từ** — `SELECT … FOR UPDATE` trong transaction của người gọi (rollback trả lại số), sổ cấp số cho dãy liên tục; kiểm bằng 20 luồng song song | ✅ chạy thật (3A) |
 | **Cây chi nhánh** — `branches` mở rộng tại chỗ; mọi đường tạo đi qua `BranchService` | ✅ chạy thật (3A) |
+| **Khung Excel nhập liệu** — `TemplateDescriptor` sinh tệp mẫu (sheet Hướng dẫn, cột `*`), bảng đệm `import_staging_rows`, kiểm set-based (hình thức → quan hệ → luật liên-trường), từ chối tệp đổi cấu trúc (FR-SYS-082); hai job kiểm/ghi chạy **cùng một hàm** (H85), so `content_hash` giữa kiểm và ghi (H78); ghi theo cấp cây bằng `INSERT … SELECT`; migration `0006` | ✅ chạy thật (3C-1) |
+| **Xuất Excel + tự tạo danh mục thiếu + sao kê ngân hàng** — exporter dùng chung descriptor (round-trip xuất → nhập 0 lỗi, cả 20 danh mục); tự tạo danh mục còn thiếu (FR-NFR-062, ba hàng rào: người dùng chọn, `auto_creatable`, quyền per-danh-mục — `ON CONFLICT DO NOTHING` cho hai lượt nhập đồng thời); khung sao kê per-bank `bank_statement_profiles` **ngoài** strict-template (RT-26, migration `0008`; tệp thật VCB/ACB là nợ M1 — cổng chặn phase 6) | ✅ chạy thật (3C-2) |
+| **UI nhóm 07 (client)** — màn danh mục cây+lưới cho cả 20 danh mục (registry client canh khớp `openapi.json` bằng test), drawer sửa theo U2, màn đối tác + thẻ công nợ giữ chỗ (H56), wizard nhập Excel 3 bước trên job nền, màn Thiết lập hai nhóm + banner U14; `TreePicker`/`LookupInput` vào design system | ✅ chạy thật (3D) |
+| **Vòng đời job cứng hóa** — thân job gia hạn lease **theo lô** (đọc tệp) và **theo cấp cây** (pha ghi); cờ hủy kiểm ở ranh giới lô (`request_cancel` giữ đúng lời hứa); `Worker._fence_before_commit` gia hạn lease bằng chính transaction nghiệp vụ ngay trước commit — mất lease là rollback trọn, không còn cửa hai worker cùng commit một job; CLI `upgrade-datasets` nâng schema dataset đã tồn tại lên head (nửa vận hành của LD-05) | ✅ chạy thật (lát vá audit phase 1–3) |
 | Posting engine, báo cáo, và toàn bộ phân hệ nghiệp vụ | ⏳ phase 4 trở đi |
 
 Bảng còn lại trong §11 và phần lớn §12 là **thiết kế đích**, chưa có mã.

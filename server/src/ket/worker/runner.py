@@ -331,7 +331,42 @@ class Worker:
             acting_branch_id=claimed.branch_id,
         )
         with unit_of_work(self._factory, scope) as session:
-            return self._call(job_type, session, dataset, claimed, progress)
+            result = self._call(job_type, session, dataset, claimed, progress)
+            self._fence_before_commit(session, claimed)
+            return result
+
+    def _fence_before_commit(self, session: Session, claimed: ClaimedJob) -> None:
+        """Gia hạn lease **trong chính transaction nghiệp vụ**, ngay trước commit.
+
+        `WorkerProgress.report` chạy trên connection riêng nên nó chỉ chứng minh
+        "lúc nãy còn giữ lease" — giữa lượt báo cuối và lúc `unit_of_work` commit
+        vẫn còn một khoảng hở: reaper thu hồi, worker khác giành lại, và **hai**
+        lượt chạy cùng commit dữ liệu nghiệp vụ (audit phase 1–3, finding C1).
+        `queue.finish` có hàng rào nhưng nó chạy *sau* commit, nên nó chỉ cứu
+        được dòng job, không cứu được dữ liệu.
+
+        Lượt `UPDATE` có điều kiện này đóng khoảng hở đó bằng hai tính chất của
+        chính PostgreSQL:
+
+        * điều kiện `attempt = :attempt` phân xử **trong cùng câu lệnh** — mất
+          lease là `rowcount == 0`, thân job ném `LeaseLostError` và toàn bộ
+          transaction nghiệp vụ rollback, không có gì được ghi;
+        * câu `UPDATE` giữ **khóa dòng job tới khi commit**. Reaper quét bằng
+          `FOR UPDATE SKIP LOCKED` nên nó không *chờ* — nó **bỏ qua** dòng đang
+          bị khóa trong lượt quét đó (review lát vá, L3: nói "phải chờ" là sai
+          cơ chế), và tới lượt quét sau thì lease đã được gia hạn nên không còn
+          gì để thu hồi. Cả hai đường đều không xen được giữa "kiểm" và "ghi".
+
+        Chạy dưới vai trò dataset của thân job: vai trò đó vốn có `UPDATE` trên
+        `jobs` (đường `request_cancel` của API dùng đúng quyền ấy), và RLS cho
+        thấy đúng dòng job của chi nhánh mình.
+        """
+        alive = queue.heartbeat(session, claimed.job_id, attempt=claimed.attempt, lease=self._lease)
+        if not alive:
+            raise LeaseLostError(
+                f"Tác vụ {claimed.job_id} (lượt {claimed.attempt}) mất lease ngay trước "
+                "commit — hủy toàn bộ transaction nghiệp vụ thay vì commit đè lượt chạy mới."
+            )
 
     def _call(
         self,
