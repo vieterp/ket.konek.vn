@@ -57,8 +57,10 @@ class Bank(MasterDataRow):
 class BankFields(BaseModel):
     """Phần riêng của ngân hàng trên API (`registry.CatalogSpec`)."""
 
-    short_name: str | None = Field(default=None, max_length=SHORT_NAME_MAX_LENGTH)
-    swift_code: str | None = Field(default=None)
+    short_name: str | None = Field(
+        title="Tên viết tắt", default=None, max_length=SHORT_NAME_MAX_LENGTH
+    )
+    swift_code: str | None = Field(title="Mã SWIFT", default=None)
 
     @field_validator("short_name", "swift_code", mode="before")
     @classmethod

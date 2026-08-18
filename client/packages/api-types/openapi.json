@@ -74,7 +74,7 @@
                 "type": "null"
               }
             ],
-            "title": "Default Useful Life Months"
+            "title": "Thời gian sử dụng ngầm định (tháng)"
           },
           "is_group": {
             "default": false,
@@ -168,7 +168,7 @@
                 "type": "null"
               }
             ],
-            "title": "Default Useful Life Months"
+            "title": "Thời gian sử dụng ngầm định (tháng)"
           },
           "id": {
             "title": "Id",
@@ -262,7 +262,7 @@
                 "type": "null"
               }
             ],
-            "title": "Default Useful Life Months"
+            "title": "Thời gian sử dụng ngầm định (tháng)"
           },
           "is_active": {
             "title": "Is Active",
@@ -528,7 +528,7 @@
                 "type": "null"
               }
             ],
-            "title": "Short Name"
+            "title": "Tên viết tắt"
           },
           "swift_code": {
             "anyOf": [
@@ -539,7 +539,7 @@
                 "type": "null"
               }
             ],
-            "title": "Swift Code"
+            "title": "Mã SWIFT"
           }
         },
         "required": [
@@ -649,7 +649,7 @@
                 "type": "null"
               }
             ],
-            "title": "Short Name"
+            "title": "Tên viết tắt"
           },
           "swift_code": {
             "anyOf": [
@@ -660,7 +660,7 @@
                 "type": "null"
               }
             ],
-            "title": "Swift Code"
+            "title": "Mã SWIFT"
           },
           "uid": {
             "title": "Uid",
@@ -731,7 +731,7 @@
                 "type": "null"
               }
             ],
-            "title": "Short Name"
+            "title": "Tên viết tắt"
           },
           "swift_code": {
             "anyOf": [
@@ -742,7 +742,7 @@
                 "type": "null"
               }
             ],
-            "title": "Swift Code"
+            "title": "Mã SWIFT"
           }
         },
         "required": [
@@ -780,6 +780,366 @@
           "file"
         ],
         "title": "Body_upload_attachment_api_v1_attachments_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_asset_types_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_asset_types_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_banks_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_banks_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_contracts_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_contracts_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_cost_objects_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_cost_objects_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_document_types_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_document_types_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_employees_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_employees_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_excise_tax_tables_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_excise_tax_tables_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_expense_items_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_expense_items_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_invoice_forms_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_invoice_forms_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_items_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_items_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_partners_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_partners_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_payment_terms_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_payment_terms_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_pit_tables_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_pit_tables_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_project_types_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_project_types_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_projects_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_projects_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_resource_tax_tables_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_resource_tax_tables_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_timekeeping_symbols_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_timekeeping_symbols_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_tool_types_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_tool_types_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_units_of_measure_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_units_of_measure_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_warehouses_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_warehouses_import_validate_post",
         "type": "object"
       },
       "BranchCreateRequest": {
@@ -1995,7 +2355,7 @@
                 "type": "null"
               }
             ],
-            "title": "Bank Account Holder"
+            "title": "Chủ tài khoản"
           },
           "bank_account_number": {
             "anyOf": [
@@ -2007,7 +2367,7 @@
                 "type": "null"
               }
             ],
-            "title": "Bank Account Number"
+            "title": "Số tài khoản nhận lương"
           },
           "bank_id": {
             "anyOf": [
@@ -2018,7 +2378,7 @@
                 "type": "null"
               }
             ],
-            "title": "Bank Id"
+            "title": "Ngân hàng"
           },
           "branch_id": {
             "anyOf": [
@@ -2047,7 +2407,7 @@
                 "type": "null"
               }
             ],
-            "title": "Department"
+            "title": "Phòng ban"
           },
           "email": {
             "anyOf": [
@@ -2071,7 +2431,7 @@
                 "type": "null"
               }
             ],
-            "title": "Id Number"
+            "title": "Số CMND/CCCD"
           },
           "is_group": {
             "default": false,
@@ -2117,7 +2477,7 @@
                 "type": "null"
               }
             ],
-            "title": "Phone"
+            "title": "Điện thoại"
           },
           "position": {
             "anyOf": [
@@ -2129,7 +2489,7 @@
                 "type": "null"
               }
             ],
-            "title": "Position"
+            "title": "Chức danh"
           },
           "tax_code": {
             "anyOf": [
@@ -2141,7 +2501,7 @@
                 "type": "null"
               }
             ],
-            "title": "Tax Code"
+            "title": "Mã số thuế TNCN"
           }
         },
         "required": [
@@ -2186,7 +2546,7 @@
                 "type": "null"
               }
             ],
-            "title": "Bank Account Holder"
+            "title": "Chủ tài khoản"
           },
           "bank_account_number": {
             "anyOf": [
@@ -2198,7 +2558,7 @@
                 "type": "null"
               }
             ],
-            "title": "Bank Account Number"
+            "title": "Số tài khoản nhận lương"
           },
           "bank_id": {
             "anyOf": [
@@ -2209,7 +2569,7 @@
                 "type": "null"
               }
             ],
-            "title": "Bank Id"
+            "title": "Ngân hàng"
           },
           "branch_id": {
             "anyOf": [
@@ -2236,7 +2596,7 @@
                 "type": "null"
               }
             ],
-            "title": "Department"
+            "title": "Phòng ban"
           },
           "email": {
             "anyOf": [
@@ -2264,7 +2624,7 @@
                 "type": "null"
               }
             ],
-            "title": "Id Number"
+            "title": "Số CMND/CCCD"
           },
           "is_active": {
             "title": "Is Active",
@@ -2318,7 +2678,7 @@
                 "type": "null"
               }
             ],
-            "title": "Phone"
+            "title": "Điện thoại"
           },
           "position": {
             "anyOf": [
@@ -2330,7 +2690,7 @@
                 "type": "null"
               }
             ],
-            "title": "Position"
+            "title": "Chức danh"
           },
           "row_version": {
             "title": "Row Version",
@@ -2346,7 +2706,7 @@
                 "type": "null"
               }
             ],
-            "title": "Tax Code"
+            "title": "Mã số thuế TNCN"
           },
           "uid": {
             "title": "Uid",
@@ -2384,7 +2744,7 @@
                 "type": "null"
               }
             ],
-            "title": "Bank Account Holder"
+            "title": "Chủ tài khoản"
           },
           "bank_account_number": {
             "anyOf": [
@@ -2396,7 +2756,7 @@
                 "type": "null"
               }
             ],
-            "title": "Bank Account Number"
+            "title": "Số tài khoản nhận lương"
           },
           "bank_id": {
             "anyOf": [
@@ -2407,7 +2767,7 @@
                 "type": "null"
               }
             ],
-            "title": "Bank Id"
+            "title": "Ngân hàng"
           },
           "code": {
             "maxLength": 50,
@@ -2425,7 +2785,7 @@
                 "type": "null"
               }
             ],
-            "title": "Department"
+            "title": "Phòng ban"
           },
           "email": {
             "anyOf": [
@@ -2449,7 +2809,7 @@
                 "type": "null"
               }
             ],
-            "title": "Id Number"
+            "title": "Số CMND/CCCD"
           },
           "is_active": {
             "title": "Is Active",
@@ -2483,7 +2843,7 @@
                 "type": "null"
               }
             ],
-            "title": "Phone"
+            "title": "Điện thoại"
           },
           "position": {
             "anyOf": [
@@ -2495,7 +2855,7 @@
                 "type": "null"
               }
             ],
-            "title": "Position"
+            "title": "Chức danh"
           },
           "row_version": {
             "minimum": 1.0,
@@ -2512,7 +2872,7 @@
                 "type": "null"
               }
             ],
-            "title": "Tax Code"
+            "title": "Mã số thuế TNCN"
           }
         },
         "required": [
@@ -3036,6 +3396,86 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "ImportCommitRequest": {
+        "additionalProperties": false,
+        "description": "Bước ghi: trỏ vào **lượt kiểm** đã thành công, không trỏ vào tệp (H78).",
+        "properties": {
+          "validation_job_id": {
+            "description": "`job_id` mà bước kiểm dữ liệu trả về, phải đã chạy xong và không còn dòng lỗi",
+            "format": "uuid",
+            "title": "Validation Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "validation_job_id"
+        ],
+        "title": "ImportCommitRequest",
+        "type": "object"
+      },
+      "ImportCommitResponse": {
+        "description": "Lượt ghi đã được xếp hàng.",
+        "properties": {
+          "catalog": {
+            "title": "Catalog",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "catalog"
+        ],
+        "title": "ImportCommitResponse",
+        "type": "object"
+      },
+      "ImportMode": {
+        "description": "Lượt nhập được phép làm gì với mã đã tồn tại (H80).\n\nMặc định là `CREATE_ONLY` ở mọi nơi khai giá trị này. Đó là quyết định có\nchủ đích: `CREATE_AND_UPDATE` biến một bảng tính dán nhầm thành một lần sửa\nhàng loạt không ai duyệt, nên nó phải là thứ người dùng **chọn**, và chọn\nsau khi đọc con số \"sẽ cập nhật 9.960 dòng\" trong báo cáo.",
+        "enum": [
+          "create_only",
+          "create_and_update"
+        ],
+        "title": "ImportMode",
+        "type": "string"
+      },
+      "ImportValidateResponse": {
+        "description": "Lượt kiểm đã được xếp hàng.\n\nTrả `content_hash` về cho client dù nó không phải nhập lại ở bước ghi: màn\nhình cần nó để nhận ra \"tệp này tôi vừa tải lên xong\" khi người dùng bấm tải\nlên cùng một tệp hai lần, và để hiện ra ở phần lịch sử.",
+        "properties": {
+          "catalog": {
+            "title": "Catalog",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode"
+          }
+        },
+        "required": [
+          "job_id",
+          "catalog",
+          "file_name",
+          "content_hash",
+          "mode"
+        ],
+        "title": "ImportValidateResponse",
+        "type": "object"
+      },
       "InvoiceFormsCreateRequest": {
         "additionalProperties": false,
         "description": "Mẫu số hóa đơn — tạo mới.",
@@ -3515,7 +3955,7 @@
                 "type": "null"
               }
             ],
-            "title": "Base Unit Id"
+            "title": "Đơn vị chính"
           },
           "branch_id": {
             "anyOf": [
@@ -3544,7 +3984,7 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Diễn giải"
           },
           "is_group": {
             "default": false,
@@ -3577,7 +4017,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Tính chất"
           },
           "parent_id": {
             "anyOf": [
@@ -3599,7 +4040,7 @@
                 "type": "null"
               }
             ],
-            "title": "Warehouse Id"
+            "title": "Kho ngầm định"
           }
         },
         "required": [
@@ -3643,7 +4084,7 @@
                 "type": "null"
               }
             ],
-            "title": "Base Unit Id"
+            "title": "Đơn vị chính"
           },
           "branch_id": {
             "anyOf": [
@@ -3670,7 +4111,7 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Diễn giải"
           },
           "id": {
             "title": "Id",
@@ -3711,7 +4152,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Tính chất"
           },
           "parent_id": {
             "anyOf": [
@@ -3745,7 +4187,7 @@
                 "type": "null"
               }
             ],
-            "title": "Warehouse Id"
+            "title": "Kho ngầm định"
           }
         },
         "required": [
@@ -3785,7 +4227,7 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Diễn giải"
           },
           "is_active": {
             "title": "Is Active",
@@ -3823,7 +4265,7 @@
                 "type": "null"
               }
             ],
-            "title": "Warehouse Id"
+            "title": "Kho ngầm định"
           }
         },
         "required": [
@@ -4513,7 +4955,7 @@
                 "type": "null"
               }
             ],
-            "title": "Address"
+            "title": "Địa chỉ"
           },
           "branch_id": {
             "anyOf": [
@@ -4542,7 +4984,7 @@
                 "type": "null"
               }
             ],
-            "title": "Contact Name"
+            "title": "Người liên hệ"
           },
           "country": {
             "anyOf": [
@@ -4554,7 +4996,7 @@
                 "type": "null"
               }
             ],
-            "title": "Country"
+            "title": "Quốc gia"
           },
           "credit_limit": {
             "anyOf": [
@@ -4570,7 +5012,7 @@
                 "type": "null"
               }
             ],
-            "title": "Credit Limit"
+            "title": "Ngưỡng nợ"
           },
           "district": {
             "anyOf": [
@@ -4582,7 +5024,7 @@
                 "type": "null"
               }
             ],
-            "title": "District"
+            "title": "Quận/Huyện"
           },
           "email": {
             "anyOf": [
@@ -4606,7 +5048,7 @@
                 "type": "null"
               }
             ],
-            "title": "Invoice Email"
+            "title": "Email nhận hóa đơn"
           },
           "invoice_recipient": {
             "anyOf": [
@@ -4618,11 +5060,11 @@
                 "type": "null"
               }
             ],
-            "title": "Invoice Recipient"
+            "title": "Người nhận hóa đơn"
           },
           "is_customer": {
             "default": false,
-            "title": "Is Customer",
+            "title": "Là khách hàng",
             "type": "boolean"
           },
           "is_group": {
@@ -4632,12 +5074,12 @@
           },
           "is_organization": {
             "default": true,
-            "title": "Is Organization",
+            "title": "Là tổ chức",
             "type": "boolean"
           },
           "is_vendor": {
             "default": false,
-            "title": "Is Vendor",
+            "title": "Là nhà cung cấp",
             "type": "boolean"
           },
           "name": {
@@ -4678,7 +5120,7 @@
                 "type": "null"
               }
             ],
-            "title": "Payment Term Id"
+            "title": "Điều khoản thanh toán"
           },
           "phone": {
             "anyOf": [
@@ -4690,7 +5132,7 @@
                 "type": "null"
               }
             ],
-            "title": "Phone"
+            "title": "Điện thoại"
           },
           "province": {
             "anyOf": [
@@ -4702,7 +5144,7 @@
                 "type": "null"
               }
             ],
-            "title": "Province"
+            "title": "Tỉnh/Thành phố"
           },
           "tax_code": {
             "anyOf": [
@@ -4714,7 +5156,7 @@
                 "type": "null"
               }
             ],
-            "title": "Tax Code"
+            "title": "Mã số thuế"
           },
           "website": {
             "anyOf": [
@@ -4771,7 +5213,7 @@
                 "type": "null"
               }
             ],
-            "title": "Address"
+            "title": "Địa chỉ"
           },
           "branch_id": {
             "anyOf": [
@@ -4798,7 +5240,7 @@
                 "type": "null"
               }
             ],
-            "title": "Contact Name"
+            "title": "Người liên hệ"
           },
           "country": {
             "anyOf": [
@@ -4810,7 +5252,7 @@
                 "type": "null"
               }
             ],
-            "title": "Country"
+            "title": "Quốc gia"
           },
           "credit_limit": {
             "anyOf": [
@@ -4822,7 +5264,7 @@
                 "type": "null"
               }
             ],
-            "title": "Credit Limit"
+            "title": "Ngưỡng nợ"
           },
           "district": {
             "anyOf": [
@@ -4834,7 +5276,7 @@
                 "type": "null"
               }
             ],
-            "title": "District"
+            "title": "Quận/Huyện"
           },
           "email": {
             "anyOf": [
@@ -4862,7 +5304,7 @@
                 "type": "null"
               }
             ],
-            "title": "Invoice Email"
+            "title": "Email nhận hóa đơn"
           },
           "invoice_recipient": {
             "anyOf": [
@@ -4874,7 +5316,7 @@
                 "type": "null"
               }
             ],
-            "title": "Invoice Recipient"
+            "title": "Người nhận hóa đơn"
           },
           "is_active": {
             "title": "Is Active",
@@ -4882,7 +5324,7 @@
           },
           "is_customer": {
             "default": false,
-            "title": "Is Customer",
+            "title": "Là khách hàng",
             "type": "boolean"
           },
           "is_group": {
@@ -4891,12 +5333,12 @@
           },
           "is_organization": {
             "default": true,
-            "title": "Is Organization",
+            "title": "Là tổ chức",
             "type": "boolean"
           },
           "is_vendor": {
             "default": false,
-            "title": "Is Vendor",
+            "title": "Là nhà cung cấp",
             "type": "boolean"
           },
           "level": {
@@ -4942,7 +5384,7 @@
                 "type": "null"
               }
             ],
-            "title": "Payment Term Id"
+            "title": "Điều khoản thanh toán"
           },
           "phone": {
             "anyOf": [
@@ -4954,7 +5396,7 @@
                 "type": "null"
               }
             ],
-            "title": "Phone"
+            "title": "Điện thoại"
           },
           "province": {
             "anyOf": [
@@ -4966,7 +5408,7 @@
                 "type": "null"
               }
             ],
-            "title": "Province"
+            "title": "Tỉnh/Thành phố"
           },
           "row_version": {
             "title": "Row Version",
@@ -4982,7 +5424,7 @@
                 "type": "null"
               }
             ],
-            "title": "Tax Code"
+            "title": "Mã số thuế"
           },
           "uid": {
             "title": "Uid",
@@ -5032,7 +5474,7 @@
                 "type": "null"
               }
             ],
-            "title": "Address"
+            "title": "Địa chỉ"
           },
           "code": {
             "maxLength": 50,
@@ -5050,7 +5492,7 @@
                 "type": "null"
               }
             ],
-            "title": "Contact Name"
+            "title": "Người liên hệ"
           },
           "country": {
             "anyOf": [
@@ -5062,7 +5504,7 @@
                 "type": "null"
               }
             ],
-            "title": "Country"
+            "title": "Quốc gia"
           },
           "credit_limit": {
             "anyOf": [
@@ -5078,7 +5520,7 @@
                 "type": "null"
               }
             ],
-            "title": "Credit Limit"
+            "title": "Ngưỡng nợ"
           },
           "district": {
             "anyOf": [
@@ -5090,7 +5532,7 @@
                 "type": "null"
               }
             ],
-            "title": "District"
+            "title": "Quận/Huyện"
           },
           "email": {
             "anyOf": [
@@ -5114,7 +5556,7 @@
                 "type": "null"
               }
             ],
-            "title": "Invoice Email"
+            "title": "Email nhận hóa đơn"
           },
           "invoice_recipient": {
             "anyOf": [
@@ -5126,7 +5568,7 @@
                 "type": "null"
               }
             ],
-            "title": "Invoice Recipient"
+            "title": "Người nhận hóa đơn"
           },
           "is_active": {
             "title": "Is Active",
@@ -5134,17 +5576,17 @@
           },
           "is_customer": {
             "default": false,
-            "title": "Is Customer",
+            "title": "Là khách hàng",
             "type": "boolean"
           },
           "is_organization": {
             "default": true,
-            "title": "Is Organization",
+            "title": "Là tổ chức",
             "type": "boolean"
           },
           "is_vendor": {
             "default": false,
-            "title": "Is Vendor",
+            "title": "Là nhà cung cấp",
             "type": "boolean"
           },
           "name": {
@@ -5174,7 +5616,7 @@
                 "type": "null"
               }
             ],
-            "title": "Payment Term Id"
+            "title": "Điều khoản thanh toán"
           },
           "phone": {
             "anyOf": [
@@ -5186,7 +5628,7 @@
                 "type": "null"
               }
             ],
-            "title": "Phone"
+            "title": "Điện thoại"
           },
           "province": {
             "anyOf": [
@@ -5198,7 +5640,7 @@
                 "type": "null"
               }
             ],
-            "title": "Province"
+            "title": "Tỉnh/Thành phố"
           },
           "row_version": {
             "minimum": 1.0,
@@ -5215,7 +5657,7 @@
                 "type": "null"
               }
             ],
-            "title": "Tax Code"
+            "title": "Mã số thuế"
           },
           "website": {
             "anyOf": [
@@ -5263,7 +5705,7 @@
           "discount_days": {
             "default": 0,
             "minimum": 0.0,
-            "title": "Discount Days",
+            "title": "Số ngày hưởng chiết khấu",
             "type": "integer"
           },
           "discount_percent": {
@@ -5279,12 +5721,12 @@
               }
             ],
             "default": "0",
-            "title": "Discount Percent"
+            "title": "Tỷ lệ chiết khấu (%)"
           },
           "due_days": {
             "default": 0,
             "minimum": 0.0,
-            "title": "Due Days",
+            "title": "Số ngày được nợ",
             "type": "integer"
           },
           "is_group": {
@@ -5372,19 +5814,19 @@
           "discount_days": {
             "default": 0,
             "minimum": 0.0,
-            "title": "Discount Days",
+            "title": "Số ngày hưởng chiết khấu",
             "type": "integer"
           },
           "discount_percent": {
             "default": "0",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Discount Percent",
+            "title": "Tỷ lệ chiết khấu (%)",
             "type": "string"
           },
           "due_days": {
             "default": 0,
             "minimum": 0.0,
-            "title": "Due Days",
+            "title": "Số ngày được nợ",
             "type": "integer"
           },
           "id": {
@@ -5472,7 +5914,7 @@
           "discount_days": {
             "default": 0,
             "minimum": 0.0,
-            "title": "Discount Days",
+            "title": "Số ngày hưởng chiết khấu",
             "type": "integer"
           },
           "discount_percent": {
@@ -5488,12 +5930,12 @@
               }
             ],
             "default": "0",
-            "title": "Discount Percent"
+            "title": "Tỷ lệ chiết khấu (%)"
           },
           "due_days": {
             "default": 0,
             "minimum": 0.0,
-            "title": "Due Days",
+            "title": "Số ngày được nợ",
             "type": "integer"
           },
           "is_active": {
@@ -7028,7 +7470,7 @@
                 "type": "null"
               }
             ],
-            "title": "Default Allocation Months"
+            "title": "Thời gian phân bổ ngầm định (tháng)"
           },
           "is_group": {
             "default": false,
@@ -7122,7 +7564,7 @@
                 "type": "null"
               }
             ],
-            "title": "Default Allocation Months"
+            "title": "Thời gian phân bổ ngầm định (tháng)"
           },
           "id": {
             "title": "Id",
@@ -7216,7 +7658,7 @@
                 "type": "null"
               }
             ],
-            "title": "Default Allocation Months"
+            "title": "Thời gian phân bổ ngầm định (tháng)"
           },
           "is_active": {
             "title": "Is Active",
@@ -7784,7 +8226,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.15.0"
+    "version": "0.16.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8869,6 +9311,118 @@
         ]
       }
     },
+    "/api/v1/master/asset_types/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_asset_types_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại tài sản cố định — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/asset_types/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_asset_types_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_asset_types_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại tài sản cố định — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/asset_types/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_asset_types_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại tài sản cố định — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
     "/api/v1/master/asset_types/{record_id}": {
       "delete": {
         "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
@@ -9235,6 +9789,118 @@
         "summary": "Ngân hàng — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/banks/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_banks_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Ngân hàng — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/banks/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_banks_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_banks_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Ngân hàng — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/banks/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_banks_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Ngân hàng — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
         ]
       }
     },
@@ -9607,6 +10273,118 @@
         ]
       }
     },
+    "/api/v1/master/contracts/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_contracts_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Hợp đồng — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/contracts/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_contracts_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_contracts_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Hợp đồng — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/contracts/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_contracts_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Hợp đồng — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
     "/api/v1/master/contracts/{record_id}": {
       "delete": {
         "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
@@ -9973,6 +10751,118 @@
         "summary": "Đối tượng tập hợp chi phí — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/cost_objects/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_cost_objects_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đối tượng tập hợp chi phí — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/cost_objects/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_cost_objects_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_cost_objects_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đối tượng tập hợp chi phí — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/cost_objects/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_cost_objects_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đối tượng tập hợp chi phí — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
         ]
       }
     },
@@ -10345,6 +11235,118 @@
         ]
       }
     },
+    "/api/v1/master/document_types/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_document_types_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại chứng từ — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/document_types/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_document_types_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_document_types_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại chứng từ — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/document_types/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_document_types_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại chứng từ — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
     "/api/v1/master/document_types/{record_id}": {
       "delete": {
         "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
@@ -10711,6 +11713,118 @@
         "summary": "Nhân viên — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/employees/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_employees_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Nhân viên — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/employees/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_employees_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_employees_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Nhân viên — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/employees/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_employees_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Nhân viên — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
         ]
       }
     },
@@ -11083,6 +12197,118 @@
         ]
       }
     },
+    "/api/v1/master/excise_tax_tables/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_excise_tax_tables_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu thuế tiêu thụ đặc biệt — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/excise_tax_tables/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_excise_tax_tables_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_excise_tax_tables_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu thuế tiêu thụ đặc biệt — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/excise_tax_tables/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_excise_tax_tables_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu thuế tiêu thụ đặc biệt — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
     "/api/v1/master/excise_tax_tables/{record_id}": {
       "delete": {
         "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
@@ -11449,6 +12675,118 @@
         "summary": "Khoản mục chi phí — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/expense_items/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_expense_items_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Khoản mục chi phí — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/expense_items/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_expense_items_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_expense_items_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Khoản mục chi phí — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/expense_items/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_expense_items_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Khoản mục chi phí — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
         ]
       }
     },
@@ -11821,6 +13159,118 @@
         ]
       }
     },
+    "/api/v1/master/invoice_forms/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_invoice_forms_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Mẫu số hóa đơn — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/invoice_forms/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_invoice_forms_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_invoice_forms_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Mẫu số hóa đơn — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/invoice_forms/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_invoice_forms_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Mẫu số hóa đơn — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
     "/api/v1/master/invoice_forms/{record_id}": {
       "delete": {
         "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
@@ -12187,6 +13637,118 @@
         "summary": "Vật tư hàng hóa — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/items/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_items_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/items/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_items_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_items_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/items/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_items_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
         ]
       }
     },
@@ -12967,6 +14529,118 @@
         ]
       }
     },
+    "/api/v1/master/partners/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_partners_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đối tác — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/partners/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_partners_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_partners_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đối tác — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/partners/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_partners_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đối tác — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
     "/api/v1/master/partners/{partner_id}/bank-accounts": {
       "get": {
         "description": "Tài khoản của một đối tác — mặc định trước.\n\n**Không** phân trang, khác đường đọc danh mục: một đối tác có vài tài khoản,\nkhông phải vài nghìn. Thêm phân trang ở đây là thêm hai tham số mà mọi màn\nhình sẽ truyền giá trị mặc định.",
@@ -13545,6 +15219,118 @@
         ]
       }
     },
+    "/api/v1/master/payment_terms/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_payment_terms_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Điều khoản thanh toán — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/payment_terms/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_payment_terms_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_payment_terms_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Điều khoản thanh toán — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/payment_terms/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_payment_terms_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Điều khoản thanh toán — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
     "/api/v1/master/payment_terms/{record_id}": {
       "delete": {
         "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
@@ -13911,6 +15697,118 @@
         "summary": "Biểu tính thuế thu nhập cá nhân — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/pit_tables/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_pit_tables_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu tính thuế thu nhập cá nhân — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/pit_tables/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_pit_tables_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_pit_tables_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu tính thuế thu nhập cá nhân — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/pit_tables/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_pit_tables_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu tính thuế thu nhập cá nhân — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
         ]
       }
     },
@@ -14283,6 +16181,118 @@
         ]
       }
     },
+    "/api/v1/master/project_types/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_project_types_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại công trình — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/project_types/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_project_types_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_project_types_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại công trình — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/project_types/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_project_types_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại công trình — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
     "/api/v1/master/project_types/{record_id}": {
       "delete": {
         "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
@@ -14649,6 +16659,118 @@
         "summary": "Công trình — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/projects/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_projects_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Công trình — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/projects/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_projects_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_projects_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Công trình — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/projects/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_projects_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Công trình — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
         ]
       }
     },
@@ -15021,6 +17143,118 @@
         ]
       }
     },
+    "/api/v1/master/resource_tax_tables/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_resource_tax_tables_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu thuế tài nguyên — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/resource_tax_tables/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_resource_tax_tables_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_resource_tax_tables_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu thuế tài nguyên — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/resource_tax_tables/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_resource_tax_tables_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu thuế tài nguyên — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
     "/api/v1/master/resource_tax_tables/{record_id}": {
       "delete": {
         "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
@@ -15387,6 +17621,118 @@
         "summary": "Ký hiệu chấm công — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/timekeeping_symbols/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_timekeeping_symbols_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Ký hiệu chấm công — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/timekeeping_symbols/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_timekeeping_symbols_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_timekeeping_symbols_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Ký hiệu chấm công — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/timekeeping_symbols/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_timekeeping_symbols_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Ký hiệu chấm công — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
         ]
       }
     },
@@ -15759,6 +18105,118 @@
         ]
       }
     },
+    "/api/v1/master/tool_types/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_tool_types_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại công cụ dụng cụ — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/tool_types/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_tool_types_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_tool_types_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại công cụ dụng cụ — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/tool_types/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_tool_types_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại công cụ dụng cụ — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
     "/api/v1/master/tool_types/{record_id}": {
       "delete": {
         "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
@@ -16128,6 +18586,118 @@
         ]
       }
     },
+    "/api/v1/master/units_of_measure/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_units_of_measure_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đơn vị tính — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/units_of_measure/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_units_of_measure_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_units_of_measure_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đơn vị tính — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/units_of_measure/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_units_of_measure_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đơn vị tính — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
     "/api/v1/master/units_of_measure/{record_id}": {
       "delete": {
         "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
@@ -16494,6 +19064,118 @@
         "summary": "Kho — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/warehouses/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_warehouses_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Kho — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/warehouses/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_warehouses_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_warehouses_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Kho — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/warehouses/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_warehouses_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Kho — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
         ]
       }
     },

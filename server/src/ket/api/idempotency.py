@@ -77,6 +77,35 @@ Tách khỏi danh sách tiền tố vì rủi ro khác nhau: một tiền tố m
 những endpoint chưa ai viết, còn danh sách này thì mỗi lần thêm là một quyết
 định về một endpoint cụ thể."""
 
+IDEMPOTENCY_EXEMPT_SUFFIXES: Final[tuple[str, ...]] = (
+    # Nhập liệu danh mục từ Excel (lát 3C-1). Hai endpoint này **xếp hàng**, y
+    # như `/api/v1/jobs`: chúng tạo một *yêu cầu*, không ghi dữ liệu kế toán, và
+    # cả hai loại job đều khai `IDEMPOTENT_RESTART`.
+    #
+    # Vì sao gửi lại vô hại, xét riêng từng cái:
+    #
+    # * `validate` chỉ đọc. Tệp đi vào kho định địa chỉ theo nội dung nên lượt
+    #   thứ hai không tốn thêm byte nào, và nó sinh ra một báo cáo thứ hai giống
+    #   hệt.
+    # * `commit` ghi, nhưng ghi **lũy đẳng theo thiết kế** (H85): ở chế độ
+    #   `create_only` lượt thứ hai thấy mọi mã đã tồn tại nên dừng với toàn dòng
+    #   lỗi và không ghi gì; ở `create_and_update` nó ghi lại đúng cùng giá trị
+    #   từ đúng cùng tệp — `content_hash` của lượt kiểm quyết định tệp nào được
+    #   đọc, và client không khai lại được giá trị đó.
+    #
+    # Miễn trừ theo **hậu tố** chứ không tiền tố: tiền tố dùng được ở đây chỉ có
+    # `/api/v1/master/`, và nó sẽ miễn trừ luôn `POST /api/v1/master/{slug}` —
+    # đường tạo bản ghi, đúng thứ FR-NFR-004 sinh ra để canh. Hậu tố hẹp tới mức
+    # chỉ khớp hai endpoint này và những endpoint nhập liệu ra đời sau chúng.
+    "/import/validate",
+    "/import/commit",
+)
+"""Miễn trừ theo **đuôi đường dẫn**, cho nhóm endpoint sinh ra cho từng danh mục.
+
+Cần một dạng thứ ba vì hai dạng trên đều không diễn đạt được nhóm này: liệt kê
+đủ thì phải viết ra bốn mươi đường dẫn và cập nhật danh sách ấy mỗi lần phase
+sau thêm một danh mục, còn tiền tố thì rộng tới mức nuốt luôn đường ghi."""
+
 
 def idempotency_key_dependency(route_key: str) -> Callable[[Request], str]:
     """Dựng dependency đọc khóa cho **một** route đã khai.
@@ -156,7 +185,11 @@ def _search(dependant: Dependant) -> str | None:
 
 def is_exempt(path: str) -> bool:
     """Đường dẫn nằm trong danh sách miễn trừ của FR-NFR-004?"""
-    return path in IDEMPOTENCY_EXEMPT_PATHS or path.startswith(IDEMPOTENCY_EXEMPT_PREFIXES)
+    return (
+        path in IDEMPOTENCY_EXEMPT_PATHS
+        or path.startswith(IDEMPOTENCY_EXEMPT_PREFIXES)
+        or path.endswith(IDEMPOTENCY_EXEMPT_SUFFIXES)
+    )
 
 
 def route_key_fits_column(route_key: str) -> bool:

@@ -106,16 +106,26 @@ class Employee(MasterDataRow):
 class EmployeeFields(BaseModel):
     """Phần riêng của nhân viên trên API (`registry.CatalogSpec`)."""
 
-    department: str | None = Field(default=None, max_length=DEPARTMENT_MAX_LENGTH)
-    position: str | None = Field(default=None, max_length=POSITION_MAX_LENGTH)
-    id_number: str | None = Field(default=None, max_length=ID_NUMBER_MAX_LENGTH)
-    tax_code: str | None = Field(default=None, max_length=TAX_CODE_MAX_LENGTH)
-    phone: str | None = Field(default=None, max_length=PHONE_MAX_LENGTH)
-    email: str | None = Field(default=None, max_length=EMAIL_MAX_LENGTH)
+    department: str | None = Field(
+        title="Phòng ban", default=None, max_length=DEPARTMENT_MAX_LENGTH
+    )
+    position: str | None = Field(title="Chức danh", default=None, max_length=POSITION_MAX_LENGTH)
+    id_number: str | None = Field(
+        title="Số CMND/CCCD", default=None, max_length=ID_NUMBER_MAX_LENGTH
+    )
+    tax_code: str | None = Field(
+        title="Mã số thuế TNCN", default=None, max_length=TAX_CODE_MAX_LENGTH
+    )
+    phone: str | None = Field(title="Điện thoại", default=None, max_length=PHONE_MAX_LENGTH)
+    email: str | None = Field(title="Email", default=None, max_length=EMAIL_MAX_LENGTH)
 
-    bank_id: int | None = None
-    bank_account_number: str | None = Field(default=None, max_length=BANK_ACCOUNT_MAX_LENGTH)
-    bank_account_holder: str | None = Field(default=None, max_length=NAME_MAX_LENGTH)
+    bank_id: int | None = Field(default=None, title="Ngân hàng")
+    bank_account_number: str | None = Field(
+        title="Số tài khoản nhận lương", default=None, max_length=BANK_ACCOUNT_MAX_LENGTH
+    )
+    bank_account_holder: str | None = Field(
+        title="Chủ tài khoản", default=None, max_length=NAME_MAX_LENGTH
+    )
 
     @model_validator(mode="after")
     def _bank_account_needs_bank(self) -> Self:

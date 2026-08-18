@@ -52,6 +52,7 @@ from ket.api.routers.attachments import ATTACHMENTS_PREFIX
 from ket.api.routers.attachments import router as attachments_router
 from ket.api.routers.auth import router as auth_router
 from ket.api.routers.dimensions import router as dimensions_router
+from ket.api.routers.imports import router as imports_router
 from ket.api.routers.items_units import router as item_units_router
 from ket.api.routers.items_variants import router as item_variants_router
 from ket.api.routers.jobs import router as jobs_router
@@ -234,6 +235,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(jobs_router)
     app.include_router(attachments_router)
     app.include_router(updates_router)
+    # **Trước** `master_data_router`, và thứ tự này là bắt buộc: hai bộ dùng
+    # chung tiền tố `/api/v1/master`, FastAPI khớp route theo thứ tự đăng ký,
+    # và `GET /{slug}/{record_id}` khớp cả `GET /{slug}/template`. Đăng ký sau
+    # thì mọi lượt tải tệp mẫu nhận `422` ("template" không phải số nguyên)
+    # thay vì nhận tệp. `tests/test_import_api.py` canh thứ tự này.
+    app.include_router(imports_router)
     app.include_router(master_data_router)
     app.include_router(partner_bank_accounts_router)
     app.include_router(item_units_router)

@@ -51,4 +51,6 @@ class AssetType(MasterDataRow):
 class AssetTypeFields(BaseModel):
     """Phần riêng của loại TSCĐ trên API (`registry.CatalogSpec`)."""
 
-    default_useful_life_months: int | None = Field(default=None, gt=0)
+    default_useful_life_months: int | None = Field(
+        title="Thời gian sử dụng ngầm định (tháng)", default=None, gt=0
+    )

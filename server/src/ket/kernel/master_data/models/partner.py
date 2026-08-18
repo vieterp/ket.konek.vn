@@ -138,23 +138,29 @@ class Partner(MasterDataRow):
 class PartnerFields(BaseModel):
     """Phần riêng của đối tác trên API (`registry.CatalogSpec`)."""
 
-    is_customer: bool = False
-    is_vendor: bool = False
-    is_organization: bool = True
+    is_customer: bool = Field(default=False, title="Là khách hàng")
+    is_vendor: bool = Field(default=False, title="Là nhà cung cấp")
+    is_organization: bool = Field(default=True, title="Là tổ chức")
 
-    tax_code: str | None = Field(default=None, max_length=TAX_CODE_MAX_LENGTH)
-    address: str | None = Field(default=None, max_length=ADDRESS_MAX_LENGTH)
-    country: str | None = Field(default=None, max_length=REGION_MAX_LENGTH)
-    province: str | None = Field(default=None, max_length=REGION_MAX_LENGTH)
-    district: str | None = Field(default=None, max_length=REGION_MAX_LENGTH)
+    tax_code: str | None = Field(title="Mã số thuế", default=None, max_length=TAX_CODE_MAX_LENGTH)
+    address: str | None = Field(title="Địa chỉ", default=None, max_length=ADDRESS_MAX_LENGTH)
+    country: str | None = Field(title="Quốc gia", default=None, max_length=REGION_MAX_LENGTH)
+    province: str | None = Field(title="Tỉnh/Thành phố", default=None, max_length=REGION_MAX_LENGTH)
+    district: str | None = Field(title="Quận/Huyện", default=None, max_length=REGION_MAX_LENGTH)
 
-    contact_name: str | None = Field(default=None, max_length=NAME_MAX_LENGTH)
-    phone: str | None = Field(default=None, max_length=PHONE_MAX_LENGTH)
-    email: str | None = Field(default=None, max_length=EMAIL_MAX_LENGTH)
-    website: str | None = Field(default=None, max_length=WEBSITE_MAX_LENGTH)
+    contact_name: str | None = Field(
+        title="Người liên hệ", default=None, max_length=NAME_MAX_LENGTH
+    )
+    phone: str | None = Field(title="Điện thoại", default=None, max_length=PHONE_MAX_LENGTH)
+    email: str | None = Field(title="Email", default=None, max_length=EMAIL_MAX_LENGTH)
+    website: str | None = Field(title="Website", default=None, max_length=WEBSITE_MAX_LENGTH)
 
-    invoice_recipient: str | None = Field(default=None, max_length=NAME_MAX_LENGTH)
-    invoice_email: str | None = Field(default=None, max_length=EMAIL_MAX_LENGTH)
+    invoice_recipient: str | None = Field(
+        title="Người nhận hóa đơn", default=None, max_length=NAME_MAX_LENGTH
+    )
+    invoice_email: str | None = Field(
+        title="Email nhận hóa đơn", default=None, max_length=EMAIL_MAX_LENGTH
+    )
 
-    payment_term_id: int | None = None
-    credit_limit: Decimal | None = Field(default=None, ge=0)
+    payment_term_id: int | None = Field(default=None, title="Điều khoản thanh toán")
+    credit_limit: Decimal | None = Field(title="Ngưỡng nợ", default=None, ge=0)

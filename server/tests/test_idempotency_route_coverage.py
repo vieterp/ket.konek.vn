@@ -16,6 +16,7 @@ from fastapi.routing import APIRoute
 from ket.api.idempotency import (
     IDEMPOTENCY_EXEMPT_PATHS,
     IDEMPOTENCY_EXEMPT_PREFIXES,
+    IDEMPOTENCY_EXEMPT_SUFFIXES,
     declared_route_key,
     is_exempt,
     iter_api_routes,
@@ -102,6 +103,15 @@ def test_the_exemption_list_is_exactly_what_was_reviewed() -> None:
             "/api/v1/system/users/{user_id}/branches",
             "/api/v1/jobs",
         }
+    )
+    # Cơ chế thứ ba, thêm ở lát 3C-1. Ghim nó ở đây vì chính docstring bên trên
+    # hứa "mọi lần nới danh sách đều làm test này đỏ" — và lời hứa ấy **đã sai**
+    # trong khoảng thời gian hằng số này tồn tại mà khẳng định thì chưa: thêm
+    # `"/warehouses"` vào tuple hậu tố miễn trừ luôn `POST /api/v1/master/warehouses`,
+    # đúng đường tạo bản ghi mà FR-NFR-004 sinh ra để canh, và không test nào đỏ.
+    assert IDEMPOTENCY_EXEMPT_SUFFIXES == (
+        "/import/validate",
+        "/import/commit",
     )
 
 

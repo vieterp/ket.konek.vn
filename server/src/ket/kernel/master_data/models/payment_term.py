@@ -79,9 +79,11 @@ class PaymentTermFields(BaseModel):
     3C không đi qua Pydantic của endpoint này.
     """
 
-    due_days: int = Field(default=0, ge=0)
-    discount_days: int = Field(default=0, ge=0)
-    discount_percent: Decimal = Field(default=Decimal(0), ge=0, le=100)
+    due_days: int = Field(title="Số ngày được nợ", default=0, ge=0)
+    discount_days: int = Field(title="Số ngày hưởng chiết khấu", default=0, ge=0)
+    discount_percent: Decimal = Field(
+        title="Tỷ lệ chiết khấu (%)", default=Decimal(0), ge=0, le=100
+    )
 
     @model_validator(mode="after")
     def _discount_window_within_due(self) -> Self:

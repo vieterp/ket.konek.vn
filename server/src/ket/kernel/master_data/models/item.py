@@ -104,9 +104,14 @@ _NATURE_TYPE = Enum(
     # trong cùng transaction với phần còn lại của migration ở nhiều bản PostgreSQL.
     native_enum=False,
     length=_NATURE_MAX_LENGTH,
-    # Không sinh `CHECK` liệt kê giá trị: bất biến thật đã nằm ở
-    # `nature_set_unless_group` cùng hai ràng buộc bên dưới, và một `CHECK` liệt kê
-    # nữa là chỗ thứ hai phải sửa mỗi lần thêm một tính chất.
+    # Không sinh `CHECK` từ **kiểu** enum: mọi enum của dự án khai `False` ở đây,
+    # và bật riêng một cái sẽ tạo ra một ràng buộc mà `compare_metadata` của
+    # Alembic không đối chiếu được (nó không dựng lại `CHECK` sinh từ kiểu), tức
+    # cổng `test_migrations_match_models` đỏ vĩnh viễn.
+    #
+    # Ràng buộc liệt kê giá trị vẫn có — khai **tường minh** ở `_item_table_args()`
+    # cạnh ba `CHECK` khác của bảng này, nơi Alembic đối chiếu được bình thường.
+    # Xem `nature_known` ở đó (H90, lát 3C-1).
     create_constraint=False,
     # Lưu **giá trị** (`"goods"`) chứ không tên thành viên (`"GOODS"`): mặc định
     # của SQLAlchemy là tên, và nó sẽ lệch với mọi câu SQL viết tay của gói cấu
@@ -119,9 +124,32 @@ viên enum, không phải `str` thuần (xem `dimensions/models.py`)."""
 _INVENTORY_NATURE_SQL = ", ".join(f"'{nature.value}'" for nature in sorted(INVENTORY_NATURES))
 
 
+_ALL_NATURE_SQL = ", ".join(f"'{nature.value}'" for nature in ItemNature)
+
+
 def _item_table_args() -> tuple[SchemaItem, ...]:
     return (
         *master_data_table_args(ITEM_TABLE_NAME),
+        # Chỉ nhận bốn tính chất đã khai (H90, lát 3C-1 — đảo quyết định của 3B-3).
+        #
+        # 3B-3 cố ý bỏ ràng buộc này: "bất biến thật đã nằm ở
+        # `nature_set_unless_group`, và một `CHECK` liệt kê nữa là chỗ thứ hai
+        # phải sửa mỗi lần thêm một tính chất". Lập luận đó đúng khi **mọi** đường
+        # ghi đi qua Pydantic, thứ vốn đã ép enum.
+        #
+        # Lát 3C-1 thêm một đường ghi không qua Pydantic: nhập liệu từ Excel ghi
+        # bằng `INSERT ... SELECT`, nên một ô gõ sai đặt được `'khong_ton_tai'` vào
+        # cột `varchar` này. Hậu quả không nằm ở dòng đó — SQLAlchemy đọc cột thành
+        # `ItemNature`, nên sau đấy **mọi** lượt đọc `Item` qua ORM ném
+        # `LookupError`: màn hình danh mục vật tư hỏng cho cả dữ liệu kế toán, và
+        # bản ghi sai không sửa hay xóa được từ giao diện.
+        #
+        # Phase 5 còn thêm một đường ghi không qua Pydantic nữa (gói cấu hình chạy
+        # SQL), nên lớp ở DB là lớp duy nhất bao được cả ba.
+        CheckConstraint(
+            f"nature IS NULL OR nature IN ({_ALL_NATURE_SQL})",
+            name="nature_known",
+        ),
         # Nút **nhóm** không có tính chất: nó chỉ gom cây, không bao giờ lên
         # chứng từ. Cho nó một tính chất mặc định sẽ là một giá trị mang nghĩa
         # với mọi truy vấn mà không mang nghĩa với người dùng.
@@ -189,8 +217,10 @@ class Item(MasterDataRow):
 class ItemEditableFields(BaseModel):
     """Phần cột riêng **sửa được** qua `PUT` (`CatalogSpec.extra_update_fields`)."""
 
-    warehouse_id: int | None = None
-    description: str | None = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
+    warehouse_id: int | None = Field(default=None, title="Kho ngầm định")
+    description: str | None = Field(
+        title="Diễn giải", default=None, max_length=DESCRIPTION_MAX_LENGTH
+    )
 
 
 class ItemUpdateGuard:
@@ -226,8 +256,8 @@ class ItemFields(ItemEditableFields):
     `test_master_data_registry.py` khẳng định đúng quan hệ kế thừa ấy.
     """
 
-    nature: ItemNature | None = None
-    base_unit_id: int | None = None
+    nature: ItemNature | None = Field(default=None, title="Tính chất")
+    base_unit_id: int | None = Field(default=None, title="Đơn vị chính")
 
     @model_validator(mode="after")
     def _check_nature_and_unit(self) -> ItemFields:
