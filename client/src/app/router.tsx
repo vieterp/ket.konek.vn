@@ -28,15 +28,32 @@
 
 import type { ReactElement } from 'react'
 import type { RouteObject } from 'react-router-dom'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 
 import { NAVIGATION } from '@/app/navigation'
 import { PlaceholderPage } from '@/app/placeholder-page'
 import { SessionGate } from '@/app/session-gate'
 import { DataGridBenchPage } from '@/features/bench/data-grid-bench-page'
+import { CatalogListPage, PartnerPage, SettingsPage } from '@/features/danh-muc-thiet-lap'
 import { KitchenSinkPage } from '@/features/kitchen-sink/kitchen-sink-page'
 
 const [home, ...groups] = NAVIGATION
+
+/**
+ * Nhóm 07 là nhóm đầu tiên có ruột thật (lát 3D): bốn route thay một trang tạm.
+ * Đường dẫn con tiếng Việt không dấu, cùng quy ước với đường dẫn nhóm.
+ */
+const danhMucThietLapRoutes: RouteObject[] = [
+  {
+    path: 'danh-muc-thiet-lap',
+    children: [
+      { index: true, element: <Navigate to="danh-muc/doi-tac" replace /> },
+      { path: 'danh-muc/:segment', element: <CatalogListPage /> },
+      { path: 'doi-tac/:id', element: <PartnerPage /> },
+      { path: 'thiet-lap', element: <SettingsPage /> },
+    ],
+  },
+]
 
 /** Rỗng trong MỌI bản dựng — xem ghi chú đầu tệp. */
 export const devOnlyRoutes: RouteObject[] = __DEV_TOOLS__
@@ -55,10 +72,13 @@ const router = createBrowserRouter([
     element: <SessionGate />,
     children: [
       ...(home === undefined ? [] : [{ index: true, element: <PlaceholderPage item={home} /> }]),
-      ...groups.map((item) => ({
-        path: item.path.slice(1),
-        element: <PlaceholderPage item={item} />,
-      })),
+      ...groups
+        .filter((item) => item.path !== '/danh-muc-thiet-lap')
+        .map((item) => ({
+          path: item.path.slice(1),
+          element: <PlaceholderPage item={item} />,
+        })),
+      ...danhMucThietLapRoutes,
       // Đường dẫn lạ (người dùng gõ tay, dấu trang cũ sau khi đổi IA) rơi về
       // trang tổng quan thay vì một trang trắng không lối ra.
       ...(home === undefined ? [] : [{ path: '*', element: <PlaceholderPage item={home} /> }]),

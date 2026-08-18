@@ -168,6 +168,49 @@ export class ApiClient {
     return this.request<T>('DELETE', path, undefined, options)
   }
 
+  /**
+   * POST một tệp kèm trường phụ (multipart) — đường nhập Excel danh mục.
+   *
+   * Tách khỏi `post` thay vì cho `post` đoán theo kiểu body: `Content-Type`
+   * của multipart phải do trình duyệt tự đặt (nó sinh `boundary`), nên nhánh
+   * "đừng đặt Content-Type" là một hợp đồng khác hẳn, đáng có tên riêng.
+   */
+  async postForm<T>(path: string, form: FormData, options?: RequestOptions): Promise<T> {
+    return this.request<T>('POST', path, form, options)
+  }
+
+  /**
+   * GET một tệp nhị phân (tệp mẫu Excel, tệp xuất danh mục).
+   *
+   * Không đi qua `request` vì phản hồi không phải JSON; nhưng lỗi thì **vẫn
+   * là** RFC 7807 — server từ chối trước khi sinh tệp — nên nhánh lỗi dùng
+   * chung `toError` để chỗ gọi chỉ phải bắt một loại `ApiError`.
+   */
+  async getBlob(
+    path: string,
+    options?: RequestOptions,
+  ): Promise<{ readonly blob: Blob; readonly fileName: string | null }> {
+    const response = await this.send('GET', path, undefined, options)
+    if (!response.ok) {
+      const error = await this.toError(response, path)
+      if (error.isSessionLost) {
+        this.token = null
+        this.onSessionLost()
+      }
+      if (error.isClientTooOld) {
+        // Server hiện chỉ kiểm phiên bản ở lệnh ghi, nhưng đường tệp không
+        // được phép lệch hành vi với đường JSON — nếu ngày nào lệnh đọc cũng
+        // bị kiểm, cờ chỉ-đọc vẫn bật đúng.
+        this.onClientTooOld()
+      }
+      throw error
+    }
+    return {
+      blob: await response.blob(),
+      fileName: fileNameFromDisposition(response.headers.get('Content-Disposition')),
+    }
+  }
+
   /** `/health` — dùng cho màn hình chẩn đoán kết nối tới máy chủ. */
   async health(): Promise<HealthStatus> {
     return this.get<HealthStatus>('/health')
@@ -187,12 +230,13 @@ export class ApiClient {
     )
   }
 
-  private async request<T>(
+  /** Gửi request thô — dùng chung cho đường JSON (`request`) và đường tệp (`getBlob`). */
+  private async send(
     method: string,
     path: string,
-    body: Body | undefined,
+    body: Body | FormData | undefined,
     options?: RequestOptions,
-  ): Promise<T> {
+  ): Promise<Response> {
     const headers: Record<string, string> = {
       Accept: 'application/json',
       [CLIENT_VERSION_HEADER]: APP_VERSION,
@@ -209,16 +253,19 @@ export class ApiClient {
     if (options?.idempotencyKey !== undefined) {
       headers[IDEMPOTENCY_HEADER] = options.idempotencyKey
     }
-    if (body !== undefined) {
+    // FormData KHÔNG đặt Content-Type: trình duyệt tự đặt kèm `boundary`,
+    // và một Content-Type đặt tay ở đây làm server đọc được 0 phần tử.
+    if (body !== undefined && !(body instanceof FormData)) {
       headers['Content-Type'] = 'application/json'
     }
 
-    let response: Response
     try {
-      response = await fetch(`${this.baseUrl}${path}`, {
+      return await fetch(`${this.baseUrl}${path}`, {
         method,
         headers,
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(body === undefined
+          ? {}
+          : { body: body instanceof FormData ? body : JSON.stringify(body) }),
         ...(options?.signal ? { signal: options.signal } : {}),
       })
     } catch (cause) {
@@ -233,6 +280,15 @@ export class ApiClient {
         error_code: 'transport.unreachable',
       })
     }
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    body: Body | FormData | undefined,
+    options?: RequestOptions,
+  ): Promise<T> {
+    const response = await this.send(method, path, body, options)
 
     if (!response.ok) {
       const error = await this.toError(response, path)
@@ -279,6 +335,28 @@ export class ApiClient {
       error_code: 'transport.unexpected_response',
     })
   }
+}
+
+/**
+ * Tên tệp server gợi ý trong `Content-Disposition`, nếu có.
+ *
+ * Ưu tiên dạng `filename*=UTF-8''…` (RFC 5987) vì tên tệp danh mục có dấu
+ * tiếng Việt; rơi về `filename="…"` khi không có.
+ */
+export function fileNameFromDisposition(header: string | null): string | null {
+  if (header === null) {
+    return null
+  }
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(header)
+  if (star?.[1] !== undefined) {
+    try {
+      return decodeURIComponent(star[1])
+    } catch {
+      // Chuỗi mã hóa hỏng — rơi xuống dạng thường bên dưới.
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(header)
+  return plain?.[1] ?? null
 }
 
 /**
