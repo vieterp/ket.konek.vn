@@ -24,6 +24,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Final, Protocol
 from uuid import UUID
 
@@ -128,6 +129,19 @@ class JobContext:
     branch_id: int | None
     requested_by: int
 
+    storage_root: Path | None = None
+    """Thư mục kho tệp của bản cài, khi job cần đọc một tệp đã tải lên.
+
+    `None` khi bản cài chưa cấu hình `KET_ATTACHMENTS_DIR` — thân job nào cần
+    tệp thì tự nói ra điều đó bằng một lỗi nghiệp vụ chỉ đúng biến môi trường
+    phải đặt, thay vì đổ ở một `AttributeError` giữa chừng.
+
+    Đặt ở đây thay vì để thân job tự đọc `Settings`: `kernel` không được biết
+    tới lớp cấu hình của ứng dụng (`import-linter` canh chiều phụ thuộc đó), và
+    một thân job tự dựng `Settings()` lấy lại từ biến môi trường sẽ đọc ra một
+    cấu hình khác với cấu hình worker đang chạy dưới.
+    """
+
 
 JobResult = AuditValues | None
 """Kết quả job ghi vào `jobs.result` (JSONB). `None` = không có gì để trả."""
@@ -144,6 +158,21 @@ class JobType[ParamsT: BaseModel]:
     handler: Callable[[JobContext, ParamsT], JobResult]
     privilege: JobPrivilege = JobPrivilege.DATASET
     description: str = ""
+
+    direct_enqueue: bool = True
+    """Xếp được hàng thẳng qua `POST /api/v1/jobs` hay bắt buộc đi qua endpoint riêng.
+
+    `False` cho loại job mà **phạm vi quyền phụ thuộc tham số**. Nhập liệu danh
+    mục là ca đầu tiên: `permission` ở đây là một chuỗi tĩnh, nên nó trả lời được
+    "người này có được dùng chức năng nhập liệu không" nhưng không trả lời được
+    "trên danh mục nào". Câu thứ hai chỉ trả lời được ở chỗ biết `slug` — tức
+    `routers/imports.py`, nơi có `spec.permission_code(...)`.
+
+    Không có cờ này thì hai lớp quyền ấy vô nghĩa: ai có `master.import.create`
+    sẽ ghi được vào **mọi** danh mục chỉ bằng cách gọi thẳng endpoint hàng đợi
+    với `type` và `params` tự đặt, đi vòng qua đúng phép kiểm per-danh-mục mà
+    H48 dựng ra ("kế toán kho sửa được danh mục kho không có nghĩa là sửa được
+    điều khoản thanh toán")."""
 
     def __post_init__(self) -> None:
         # Mã loại job đi vào cột `jobs.type` và vào tham số của client, nên nó

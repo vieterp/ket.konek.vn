@@ -33,6 +33,7 @@ from ket.api.routers.jobs_schemas import (
     JobTypeListResponse,
     JobTypeResponse,
 )
+from ket.kernel.errors import JobNotDirectlyEnqueueableError
 from ket.kernel.jobs import queue
 from ket.kernel.jobs.builtin import JOB_CANCEL, JOB_CREATE, JOB_VIEW
 from ket.kernel.jobs.models import JobStatus
@@ -88,6 +89,15 @@ def enqueue_job(
     người bấm nút chứ không phải một tham số client gửi lên.
     """
     job_type = REGISTRY.get(payload.type)
+    if not job_type.direct_enqueue:
+        # Loại job mà phạm vi quyền phụ thuộc tham số (nhập liệu danh mục) —
+        # xem `JobType.direct_enqueue`. Từ chối ở đây chứ không kiểm thêm ở đây:
+        # endpoint này không biết `slug` nào đang bị nhắm tới, và đoán ra nó từ
+        # `params` là chép lại phép kiểm của endpoint kia ở một chỗ thứ hai.
+        raise JobNotDirectlyEnqueueableError(
+            "Tác vụ này phải bắt đầu từ màn hình chức năng của nó",
+            job_type=job_type.code,
+        )
     authorized.access.require(job_type.permission)
 
     with unit_of_work(factory, authorized.scope) as session:

@@ -40,6 +40,15 @@ class AuditAction(StrEnum):
     LOCKED = "locked"
     UNLOCKED = "unlocked"
     PRINTED = "printed"
+    IMPORTED = "imported"
+    """Một lượt nhập liệu từ Excel (H84, lát 3C-1).
+
+    Riêng khỏi `CREATED`/`UPDATED` vì nó ghi **một** dòng cho cả lượt, không một
+    dòng cho mỗi bản ghi: đường ghi của nhập liệu là `INSERT … SELECT` tập hợp,
+    nằm ngoài hai móc dựng nhật ký. Dùng lại `CREATED` sẽ là một dòng nói "đã
+    tạo bản ghi X" trong khi nó mô tả 10.000 bản ghi — sai với chính người đọc
+    nhật ký để đối chiếu. Giá trị của nó nằm ở `new_values`: tên tệp, `content_hash`
+    và số dòng, tức địa chỉ của bằng chứng còn nguyên trong kho tệp."""
 
 
 AUDIT_TABLE_NAME = "audit_log"

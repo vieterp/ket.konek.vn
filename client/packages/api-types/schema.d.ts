@@ -499,6 +499,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/asset_types/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại tài sản cố định — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_asset_types_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/asset_types/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại tài sản cố định — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_asset_types_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/asset_types/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại tài sản cố định — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_asset_types_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/asset_types/{record_id}": {
         parameters: {
             query?: never;
@@ -610,6 +695,91 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_banks_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/banks/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ngân hàng — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_banks_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/banks/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ngân hàng — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_banks_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/banks/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ngân hàng — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_banks_template_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -733,6 +903,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/contracts/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hợp đồng — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_contracts_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/contracts/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hợp đồng — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_contracts_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/contracts/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hợp đồng — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_contracts_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/contracts/{record_id}": {
         parameters: {
             query?: never;
@@ -844,6 +1099,91 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_cost_objects_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/cost_objects/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đối tượng tập hợp chi phí — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_cost_objects_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/cost_objects/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đối tượng tập hợp chi phí — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_cost_objects_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/cost_objects/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Đối tượng tập hợp chi phí — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_cost_objects_template_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -967,6 +1307,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/document_types/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại chứng từ — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_document_types_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/document_types/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại chứng từ — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_document_types_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/document_types/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại chứng từ — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_document_types_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/document_types/{record_id}": {
         parameters: {
             query?: never;
@@ -1078,6 +1503,91 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_employees_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/employees/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Nhân viên — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_employees_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/employees/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Nhân viên — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_employees_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/employees/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Nhân viên — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_employees_template_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1201,6 +1711,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/excise_tax_tables/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Biểu thuế tiêu thụ đặc biệt — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_excise_tax_tables_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/excise_tax_tables/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Biểu thuế tiêu thụ đặc biệt — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_excise_tax_tables_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/excise_tax_tables/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Biểu thuế tiêu thụ đặc biệt — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_excise_tax_tables_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/excise_tax_tables/{record_id}": {
         parameters: {
             query?: never;
@@ -1312,6 +1907,91 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_expense_items_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/expense_items/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Khoản mục chi phí — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_expense_items_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/expense_items/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Khoản mục chi phí — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_expense_items_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/expense_items/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Khoản mục chi phí — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_expense_items_template_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1435,6 +2115,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/invoice_forms/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mẫu số hóa đơn — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_invoice_forms_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/invoice_forms/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mẫu số hóa đơn — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_invoice_forms_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/invoice_forms/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mẫu số hóa đơn — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_invoice_forms_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/invoice_forms/{record_id}": {
         parameters: {
             query?: never;
@@ -1546,6 +2311,91 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_items_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vật tư hàng hóa — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_items_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vật tư hàng hóa — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_items_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vật tư hàng hóa — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_items_template_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1772,6 +2622,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/partners/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đối tác — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_partners_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/partners/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đối tác — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_partners_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/partners/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Đối tác — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_partners_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/partners/{partner_id}/bank-accounts": {
         parameters: {
             query?: never;
@@ -1941,6 +2876,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/payment_terms/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Điều khoản thanh toán — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_payment_terms_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/payment_terms/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Điều khoản thanh toán — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_payment_terms_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/payment_terms/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Điều khoản thanh toán — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_payment_terms_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/payment_terms/{record_id}": {
         parameters: {
             query?: never;
@@ -2052,6 +3072,91 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_pit_tables_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/pit_tables/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Biểu tính thuế thu nhập cá nhân — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_pit_tables_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/pit_tables/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Biểu tính thuế thu nhập cá nhân — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_pit_tables_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/pit_tables/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Biểu tính thuế thu nhập cá nhân — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_pit_tables_template_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2175,6 +3280,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/project_types/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại công trình — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_project_types_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/project_types/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại công trình — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_project_types_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/project_types/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại công trình — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_project_types_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/project_types/{record_id}": {
         parameters: {
             query?: never;
@@ -2286,6 +3476,91 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_projects_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/projects/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Công trình — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_projects_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/projects/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Công trình — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_projects_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/projects/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Công trình — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_projects_template_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2409,6 +3684,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/resource_tax_tables/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Biểu thuế tài nguyên — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_resource_tax_tables_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/resource_tax_tables/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Biểu thuế tài nguyên — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_resource_tax_tables_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/resource_tax_tables/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Biểu thuế tài nguyên — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_resource_tax_tables_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/resource_tax_tables/{record_id}": {
         parameters: {
             query?: never;
@@ -2520,6 +3880,91 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_timekeeping_symbols_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/timekeeping_symbols/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ký hiệu chấm công — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_timekeeping_symbols_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/timekeeping_symbols/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ký hiệu chấm công — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_timekeeping_symbols_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/timekeeping_symbols/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ký hiệu chấm công — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_timekeeping_symbols_template_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2643,6 +4088,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/tool_types/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại công cụ dụng cụ — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_tool_types_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/tool_types/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Loại công cụ dụng cụ — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_tool_types_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/tool_types/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại công cụ dụng cụ — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_tool_types_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/tool_types/{record_id}": {
         parameters: {
             query?: never;
@@ -2760,6 +4290,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/units_of_measure/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đơn vị tính — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_units_of_measure_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/units_of_measure/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đơn vị tính — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_units_of_measure_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/units_of_measure/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Đơn vị tính — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_units_of_measure_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/units_of_measure/{record_id}": {
         parameters: {
             query?: never;
@@ -2871,6 +4486,91 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_warehouses_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/warehouses/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Kho — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_warehouses_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/warehouses/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Kho — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_warehouses_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/warehouses/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Kho — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_warehouses_template_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3348,7 +5048,7 @@ export interface components {
             branch_id?: number | null;
             /** Code */
             code: string;
-            /** Default Useful Life Months */
+            /** Thời gian sử dụng ngầm định (tháng) */
             default_useful_life_months?: number | null;
             /**
              * Is Group
@@ -3381,7 +5081,7 @@ export interface components {
             branch_id: number | null;
             /** Code */
             code: string;
-            /** Default Useful Life Months */
+            /** Thời gian sử dụng ngầm định (tháng) */
             default_useful_life_months?: number | null;
             /** Id */
             id: number;
@@ -3411,7 +5111,7 @@ export interface components {
         AssetTypesUpdateRequest: {
             /** Code */
             code: string;
-            /** Default Useful Life Months */
+            /** Thời gian sử dụng ngầm định (tháng) */
             default_useful_life_months?: number | null;
             /** Is Active */
             is_active: boolean;
@@ -3512,9 +5212,9 @@ export interface components {
             name_en?: string | null;
             /** Parent Id */
             parent_id?: number | null;
-            /** Short Name */
+            /** Tên viết tắt */
             short_name?: string | null;
-            /** Swift Code */
+            /** Mã SWIFT */
             swift_code?: string | null;
         };
         /**
@@ -3554,9 +5254,9 @@ export interface components {
             path: string;
             /** Row Version */
             row_version: number;
-            /** Short Name */
+            /** Tên viết tắt */
             short_name?: string | null;
-            /** Swift Code */
+            /** Mã SWIFT */
             swift_code?: string | null;
             /** Uid */
             uid: string;
@@ -3576,9 +5276,9 @@ export interface components {
             name_en?: string | null;
             /** Row Version */
             row_version: number;
-            /** Short Name */
+            /** Tên viết tắt */
             short_name?: string | null;
-            /** Swift Code */
+            /** Mã SWIFT */
             swift_code?: string | null;
         };
         /** Body_upload_attachment_api_v1_attachments_post */
@@ -3589,6 +5289,146 @@ export interface components {
             entity_type: string;
             /** File */
             file: string;
+        };
+        /** Body_validate_import_api_v1_master_asset_types_import_validate_post */
+        Body_validate_import_api_v1_master_asset_types_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_banks_import_validate_post */
+        Body_validate_import_api_v1_master_banks_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_contracts_import_validate_post */
+        Body_validate_import_api_v1_master_contracts_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_cost_objects_import_validate_post */
+        Body_validate_import_api_v1_master_cost_objects_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_document_types_import_validate_post */
+        Body_validate_import_api_v1_master_document_types_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_employees_import_validate_post */
+        Body_validate_import_api_v1_master_employees_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_excise_tax_tables_import_validate_post */
+        Body_validate_import_api_v1_master_excise_tax_tables_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_expense_items_import_validate_post */
+        Body_validate_import_api_v1_master_expense_items_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_invoice_forms_import_validate_post */
+        Body_validate_import_api_v1_master_invoice_forms_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_items_import_validate_post */
+        Body_validate_import_api_v1_master_items_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_partners_import_validate_post */
+        Body_validate_import_api_v1_master_partners_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_payment_terms_import_validate_post */
+        Body_validate_import_api_v1_master_payment_terms_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_pit_tables_import_validate_post */
+        Body_validate_import_api_v1_master_pit_tables_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_project_types_import_validate_post */
+        Body_validate_import_api_v1_master_project_types_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_projects_import_validate_post */
+        Body_validate_import_api_v1_master_projects_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_resource_tax_tables_import_validate_post */
+        Body_validate_import_api_v1_master_resource_tax_tables_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_timekeeping_symbols_import_validate_post */
+        Body_validate_import_api_v1_master_timekeeping_symbols_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_tool_types_import_validate_post */
+        Body_validate_import_api_v1_master_tool_types_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_units_of_measure_import_validate_post */
+        Body_validate_import_api_v1_master_units_of_measure_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_warehouses_import_validate_post */
+        Body_validate_import_api_v1_master_warehouses_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
         };
         /** BranchCreateRequest */
         BranchCreateRequest: {
@@ -4026,21 +5866,21 @@ export interface components {
          * @description Nhân viên — tạo mới.
          */
         EmployeesCreateRequest: {
-            /** Bank Account Holder */
+            /** Chủ tài khoản */
             bank_account_holder?: string | null;
-            /** Bank Account Number */
+            /** Số tài khoản nhận lương */
             bank_account_number?: string | null;
-            /** Bank Id */
+            /** Ngân hàng */
             bank_id?: number | null;
             /** Branch Id */
             branch_id?: number | null;
             /** Code */
             code: string;
-            /** Department */
+            /** Phòng ban */
             department?: string | null;
             /** Email */
             email?: string | null;
-            /** Id Number */
+            /** Số CMND/CCCD */
             id_number?: string | null;
             /**
              * Is Group
@@ -4053,11 +5893,11 @@ export interface components {
             name_en?: string | null;
             /** Parent Id */
             parent_id?: number | null;
-            /** Phone */
+            /** Điện thoại */
             phone?: string | null;
-            /** Position */
+            /** Chức danh */
             position?: string | null;
-            /** Tax Code */
+            /** Mã số thuế TNCN */
             tax_code?: string | null;
         };
         /**
@@ -4075,23 +5915,23 @@ export interface components {
          * @description Nhân viên — một bản ghi.
          */
         EmployeesResponse: {
-            /** Bank Account Holder */
+            /** Chủ tài khoản */
             bank_account_holder?: string | null;
-            /** Bank Account Number */
+            /** Số tài khoản nhận lương */
             bank_account_number?: string | null;
-            /** Bank Id */
+            /** Ngân hàng */
             bank_id?: number | null;
             /** Branch Id */
             branch_id: number | null;
             /** Code */
             code: string;
-            /** Department */
+            /** Phòng ban */
             department?: string | null;
             /** Email */
             email?: string | null;
             /** Id */
             id: number;
-            /** Id Number */
+            /** Số CMND/CCCD */
             id_number?: string | null;
             /** Is Active */
             is_active: boolean;
@@ -4107,13 +5947,13 @@ export interface components {
             parent_id: number | null;
             /** Path */
             path: string;
-            /** Phone */
+            /** Điện thoại */
             phone?: string | null;
-            /** Position */
+            /** Chức danh */
             position?: string | null;
             /** Row Version */
             row_version: number;
-            /** Tax Code */
+            /** Mã số thuế TNCN */
             tax_code?: string | null;
             /** Uid */
             uid: string;
@@ -4123,19 +5963,19 @@ export interface components {
          * @description Nhân viên — sửa.
          */
         EmployeesUpdateRequest: {
-            /** Bank Account Holder */
+            /** Chủ tài khoản */
             bank_account_holder?: string | null;
-            /** Bank Account Number */
+            /** Số tài khoản nhận lương */
             bank_account_number?: string | null;
-            /** Bank Id */
+            /** Ngân hàng */
             bank_id?: number | null;
             /** Code */
             code: string;
-            /** Department */
+            /** Phòng ban */
             department?: string | null;
             /** Email */
             email?: string | null;
-            /** Id Number */
+            /** Số CMND/CCCD */
             id_number?: string | null;
             /** Is Active */
             is_active: boolean;
@@ -4143,13 +5983,13 @@ export interface components {
             name: string;
             /** Name En */
             name_en?: string | null;
-            /** Phone */
+            /** Điện thoại */
             phone?: string | null;
-            /** Position */
+            /** Chức danh */
             position?: string | null;
             /** Row Version */
             row_version: number;
-            /** Tax Code */
+            /** Mã số thuế TNCN */
             tax_code?: string | null;
         };
         /**
@@ -4356,6 +6196,64 @@ export interface components {
             version: string;
         };
         /**
+         * ImportCommitRequest
+         * @description Bước ghi: trỏ vào **lượt kiểm** đã thành công, không trỏ vào tệp (H78).
+         */
+        ImportCommitRequest: {
+            /**
+             * Validation Job Id
+             * Format: uuid
+             * @description `job_id` mà bước kiểm dữ liệu trả về, phải đã chạy xong và không còn dòng lỗi
+             */
+            validation_job_id: string;
+        };
+        /**
+         * ImportCommitResponse
+         * @description Lượt ghi đã được xếp hàng.
+         */
+        ImportCommitResponse: {
+            /** Catalog */
+            catalog: string;
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+        };
+        /**
+         * ImportMode
+         * @description Lượt nhập được phép làm gì với mã đã tồn tại (H80).
+         *
+         *     Mặc định là `CREATE_ONLY` ở mọi nơi khai giá trị này. Đó là quyết định có
+         *     chủ đích: `CREATE_AND_UPDATE` biến một bảng tính dán nhầm thành một lần sửa
+         *     hàng loạt không ai duyệt, nên nó phải là thứ người dùng **chọn**, và chọn
+         *     sau khi đọc con số "sẽ cập nhật 9.960 dòng" trong báo cáo.
+         * @enum {string}
+         */
+        ImportMode: "create_only" | "create_and_update";
+        /**
+         * ImportValidateResponse
+         * @description Lượt kiểm đã được xếp hàng.
+         *
+         *     Trả `content_hash` về cho client dù nó không phải nhập lại ở bước ghi: màn
+         *     hình cần nó để nhận ra "tệp này tôi vừa tải lên xong" khi người dùng bấm tải
+         *     lên cùng một tệp hai lần, và để hiện ra ở phần lịch sử.
+         */
+        ImportValidateResponse: {
+            /** Catalog */
+            catalog: string;
+            /** Content Hash */
+            content_hash: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+            mode: components["schemas"]["ImportMode"];
+        };
+        /**
          * InvoiceFormsCreateRequest
          * @description Mẫu số hóa đơn — tạo mới.
          */
@@ -4554,13 +6452,13 @@ export interface components {
          * @description Vật tư hàng hóa — tạo mới.
          */
         ItemsCreateRequest: {
-            /** Base Unit Id */
+            /** Đơn vị chính */
             base_unit_id?: number | null;
             /** Branch Id */
             branch_id?: number | null;
             /** Code */
             code: string;
-            /** Description */
+            /** Diễn giải */
             description?: string | null;
             /**
              * Is Group
@@ -4571,10 +6469,11 @@ export interface components {
             name: string;
             /** Name En */
             name_en?: string | null;
+            /** Tính chất */
             nature?: components["schemas"]["ItemNature"] | null;
             /** Parent Id */
             parent_id?: number | null;
-            /** Warehouse Id */
+            /** Kho ngầm định */
             warehouse_id?: number | null;
         };
         /**
@@ -4592,13 +6491,13 @@ export interface components {
          * @description Vật tư hàng hóa — một bản ghi.
          */
         ItemsResponse: {
-            /** Base Unit Id */
+            /** Đơn vị chính */
             base_unit_id?: number | null;
             /** Branch Id */
             branch_id: number | null;
             /** Code */
             code: string;
-            /** Description */
+            /** Diễn giải */
             description?: string | null;
             /** Id */
             id: number;
@@ -4612,6 +6511,7 @@ export interface components {
             name: string;
             /** Name En */
             name_en: string | null;
+            /** Tính chất */
             nature?: components["schemas"]["ItemNature"] | null;
             /** Parent Id */
             parent_id: number | null;
@@ -4621,7 +6521,7 @@ export interface components {
             row_version: number;
             /** Uid */
             uid: string;
-            /** Warehouse Id */
+            /** Kho ngầm định */
             warehouse_id?: number | null;
         };
         /**
@@ -4631,7 +6531,7 @@ export interface components {
         ItemsUpdateRequest: {
             /** Code */
             code: string;
-            /** Description */
+            /** Diễn giải */
             description?: string | null;
             /** Is Active */
             is_active: boolean;
@@ -4641,7 +6541,7 @@ export interface components {
             name_en?: string | null;
             /** Row Version */
             row_version: number;
-            /** Warehouse Id */
+            /** Kho ngầm định */
             warehouse_id?: number | null;
         };
         /**
@@ -4932,28 +6832,28 @@ export interface components {
          * @description Đối tác — tạo mới.
          */
         PartnersCreateRequest: {
-            /** Address */
+            /** Địa chỉ */
             address?: string | null;
             /** Branch Id */
             branch_id?: number | null;
             /** Code */
             code: string;
-            /** Contact Name */
+            /** Người liên hệ */
             contact_name?: string | null;
-            /** Country */
+            /** Quốc gia */
             country?: string | null;
-            /** Credit Limit */
+            /** Ngưỡng nợ */
             credit_limit?: number | string | null;
-            /** District */
+            /** Quận/Huyện */
             district?: string | null;
             /** Email */
             email?: string | null;
-            /** Invoice Email */
+            /** Email nhận hóa đơn */
             invoice_email?: string | null;
-            /** Invoice Recipient */
+            /** Người nhận hóa đơn */
             invoice_recipient?: string | null;
             /**
-             * Is Customer
+             * Là khách hàng
              * @default false
              */
             is_customer: boolean;
@@ -4963,12 +6863,12 @@ export interface components {
              */
             is_group: boolean;
             /**
-             * Is Organization
+             * Là tổ chức
              * @default true
              */
             is_organization: boolean;
             /**
-             * Is Vendor
+             * Là nhà cung cấp
              * @default false
              */
             is_vendor: boolean;
@@ -4978,13 +6878,13 @@ export interface components {
             name_en?: string | null;
             /** Parent Id */
             parent_id?: number | null;
-            /** Payment Term Id */
+            /** Điều khoản thanh toán */
             payment_term_id?: number | null;
-            /** Phone */
+            /** Điện thoại */
             phone?: string | null;
-            /** Province */
+            /** Tỉnh/Thành phố */
             province?: string | null;
-            /** Tax Code */
+            /** Mã số thuế */
             tax_code?: string | null;
             /** Website */
             website?: string | null;
@@ -5004,44 +6904,44 @@ export interface components {
          * @description Đối tác — một bản ghi.
          */
         PartnersResponse: {
-            /** Address */
+            /** Địa chỉ */
             address?: string | null;
             /** Branch Id */
             branch_id: number | null;
             /** Code */
             code: string;
-            /** Contact Name */
+            /** Người liên hệ */
             contact_name?: string | null;
-            /** Country */
+            /** Quốc gia */
             country?: string | null;
-            /** Credit Limit */
+            /** Ngưỡng nợ */
             credit_limit?: string | null;
-            /** District */
+            /** Quận/Huyện */
             district?: string | null;
             /** Email */
             email?: string | null;
             /** Id */
             id: number;
-            /** Invoice Email */
+            /** Email nhận hóa đơn */
             invoice_email?: string | null;
-            /** Invoice Recipient */
+            /** Người nhận hóa đơn */
             invoice_recipient?: string | null;
             /** Is Active */
             is_active: boolean;
             /**
-             * Is Customer
+             * Là khách hàng
              * @default false
              */
             is_customer: boolean;
             /** Is Group */
             is_group: boolean;
             /**
-             * Is Organization
+             * Là tổ chức
              * @default true
              */
             is_organization: boolean;
             /**
-             * Is Vendor
+             * Là nhà cung cấp
              * @default false
              */
             is_vendor: boolean;
@@ -5055,15 +6955,15 @@ export interface components {
             parent_id: number | null;
             /** Path */
             path: string;
-            /** Payment Term Id */
+            /** Điều khoản thanh toán */
             payment_term_id?: number | null;
-            /** Phone */
+            /** Điện thoại */
             phone?: string | null;
-            /** Province */
+            /** Tỉnh/Thành phố */
             province?: string | null;
             /** Row Version */
             row_version: number;
-            /** Tax Code */
+            /** Mã số thuế */
             tax_code?: string | null;
             /** Uid */
             uid: string;
@@ -5075,38 +6975,38 @@ export interface components {
          * @description Đối tác — sửa.
          */
         PartnersUpdateRequest: {
-            /** Address */
+            /** Địa chỉ */
             address?: string | null;
             /** Code */
             code: string;
-            /** Contact Name */
+            /** Người liên hệ */
             contact_name?: string | null;
-            /** Country */
+            /** Quốc gia */
             country?: string | null;
-            /** Credit Limit */
+            /** Ngưỡng nợ */
             credit_limit?: number | string | null;
-            /** District */
+            /** Quận/Huyện */
             district?: string | null;
             /** Email */
             email?: string | null;
-            /** Invoice Email */
+            /** Email nhận hóa đơn */
             invoice_email?: string | null;
-            /** Invoice Recipient */
+            /** Người nhận hóa đơn */
             invoice_recipient?: string | null;
             /** Is Active */
             is_active: boolean;
             /**
-             * Is Customer
+             * Là khách hàng
              * @default false
              */
             is_customer: boolean;
             /**
-             * Is Organization
+             * Là tổ chức
              * @default true
              */
             is_organization: boolean;
             /**
-             * Is Vendor
+             * Là nhà cung cấp
              * @default false
              */
             is_vendor: boolean;
@@ -5114,15 +7014,15 @@ export interface components {
             name: string;
             /** Name En */
             name_en?: string | null;
-            /** Payment Term Id */
+            /** Điều khoản thanh toán */
             payment_term_id?: number | null;
-            /** Phone */
+            /** Điện thoại */
             phone?: string | null;
-            /** Province */
+            /** Tỉnh/Thành phố */
             province?: string | null;
             /** Row Version */
             row_version: number;
-            /** Tax Code */
+            /** Mã số thuế */
             tax_code?: string | null;
             /** Website */
             website?: string | null;
@@ -5137,17 +7037,17 @@ export interface components {
             /** Code */
             code: string;
             /**
-             * Discount Days
+             * Số ngày hưởng chiết khấu
              * @default 0
              */
             discount_days: number;
             /**
-             * Discount Percent
+             * Tỷ lệ chiết khấu (%)
              * @default 0
              */
             discount_percent: number | string;
             /**
-             * Due Days
+             * Số ngày được nợ
              * @default 0
              */
             due_days: number;
@@ -5183,17 +7083,17 @@ export interface components {
             /** Code */
             code: string;
             /**
-             * Discount Days
+             * Số ngày hưởng chiết khấu
              * @default 0
              */
             discount_days: number;
             /**
-             * Discount Percent
+             * Tỷ lệ chiết khấu (%)
              * @default 0
              */
             discount_percent: string;
             /**
-             * Due Days
+             * Số ngày được nợ
              * @default 0
              */
             due_days: number;
@@ -5226,17 +7126,17 @@ export interface components {
             /** Code */
             code: string;
             /**
-             * Discount Days
+             * Số ngày hưởng chiết khấu
              * @default 0
              */
             discount_days: number;
             /**
-             * Discount Percent
+             * Tỷ lệ chiết khấu (%)
              * @default 0
              */
             discount_percent: number | string;
             /**
-             * Due Days
+             * Số ngày được nợ
              * @default 0
              */
             due_days: number;
@@ -5802,7 +7702,7 @@ export interface components {
             branch_id?: number | null;
             /** Code */
             code: string;
-            /** Default Allocation Months */
+            /** Thời gian phân bổ ngầm định (tháng) */
             default_allocation_months?: number | null;
             /**
              * Is Group
@@ -5835,7 +7735,7 @@ export interface components {
             branch_id: number | null;
             /** Code */
             code: string;
-            /** Default Allocation Months */
+            /** Thời gian phân bổ ngầm định (tháng) */
             default_allocation_months?: number | null;
             /** Id */
             id: number;
@@ -5865,7 +7765,7 @@ export interface components {
         ToolTypesUpdateRequest: {
             /** Code */
             code: string;
-            /** Default Allocation Months */
+            /** Thời gian phân bổ ngầm định (tháng) */
             default_allocation_months?: number | null;
             /** Is Active */
             is_active: boolean;
@@ -6864,6 +8764,101 @@ export interface operations {
             };
         };
     };
+    commit_import_api_v1_master_asset_types_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_asset_types_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_asset_types_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_asset_types_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_record_api_v1_master_asset_types__record_id__get: {
         parameters: {
             query?: never;
@@ -7083,6 +9078,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_master_banks_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_banks_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_banks_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_banks_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -7328,6 +9418,101 @@ export interface operations {
             };
         };
     };
+    commit_import_api_v1_master_contracts_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_contracts_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_contracts_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_contracts_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_record_api_v1_master_contracts__record_id__get: {
         parameters: {
             query?: never;
@@ -7547,6 +9732,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_master_cost_objects_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_cost_objects_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_cost_objects_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_cost_objects_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -7792,6 +10072,101 @@ export interface operations {
             };
         };
     };
+    commit_import_api_v1_master_document_types_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_document_types_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_document_types_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_document_types_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_record_api_v1_master_document_types__record_id__get: {
         parameters: {
             query?: never;
@@ -8011,6 +10386,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_master_employees_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_employees_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_employees_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_employees_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -8256,6 +10726,101 @@ export interface operations {
             };
         };
     };
+    commit_import_api_v1_master_excise_tax_tables_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_excise_tax_tables_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_excise_tax_tables_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_excise_tax_tables_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_record_api_v1_master_excise_tax_tables__record_id__get: {
         parameters: {
             query?: never;
@@ -8475,6 +11040,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_master_expense_items_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_expense_items_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_expense_items_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_expense_items_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -8720,6 +11380,101 @@ export interface operations {
             };
         };
     };
+    commit_import_api_v1_master_invoice_forms_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_invoice_forms_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_invoice_forms_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_invoice_forms_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_record_api_v1_master_invoice_forms__record_id__get: {
         parameters: {
             query?: never;
@@ -8939,6 +11694,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_master_items_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_items_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_items_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_items_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -9450,6 +12300,101 @@ export interface operations {
             };
         };
     };
+    commit_import_api_v1_master_partners_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_partners_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_partners_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_partners_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_bank_accounts_api_v1_master_partners__partner_id__bank_accounts_get: {
         parameters: {
             query?: {
@@ -9816,6 +12761,101 @@ export interface operations {
             };
         };
     };
+    commit_import_api_v1_master_payment_terms_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_payment_terms_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_payment_terms_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_payment_terms_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_record_api_v1_master_payment_terms__record_id__get: {
         parameters: {
             query?: never;
@@ -10035,6 +13075,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_master_pit_tables_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_pit_tables_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_pit_tables_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_pit_tables_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -10280,6 +13415,101 @@ export interface operations {
             };
         };
     };
+    commit_import_api_v1_master_project_types_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_project_types_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_project_types_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_project_types_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_record_api_v1_master_project_types__record_id__get: {
         parameters: {
             query?: never;
@@ -10499,6 +13729,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_master_projects_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_projects_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_projects_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_projects_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -10744,6 +14069,101 @@ export interface operations {
             };
         };
     };
+    commit_import_api_v1_master_resource_tax_tables_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_resource_tax_tables_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_resource_tax_tables_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_resource_tax_tables_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_record_api_v1_master_resource_tax_tables__record_id__get: {
         parameters: {
             query?: never;
@@ -10963,6 +14383,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_master_timekeeping_symbols_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_timekeeping_symbols_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_timekeeping_symbols_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_timekeeping_symbols_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -11208,6 +14723,101 @@ export interface operations {
             };
         };
     };
+    commit_import_api_v1_master_tool_types_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_tool_types_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_tool_types_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_tool_types_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_record_api_v1_master_tool_types__record_id__get: {
         parameters: {
             query?: never;
@@ -11440,6 +15050,101 @@ export interface operations {
             };
         };
     };
+    commit_import_api_v1_master_units_of_measure_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_units_of_measure_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_units_of_measure_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_units_of_measure_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_record_api_v1_master_units_of_measure__record_id__get: {
         parameters: {
             query?: never;
@@ -11659,6 +15364,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_master_warehouses_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_warehouses_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_warehouses_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_warehouses_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
             /** @description Lỗi (RFC 7807) */

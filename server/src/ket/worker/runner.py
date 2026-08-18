@@ -357,6 +357,7 @@ class Worker:
             dataset_schema=dataset.schema_name,
             branch_id=claimed.branch_id,
             requested_by=claimed.requested_by,
+            storage_root=self._settings.attachments_dir,
         )
         return job_type.run(context, claimed.params)
 

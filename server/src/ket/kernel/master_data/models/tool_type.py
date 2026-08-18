@@ -44,4 +44,6 @@ class ToolType(MasterDataRow):
 class ToolTypeFields(BaseModel):
     """Phần riêng của loại CCDC trên API (`registry.CatalogSpec`)."""
 
-    default_allocation_months: int | None = Field(default=None, gt=0)
+    default_allocation_months: int | None = Field(
+        title="Thời gian phân bổ ngầm định (tháng)", default=None, gt=0
+    )

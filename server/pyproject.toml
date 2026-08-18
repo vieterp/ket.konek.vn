@@ -1,6 +1,6 @@
 [project]
 name = "ket-server"
-version = "0.15.0"
+version = "0.16.0"
 description = "Konek Két — app server phần mềm kế toán VN (TT200/TT133), chạy LAN hoặc offline một máy"
 requires-python = "==3.12.*"
 license = { text = "Proprietary" }
@@ -26,6 +26,10 @@ dependencies = [
     # này; thiếu nó thì endpoint tải tệp lên hỏng **lúc dựng ứng dụng**, không
     # phải lúc có ai gọi (FR-NFR-053).
     "python-multipart>=0.0.20",
+    # Khung nhập liệu Excel (lát 3C-1, FR-SYS-080..083). Đọc bằng `read_only=True`
+    # và ghi bằng `write_only=True` nên bộ nhớ không tăng theo số dòng — điều
+    # kiện để 10.000 dòng của FR-NFR-043 không phải là 10.000 đối tượng ô.
+    "openpyxl>=3.1",
 ]
 
 [dependency-groups]
@@ -36,6 +40,10 @@ dev = [
     "mypy>=2.3",
     "import-linter>=2.13",
     "pytest-cov>=7.1",
+    # openpyxl không kèm `py.typed`, nên mypy strict coi mọi thứ nó trả về là
+    # `Any` — tức đúng đoạn mã đọc tệp người dùng gửi lên lại là đoạn không được
+    # kiểm gì. Stub bên ngoài rẻ hơn nhiều so với một lớp bọc tự viết.
+    "types-openpyxl>=3.1",
 ]
 
 [build-system]

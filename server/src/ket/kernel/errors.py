@@ -899,3 +899,122 @@ class NumberSequenceNotFoundError(DomainError):
     """
 
     error_code: ClassVar[str] = "numbering.sequence_not_found"
+
+
+# ---------------------------------------------------------------------------
+# Nhập liệu Excel (lát 3C-1, FR-SYS-080..085)
+#
+# Bốn lỗi đầu là lỗi **của cả tệp**: chúng dừng lượt nhập trước khi có dòng nào
+# được xét. Sai sót của từng dòng KHÔNG ném ra ở đây — chúng đi vào
+# `ImportReport.errors` kèm số dòng và tên cột, vì một tệp 10.000 dòng có thể có
+# 10.000 sai sót và người dùng cần đọc chúng cùng lúc chứ không phải từng cái
+# một qua mười nghìn lượt gửi lại.
+# ---------------------------------------------------------------------------
+
+
+class ImportFileUnreadableError(DomainError):
+    """Tệp không mở được: hỏng, mã hóa, hoặc là .xls cũ đổi đuôi thành .xlsx."""
+
+    error_code: ClassVar[str] = "import.file_unreadable"
+
+
+class ImportSheetMissingError(DomainError):
+    """Tệp không có sheet dữ liệu đúng tên (FR-SYS-082).
+
+    Trả kèm danh sách sheet **đang có** để câu thông báo nói được "tệp đang có
+    `Sheet1`" — không có nó thì người dùng phải tự mở tệp ra so tên bằng mắt,
+    đúng việc mà máy chủ vừa làm xong.
+    """
+
+    error_code: ClassVar[str] = "import.sheet_missing"
+
+    def __init__(
+        self, message: str, *, expected: str, found: list[str], **details: str | int | None
+    ) -> None:
+        super().__init__(message, expected=expected, **details)
+        self.found = found
+
+    def problem_extra(self) -> dict[str, Any]:
+        return {"found_sheets": self.found}
+
+
+class ImportTemplateMismatchError(DomainError):
+    """Dòng tiêu đề lệch khỏi tệp mẫu (FR-SYS-082, bước 13).
+
+    Bốn danh sách chứ không một câu: `missing` và `unexpected` là thứ người dùng
+    sửa được ngay, còn `expected`/`found` cho màn hình dựng được bảng so sánh
+    hai cột. Gộp chúng thành một chuỗi ở máy chủ là quyết định thay client cách
+    trình bày một thứ mà client trình bày tốt hơn nhiều.
+    """
+
+    error_code: ClassVar[str] = "import.template_mismatch"
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        expected: list[str],
+        found: list[str],
+        missing: list[str],
+        unexpected: list[str],
+        **details: str | int | None,
+    ) -> None:
+        super().__init__(message, **details)
+        self.expected = expected
+        self.found = found
+        self.missing = missing
+        self.unexpected = unexpected
+
+    def problem_extra(self) -> dict[str, Any]:
+        return {
+            "expected_columns": self.expected,
+            "found_columns": self.found,
+            "missing_columns": self.missing,
+            "unexpected_columns": self.unexpected,
+        }
+
+
+class ImportTooManyRowsError(DomainError):
+    """Tệp vượt trần số dòng của một lượt nhập."""
+
+    error_code: ClassVar[str] = "import.too_many_rows"
+
+
+class ImportSourceNotValidatedError(DomainError):
+    """Bước ghi trỏ vào một lượt kiểm không dùng được (H78).
+
+    Bốn tình huống chung một mã vì với người dùng chúng là **một**: lượt kiểm
+    không còn hợp lệ, và việc phải làm là kiểm lại. Tách mã ra sẽ là bốn câu
+    thông báo cho cùng một nút bấm.
+    """
+
+    error_code: ClassVar[str] = "import.source_not_validated"
+
+
+class ImportFileMissingError(DomainError):
+    """Tệp đã kiểm không còn trong kho — khôi phục dở dang, hoặc đã bị dọn."""
+
+    error_code: ClassVar[str] = "import.file_missing"
+
+
+class JobNotDirectlyEnqueueableError(DomainError):
+    """Loại job này phải xếp hàng qua endpoint riêng của nó (`JobType.direct_enqueue`).
+
+    Không phải lỗi phân quyền: người gọi **có** quyền dùng loại job đó. Điều
+    thiếu là phạm vi — endpoint riêng biết tham số nên kiểm được quyền trên đúng
+    đối tượng, còn endpoint hàng đợi chung thì không.
+    """
+
+    error_code: ClassVar[str] = "job.not_directly_enqueueable"
+
+
+class ImportParentUnresolvableError(DomainError):
+    """Còn dòng không tạo được sau khi đã duyệt hết các cấp cây.
+
+    Nguyên nhân là một câu hỏi về **đồ thị**, không về từng dòng: `parent_code`
+    tạo chu trình (A trỏ B, B trỏ A), một dòng tự trỏ vào chính mã của nó, hoặc
+    cây sâu hơn mức cho phép. Bước kiểm theo dòng không bắt được loại này, nên nó
+    ném ở bước ghi — và ném chứ không bỏ qua, vì bỏ qua là mất dữ liệu im lặng.
+    """
+
+    error_code: ClassVar[str] = "import.parent_unresolvable"
