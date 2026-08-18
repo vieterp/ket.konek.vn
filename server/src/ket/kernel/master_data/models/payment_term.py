@@ -15,11 +15,12 @@ from decimal import Decimal
 from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import CheckConstraint, Integer, Numeric
+from sqlalchemy import CheckConstraint, Integer, Numeric, or_
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import SchemaItem
 
 from ket.kernel.master_data.base import MasterDataRow, master_data_table_args
+from ket.kernel.master_data.row_rules import RowRule
 
 PAYMENT_TERM_TABLE_NAME = "payment_terms"
 
@@ -93,3 +94,40 @@ class PaymentTermFields(BaseModel):
                 "cửa sổ chiết khấu như vậy sẽ không ai chạm tới được"
             )
         return self
+
+
+def payment_term_row_rules() -> tuple[RowRule, ...]:
+    """Bốn luật của bộ ba ngày–ngày–phần trăm (H3).
+
+    `discount_window_within_due` là cái đáng giá nhất: ba cái kia là miền giá trị
+    của **một** cột, còn nó nối hai cột — và một điều khoản `2/40 net 30` đọc vẫn
+    xuôi tai, chỉ là nó mô tả một ưu đãi không ai chạm tới được.
+    """
+    return (
+        RowRule(
+            constraint="due_days_not_negative",
+            field="due_days",
+            message="Số ngày được nợ không được âm",
+            violated=lambda row: row.value("due_days") < 0,
+        ),
+        RowRule(
+            constraint="discount_days_not_negative",
+            field="discount_days",
+            message="Số ngày hưởng chiết khấu không được âm",
+            violated=lambda row: row.value("discount_days") < 0,
+        ),
+        RowRule(
+            constraint="discount_percent_in_range",
+            field="discount_percent",
+            message="Tỷ lệ chiết khấu phải nằm trong khoảng 0–100",
+            violated=lambda row: or_(
+                row.value("discount_percent") < 0, row.value("discount_percent") > 100
+            ),
+        ),
+        RowRule(
+            constraint="discount_window_within_due",
+            field="discount_days",
+            message="Số ngày hưởng chiết khấu không được lớn hơn số ngày được nợ",
+            violated=lambda row: row.value("discount_days") > row.value("due_days"),
+        ),
+    )

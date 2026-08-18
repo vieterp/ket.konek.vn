@@ -25,6 +25,7 @@ from __future__ import annotations
 from ket.kernel.attachments import models as attachment_models
 from ket.kernel.auditing import control_log as control_audit_models
 from ket.kernel.auditing import models as auditing_models
+from ket.kernel.bank_import import profile_models as bank_import_models
 from ket.kernel.currency import models as currency_models
 from ket.kernel.datasets import models as control_models
 from ket.kernel.dimensions import models as dimension_models
@@ -45,6 +46,7 @@ __all__ = [
     "attachment_models",
     "auditing_models",
     "auth_models",
+    "bank_import_models",
     "control_audit_models",
     "control_models",
     "currency_models",

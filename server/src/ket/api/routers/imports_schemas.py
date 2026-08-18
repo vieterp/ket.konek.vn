@@ -12,7 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ket.kernel.excel.report import ImportMode
+from ket.kernel.excel.report import ImportMode, MissingReferenceMode
 
 
 class ImportValidateResponse(BaseModel):
@@ -28,6 +28,14 @@ class ImportValidateResponse(BaseModel):
     file_name: str
     content_hash: str
     mode: ImportMode
+    missing_reference: MissingReferenceMode
+    allow_create_in: tuple[str, ...]
+    """Danh mục đích mà người này **được** tự tạo bản ghi (FR-NFR-062).
+
+    Trả về cho client vì nó là một câu trả lời người dùng cần **trước** khi đọc
+    báo cáo: xin tự tạo mà danh sách này rỗng thì mọi mã thiếu vẫn sẽ là dòng
+    lỗi, và lý do là quyền chứ không phải dữ liệu. Không có nó, màn hình chỉ còn
+    cách đoán."""
 
 
 class ImportCommitRequest(BaseModel):

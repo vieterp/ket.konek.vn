@@ -12,11 +12,12 @@ nhánh ngân hàng trong nước nhỏ thường không có mã SWIFT riêng.
 from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import CheckConstraint, String
+from sqlalchemy import CheckConstraint, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import SchemaItem
 
 from ket.kernel.master_data.base import MasterDataRow, master_data_table_args
+from ket.kernel.master_data.row_rules import RowRule
 
 BANK_TABLE_NAME = "banks"
 
@@ -85,3 +86,23 @@ class BankFields(BaseModel):
                 f"{SWIFT_CODE_LENGTH_MAX} ký tự (ISO 9362)"
             )
         return value
+
+
+def bank_row_rules() -> tuple[RowRule, ...]:
+    """Mã SWIFT dài 8 hoặc 11 — không phải "tối đa 11" (H3).
+
+    Trần độ dài của bước kiểm đọc từ cột thật (`VARCHAR(11)`), nên nó chặn một
+    giá trị 20 ký tự. Nó **không** chặn 9 ký tự: đúng luật độ dài, sai ISO 9362,
+    và đủ để lượt ghi đổ sau khi bước kiểm đã báo "hợp lệ". Đây là ca H3 điển
+    hình nhất — một ràng buộc không suy ra được từ kiểu hay độ dài của cột.
+    """
+    return (
+        RowRule(
+            constraint="swift_code_length_iso9362",
+            field="swift_code",
+            message="Mã SWIFT phải dài đúng 8 hoặc 11 ký tự (ISO 9362)",
+            violated=lambda row: func.length(row.value("swift_code")).notin_(
+                (SWIFT_CODE_LENGTH_MIN, SWIFT_CODE_LENGTH_MAX)
+            ),
+        ),
+    )

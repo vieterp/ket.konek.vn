@@ -41,6 +41,7 @@ from ket.kernel.master_data.models.partner import (
     PHONE_MAX_LENGTH,
     TAX_CODE_MAX_LENGTH,
 )
+from ket.kernel.master_data.row_rules import RowRule
 
 EMPLOYEE_TABLE_NAME = "employees"
 
@@ -144,3 +145,22 @@ class EmployeeFields(BaseModel):
                 "thì không lập được ủy nhiệm chi trả lương"
             )
         return self
+
+
+def employee_row_rules() -> tuple[RowRule, ...]:
+    """Số tài khoản và ngân hàng phải cùng có hoặc cùng không (H3).
+
+    Một số tài khoản không kèm ngân hàng là một số tài khoản không chuyển tiền
+    được, và một ngân hàng không kèm số tài khoản là một ô không dùng vào việc
+    gì. Bảng lương ở phase 9 đọc cặp này để lập ủy nhiệm chi.
+    """
+    return (
+        RowRule(
+            constraint="bank_account_needs_bank",
+            field="bank_account_number",
+            message="Số tài khoản ngân hàng và ngân hàng phải cùng khai, hoặc cùng để trống",
+            violated=lambda row: (
+                row.value("bank_account_number").is_(None) != row.value("bank_code").is_(None)
+            ),
+        ),
+    )

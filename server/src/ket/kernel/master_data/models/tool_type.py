@@ -17,6 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import SchemaItem
 
 from ket.kernel.master_data.base import MasterDataRow, master_data_table_args
+from ket.kernel.master_data.row_rules import RowRule
 
 TOOL_TYPE_TABLE_NAME = "tool_types"
 
@@ -46,4 +47,16 @@ class ToolTypeFields(BaseModel):
 
     default_allocation_months: int | None = Field(
         title="Thời gian phân bổ ngầm định (tháng)", default=None, gt=0
+    )
+
+
+def tool_type_row_rules() -> tuple[RowRule, ...]:
+    """Cùng luật với loại TSCĐ, trên cột phân bổ (H3)."""
+    return (
+        RowRule(
+            constraint="default_allocation_months_positive",
+            field="default_allocation_months",
+            message="Thời gian phân bổ ngầm định phải lớn hơn 0 (để trống nếu không gợi ý)",
+            violated=lambda row: row.value("default_allocation_months") <= 0,
+        ),
     )

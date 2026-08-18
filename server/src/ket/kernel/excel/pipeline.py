@@ -38,9 +38,14 @@ from ket.kernel.auditing.listener import record_action
 from ket.kernel.auditing.models import AuditAction
 from ket.kernel.errors import ImportParentUnresolvableError
 from ket.kernel.excel.descriptors import TemplateDescriptor, template_for
+from ket.kernel.excel.missing_references import (
+    count_missing,
+    create_missing,
+    eligible_columns,
+)
 from ket.kernel.excel.models import ImportStagingRow
 from ket.kernel.excel.reader import ensure_structure, iter_rows
-from ket.kernel.excel.report import ImportMode, ImportReport
+from ket.kernel.excel.report import ImportMode, ImportReport, MissingReferenceMode
 from ket.kernel.excel.sql import (
     boolean_expression,
     cell,
@@ -57,6 +62,7 @@ from ket.kernel.excel.sql import (
 )
 from ket.kernel.excel.staging import StagingTable
 from ket.kernel.jobs.registry import JobContext
+from ket.kernel.master_data.registry import REGISTRY as CATALOG_REGISTRY
 from ket.kernel.master_data.registry import CatalogSpec
 from ket.kernel.master_data.tree_path import ROOT_LEVEL
 
@@ -84,6 +90,8 @@ def run_import(
     content_hash: str,
     mode: ImportMode,
     commit: bool,
+    missing_reference: MissingReferenceMode = MissingReferenceMode.ERROR,
+    allow_create_in: frozenset[str] = frozenset(),
 ) -> ImportReport:
     """Chạy trọn một lượt nhập trong transaction của job.
 
@@ -95,10 +103,18 @@ def run_import(
     ensure_structure(source, descriptor)
     source.seek(0)
 
-    staging = StagingTable(context.session, context.job_id, descriptor)
+    staging = StagingTable(context.session, context.job_id, descriptor, table_for(spec.model))
+    # **Một** phép tính "danh mục nào sẽ được tự tạo", dùng chung cho bước bỏ
+    # qua lỗi tra cứu, bước đánh giá luật liên-trường, bước đếm và bước tạo.
+    # Bản đầu để `_reference_errors` tự lọc bằng `allow_create_in` thô, nên một
+    # danh mục **không** tự tạo được (đối tác → điều khoản thanh toán) vẫn bị bỏ
+    # qua lỗi: lượt nhập báo "hợp lệ" rồi ghi một khóa ngoại rỗng.
+    requested = allow_create_in if missing_reference is MissingReferenceMode.CREATE else frozenset()
+    autocreate = frozenset(slug for slug, _ in eligible_columns(descriptor, requested))
     report = ImportReport(
         catalog=spec.slug,
         mode=mode,
+        missing_reference=missing_reference,
         file_name=file_name,
         content_hash=content_hash,
         total_rows=0,
@@ -109,7 +125,7 @@ def run_import(
 
         branch_id = context.branch_id
         failed_rows: set[int] = set()
-        for error in staging.errors(spec, mode=mode, branch_id=branch_id):
+        for error in staging.errors(spec, mode=mode, branch_id=branch_id, autocreate=autocreate):
             failed_rows.add(error.row)
             report.add(error)
         report.error_rows = len(failed_rows)
@@ -119,9 +135,27 @@ def run_import(
             # "sẽ cập nhật" không mô tả gì sắp xảy ra. Để nguyên nó sẽ là một
             # con số đúng về mặt truy vấn và sai về mặt ý nghĩa.
             report.update_rows = 0
+        # Lượt **kiểm** chỉ đếm; lượt **ghi** mới tạo thật (FR-SYS-081 nói bước
+        # kiểm không ghi gì). Hai hàm chứ không một hàm có cờ: một cờ đặt sai ở
+        # nhánh nào đó biến bước kiểm thành bước ghi.
+        report.created_references = count_missing(
+            context.session,
+            descriptor,
+            context.job_id,
+            branch_id=branch_id,
+            allowed=autocreate,
+        )
         context.progress.report(PROGRESS_VALIDATED, f"Đã kiểm {report.total_rows} dòng")
 
         if commit and report.is_valid:
+            report.created_references = create_missing(
+                context.session,
+                descriptor,
+                context.job_id,
+                branch_id=branch_id,
+                allowed=autocreate,
+            )
+            _record_created_references(context, report=report)
             _write(
                 context.session,
                 spec,
@@ -172,6 +206,38 @@ def _record_import(context: JobContext, *, spec: CatalogSpec, report: ImportRepo
             "update_rows": report.update_rows,
         },
     )
+
+
+def _record_created_references(context: JobContext, *, report: ImportReport) -> None:
+    """Một dòng nhật ký cho **mỗi** danh mục đích được tự tạo (FR-NFR-062, M3).
+
+    Đường ghi của `create_missing` là `INSERT ... SELECT` qua Core, nên hai móc
+    dựng `audit_log` không chạy — giống hệt lý do H84 đã dựng `_record_import`.
+    Nhưng dòng của H84 mang `entity_type` của danh mục **chính**, nên câu hỏi
+    "ai tạo đơn vị tính này, lúc nào" không có câu trả lời ở đâu: màn hình lịch
+    sử của `units_of_measure` không thấy gì.
+
+    Một dòng cho mỗi danh mục đích chứ không mỗi bản ghi: cùng cân nhắc H84 —
+    bốn mươi dòng "rỗng → giá trị" chôn mất một lần sửa tay thật, còn `job_id`
+    thì trỏ thẳng vào lượt nhập đã sinh ra chúng, và lượt ấy trỏ tiếp vào tệp
+    trong kho định địa chỉ theo nội dung.
+    """
+    for slug, created in sorted(report.created_references.items()):
+        spec = CATALOG_REGISTRY.get(slug)
+        if spec is None:  # pragma: no cover — `eligible_columns` đã tra được nó
+            continue
+        record_action(
+            context.session,
+            entity_type=spec.entity_type,
+            entity_id=str(context.job_id),
+            action=AuditAction.IMPORTED,
+            new_values={
+                "catalog": slug,
+                "created_by_import_of": report.catalog,
+                "content_hash": report.content_hash,
+                "created_rows": created,
+            },
+        )
 
 
 def _write(

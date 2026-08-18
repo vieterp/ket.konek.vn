@@ -35,6 +35,8 @@ from sqlalchemy import (
     Column,
     ColumnElement,
     FromClause,
+    Integer,
+    Numeric,
     String,
     Table,
     Text,
@@ -47,6 +49,7 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.types import TypeEngine
 
 from ket.kernel.excel.descriptors import CellKind, ColumnDescriptor, TemplateDescriptor
 from ket.kernel.excel.models import ImportStagingRow
@@ -228,8 +231,33 @@ def code_matches(table: FromClause, branch_id: int | None) -> ColumnElement[bool
     )
 
 
+def widened(target: Column[Any]) -> TypeEngine[Any]:
+    """Kiểu **không ràng buộc** để ép một ô số mà không bao giờ tràn.
+
+    `CAST(x AS numeric(p, s))` của PostgreSQL **làm tròn theo `s` rồi mới kiểm
+    `p`**, nên một giá trị đúng hình thức vẫn nổ với `NumericValueOutOfRange`:
+    `"999.99999"` vào `Numeric(7, 4)` làm tròn thành `1000.0000` — tám chữ số,
+    quá bảy. `CAST(… AS integer)` cũng vậy khi giá trị vượt 32 bit.
+
+    Chấp nhận được ở câu **ghi** (chỉ chạy khi tệp đã sạch), nhưng là một lỗ hổng
+    ở câu **kiểm**: nó chạy trên mọi dòng, kể cả dòng vừa bị báo sai, và một lần
+    ném ở đó làm hỏng transaction rồi `staging.clear()` ném chồng lên — nuốt mất
+    **cả** báo cáo lỗi (review vòng 2 C1, vòng 3 R3-C1).
+
+    `numeric` không khai precision thì không có trần, nên phép ép không bao giờ
+    nổ; mọi phép so của một luật liên-trường vẫn đúng nguyên trên nó.
+    """
+    if isinstance(target.type, Numeric | Integer):
+        return Numeric()
+    return target.type
+
+
 def column_source(
-    column: ColumnDescriptor, branch_id: int | None, target: Column[Any] | None = None
+    column: ColumnDescriptor,
+    branch_id: int | None,
+    target: Column[Any] | None = None,
+    *,
+    widen: bool = False,
 ) -> ColumnElement[Any]:
     """Giá trị của một cột đích, lấy từ dòng đệm — dùng ở cả `INSERT` lẫn `UPDATE`.
 
@@ -253,10 +281,12 @@ def column_source(
     value = cell_or_null(column.field)
     if target is None:
         return value
-    return _with_default(_typed(value, target), target)
+    return _with_default(_typed(value, target, widen=widen), target)
 
 
-def _typed(value: ColumnElement[Any], target: Column[Any]) -> ColumnElement[Any]:
+def _typed(
+    value: ColumnElement[Any], target: Column[Any], *, widen: bool = False
+) -> ColumnElement[Any]:
     """Ép ô về kiểu cột — **trừ** kiểu chuỗi, và ngoại lệ đó là cả một lớp lỗi.
 
     `CAST(x AS varchar(n))` của PostgreSQL **cắt** chuỗi dài quá thay vì báo lỗi,
@@ -269,7 +299,9 @@ def _typed(value: ColumnElement[Any], target: Column[Any]) -> ColumnElement[Any]
     (không có phép ép ngầm `text → integer` ở vị trí gán). Nên ép cho chúng, để
     nguyên cho chuỗi.
     """
-    return value if isinstance(target.type, String) else cast(value, target.type)
+    if isinstance(target.type, String):
+        return value
+    return cast(value, widened(target) if widen else target.type)
 
 
 def _with_default(value: ColumnElement[Any], target: Column[Any]) -> ColumnElement[Any]:
@@ -301,6 +333,8 @@ def keep_existing(
     column: ColumnDescriptor,
     branch_id: int | None,
     target: Column[Any],
+    *,
+    widen: bool = False,
 ) -> ColumnElement[Any]:
     """Giá trị mới ở đường **sửa** — ô để trống thì giữ nguyên giá trị đang có (H87).
 
@@ -332,9 +366,9 @@ def keep_existing(
         # mới không có giá trị cũ nào để giữ.
         return case(
             (cell_or_null(column.field).is_(None), target),
-            else_=column_source(column, branch_id, target),
+            else_=column_source(column, branch_id, target, widen=widen),
         )
-    return func.coalesce(_typed(cell_or_null(column.field), target), target)
+    return func.coalesce(_typed(cell_or_null(column.field), target, widen=widen), target)
 
 
 def as_text(value: ColumnElement[Any]) -> ColumnElement[str]:

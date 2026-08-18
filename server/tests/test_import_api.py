@@ -1,7 +1,7 @@
-"""Nhập liệu danh mục qua HTTP (lát 3C-1).
+"""Nhập và xuất danh mục qua HTTP (lát 3C-1, mở rộng cho đường xuất ở 3C-2).
 
-Luật nghiệp vụ của lượt nhập nằm ở `test_import_pipeline.py`. Ở đây chỉ kiểm bốn
-thứ mà **chỉ tầng HTTP** trả lời được:
+Luật nghiệp vụ của lượt nhập nằm ở `test_import_pipeline.py`, của lượt xuất ở
+`test_export.py`. Ở đây chỉ kiểm bốn thứ mà **chỉ tầng HTTP** trả lời được:
 
 * tệp mẫu tải về được, và route của nó không bị route đọc bản ghi nuốt mất;
 * **hai lớp quyền** — quyền dùng chức năng nhập liệu, và quyền trên chính danh
@@ -10,6 +10,11 @@ thứ mà **chỉ tầng HTTP** trả lời được:
 * hai loại job **không** xếp hàng thẳng qua `/api/v1/jobs` được, vì endpoint
   chung không biết `slug` nào đang bị nhắm tới;
 * lượt kiểm để lại một `job_id` và tệp nằm trong kho định địa chỉ theo nội dung.
+
+Đường **xuất** (3C-2) đo hai thứ ở đây vì cùng hai lý do: route của nó cũng bị
+`GET /{slug}/{record_id}` nuốt nếu đăng ký sai thứ tự, và mức quyền của nó cũng
+là một quyết định (`view`, bằng đường đọc danh sách — tệp xuất ra chứa đúng
+những dòng người dùng ấy đã đọc được).
 """
 
 from __future__ import annotations
@@ -28,18 +33,23 @@ from catalog_api_support import (
     UserFactory,
     actor,
     all_branch_codes,
+    branch_ids,
     catalog_codes,
     ensure_branches,
     ensure_role,
     unique_code,
 )
 from conftest import api_test_client
+from ket.api.dependencies import BRANCH_HEADER
 from ket.kernel.attachments import storage
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.excel.descriptors import template_for
 from ket.kernel.excel.job import IMPORT_COMMIT, IMPORT_VALIDATE
 from ket.kernel.jobs.builtin import JOB_CREATE, JOB_VIEW
+from ket.kernel.master_data.models.warehouse import Warehouse
 from ket.kernel.master_data.registry import REGISTRY
+from ket.kernel.master_data.service import MasterDataService
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security.permissions import Action
 from ket.main import create_app
 from ket.settings import Settings
@@ -50,7 +60,12 @@ WAREHOUSES = "warehouses"
 PAYMENT_TERMS = "payment_terms"
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-BRANCH_CODES = ["CN_IMP_A"]
+BRANCH_CODES = ["CN_IMP_A", "CN_IMP_MINE", "CN_IMP_KHAC"]
+"""Ba chi nhánh, tạo **trước** khi fixture `importer` gán phạm vi cho người dùng.
+
+Hai cái sau tồn tại cho phép kiểm phạm vi của lượt xuất: chỉ với ba bản ghi ở ba
+phạm vi (dùng chung, chi nhánh này, chi nhánh kia) mới tách được "lọc theo phiên"
+khỏi "lọc về phần dùng chung" — xem test tương ứng."""
 
 
 @pytest.fixture(scope="module")
@@ -116,7 +131,7 @@ def importer(
     branches: list[str],
 ) -> dict[str, str]:
     assert branches, "cần ít nhất một chi nhánh"
-    return actor(
+    headers = actor(
         client,
         session_factory,
         dataset_alpha,
@@ -126,6 +141,16 @@ def importer(
         test_password,
         branch_codes=all_branch_codes(session_factory, dataset_alpha),
     )
+    # `X-Branch` tường minh: `dependencies._acting_branch` suy chi nhánh **khi và
+    # chỉ khi** người dùng có đúng một, nên phạm vi ghi của cả module này vốn là
+    # hàm của *số chi nhánh mà module test khác tình cờ tạo ra* (R3-M3). Ghim nó
+    # để mọi khẳng định ở đây nói về một phạm vi biết trước.
+    return {
+        **headers,
+        BRANCH_HEADER: str(
+            branch_ids(session_factory, dataset_alpha, [BRANCH_CODES[0]])[BRANCH_CODES[0]]
+        ),
+    }
 
 
 @pytest.fixture
@@ -312,3 +337,141 @@ def test_commit_refuses_a_validation_job_that_does_not_exist(
         json={"validation_job_id": "00000000-0000-0000-0000-000000000000"},
     )
     assert response.status_code == 202, response.text
+
+
+# ------------------------------------------------------------------- xuất
+
+
+def test_the_export_route_is_not_swallowed_by_the_record_route(
+    client: TestClient, importer: dict[str, str]
+) -> None:
+    """`GET /{slug}/export` phải thắng `GET /{slug}/{record_id}` — cùng bẫy với `template`.
+
+    Đăng ký sau bộ danh mục thì mọi lượt xuất nhận `422` ("export" không phải số
+    nguyên) thay vì nhận tệp. `main.py` gắn bộ xuất ngay sau bộ nhập và trước bộ
+    danh mục; đây là chỗ canh thứ tự ấy.
+    """
+    response = client.get(f"/api/v1/master/{WAREHOUSES}/export", headers=importer)
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith(XLSX)
+    assert "attachment" in response.headers["content-disposition"]
+
+
+def test_exporting_needs_only_view_permission(client: TestClient, reader: dict[str, str]) -> None:
+    """Cùng mức quyền với đường đọc danh sách, và cố ý.
+
+    Tệp xuất ra chứa **đúng** những dòng mà `GET /api/v1/master/{slug}` đã trả về
+    cho chính người dùng ấy — chỉ khác định dạng. Đòi thêm quyền ở đây là dựng
+    một mức quyền thứ hai cho cùng một dữ liệu, thứ sẽ lệch khỏi mức thứ nhất.
+    """
+    response = client.get(f"/api/v1/master/{WAREHOUSES}/export", headers=reader)
+    assert response.status_code == 200, response.text
+
+
+def test_exporting_a_catalog_without_permission_on_it_is_refused(
+    client: TestClient, importer: dict[str, str]
+) -> None:
+    """H48 áp cho cả đường xuất: quyền trên **danh mục này**, không phải mọi danh mục."""
+    response = client.get(f"/api/v1/master/{PAYMENT_TERMS}/export", headers=importer)
+    assert response.status_code == 403, response.text
+
+
+def test_the_export_is_scoped_to_the_session_branch_not_the_whole_dataset(
+    client: TestClient,
+    importer: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+) -> None:
+    """Phạm vi chi nhánh của lượt xuất đến từ **phiên**, và phải có cổng canh.
+
+    Review vòng 1 (H3) rồi vòng 2 (H2): đột biến
+    `branch_id=authorized.scope.acting_branch_id` → `branch_id=None` **sống sót**
+    cả hai lần. Bản đầu của test này dùng người dùng không đặt `X-Branch`, nên
+    `acting_branch_id` vốn đã là `None`: nó phân biệt được "không lọc gì" với
+    "có lọc", nhưng **không** phân biệt được "lọc theo phiên" với "lọc về phần
+    dùng chung" — mà đó đúng là thứ đột biến đổi.
+
+    Ba bản ghi, ba phạm vi, và phiên **có** đặt `X-Branch`: chỉ khi ấy ba khả
+    năng mới tách nhau ra. Bảng danh mục cố ý không bật RLS (H39) nên dòng
+    `acting_branch_id` ấy là lớp lọc **duy nhất** của endpoint.
+    """
+    ids = branch_ids(session_factory, dataset_alpha, ["CN_IMP_MINE", "CN_IMP_KHAC"])
+    shared_code = unique_code("KHO_CHUNG")
+    mine_code = unique_code("KHO_CUA_TOI")
+    other_code = unique_code("KHO_KHAC")
+
+    for code, branch in (
+        (shared_code, None),
+        (mine_code, ids["CN_IMP_MINE"]),
+        (other_code, ids["CN_IMP_KHAC"]),
+    ):
+        scope = RequestScope(
+            dataset_schema=dataset_alpha.schema_name,
+            user_id=1,
+            branch_ids=() if branch is None else (branch,),
+            acting_branch_id=branch,
+        )
+        with unit_of_work(session_factory, scope) as session:
+            service: MasterDataService[Warehouse] = MasterDataService(session, Warehouse)
+            service.create(code=code, name=f"Kho {code}", branch_id=branch)
+
+    response = client.get(
+        f"/api/v1/master/{WAREHOUSES}/export",
+        headers={**importer, BRANCH_HEADER: str(ids["CN_IMP_MINE"])},
+    )
+    assert response.status_code == 200, response.text
+    workbook = load_workbook(BytesIO(response.content), read_only=True, data_only=True)
+    try:
+        spec = REGISTRY.get(WAREHOUSES)
+        assert spec is not None
+        sheet = workbook[template_for(spec).sheet_name]
+        exported = {row[0] for row in sheet.iter_rows(min_row=2, max_col=1, values_only=True)}
+    finally:
+        workbook.close()
+
+    assert mine_code in exported, "thiếu danh mục riêng của chính chi nhánh đang thao tác"
+    assert shared_code in exported, "thiếu phần dùng chung toàn công ty"
+    assert other_code not in exported, "tệp xuất chứa danh mục riêng của một chi nhánh khác"
+
+
+def test_validate_only_authorises_auto_create_where_the_user_may_create(
+    client: TestClient, importer: dict[str, str]
+) -> None:
+    """Hàng rào quyền của FR-NFR-062, đo ở **tầng HTTP** — nơi quyền thật sự được kiểm.
+
+    Review vòng 2, H4: toàn bộ tính năng tự tạo chỉ được đo qua `run_import` với
+    `allow_create_in` truyền tay, nên hai đột biến sống sót — bỏ hẳn
+    `_authorise_targets` khỏi endpoint commit, và ép `missing_reference=CREATE`
+    trong thân job. Đột biến thứ nhất nghĩa là: ai được nhập vật tư sẽ ghi được
+    vào danh mục kho mà không có quyền nào trên kho, đúng lỗ hổng mà hàng rào
+    này tuyên bố đã chặn (khuôn H89).
+
+    `importer` có toàn quyền trên **danh mục kho** và không có gì trên các danh
+    mục khác, nên danh sách được duyệt phải chứa `warehouses` và **chỉ** nó —
+    dù `items` trỏ tới cả `units_of_measure`.
+    """
+    response = client.post(
+        f"/api/v1/master/{WAREHOUSES}/import/validate",
+        headers=importer,
+        files={"file": ("kho.xlsx", _upload(WAREHOUSES, []), XLSX)},
+        data={"missing_reference": "create"},
+    )
+    assert response.status_code == 202, response.text
+    body = response.json()
+    assert body["missing_reference"] == "create"
+    # Danh mục kho không có cột tra cứu nào ngoài mã nhóm cha (cố ý không tự tạo
+    # được — H106), nên danh sách rỗng là câu trả lời đúng và có nghĩa.
+    assert body["allow_create_in"] == []
+
+
+def test_the_default_import_never_asks_to_create_anything(
+    client: TestClient, importer: dict[str, str]
+) -> None:
+    """Không gửi `missing_reference` thì chế độ là `error` — H80 áp cho cả FR-NFR-062."""
+    response = client.post(
+        f"/api/v1/master/{WAREHOUSES}/import/validate",
+        headers=importer,
+        files={"file": ("kho.xlsx", _upload(WAREHOUSES, []), XLSX)},
+    )
+    assert response.status_code == 202, response.text
+    assert response.json()["missing_reference"] == "error"

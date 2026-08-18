@@ -499,6 +499,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/asset_types/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại tài sản cố định — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_asset_types_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/asset_types/import/commit": {
         parameters: {
             query?: never;
@@ -695,6 +723,34 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_banks_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/banks/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ngân hàng — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_banks_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -903,6 +959,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/contracts/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hợp đồng — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_contracts_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/contracts/import/commit": {
         parameters: {
             query?: never;
@@ -1099,6 +1183,34 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_cost_objects_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/cost_objects/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Đối tượng tập hợp chi phí — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_cost_objects_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1307,6 +1419,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/document_types/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại chứng từ — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_document_types_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/document_types/import/commit": {
         parameters: {
             query?: never;
@@ -1503,6 +1643,34 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_employees_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/employees/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Nhân viên — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_employees_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1711,6 +1879,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/excise_tax_tables/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Biểu thuế tiêu thụ đặc biệt — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_excise_tax_tables_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/excise_tax_tables/import/commit": {
         parameters: {
             query?: never;
@@ -1907,6 +2103,34 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_expense_items_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/expense_items/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Khoản mục chi phí — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_expense_items_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2115,6 +2339,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/invoice_forms/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mẫu số hóa đơn — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_invoice_forms_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/invoice_forms/import/commit": {
         parameters: {
             query?: never;
@@ -2311,6 +2563,34 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_items_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vật tư hàng hóa — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_items_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2622,6 +2902,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/partners/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Đối tác — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_partners_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/partners/import/commit": {
         parameters: {
             query?: never;
@@ -2876,6 +3184,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/payment_terms/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Điều khoản thanh toán — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_payment_terms_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/payment_terms/import/commit": {
         parameters: {
             query?: never;
@@ -3072,6 +3408,34 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_pit_tables_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/pit_tables/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Biểu tính thuế thu nhập cá nhân — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_pit_tables_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3280,6 +3644,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/project_types/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại công trình — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_project_types_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/project_types/import/commit": {
         parameters: {
             query?: never;
@@ -3476,6 +3868,34 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_projects_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/projects/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Công trình — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_projects_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3684,6 +4104,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/resource_tax_tables/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Biểu thuế tài nguyên — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_resource_tax_tables_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/resource_tax_tables/import/commit": {
         parameters: {
             query?: never;
@@ -3880,6 +4328,34 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_timekeeping_symbols_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/timekeeping_symbols/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ký hiệu chấm công — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_timekeeping_symbols_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4088,6 +4564,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/tool_types/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loại công cụ dụng cụ — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_tool_types_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/tool_types/import/commit": {
         parameters: {
             query?: never;
@@ -4290,6 +4794,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/units_of_measure/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Đơn vị tính — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_units_of_measure_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/units_of_measure/import/commit": {
         parameters: {
             query?: never;
@@ -4486,6 +5018,34 @@ export interface paths {
          *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
          */
         post: operations["merge_two_records_api_v1_master_warehouses_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/warehouses/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Kho — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_warehouses_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5294,6 +5854,8 @@ export interface components {
         Body_validate_import_api_v1_master_asset_types_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5301,6 +5863,8 @@ export interface components {
         Body_validate_import_api_v1_master_banks_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5308,6 +5872,8 @@ export interface components {
         Body_validate_import_api_v1_master_contracts_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5315,6 +5881,8 @@ export interface components {
         Body_validate_import_api_v1_master_cost_objects_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5322,6 +5890,8 @@ export interface components {
         Body_validate_import_api_v1_master_document_types_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5329,6 +5899,8 @@ export interface components {
         Body_validate_import_api_v1_master_employees_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5336,6 +5908,8 @@ export interface components {
         Body_validate_import_api_v1_master_excise_tax_tables_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5343,6 +5917,8 @@ export interface components {
         Body_validate_import_api_v1_master_expense_items_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5350,6 +5926,8 @@ export interface components {
         Body_validate_import_api_v1_master_invoice_forms_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5357,6 +5935,8 @@ export interface components {
         Body_validate_import_api_v1_master_items_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5364,6 +5944,8 @@ export interface components {
         Body_validate_import_api_v1_master_partners_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5371,6 +5953,8 @@ export interface components {
         Body_validate_import_api_v1_master_payment_terms_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5378,6 +5962,8 @@ export interface components {
         Body_validate_import_api_v1_master_pit_tables_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5385,6 +5971,8 @@ export interface components {
         Body_validate_import_api_v1_master_project_types_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5392,6 +5980,8 @@ export interface components {
         Body_validate_import_api_v1_master_projects_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5399,6 +5989,8 @@ export interface components {
         Body_validate_import_api_v1_master_resource_tax_tables_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5406,6 +5998,8 @@ export interface components {
         Body_validate_import_api_v1_master_timekeeping_symbols_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5413,6 +6007,8 @@ export interface components {
         Body_validate_import_api_v1_master_tool_types_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5420,6 +6016,8 @@ export interface components {
         Body_validate_import_api_v1_master_units_of_measure_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -5427,6 +6025,8 @@ export interface components {
         Body_validate_import_api_v1_master_warehouses_import_validate_post: {
             /** File */
             file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
@@ -6240,6 +6840,8 @@ export interface components {
          *     lên cùng một tệp hai lần, và để hiện ra ở phần lịch sử.
          */
         ImportValidateResponse: {
+            /** Allow Create In */
+            allow_create_in: string[];
             /** Catalog */
             catalog: string;
             /** Content Hash */
@@ -6251,6 +6853,7 @@ export interface components {
              * Format: uuid
              */
             job_id: string;
+            missing_reference: components["schemas"]["MissingReferenceMode"];
             mode: components["schemas"]["ImportMode"];
         };
         /**
@@ -6734,6 +7337,17 @@ export interface components {
             /** Username */
             username: string;
         };
+        /**
+         * MissingReferenceMode
+         * @description Làm gì với một ô tra cứu mang mã chưa có trong danh mục đích (FR-NFR-062).
+         *
+         *     Mặc định `ERROR` ở mọi nơi khai giá trị này, cùng lý do với `ImportMode`:
+         *     `CREATE` ghi vào một danh mục **khác** danh mục người dùng đang nhập, nên nó
+         *     phải là thứ họ chọn — và chọn sau khi đọc con số "sẽ tạo thêm 12 đơn vị tính"
+         *     trong báo cáo của lượt kiểm.
+         * @enum {string}
+         */
+        MissingReferenceMode: "error" | "create";
         /**
          * MovedReferenceResponse
          * @description Một cột khóa ngoại đã được trỏ lại, kèm số dòng.
@@ -8764,6 +9378,45 @@ export interface operations {
             };
         };
     };
+    export_records_api_v1_master_asset_types_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     commit_import_api_v1_master_asset_types_import_commit_post: {
         parameters: {
             query?: never;
@@ -9079,6 +9732,45 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_records_api_v1_master_banks_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {
@@ -9418,6 +10110,45 @@ export interface operations {
             };
         };
     };
+    export_records_api_v1_master_contracts_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     commit_import_api_v1_master_contracts_import_commit_post: {
         parameters: {
             query?: never;
@@ -9733,6 +10464,45 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_records_api_v1_master_cost_objects_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {
@@ -10072,6 +10842,45 @@ export interface operations {
             };
         };
     };
+    export_records_api_v1_master_document_types_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     commit_import_api_v1_master_document_types_import_commit_post: {
         parameters: {
             query?: never;
@@ -10387,6 +11196,45 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_records_api_v1_master_employees_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {
@@ -10726,6 +11574,45 @@ export interface operations {
             };
         };
     };
+    export_records_api_v1_master_excise_tax_tables_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     commit_import_api_v1_master_excise_tax_tables_import_commit_post: {
         parameters: {
             query?: never;
@@ -11041,6 +11928,45 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_records_api_v1_master_expense_items_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {
@@ -11380,6 +12306,45 @@ export interface operations {
             };
         };
     };
+    export_records_api_v1_master_invoice_forms_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     commit_import_api_v1_master_invoice_forms_import_commit_post: {
         parameters: {
             query?: never;
@@ -11695,6 +12660,45 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_records_api_v1_master_items_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {
@@ -12300,6 +13304,45 @@ export interface operations {
             };
         };
     };
+    export_records_api_v1_master_partners_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     commit_import_api_v1_master_partners_import_commit_post: {
         parameters: {
             query?: never;
@@ -12761,6 +13804,45 @@ export interface operations {
             };
         };
     };
+    export_records_api_v1_master_payment_terms_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     commit_import_api_v1_master_payment_terms_import_commit_post: {
         parameters: {
             query?: never;
@@ -13076,6 +14158,45 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_records_api_v1_master_pit_tables_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {
@@ -13415,6 +14536,45 @@ export interface operations {
             };
         };
     };
+    export_records_api_v1_master_project_types_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     commit_import_api_v1_master_project_types_import_commit_post: {
         parameters: {
             query?: never;
@@ -13730,6 +14890,45 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_records_api_v1_master_projects_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {
@@ -14069,6 +15268,45 @@ export interface operations {
             };
         };
     };
+    export_records_api_v1_master_resource_tax_tables_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     commit_import_api_v1_master_resource_tax_tables_import_commit_post: {
         parameters: {
             query?: never;
@@ -14384,6 +15622,45 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_records_api_v1_master_timekeeping_symbols_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {
@@ -14723,6 +16000,45 @@ export interface operations {
             };
         };
     };
+    export_records_api_v1_master_tool_types_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     commit_import_api_v1_master_tool_types_import_commit_post: {
         parameters: {
             query?: never;
@@ -15050,6 +16366,45 @@ export interface operations {
             };
         };
     };
+    export_records_api_v1_master_units_of_measure_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     commit_import_api_v1_master_units_of_measure_import_commit_post: {
         parameters: {
             query?: never;
@@ -15365,6 +16720,45 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MasterDataMergeResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_records_api_v1_master_warehouses_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {

@@ -789,6 +789,10 @@
             "title": "File",
             "type": "string"
           },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
             "default": "create_only"
@@ -806,6 +810,10 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
           },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
@@ -825,6 +833,10 @@
             "title": "File",
             "type": "string"
           },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
             "default": "create_only"
@@ -842,6 +854,10 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
           },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
@@ -861,6 +877,10 @@
             "title": "File",
             "type": "string"
           },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
             "default": "create_only"
@@ -878,6 +898,10 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
           },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
@@ -897,6 +921,10 @@
             "title": "File",
             "type": "string"
           },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
             "default": "create_only"
@@ -914,6 +942,10 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
           },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
@@ -933,6 +965,10 @@
             "title": "File",
             "type": "string"
           },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
             "default": "create_only"
@@ -950,6 +986,10 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
           },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
@@ -969,6 +1009,10 @@
             "title": "File",
             "type": "string"
           },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
             "default": "create_only"
@@ -986,6 +1030,10 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
           },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
@@ -1005,6 +1053,10 @@
             "title": "File",
             "type": "string"
           },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
             "default": "create_only"
@@ -1022,6 +1074,10 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
           },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
@@ -1041,6 +1097,10 @@
             "title": "File",
             "type": "string"
           },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
             "default": "create_only"
@@ -1058,6 +1118,10 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
           },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
@@ -1077,6 +1141,10 @@
             "title": "File",
             "type": "string"
           },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
             "default": "create_only"
@@ -1094,6 +1162,10 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
           },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
@@ -1113,6 +1185,10 @@
             "title": "File",
             "type": "string"
           },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
             "default": "create_only"
@@ -1130,6 +1206,10 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
           },
           "mode": {
             "$ref": "#/components/schemas/ImportMode",
@@ -3445,6 +3525,13 @@
       "ImportValidateResponse": {
         "description": "Lượt kiểm đã được xếp hàng.\n\nTrả `content_hash` về cho client dù nó không phải nhập lại ở bước ghi: màn\nhình cần nó để nhận ra \"tệp này tôi vừa tải lên xong\" khi người dùng bấm tải\nlên cùng một tệp hai lần, và để hiện ra ở phần lịch sử.",
         "properties": {
+          "allow_create_in": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allow Create In",
+            "type": "array"
+          },
           "catalog": {
             "title": "Catalog",
             "type": "string"
@@ -3462,6 +3549,9 @@
             "title": "Job Id",
             "type": "string"
           },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode"
+          },
           "mode": {
             "$ref": "#/components/schemas/ImportMode"
           }
@@ -3471,7 +3561,9 @@
           "catalog",
           "file_name",
           "content_hash",
-          "mode"
+          "mode",
+          "missing_reference",
+          "allow_create_in"
         ],
         "title": "ImportValidateResponse",
         "type": "object"
@@ -4733,6 +4825,15 @@
         ],
         "title": "MeResponse",
         "type": "object"
+      },
+      "MissingReferenceMode": {
+        "description": "Làm gì với một ô tra cứu mang mã chưa có trong danh mục đích (FR-NFR-062).\n\nMặc định `ERROR` ở mọi nơi khai giá trị này, cùng lý do với `ImportMode`:\n`CREATE` ghi vào một danh mục **khác** danh mục người dùng đang nhập, nên nó\nphải là thứ họ chọn — và chọn sau khi đọc con số \"sẽ tạo thêm 12 đơn vị tính\"\ntrong báo cáo của lượt kiểm.",
+        "enum": [
+          "error",
+          "create"
+        ],
+        "title": "MissingReferenceMode",
+        "type": "string"
       },
       "MovedReferenceResponse": {
         "description": "Một cột khóa ngoại đã được trỏ lại, kèm số dòng.",
@@ -8226,7 +8327,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.16.0"
+    "version": "0.17.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -9311,6 +9412,51 @@
         ]
       }
     },
+    "/api/v1/master/asset_types/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_asset_types_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại tài sản cố định — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
     "/api/v1/master/asset_types/import/commit": {
       "post": {
         "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
@@ -9789,6 +9935,51 @@
         "summary": "Ngân hàng — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/banks/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_banks_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Ngân hàng — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
         ]
       }
     },
@@ -10273,6 +10464,51 @@
         ]
       }
     },
+    "/api/v1/master/contracts/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_contracts_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Hợp đồng — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
     "/api/v1/master/contracts/import/commit": {
       "post": {
         "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
@@ -10751,6 +10987,51 @@
         "summary": "Đối tượng tập hợp chi phí — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/cost_objects/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_cost_objects_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đối tượng tập hợp chi phí — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
         ]
       }
     },
@@ -11235,6 +11516,51 @@
         ]
       }
     },
+    "/api/v1/master/document_types/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_document_types_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại chứng từ — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
     "/api/v1/master/document_types/import/commit": {
       "post": {
         "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
@@ -11713,6 +12039,51 @@
         "summary": "Nhân viên — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/employees/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_employees_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Nhân viên — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
         ]
       }
     },
@@ -12197,6 +12568,51 @@
         ]
       }
     },
+    "/api/v1/master/excise_tax_tables/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_excise_tax_tables_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu thuế tiêu thụ đặc biệt — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
     "/api/v1/master/excise_tax_tables/import/commit": {
       "post": {
         "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
@@ -12675,6 +13091,51 @@
         "summary": "Khoản mục chi phí — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/expense_items/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_expense_items_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Khoản mục chi phí — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
         ]
       }
     },
@@ -13159,6 +13620,51 @@
         ]
       }
     },
+    "/api/v1/master/invoice_forms/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_invoice_forms_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Mẫu số hóa đơn — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
     "/api/v1/master/invoice_forms/import/commit": {
       "post": {
         "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
@@ -13637,6 +14143,51 @@
         "summary": "Vật tư hàng hóa — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/items/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_items_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
         ]
       }
     },
@@ -14529,6 +15080,51 @@
         ]
       }
     },
+    "/api/v1/master/partners/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_partners_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đối tác — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
     "/api/v1/master/partners/import/commit": {
       "post": {
         "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
@@ -15219,6 +15815,51 @@
         ]
       }
     },
+    "/api/v1/master/payment_terms/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_payment_terms_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Điều khoản thanh toán — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
     "/api/v1/master/payment_terms/import/commit": {
       "post": {
         "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
@@ -15697,6 +16338,51 @@
         "summary": "Biểu tính thuế thu nhập cá nhân — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/pit_tables/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_pit_tables_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu tính thuế thu nhập cá nhân — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
         ]
       }
     },
@@ -16181,6 +16867,51 @@
         ]
       }
     },
+    "/api/v1/master/project_types/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_project_types_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại công trình — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
     "/api/v1/master/project_types/import/commit": {
       "post": {
         "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
@@ -16659,6 +17390,51 @@
         "summary": "Công trình — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/projects/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_projects_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Công trình — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
         ]
       }
     },
@@ -17143,6 +17919,51 @@
         ]
       }
     },
+    "/api/v1/master/resource_tax_tables/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_resource_tax_tables_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Biểu thuế tài nguyên — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
     "/api/v1/master/resource_tax_tables/import/commit": {
       "post": {
         "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
@@ -17621,6 +18442,51 @@
         "summary": "Ký hiệu chấm công — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/timekeeping_symbols/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_timekeeping_symbols_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Ký hiệu chấm công — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
         ]
       }
     },
@@ -18105,6 +18971,51 @@
         ]
       }
     },
+    "/api/v1/master/tool_types/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_tool_types_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Loại công cụ dụng cụ — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
     "/api/v1/master/tool_types/import/commit": {
       "post": {
         "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
@@ -18586,6 +19497,51 @@
         ]
       }
     },
+    "/api/v1/master/units_of_measure/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_units_of_measure_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đơn vị tính — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
     "/api/v1/master/units_of_measure/import/commit": {
       "post": {
         "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
@@ -19064,6 +20020,51 @@
         "summary": "Kho — gộp hai bản ghi trùng",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/warehouses/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_warehouses_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Kho — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
         ]
       }
     },

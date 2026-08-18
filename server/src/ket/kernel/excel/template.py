@@ -28,24 +28,40 @@ from ket.kernel.excel.descriptors import (
 )
 from ket.kernel.master_data.registry import CatalogSpec
 
-_HEADER_FILL: Final[PatternFill] = PatternFill("solid", fgColor="E8EEF7")
-_REQUIRED_FONT: Final[Font] = Font(bold=True, color="B4232C")
+# Bốn hằng số trình bày dưới đây **công khai** vì bộ xuất (`exporter.py`, bước
+# 16) dựng cùng dòng tiêu đề ấy trên một sổ `write_only`. Chép lại chúng ở đó là
+# chép một quyết định trình bày sang chỗ thứ hai, và hai chỗ sẽ lệch — tệp mẫu
+# tải về trông khác tệp dữ liệu xuất ra, dù cả hai được cho là cùng một biểu mẫu.
+HEADER_FILL: Final[PatternFill] = PatternFill("solid", fgColor="E8EEF7")
+REQUIRED_FONT: Final[Font] = Font(bold=True, color="B4232C")
 """Cột bắt buộc đậm và đỏ, ngoài dấu `*`.
 
 Hai tín hiệu cho cùng một thông tin, có chủ đích: dấu `*` sống sót qua thao tác
 sao chép sang một bảng tính khác (thứ người dùng làm suốt), còn màu thì nhìn
 thấy ngay mà không phải đọc."""
 
-_OPTIONAL_FONT: Final[Font] = Font(bold=True)
+OPTIONAL_FONT: Final[Font] = Font(bold=True)
 
-_HEADER_WIDTH: Final[int] = 22
+HEADER_WIDTH: Final[int] = 22
 _NOTE_WIDTH: Final[int] = 90
 
+XLSX_MEDIA_TYPE: Final[str] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+"""Kiểu MIME của tệp .xlsx.
 
-def _write_instructions(
+Ở kernel chứ ở một router: **hai** router trả tệp .xlsx (nhập liệu trả tệp mẫu,
+xuất trả dữ liệu), và bản đầu để `routers/exports.py` import hằng số từ
+`routers/imports.py` — một router phụ thuộc router chỉ vì một chuỗi."""
+
+
+def write_instructions_sheet(
     workbook: Workbook, spec: CatalogSpec, descriptor: TemplateDescriptor
 ) -> None:
-    """Sheet **Hướng dẫn** — mỗi cột một dòng, sinh từ descriptor."""
+    """Sheet **Hướng dẫn** — mỗi cột một dòng, sinh từ descriptor.
+
+    Chỉ dùng `append` + `column_dimensions` nên nó chạy được trên **cả** sổ
+    thường lẫn sổ `write_only`: bộ xuất cần đúng sheet này để tệp xuất ra vẫn là
+    một tệp mẫu hoàn chỉnh, còn `reader` thì bỏ qua nó theo tên (`INSTRUCTIONS_SHEET`).
+    """
     sheet = workbook.create_sheet(INSTRUCTIONS_SHEET)
     sheet.append([f"Tệp mẫu nhập liệu — {spec.title}"])
     sheet.append([])
@@ -60,7 +76,7 @@ def _write_instructions(
     sheet.append(["Cột", "Giải thích"])
     for header, note in instructions_for(spec, descriptor):
         sheet.append([header, note])
-    sheet.column_dimensions["A"].width = _HEADER_WIDTH
+    sheet.column_dimensions["A"].width = HEADER_WIDTH
     sheet.column_dimensions["B"].width = _NOTE_WIDTH
 
 
@@ -74,10 +90,10 @@ def _write_header(workbook: Workbook, descriptor: TemplateDescriptor) -> None:
     sheet.append(list(descriptor.headers))
     for index, column in enumerate(descriptor.columns, start=1):
         cell = sheet.cell(row=1, column=index)
-        cell.font = _REQUIRED_FONT if column.required else _OPTIONAL_FONT
-        cell.fill = _HEADER_FILL
+        cell.font = REQUIRED_FONT if column.required else OPTIONAL_FONT
+        cell.fill = HEADER_FILL
         cell.alignment = Alignment(vertical="center", wrap_text=True)
-        sheet.column_dimensions[get_column_letter(index)].width = _HEADER_WIDTH
+        sheet.column_dimensions[get_column_letter(index)].width = HEADER_WIDTH
     # Khóa dòng tiêu đề: người dùng cuộn tới dòng 4.000 vẫn phải biết cột nào là
     # cột nào. Không có nó thì họ dán lệch cột — sai sót mà phép kiểm cấu trúc
     # không bắt được, vì dòng tiêu đề vẫn đúng nguyên.
@@ -94,7 +110,7 @@ def build_template(spec: CatalogSpec, descriptor: TemplateDescriptor) -> bytes:
     default_sheet = workbook.active
     if default_sheet is not None:
         workbook.remove(default_sheet)
-    _write_instructions(workbook, spec, descriptor)
+    write_instructions_sheet(workbook, spec, descriptor)
     _write_header(workbook, descriptor)
     buffer = BytesIO()
     workbook.save(buffer)

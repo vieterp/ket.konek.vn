@@ -17,35 +17,37 @@ from __future__ import annotations
 
 import time
 import uuid
-from dataclasses import dataclass
-from io import BytesIO
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import pytest
-from openpyxl import Workbook
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from catalog_api_support import branch_ids, ensure_branches, unique_code
+from import_support import (
+    FakeProgress,
+    import_source,
+    minimal_row,
+    spec_of,
+    workbook_bytes,
+)
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.errors import ImportParentUnresolvableError, ImportSourceNotValidatedError
 from ket.kernel.excel.descriptors import template_for
 from ket.kernel.excel.job import VALIDATE_IMPORT, ImportCommitParams, run_commit
 from ket.kernel.excel.models import ImportStagingRow
-from ket.kernel.excel.pipeline import run_import
 from ket.kernel.excel.report import ImportMode, ImportReport
 from ket.kernel.jobs import queue
 from ket.kernel.jobs.builtin import SLOW_TASK
 from ket.kernel.jobs.models import JobStatus
-from ket.kernel.jobs.registry import JobContext
+from ket.kernel.jobs.registry import JobContext, JobType
 from ket.kernel.master_data.models.bank import Bank
 from ket.kernel.master_data.models.item import Item
 from ket.kernel.master_data.models.payment_term import PaymentTerm
 from ket.kernel.master_data.models.unit_of_measure import UnitOfMeasure
 from ket.kernel.master_data.models.warehouse import Warehouse
 from ket.kernel.master_data.registry import REGISTRY, CatalogSpec
-from ket.kernel.persistence.types import AuditValues
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 
 pytestmark = pytest.mark.db
@@ -76,49 +78,6 @@ ITEMS = "items"
 UNITS = "units_of_measure"
 
 
-@dataclass
-class FakeProgress:
-    """Bản giả của `JobProgress` — ghi lại thay vì chạm DB.
-
-    Đủ cho lát này: thân job chỉ **báo** tiến độ, nó không đọc lại gì. Bản thật
-    dùng một connection riêng và đã có test của nó ở `test_worker_runner.py`.
-    """
-
-    reports: list[tuple[int, str | None]]
-    cancelled: bool = False
-
-    def report(self, percent: int, message: str | None = None) -> None:
-        self.reports.append((percent, message))
-
-    def cancel_requested(self) -> bool:
-        return self.cancelled
-
-    def checkpoint(self, state: AuditValues) -> None:  # pragma: no cover — job này không dùng
-        raise AssertionError("nhập liệu không khai `checkpointed`")
-
-
-def _spec(slug: str) -> CatalogSpec:
-    spec = REGISTRY.get(slug)
-    assert spec is not None
-    return spec
-
-
-def _workbook(slug: str, rows: list[list[object]]) -> BytesIO:
-    """Tệp đúng cấu trúc mẫu, kèm các dòng đã cho."""
-    descriptor = template_for(_spec(slug))
-    workbook = Workbook()
-    sheet = workbook.active
-    assert sheet is not None
-    sheet.title = descriptor.sheet_name
-    sheet.append(list(descriptor.headers))
-    for row in rows:
-        sheet.append(row)
-    buffer = BytesIO()
-    workbook.save(buffer)
-    buffer.seek(0)
-    return buffer
-
-
 BRANCH_FOR_SCOPE = "CN_IMPORT_SCOPE"
 
 
@@ -142,11 +101,7 @@ def run(
     app_engine: Engine,
     tmp_path: Path,
 ) -> RunImport:
-    """Chạy một lượt nhập trong một transaction thật, trả về báo cáo.
-
-    Mỗi lượt có `job_id` riêng và một dòng `jobs` thật: bảng đệm có khóa ngoại
-    tới `jobs`, nên một id bịa ra sẽ đổ ở ràng buộc chứ không ở luật đang đo.
-    """
+    """Một lượt nhập từ danh sách dòng — phần dựng bối cảnh ở `import_support.py`."""
     assert app_engine is not None
 
     def _run(
@@ -157,31 +112,29 @@ def run(
         commit: bool = False,
         branch_id: int | None = None,
     ) -> ImportReport:
-        with unit_of_work(session_factory, scope) as session:
-            job = queue.enqueue(session, job_type=SLOW_TASK, params={}, requested_by=1)
-            job_id = job.id
-        with unit_of_work(session_factory, scope) as session:
-            context = JobContext(
-                job_id=job_id,
-                session=session,
-                progress=FakeProgress(reports=[]),
-                attempt=1,
-                dataset_schema=dataset_alpha.schema_name,
-                branch_id=branch_id,
-                requested_by=1,
-                storage_root=tmp_path,
-            )
-            return run_import(
-                context,
-                spec=_spec(slug),
-                source=_workbook(slug, rows),
-                file_name="nhap-lieu.xlsx",
-                content_hash="0" * 64,
-                mode=mode,
-                commit=commit,
-            )
+        return import_source(
+            session_factory,
+            dataset_alpha,
+            scope,
+            tmp_path,
+            slug,
+            workbook_bytes(slug, rows),
+            mode=mode,
+            commit=commit,
+            branch_id=branch_id,
+        )
 
     return _run
+
+
+def _minimal_row(spec: CatalogSpec) -> list[object]:
+    """Dòng hợp lệ tối thiểu, mã sinh sẵn — bọc `import_support.minimal_row`.
+
+    Bản dùng chung nhận mã và tên từ ngoài vì `test_export.py` cần dựng **hai**
+    dòng khác mã trong cùng một danh mục; ở đây thì mỗi lượt gọi là một bản ghi
+    mới nên mã sinh tại chỗ.
+    """
+    return minimal_row(spec, unique_code(f"SW{spec.slug[:5].upper()}"), f"Bản ghi thử {spec.slug}")
 
 
 def _warehouse_row(code: str, name: str, parent: str | None = None) -> list[object]:
@@ -548,38 +501,6 @@ def test_ten_thousand_rows_import_within_the_budget(run: RunImport) -> None:
 # --------------------------------------------- duyệt TOÀN BỘ registry (C4)
 
 
-MINIMUM_VALID_CELLS: dict[str, dict[str, object]] = {
-    # Ba danh mục có ràng buộc `CHECK` liên-trường mà một dòng "chỉ mã và tên"
-    # không thỏa. Khai ở đây thay vì nới lỏng phép khẳng định: nếu phase 5 thêm
-    # một danh mục có `CHECK` riêng thì test này đỏ, và người thêm phải nói ra
-    # đâu là dòng hợp lệ tối thiểu của nó — đúng thứ người viết tệp mẫu cần biết.
-    "partners": {"is_customer": "x"},  # CHECK (is_group OR is_customer OR is_vendor)
-    "payment_terms": {"due_days": "0"},  # CHECK (due_days >= 0), NOT NULL
-    "items": {"nature": "service"},  # dịch vụ: không cần đơn vị chính, không cần kho
-}
-
-
-def _minimal_row(spec: CatalogSpec) -> list[object]:
-    """Dòng hợp lệ **tối thiểu** của một danh mục bất kỳ.
-
-    Mã và tên cho mọi danh mục, cộng phần khai thêm ở `MINIMUM_VALID_CELLS` cho
-    danh mục nào có ràng buộc liên-trường. Mọi ô còn lại để trống — đó là điều
-    kiện để câu `INSERT` vẫn phải lập kế hoạch với **đầy đủ** cột, tức là vẫn
-    bắt được lỗi ép kiểu dù giá trị rỗng.
-    """
-    descriptor = template_for(spec)
-    extra = MINIMUM_VALID_CELLS.get(spec.slug, {})
-    values: list[object] = [None] * len(descriptor.columns)
-    for index, column in enumerate(descriptor.columns):
-        if column.field == "code":
-            values[index] = unique_code(f"SW{spec.slug[:5].upper()}")
-        elif column.field == "name":
-            values[index] = f"Bản ghi thử {spec.slug}"
-        elif column.field in extra:
-            values[index] = extra[column.field]
-    return values
-
-
 @pytest.mark.parametrize("slug", [spec.slug for spec in REGISTRY.specs()])
 def test_every_registered_catalog_can_actually_be_imported(run: RunImport, slug: str) -> None:
     """Mọi danh mục trong registry phải nhập được — duyệt hết, không chọn mẫu.
@@ -597,7 +518,7 @@ def test_every_registered_catalog_can_actually_be_imported(run: RunImport, slug:
     nhất khiến danh mục thêm ở phase 5 và phase 9 cũng được canh mà không ai phải
     nhớ thêm một dòng.
     """
-    spec = _spec(slug)
+    spec = spec_of(slug)
     report = run(slug, [_minimal_row(spec)], commit=True)
     assert report.is_valid, report.errors
     assert report.committed and report.create_rows == 1
@@ -649,6 +570,10 @@ def test_a_branch_import_never_touches_a_company_shared_record(
     `visible_to` làm điều kiện ghi, một ô mã khớp **cả hai** dòng và câu `UPDATE`
     sửa cả hai — lượt nhập của một chi nhánh ghi đè dữ liệu của cả công ty. Bảng
     danh mục không có RLS (H39) nên không có lớp nào khác chặn lại.
+
+    Đo ở chế độ **chỉ tạo mới**, và ranh giới ấy là phần H86 còn nguyên sau lát
+    3C-2: xem `test_a_shared_code_cannot_be_updated_from_a_branch` ngay dưới cho
+    nửa kia.
     """
     code = unique_code("KHO_SHARED")
     run(WAREHOUSES, [_warehouse_row(code, "Bản dùng chung")], commit=True)
@@ -656,7 +581,6 @@ def test_a_branch_import_never_touches_a_company_shared_record(
     report = run(
         WAREHOUSES,
         [_warehouse_row(code, "Bản của chi nhánh")],
-        mode=ImportMode.CREATE_AND_UPDATE,
         commit=True,
         branch_id=a_branch,
     )
@@ -672,6 +596,81 @@ def test_a_branch_import_never_touches_a_company_shared_record(
         }
     assert rows[None] == "Bản dùng chung", "bản dùng chung không được đụng tới"
     assert rows[a_branch] == "Bản của chi nhánh"
+
+
+def test_a_shared_code_cannot_be_updated_from_a_branch(
+    run: RunImport,
+    session_factory: sessionmaker[Session],
+    scope: RequestScope,
+    a_branch: int,
+) -> None:
+    """Lát 3C-2 thu hẹp H86 ở **chế độ cập nhật** — và chỉ ở đó.
+
+    Vì sao phải thu hẹp: bộ xuất lọc theo phạm vi **đọc** (gồm dòng dùng chung),
+    còn phép so mã ở đây theo phạm vi **ghi**. Đứng ở chi nhánh mà xuất danh mục
+    rồi nhập lại nguyên xi thì mọi mã dùng chung không khớp gì, nên chúng được
+    **tạo mới** thành bản sao riêng của chi nhánh: danh mục nhân đôi, không một
+    dòng lỗi nào, và hai bản ghi cùng mã trôi vào mọi báo cáo (review vòng 1, C1).
+
+    Vì sao chỉ ở chế độ cập nhật: ở `create_only` thì "tạo bản ghi riêng của chi
+    nhánh" là ý định duy nhất đọc được từ tệp, và nó hợp lệ (test ngay trên).
+    Ở `create_and_update` thì ý định đọc được là "sửa thứ đã có" — lặng lẽ tạo
+    một bản sao thay vì cập nhật là làm điều người dùng không xin.
+    """
+    code = unique_code("KHO_SHARED_UPD")
+    run(WAREHOUSES, [_warehouse_row(code, "Bản dùng chung")], commit=True)
+
+    report = run(
+        WAREHOUSES,
+        [_warehouse_row(code, "Bản của chi nhánh")],
+        mode=ImportMode.CREATE_AND_UPDATE,
+        commit=True,
+        branch_id=a_branch,
+    )
+    assert not report.is_valid
+    assert not report.committed
+    assert [error.code for error in report.errors] == [
+        "import.shared_record_not_editable_from_branch"
+    ]
+
+    with unit_of_work(session_factory, scope) as session:
+        rows = session.scalars(select(Warehouse).where(Warehouse.code == code)).all()
+    assert [row.branch_id for row in rows] == [None], "mã dùng chung đã bị nhân đôi"
+
+
+def test_a_branch_updates_its_own_record_even_when_a_shared_code_exists(
+    run: RunImport,
+    session_factory: sessionmaker[Session],
+    scope: RequestScope,
+    a_branch: int,
+) -> None:
+    """Đối chứng: chi nhánh **đã có** bản riêng thì cập nhật chạy bình thường.
+
+    Không có phép đối chứng này thì phép kiểm mới có thể chặn cả ca hợp lệ nhất
+    của chính nó — chi nhánh sửa dữ liệu của chính mình — và mọi test trên vẫn
+    xanh, vì chúng chỉ khẳng định "có lỗi".
+    """
+    code = unique_code("KHO_CA_HAI")
+    run(WAREHOUSES, [_warehouse_row(code, "Bản dùng chung")], commit=True)
+    run(WAREHOUSES, [_warehouse_row(code, "Bản riêng")], commit=True, branch_id=a_branch)
+
+    report = run(
+        WAREHOUSES,
+        [_warehouse_row(code, "Bản riêng đã sửa")],
+        mode=ImportMode.CREATE_AND_UPDATE,
+        commit=True,
+        branch_id=a_branch,
+    )
+    assert report.is_valid, report.errors
+    assert report.update_rows == 1 and report.create_rows == 0
+
+    with unit_of_work(session_factory, scope) as session:
+        rows = {
+            row.branch_id: row.name
+            for row in session.scalars(select(Warehouse).where(Warehouse.code == code)).all()
+        }
+    assert rows[None] == "Bản dùng chung", "bản dùng chung vẫn không được đụng tới"
+    assert rows[a_branch] == "Bản riêng đã sửa"
 
 
 def test_is_group_cannot_be_flipped_by_an_import(run: RunImport) -> None:
@@ -729,7 +728,7 @@ def test_a_blank_not_null_column_falls_back_to_its_default(
     `NotNullViolation` sau khi bước kiểm đã báo "hợp lệ".
     """
     code = unique_code("DK")
-    spec = _spec("payment_terms")
+    spec = spec_of("payment_terms")
     row_values = _minimal_row(spec)
     row_values[0] = code
     report = run("payment_terms", [row_values], commit=True)
@@ -796,6 +795,68 @@ def test_commit_refuses_a_validation_job_of_a_different_catalog(
             run_commit(context, ImportCommitParams(validation_job_id=job_id, catalog="warehouses"))
 
 
+@pytest.mark.parametrize(
+    ("job_type", "status", "error_rows"),
+    [
+        pytest.param(SLOW_TASK, JobStatus.DONE, 0, id="không-phải-lượt-kiểm"),
+        pytest.param(VALIDATE_IMPORT, JobStatus.RUNNING, 0, id="lượt-kiểm-chưa-xong"),
+        pytest.param(VALIDATE_IMPORT, JobStatus.DONE, 1, id="lượt-kiểm-còn-dòng-lỗi"),
+    ],
+)
+def test_commit_refuses_every_shape_of_unusable_validation_job(
+    job_type: JobType[Any],
+    status: JobStatus,
+    error_rows: int,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    scope: RequestScope,
+    tmp_path: Path,
+) -> None:
+    """Ba điều kiện còn lại của cổng validate→commit, mỗi cái một test (nợ L5).
+
+    Điều kiện thứ tư ("job không tồn tại trong dataset này") đã có test riêng ở
+    `test_import_api.py`; ba cái này thì chưa, và vòng review thứ hai của lát
+    3C-1 để lại đúng hai đột biến sống sót ở đây. Không phải lỗi đang có — là
+    chỗ chưa được canh, nên xóa bất kỳ vế nào của điều kiện `if` cũng không làm
+    bộ test đỏ.
+
+    Điều kiện **cuối** đắt nhất trong ba: thiếu nó thì "bắt buộc kiểm trước khi
+    ghi" của FR-SYS-081 tụt xuống thành "bắt buộc **bấm nút** kiểm trước khi
+    ghi", tức một tệp đã được báo là còn 300 dòng lỗi vẫn ghi được vào danh mục.
+    """
+    report = ImportReport(
+        catalog="payment_terms",
+        mode=ImportMode.CREATE_ONLY,
+        file_name="x.xlsx",
+        content_hash="0" * 64,
+        total_rows=1,
+        create_rows=1,
+        error_rows=error_rows,
+    )
+    params = _validate_params() if job_type is VALIDATE_IMPORT else {}
+    with unit_of_work(session_factory, scope) as session:
+        job = queue.enqueue(session, job_type=job_type, params=params, requested_by=1)
+        job.status = status.value
+        job.result = dict(report.model_dump(mode="json"))
+        job_id = job.id
+
+    with unit_of_work(session_factory, scope) as session:
+        context = JobContext(
+            job_id=job_id,
+            session=session,
+            progress=FakeProgress(reports=[]),
+            attempt=1,
+            dataset_schema=dataset_alpha.schema_name,
+            branch_id=None,
+            requested_by=1,
+            storage_root=tmp_path,
+        )
+        with pytest.raises(ImportSourceNotValidatedError):
+            run_commit(
+                context, ImportCommitParams(validation_job_id=job_id, catalog="payment_terms")
+            )
+
+
 # ------------------------------------------------ hồi quy vòng 2 của review
 
 
@@ -835,7 +896,7 @@ def test_a_blank_cell_does_not_reset_a_not_null_column_to_its_default(
     Ngầm định của cột là câu trả lời đúng cho một dòng **mới**; với dòng đã tồn
     tại thì câu trả lời đúng là giá trị nó đang mang.
     """
-    spec = _spec("payment_terms")
+    spec = spec_of("payment_terms")
     descriptor = template_for(spec)
     code = unique_code("DK_KEEP")
 
@@ -898,7 +959,7 @@ def test_an_over_long_value_never_reaches_the_database_truncated(
     trị 20 ký tự bị cắt còn 11 sẽ **thỏa** ràng buộc ấy, nên dữ liệu sai đi thẳng
     vào DB mà không tầng nào kêu. Nay bước kiểm bắt nó bằng trần đọc từ chính cột.
     """
-    spec = _spec("banks")
+    spec = spec_of("banks")
     descriptor = template_for(spec)
     row = _minimal_row(spec)
     row[0] = unique_code("NH")

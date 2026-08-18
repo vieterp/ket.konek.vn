@@ -16,10 +16,30 @@ Core; lý do (và nó là một lý do bảo mật, không phải thẩm mỹ) n
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Final
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Select, Text, cast, delete, exists, func, null, select
+from sqlalchemy import (
+    Boolean,
+    Column,
+    ColumnElement,
+    Integer,
+    Numeric,
+    Select,
+    Table,
+    Text,
+    case,
+    cast,
+    delete,
+    exists,
+    func,
+    literal,
+    null,
+    or_,
+    select,
+)
 from sqlalchemy.orm import Session
 
 from ket.kernel.excel.descriptors import CellKind, ColumnDescriptor, TemplateDescriptor
@@ -33,9 +53,12 @@ from ket.kernel.excel.sql import (
     cell,
     cell_or_null,
     code_matches,
+    column_source,
     counts_expression,
     create_only_columns,
+    editable_columns,
     first_occurrence_rank,
+    keep_existing,
     reference_id,
     table_for,
     table_of,
@@ -71,6 +94,121 @@ _TYPE_HINTS: Final[dict[CellKind, str]] = {
 }
 
 
+@dataclass(frozen=True)
+class _StagedValues:
+    """Khung nhìn `row_rules.StagedRow` trên một dòng đệm — giá trị **sẽ được ghi**.
+
+    Dựng ở tầng `excel` chứ không ở `master_data` vì nó phải gọi `column_source`
+    và `keep_existing`, mà cả hai sống trong `excel/sql.py`. Chiều import ngược
+    lại (`master_data` → `excel`) là một vòng: `excel/sql.py` đã import registry
+    danh mục để tra bảng đích của một mã. `StagedRow` là Protocol nên luật khai ở
+    `master_data` không cần biết lớp này tồn tại.
+    """
+
+    descriptor: TemplateDescriptor
+    table: Table
+    branch_id: int | None
+    autocreate: frozenset[str]
+    """Danh mục đích sẽ được **tự tạo** ở bước ghi (FR-NFR-062).
+
+    Luật liên-trường phải biết tập này, nếu không nó mô tả sai tương lai: một mã
+    đơn vị tính chưa tồn tại tra ra `NULL` ở thời điểm kiểm, nên
+    `stock_item_needs_base_unit` báo "hàng hóa phải có đơn vị tính chính" cho một
+    dòng **đã** điền đơn vị tính — và bước ghi thì sẽ tạo đơn vị ấy rồi gắn vào
+    bình thường. Câu báo lỗi ấy vừa sai vừa đẩy người dùng đi sửa nhầm chỗ.
+    """
+
+    updating: bool
+    """Chế độ có cho phép cập nhật không.
+
+    Ở `CREATE_ONLY` thì mọi dòng là dòng mới — kể cả dòng khớp một mã đã có, vì
+    dòng ấy đã là một dòng **lỗi** (`_existing_code_errors`). Dùng
+    `keep_existing` cho nó sẽ đánh giá luật trên giá trị của một bản ghi mà lượt
+    nhập này không hề định chạm tới.
+    """
+
+    def _projected(self, field: str) -> ColumnElement[Any]:
+        column = self.descriptor.column(field)
+        if column is None:
+            raise ValueError(f"Luật nhắc tới cột {field!r} không có trong tệp mẫu")
+        target_name = column.target_field or column.field
+        target = self.table.c.get(target_name)
+        if target is None:
+            raise ValueError(f"Cột {target_name!r} không có trong bảng {self.table.name!r}")
+        projected = self._guarded(column, self._pending_aware(column, target))
+        if not self.updating:
+            return projected
+        # Dòng đã có bản ghi → giá trị hiệu lực là thứ `keep_existing` cho ra;
+        # dòng chưa có → `table.c.id` là `NULL` sau `LEFT JOIN`, và giá trị hiệu
+        # lực là ngầm định của cột như mọi dòng tạo mới.
+        return case(
+            (self.table.c.id.is_(None), projected),
+            else_=self._guarded(column, keep_existing(column, self.branch_id, target, widen=True)),
+        )
+
+    def _guarded(self, column: ColumnDescriptor, value: ColumnElement[Any]) -> ColumnElement[Any]:
+        """Bọc một phép ép số trong `CASE` để nó **không bao giờ chạy trên ô hỏng**.
+
+        Đây là vế còn lại của C1/R3-C1, và là vế duy nhất đóng được nó cho mọi
+        đầu vào. `widen=True` bỏ được ca **tràn số**, nhưng `CAST('ba mươi' AS
+        numeric)` vẫn ném `InvalidTextRepresentation` — mà truy vấn luật chạy
+        trên **mọi** dòng đệm, kể cả dòng vừa bị `_type_errors` báo là sai.
+
+        Lọc bằng danh sách số dòng (`NOT IN (…)`) thì đúng nhưng vỡ ở >65.535
+        dòng lỗi vì mỗi dòng là một tham số ràng buộc, trong khi `reader.MAX_ROWS`
+        cho phép 100.000 (R3-H1). `CASE` không cần biết dòng nào hỏng: nhánh
+        không được chọn thì không được đánh giá, nên phép ép chỉ chạy trên ô đúng
+        hình thức — và số dòng lỗi không còn ảnh hưởng gì tới truy vấn.
+
+        Ô **để trống** vẫn đi vào nhánh ép: `column_source` đổi nó thành ngầm
+        định của cột (`sql._with_default`), và cắt nó ra sẽ làm luật đánh giá
+        `NULL` cho một dòng mà bước ghi sẽ điền `0`.
+        """
+        if column.kind not in {CellKind.INTEGER, CellKind.DECIMAL}:
+            return value
+        pattern = _TYPE_PATTERNS[column.kind]
+        shaped = or_(
+            cell_or_null(column.field).is_(None),
+            truthy(func.lower(cell(column.field)).regexp_match(pattern)),
+        )
+        return case((shaped, value), else_=null())
+
+    def _pending_aware(self, column: ColumnDescriptor, target: Column[Any]) -> ColumnElement[Any]:
+        """Giá trị của một cột, coi mã **sắp được tạo** là đã có.
+
+        `PENDING_REFERENCE_ID` không phải một id thật và không bao giờ được ghi
+        xuống DB — nó chỉ đi vào biểu thức của một luật, và mọi luật hôm nay chỉ
+        hỏi cột tra cứu một câu: *"có hay không"*. Giá trị âm để nếu có luật nào
+        về sau đem nó đi so với một id thật thì kết quả sai một cách ồn ào chứ
+        không lặng lẽ trùng với bản ghi số 0.
+        """
+        source = column_source(column, self.branch_id, target, widen=True)
+        if column.kind is not CellKind.CODE_REF or column.reference_slug not in self.autocreate:
+            return source
+        return case(
+            (cell_or_null(column.field).is_not(None), literal(PENDING_REFERENCE_ID)),
+            else_=source,
+        )
+
+    def value(self, field: str) -> ColumnElement[Any]:
+        return self._projected(field)
+
+    def flag(self, field: str) -> ColumnElement[bool]:
+        """Cột boolean. `cast` để mypy biết kiểu — `case(...)` trả `Any`."""
+        return cast(self._projected(field), Boolean())
+
+
+INTEGER_MAX: Final[int] = 2_147_483_647
+"""Trần của cột `integer` 32 bit trong PostgreSQL.
+
+So với trần **thật** được vì phép so chạy trên `numeric` không ràng buộc
+(`sql.widened`), nên nó không bao giờ là chỗ tràn — bản đầu phải đếm chữ số và
+vì thế chặn nhầm cả những giá trị hợp lệ từ 1.000.000.000 trở lên."""
+
+PENDING_REFERENCE_ID: Final[int] = -1
+"""Chỗ đứng cho một khóa ngoại **sẽ** tồn tại sau bước ghi — xem `_StagedValues`."""
+
+
 class StagingTable:
     """Vòng đời bảng đệm của **một** lượt nhập, khóa theo `job_id`.
 
@@ -79,10 +217,24 @@ class StagingTable:
     hoặc **xóa** dòng của một lượt nhập khác đang chạy song song.
     """
 
-    def __init__(self, session: Session, job_id: UUID, descriptor: TemplateDescriptor) -> None:
+    def __init__(
+        self,
+        session: Session,
+        job_id: UUID,
+        descriptor: TemplateDescriptor,
+        catalog_table: Table,
+    ) -> None:
         self._session = session
         self._job_id = job_id
         self._descriptor = descriptor
+        self._catalog_table = catalog_table
+        """Bảng danh mục đích, để `_range_errors` đọc được `precision`/`scale` của
+        cột thật.
+
+        **Bắt buộc**, không có ngầm định: với `None` thì `_magnitude_bound` trả
+        `None` và **toàn bộ `_range_errors` tắt trong im lặng** — tức lỗi C1 quay
+        lại mà không cổng nào đỏ. Một tham số bắt buộc biến chỗ quên thành lỗi
+        lúc gọi (R3-L1)."""
 
     @property
     def _mine(self) -> ColumnElement[bool]:
@@ -137,7 +289,12 @@ class StagingTable:
     # ---------------------------------------------------------------- kiểm
 
     def errors(
-        self, spec: CatalogSpec, *, mode: ImportMode, branch_id: int | None
+        self,
+        spec: CatalogSpec,
+        *,
+        mode: ImportMode,
+        branch_id: int | None,
+        autocreate: frozenset[str] = frozenset(),
     ) -> Iterator[RowError]:
         """Mọi sai sót của lượt nhập, gộp từ các phép kiểm độc lập.
 
@@ -146,14 +303,49 @@ class StagingTable:
         biết gì về dữ liệu đang có trong hệ thống, nên đọc danh sách từ trên
         xuống cũng là thứ tự việc phải làm.
         """
+        # Vắt cạn **trước**, không `yield` dần: tập dòng đã lỗi phải đầy đủ trước
+        # khi truy vấn của `_row_rule_errors` chạy, vì phép loại trừ nay nằm
+        # trong chính câu SQL đó chứ không ở Python.
+        #
+        # Vì sao bắt buộc phải thế (review vòng 2, C1): truy vấn luật liên-trường
+        # `CAST(ô AS integer)` trên **mọi** dòng đệm. Một ô `Số ngày được nợ` gõ
+        # `"1.000"` hay `"ba mươi"` — lỗi gõ số kiểu Việt Nam phổ biến nhất — làm
+        # PostgreSQL ném `InvalidTextRepresentation`, hỏng transaction, và
+        # `finally: staging.clear()` ném tiếp `InFailedSqlTransaction` **đè lên**
+        # nguyên nhân gốc. Người dùng mất **toàn bộ** danh sách lỗi đã tính đúng
+        # và nhận một câu không nói được ô nào sai. Lọc ở Python sau khi truy vấn
+        # đã chạy thì đã muộn.
+        earlier: list[RowError] = []
         for column in self._descriptor.columns:
-            yield from self._required_errors(column)
-            yield from self._length_errors(column)
-            yield from self._type_errors(column)
-            yield from self._allowed_value_errors(column)
-        yield from self._duplicate_in_file_errors()
-        yield from self._reference_errors(branch_id)
-        yield from self._existing_code_errors(spec, mode=mode, branch_id=branch_id)
+            earlier.extend(self._required_errors(column))
+            earlier.extend(self._length_errors(column))
+            earlier.extend(self._type_errors(column))
+            earlier.extend(self._range_errors(column))
+            earlier.extend(self._allowed_value_errors(column))
+        earlier.extend(self._duplicate_in_file_errors())
+        earlier.extend(self._reference_errors(branch_id, autocreate=autocreate))
+        earlier.extend(self._existing_code_errors(spec, mode=mode, branch_id=branch_id))
+        earlier.extend(self._shared_record_errors(spec, mode=mode, branch_id=branch_id))
+        earlier.extend(self._reference_moved_errors(spec, mode=mode, branch_id=branch_id))
+        flagged = {error.row for error in earlier}
+        yield from earlier
+        # Luật liên-trường chạy **cuối**, và bỏ qua dòng đã có lỗi khác: chúng
+        # đọc *giá trị hiệu lực*, nên một ô hỏng ở trên biến thành `NULL` ở đây
+        # và kéo theo một lỗi thứ hai mô tả **hệ quả** thay vì nguyên nhân. Ca
+        # cụ thể: mã đơn vị tính tra không ra → `base_unit_code` thành `NULL` →
+        # "hàng hóa phải có đơn vị tính chính". Câu thứ hai ấy nói sai sự thật —
+        # người dùng **đã** điền đơn vị tính — và nó đẩy họ đi sửa nhầm chỗ.
+        # Lọc ở **Python**, và nay đó là lựa chọn về **chất lượng thông điệp**
+        # chứ không về tính đúng: phép ép kiểu của luật dùng `widen=True` nên
+        # truy vấn không thể nổ dù dòng nào có mặt (R3-C1). Lọc bằng
+        # `NOT IN (…)` trong SQL thì mỗi dòng lỗi là **một tham số ràng buộc**,
+        # và trần giao thức PostgreSQL là 65.535 trong khi `reader.MAX_ROWS` là
+        # 100.000 — hai trần mâu thuẫn nhau (R3-H1).
+        for error in self._row_rule_errors(
+            spec, mode=mode, branch_id=branch_id, autocreate=autocreate
+        ):
+            if error.row not in flagged:
+                yield error
 
     def _rows(self, statement: Select[tuple[int, str | None]]) -> Sequence[tuple[int, str | None]]:
         return [(int(row[0]), row[1]) for row in self._session.execute(statement)]
@@ -224,6 +416,73 @@ class StagingTable:
                 value=value,
             )
 
+    def _range_errors(self, column: ColumnDescriptor) -> Iterator[RowError]:
+        """Ô **đúng hình thức** nhưng không nằm vừa cột đích (review vòng 2 C1, vòng 3 R3-C1).
+
+        `_type_errors` chỉ hỏi "có phải một con số không". Một giá trị vượt tầm
+        cột trả lời **có**, rồi làm câu ghi nổ với `NumericValueOutOfRange`.
+
+        Mô hình **đúng** cách PostgreSQL kiểm `numeric(p, s)`: nó **làm tròn theo
+        `s` trước**, rồi mới đòi phần nguyên không quá `p − s` chữ số. Bản đầu
+        đếm chữ số phần nguyên của chuỗi *trước* khi ép, nên `"999.99999"` vào
+        `Numeric(7, 4)` lọt qua (ba chữ số, đúng trần) rồi tràn sau khi làm tròn
+        thành `1000.0000`. Phép so ở đây vì thế `round(…, s)` trước khi so với
+        `10^(p−s)` — cùng thứ tự với DB.
+
+        Ép về `numeric` **không ràng buộc** để chính phép kiểm này không bao giờ
+        là chỗ tràn (xem `sql.widened`).
+        """
+        if column.kind not in {CellKind.INTEGER, CellKind.DECIMAL}:
+            return
+        bound = self._magnitude_bound(column)
+        if bound is None:
+            return
+        limit, scale = bound
+        pattern = _TYPE_PATTERNS[column.kind]
+        value = func.abs(cast(cell_or_null(column.field), Numeric()))
+        statement = (
+            self._base(cell(column.field))
+            .where(cell_or_null(column.field).is_not(None))
+            # **Chỉ** dòng đã qua phép kiểm hình thức: phép ép ở đây tuy không
+            # tràn được (`Numeric()` không precision) nhưng vẫn ném với một ô
+            # không phải số — tức chính phép kiểm miền lại thành chỗ nuốt cả
+            # báo cáo lỗi, đúng vòng lặp mà C1/R3-C1 đang đóng.
+            .where(truthy(func.lower(cell(column.field)).regexp_match(pattern)))
+            .where(func.round(value, scale) >= limit)
+        )
+        for row_number, cell_value in self._rows(statement):
+            yield RowError(
+                row=row_number,
+                column=column.display_header,
+                code="import.out_of_range",
+                message=f"Cột {column.header!r}: giá trị vượt sức chứa của cột",
+                value=cell_value,
+            )
+
+    def _magnitude_bound(self, column: ColumnDescriptor) -> tuple[Decimal, int] | None:
+        """`(ngưỡng, số chữ số thập phân)` của cột đích, hoặc `None` nếu không rõ.
+
+        Trả về **ngưỡng** chứ không số chữ số: phép so `round(|x|, s) >= 10^(p−s)`
+        diễn đạt đúng luật của PostgreSQL, còn đếm chữ số thì không mô tả được
+        phần làm tròn.
+        """
+        target = self._table_column(column)
+        if target is None:
+            return None
+        precision = getattr(target.type, "precision", None)
+        scale = getattr(target.type, "scale", None)
+        if isinstance(precision, int) and isinstance(scale, int):
+            return Decimal(10) ** (precision - scale), scale
+        if isinstance(target.type, Integer):
+            # `integer` 32 bit: trần thật là 2.147.483.647. So với trần **thật**
+            # chứ không một mức chữ số tròn — giá trị hợp lệ không bị chặn nhầm.
+            return Decimal(INTEGER_MAX + 1), 0
+        return None
+
+    def _table_column(self, column: ColumnDescriptor) -> Column[Any] | None:
+        """Cột thật mà một cột của tệp mẫu sẽ ghi vào."""
+        return self._catalog_table.c.get(column.target_field or column.field)
+
     def _allowed_value_errors(self, column: ColumnDescriptor) -> Iterator[RowError]:
         """Ô mang một giá trị ngoài tập cho phép của cột enum (review vòng 2, R2-1).
 
@@ -284,7 +543,9 @@ class StagingTable:
                 value=value,
             )
 
-    def _reference_errors(self, branch_id: int | None) -> Iterator[RowError]:
+    def _reference_errors(
+        self, branch_id: int | None, *, autocreate: frozenset[str] = frozenset()
+    ) -> Iterator[RowError]:
         """Ô tra cứu mang một mã không tìm thấy (H79).
 
         Mã nhóm cha được phép trỏ tới **một dòng khác trong cùng tệp**: người
@@ -293,6 +554,12 @@ class StagingTable:
         mục *khác* thì không có ngoại lệ đó — bảng kia không nằm trong tệp này.
         """
         for column in self._descriptor.references:
+            if column.reference_slug in autocreate and column.target_field != "parent_id":
+                # Mã thiếu ở danh mục này sẽ được tự tạo (FR-NFR-062), nên nó
+                # không còn là lỗi. `missing_references.eligible_columns` là chỗ
+                # quyết định cột nào đủ điều kiện, và `autocreate` chính là kết
+                # quả của nó — hai chỗ đọc cùng một tập nên không lệch được.
+                continue
             target = table_of(column.reference_slug)
             in_catalog = exists(
                 select(target.c.id)
@@ -350,6 +617,101 @@ class StagingTable:
                 value=value,
             )
 
+    def _shared_record_errors(
+        self, spec: CatalogSpec, *, mode: ImportMode, branch_id: int | None
+    ) -> Iterator[RowError]:
+        """Dòng trỏ vào một mã **dùng chung toàn công ty** trong lúc đứng ở chi nhánh.
+
+        Review vòng 1, C1 — và nó là lỗ hổng của chính tiêu chí trung tâm của
+        lát này. Bộ xuất lọc theo phạm vi **đọc** (`visible_to`: dùng chung +
+        riêng chi nhánh), còn bộ nhập so khớp theo phạm vi **ghi** (`owned_by`:
+        đúng chi nhánh, H86). Đứng ở chi nhánh A xuất danh mục rồi nhập lại
+        nguyên xi, mọi mã dùng chung **không khớp gì** nên chúng được tạo mới
+        thành bản ghi riêng của A: danh mục nhân đôi, không một dòng lỗi nào,
+        và hai bản ghi cùng mã từ đó trôi vào mọi báo cáo.
+
+        **Chỉ ở chế độ cập nhật**, và ranh giới ấy là chỗ giữ nguyên H86. H86 nói
+        rõ: đứng ở chi nhánh A mà nhập một mã đã có ở phần dùng chung thì đó
+        *không* phải "mã đã tồn tại" — nó tạo bản ghi riêng của A, đúng bằng thứ
+        `POST /api/v1/master/{slug}` vẫn cho phép (FR-SYS-018). Ở `CREATE_ONLY`
+        đó vẫn là ý định hợp lệ và duy nhất đọc được từ tệp.
+
+        Ở `CREATE_AND_UPDATE` thì ý định đọc được là ngược lại: người dùng nói
+        "cập nhật những gì đã có". Lặng lẽ tạo một bản sao riêng chi nhánh thay vì
+        cập nhật là làm điều họ không xin, nên đây thành một dòng lỗi nói thẳng
+        việc phải làm.
+        """
+        if mode is not ImportMode.CREATE_AND_UPDATE or branch_id is None:
+            return
+        table = table_for(spec.model)
+        shared = exists(
+            select(table.c.id)
+            .where(table.c.code == cell("code"))
+            .where(table.c.branch_id.is_(None))
+        )
+        # Trừ ra dòng đã khớp một bản ghi **riêng của chi nhánh này**: mã dùng
+        # chung và mã riêng cùng tên được phép tồn tại song song (H86), và khi
+        # bản riêng đã có thì lượt nhập cập nhật đúng nó — không có gì để cảnh báo.
+        owned = exists(select(table.c.id).where(code_matches(table, branch_id)))
+        statement = self._base(cell("code")).where(shared).where(~owned)
+        for row_number, value in self._rows(statement):
+            yield RowError(
+                row=row_number,
+                column="Mã *",
+                code="import.shared_record_not_editable_from_branch",
+                message=f"Mã {value!r} thuộc danh mục dùng chung toàn công ty — "
+                "không sửa được từ chi nhánh. Hãy nhập ở phạm vi toàn công ty, "
+                "hoặc bỏ dòng này khỏi tệp",
+                value=value,
+            )
+
+    def _reference_moved_errors(
+        self, spec: CatalogSpec, *, mode: ImportMode, branch_id: int | None
+    ) -> Iterator[RowError]:
+        """Mã tra cứu nay phân giải ra một bản ghi **khác** bản ghi đang được trỏ.
+
+        Review vòng 1 (H4) rồi vòng 2 (H3), tái hiện được nguyên vẹn: đối tác trỏ
+        điều khoản dùng chung `PT01` (id 1); chi nhánh khai `PT01` riêng của mình
+        (id 2 — hợp lệ theo H86, hai chỉ mục duy nhất tách theo điều kiện); xuất
+        đối tác ở chi nhánh rồi **nhập lại nguyên xi** ở chế độ cập nhật →
+        `payment_term_id` đổi **1 → 2**, `is_valid=True`, không một dòng lỗi.
+
+        Điều khoản thanh toán của một khách hàng đổi sau một thao tác mà người
+        dùng tin là "không đổi gì" — và hạn nợ của mọi hóa đơn sau đó tính theo
+        cái mới. Áp cho cả ba cột tra cứu sửa được (`partners.payment_term_code`,
+        `items.warehouse_code`, `employees.bank_code`).
+
+        Chỉ ở chế độ **cập nhật**: dòng tạo mới chưa có giá trị cũ nào để đổi.
+        """
+        if mode is not ImportMode.CREATE_AND_UPDATE:
+            return
+        table = table_for(spec.model)
+        for column in editable_columns(spec, self._descriptor):
+            if column.kind is not CellKind.CODE_REF or column.target_field == "parent_id":
+                continue
+            current = table.c[column.target_field or column.field]
+            resolved = reference_id(column, branch_id)
+            statement = (
+                self._base(cell(column.field))
+                .join(table, code_matches(table, branch_id))
+                # Ô để trống = "không nói gì" (H87), và mã tra không ra đã là một
+                # dòng lỗi khác — cả hai đều không phải một lần **đổi**.
+                .where(cell_or_null(column.field).is_not(None))
+                .where(current.is_not(None))
+                .where(resolved.is_not(None))
+                .where(resolved != current)
+            )
+            for row_number, value in self._rows(statement):
+                yield RowError(
+                    row=row_number,
+                    column=column.display_header,
+                    code="import.reference_moved",
+                    message=f"Mã {value!r} nay trỏ tới một bản ghi khác bản ghi dòng này "
+                    "đang dùng (thường vì chi nhánh có một mã riêng trùng mã dùng chung). "
+                    "Bỏ trống ô này nếu muốn giữ nguyên giá trị đang có",
+                    value=value,
+                )
+
     def _create_only_field_errors(
         self, spec: CatalogSpec, *, branch_id: int | None
     ) -> Iterator[RowError]:
@@ -394,6 +756,57 @@ class StagingTable:
                     code="import.create_only_field_changed",
                     message=f"Cột {column.header!r} chỉ khai được lúc tạo mới, "
                     "không sửa được bằng nhập liệu",
+                    value=value,
+                )
+
+    def _row_rule_errors(
+        self,
+        spec: CatalogSpec,
+        *,
+        mode: ImportMode,
+        branch_id: int | None,
+        autocreate: frozenset[str],
+    ) -> Iterator[RowError]:
+        """Luật liên-trường của danh mục, đánh giá trên **giá trị hiệu lực** (H3).
+
+        Nợ H3 của lát 3C-1: bước kiểm không biết ràng buộc `CHECK` liên-trường
+        của DB, nên vẫn có ca "hợp lệ" rồi job hỏng ở bước ghi với một thông báo
+        `IntegrityError` thô. Không mất dữ liệu (một transaction, quay lui trọn
+        vẹn), nhưng người dùng đọc "tệp hợp lệ" rồi nhận tên một ràng buộc nội bộ.
+
+        **Giá trị hiệu lực, không phải ô thô** — đây là điểm dễ sai nhất. Một
+        dòng ở chế độ cập nhật chỉ sửa tên của một mã hàng thì tệp không nhắc lại
+        đơn vị tính của nó, và ô trống nghĩa là "giữ nguyên" (H87/H91). Đánh giá
+        `stock_item_needs_base_unit` trên ô thô sẽ báo lỗi cho một mã hàng hoàn
+        toàn hợp lệ. `_StagedValues` vì thế chọn `keep_existing` cho dòng đã có
+        bản ghi và `column_source` cho dòng mới — cùng hai hàm mà **bước ghi**
+        dùng, nên phép kiểm nói đúng thứ sắp được ghi.
+        """
+        if not spec.row_rules:
+            return
+        table = table_for(spec.model)
+        updating = mode is ImportMode.CREATE_AND_UPDATE
+        values = _StagedValues(
+            descriptor=self._descriptor,
+            table=table,
+            branch_id=branch_id,
+            autocreate=autocreate,
+            updating=updating,
+        )
+        for rule in spec.row_rules:
+            column = self._descriptor.column(rule.field)
+            header = column.display_header if column is not None else rule.field
+            statement = (
+                self._base(cell(rule.field))
+                .outerjoin(table, code_matches(table, branch_id))
+                .where(rule.violated(values))
+            )
+            for row_number, value in self._rows(statement):
+                yield RowError(
+                    row=row_number,
+                    column=header,
+                    code=rule.code,
+                    message=rule.message,
                     value=value,
                 )
 

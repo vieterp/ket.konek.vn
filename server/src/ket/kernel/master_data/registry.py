@@ -31,6 +31,7 @@ from typing import Final, Protocol
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from ket.kernel.bank_import.profile_merge import BankStatementProfileMergeHook
 from ket.kernel.master_data.bank_account_service import PartnerBankAccountMergeHook
 from ket.kernel.master_data.base import MasterDataRow
 from ket.kernel.master_data.item_unit_service import (
@@ -38,12 +39,20 @@ from ket.kernel.master_data.item_unit_service import (
     UnitOfMeasureMergeHook,
 )
 from ket.kernel.master_data.item_variant_service import ItemVariantMergeHook
-from ket.kernel.master_data.models.asset_type import AssetType, AssetTypeFields
-from ket.kernel.master_data.models.bank import Bank, BankFields
+from ket.kernel.master_data.models.asset_type import (
+    AssetType,
+    AssetTypeFields,
+    asset_type_row_rules,
+)
+from ket.kernel.master_data.models.bank import Bank, BankFields, bank_row_rules
 from ket.kernel.master_data.models.contract import Contract
 from ket.kernel.master_data.models.cost_object import CostObject
 from ket.kernel.master_data.models.document_type import DocumentTypeCatalog
-from ket.kernel.master_data.models.employee import Employee, EmployeeFields
+from ket.kernel.master_data.models.employee import (
+    Employee,
+    EmployeeFields,
+    employee_row_rules,
+)
 from ket.kernel.master_data.models.excise_tax_table import ExciseTaxTable
 from ket.kernel.master_data.models.expense_item import ExpenseItem
 from ket.kernel.master_data.models.invoice_form import InvoiceForm
@@ -52,17 +61,31 @@ from ket.kernel.master_data.models.item import (
     ItemEditableFields,
     ItemFields,
     ItemUpdateGuard,
+    item_row_rules,
 )
-from ket.kernel.master_data.models.partner import Partner, PartnerFields
-from ket.kernel.master_data.models.payment_term import PaymentTerm, PaymentTermFields
+from ket.kernel.master_data.models.partner import (
+    Partner,
+    PartnerFields,
+    partner_row_rules,
+)
+from ket.kernel.master_data.models.payment_term import (
+    PaymentTerm,
+    PaymentTermFields,
+    payment_term_row_rules,
+)
 from ket.kernel.master_data.models.pit_table import PitTable
 from ket.kernel.master_data.models.project import Project
 from ket.kernel.master_data.models.project_type import ProjectType
 from ket.kernel.master_data.models.resource_tax_table import ResourceTaxTable
 from ket.kernel.master_data.models.timekeeping_symbol import TimekeepingSymbol
-from ket.kernel.master_data.models.tool_type import ToolType, ToolTypeFields
+from ket.kernel.master_data.models.tool_type import (
+    ToolType,
+    ToolTypeFields,
+    tool_type_row_rules,
+)
 from ket.kernel.master_data.models.unit_of_measure import UnitOfMeasure
 from ket.kernel.master_data.models.warehouse import Warehouse
+from ket.kernel.master_data.row_rules import RowRule
 from ket.kernel.security.permissions import (
     CATALOG_ACTIONS,
     MASTER_MODULE,
@@ -223,6 +246,19 @@ class CatalogSpec:
     thuộc về chính danh mục ấy và viết gọn trong một chỗ.
     """
 
+    row_rules: tuple[RowRule, ...] = ()
+    """Luật liên-trường mà **bước nhập liệu** phải kiểm được (H3) — xem `row_rules.py`.
+
+    Phản chiếu các ràng buộc `CHECK` liên-trường của bảng. Không thay chúng: DB
+    vẫn là chỗ bảo đảm, còn đây là chỗ nói ra bằng tiếng Việt kèm đúng số dòng và
+    đúng tên ô, thay vì để bước ghi đổ với một `IntegrityError` thô sau khi bước
+    kiểm đã báo "hợp lệ".
+
+    `tests/test_import_row_rules.py` canh hai chiều: mọi `CHECK` liên-trường của
+    một bảng danh mục phải có luật ở đây, và mọi luật phải trỏ tới một `CHECK`
+    có thật. Một ràng buộc thêm ở phase 5 vì thế làm bộ test đỏ.
+    """
+
     merge_hooks: tuple[MergeHook, ...] = ()
     """Luật hợp nhất bảng con khi gộp hai bản ghi — xem `MergeHook`.
 
@@ -260,6 +296,40 @@ class CatalogSpec:
 
     def permission_code(self, action: Action) -> str:
         return permission_code(MASTER_MODULE, self.slug, action)
+
+    @property
+    def auto_creatable(self) -> bool:
+        """Danh mục này có tạo được một bản ghi hợp lệ từ **chỉ một cái mã** không?
+
+        Câu trả lời cho FR-NFR-062 ("tùy chọn tự tạo danh mục còn thiếu"). Lát
+        3C-1 đã từ chối giao tính năng ấy với đúng lý do này: một lượt nhập vật tư
+        tự tạo ra đơn vị tính và kho là **ghi vào danh mục khác** với dữ liệu duy
+        nhất là một cái mã — và với vật tư hàng hóa thì bản ghi sinh ra như vậy
+        còn không hợp lệ (H76: hàng hóa bắt buộc có đơn vị chính).
+
+        **Suy ra, không khai tay.** Hai điều kiện, cả hai đều chỉ có thể siết chặt
+        thêm theo thời gian:
+
+        * không cột riêng nào **bắt buộc** — nếu có thì bản ghi tối thiểu thiếu nó;
+        * không luật liên-trường nào (`row_rules`) — một luật có thể đúng là thứ
+          mà "mã + tên" vi phạm, và biết chắc điều đó đòi chạy SQL. Loại cả nhóm
+          là câu trả lời an toàn.
+
+        Chiều trôi vì thế luôn an toàn: thêm một ràng buộc ở phase sau chỉ khiến
+        một danh mục **thôi** tự tạo được, không bao giờ khiến nó tự tạo được một
+        bản ghi sai. `tests/test_import_missing_references.py` ghim danh sách hiện
+        tại để một thay đổi ngoài ý muốn vẫn phải được nhìn thấy.
+
+        Ví dụ hôm nay: đơn vị tính và kho tự tạo được; đối tác thì **không**
+        (`partner_is_customer_or_vendor` — một bản ghi không phải khách, không
+        phải NCC, không phải nhóm sẽ không hiện ở danh sách nào), vật tư hàng hóa
+        cũng không.
+        """
+        if self.row_rules:
+            return False
+        if self.extra_fields is None:
+            return True
+        return not any(info.is_required() for info in self.extra_fields.model_fields.values())
 
 
 class CatalogRegistry:
@@ -335,6 +405,7 @@ def _register_all() -> None:
             # Bảng con `partner_bank_accounts` mang hai ràng buộc duy nhất theo
             # `partner_id`, nên gộp phải có bước chuẩn bị (review H1).
             merge_hooks=(PartnerBankAccountMergeHook(),),
+            row_rules=partner_row_rules(),
         ),
         CatalogSpec(
             slug="employees",
@@ -342,6 +413,7 @@ def _register_all() -> None:
             title="Nhân viên",
             extra_fields=EmployeeFields,
             references=(CatalogReference(field="bank_id", slug="banks"),),
+            row_rules=employee_row_rules(),
         ),
         CatalogSpec(slug="cost_objects", model=CostObject, title="Đối tượng tập hợp chi phí"),
         CatalogSpec(slug="expense_items", model=ExpenseItem, title="Khoản mục chi phí"),
@@ -363,6 +435,7 @@ def _register_all() -> None:
             ),
             # Hook từ chối (`base_unit_differs`) đứng trước hook dọn dữ liệu.
             merge_hooks=(ItemUnitOfItemMergeHook(), ItemVariantMergeHook()),
+            row_rules=item_row_rules(),
         ),
         CatalogSpec(slug="warehouses", model=Warehouse, title="Kho"),
         CatalogSpec(
@@ -379,12 +452,14 @@ def _register_all() -> None:
             model=AssetType,
             title="Loại tài sản cố định",
             extra_fields=AssetTypeFields,
+            row_rules=asset_type_row_rules(),
         ),
         CatalogSpec(
             slug="tool_types",
             model=ToolType,
             title="Loại công cụ dụng cụ",
             extra_fields=ToolTypeFields,
+            row_rules=tool_type_row_rules(),
         ),
         # Thanh toán – ngân hàng
         CatalogSpec(
@@ -392,8 +467,18 @@ def _register_all() -> None:
             model=PaymentTerm,
             title="Điều khoản thanh toán",
             extra_fields=PaymentTermFields,
+            row_rules=payment_term_row_rules(),
         ),
-        CatalogSpec(slug="banks", model=Bank, title="Ngân hàng", extra_fields=BankFields),
+        CatalogSpec(
+            slug="banks",
+            model=Bank,
+            title="Ngân hàng",
+            extra_fields=BankFields,
+            row_rules=bank_row_rules(),
+            # `bank_statement_profiles` mang ràng buộc duy nhất `(bank_id, name)`
+            # từ lát 3C-2, nên gộp hai ngân hàng phải có bước hợp nhất (RT-26).
+            merge_hooks=(BankStatementProfileMergeHook(),),
+        ),
         # Chứng từ – hóa đơn
         CatalogSpec(slug="document_types", model=DocumentTypeCatalog, title="Loại chứng từ"),
         CatalogSpec(slug="invoice_forms", model=InvoiceForm, title="Mẫu số hóa đơn"),
