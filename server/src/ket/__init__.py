@@ -1,4 +1,4 @@
-"""Konek — app server phần mềm kế toán Việt Nam (TT200 / TT133).
+"""Konek — app server phần mềm kế toán Việt Nam (TT99/TT133).
 
 Modular monolith: `kernel` (nền nghiệp vụ dùng chung) → `posting` (ghi sổ) →
 `modules.*` (phân hệ theo SRS). `reporting` chỉ đọc. Luật phụ thuộc ép bằng

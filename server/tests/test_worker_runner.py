@@ -381,7 +381,7 @@ def test_one_broken_dataset_does_not_stop_the_others(
         job_id = UUID(str(job.id))
 
     broken = DatasetRef(
-        id=-1, code="hong", name="Dataset hỏng", schema_name="ds_khong_ton_tai", scheme="TT200"
+        id=-1, code="hong", name="Dataset hỏng", schema_name="ds_khong_ton_tai", scheme="TT99"
     )
     original = worker._datasets
 

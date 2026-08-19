@@ -52,6 +52,8 @@ from ket.api.routers.accounts import router as accounts_router
 from ket.api.routers.attachments import ATTACHMENTS_PREFIX
 from ket.api.routers.attachments import router as attachments_router
 from ket.api.routers.auth import router as auth_router
+from ket.api.routers.config_packages import CONFIG_PACKAGES_PREFIX
+from ket.api.routers.config_packages import router as config_packages_router
 from ket.api.routers.dimensions import router as dimensions_router
 from ket.api.routers.exports import router as exports_router
 from ket.api.routers.fiscal_years import router as fiscal_years_router
@@ -70,6 +72,7 @@ from ket.api.routers.system import router as system_router
 from ket.api.routers.system_settings import router as settings_router
 from ket.api.routers.updates import router as updates_router
 from ket.api.routers.vouchers import router as vouchers_router
+from ket.kernel.config.packages.importer import MAX_ARCHIVE_BYTES as IMPORTER_MAX_ARCHIVE_BYTES
 from ket.kernel.datasets.bootstrap import verify_control_schema
 from ket.kernel.datasets.provisioning import find_alembic_config, verify_dataset_schema_version
 from ket.kernel.datasets.service import list_datasets
@@ -202,6 +205,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 ATTACHMENTS_PREFIX,
                 resolved.attachment_max_bytes + MULTIPART_OVERHEAD_BYTES,
             ),
+            # Gói cấu hình `.zip` (RT-07): trần riêng của `importer.py`
+            # (`MAX_ARCHIVE_BYTES`) cộng phụ phí multipart, cùng khuôn với
+            # tệp đính kèm ở trên — không dùng trần mặc định 1 MiB.
+            (CONFIG_PACKAGES_PREFIX, IMPORTER_MAX_ARCHIVE_BYTES + MULTIPART_OVERHEAD_BYTES),
         ),
     )
     app.add_middleware(
@@ -267,6 +274,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ledger_router)
     app.include_router(opening_balances_router)
     app.include_router(period_lock_router)
+    # Lát 5A — máy móc quanh gói cấu hình pháp lý (TT99/TT133): liệt kê, xem
+    # cây TK của một gói, kích hoạt, nhập gói `.zip` đã ký (RT-07).
+    app.include_router(config_packages_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

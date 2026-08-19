@@ -263,5 +263,5 @@ Lát **2C**: client (design system, layout, quản lý phiên, i18n) + ba spike 
    thực tế nhân đôi. Chấp nhận ở quy mô LAN; chỗ sửa khi cần chính xác là chuyển
    bộ đếm xuống PostgreSQL, không phải thêm Redis vào bản cài.
 4. Dọn phiên `prune_sessions` và `prune_idempotency_keys` có sẵn làm job (xếp hàng qua API); lịch tự động thuộc phase 3 hoặc sau (tuỳ chức năng Scheduler).
-5. Bộ vai trò mẫu (`ke-toan`, `thu-quy`, `xem`) vẫn chờ gói cấu hình TT200/TT133
+5. Bộ vai trò mẫu (`ke-toan`, `thu-quy`, `xem`) vẫn chờ gói cấu hình TT99/TT133
    ở phase 5 — hiện chỉ gieo `admin`.

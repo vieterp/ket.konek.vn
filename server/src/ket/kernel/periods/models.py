@@ -1,10 +1,10 @@
 """Năm tài chính và kỳ kế toán (LD-12, FR-NFR-031/033, FR-SYS-004).
 
 Hai bảng chứ không một: **năm** mang những quyết định chốt một lần cho cả năm
-(chế độ kế toán TT200/TT133, đồng tiền hạch toán, phương pháp tính giá xuất kho,
+(chế độ kế toán TT99/TT133, đồng tiền hạch toán, phương pháp tính giá xuất kho,
 phương pháp tính thuế GTGT), còn **kỳ** là đơn vị khóa sổ. Gộp làm một thì mỗi
 tháng lại phải trả lời lại những câu chỉ hỏi một lần mỗi năm, và không có gì
-ngăn tháng 3 dùng TT200 còn tháng 4 dùng TT133.
+ngăn tháng 3 dùng TT99 còn tháng 4 dùng TT133.
 
 Nhiều năm tài chính tồn tại song song trong cùng một dữ liệu kế toán
 (FR-NFR-033): tháng 1 năm sau người ta vẫn đang chốt sổ năm trước, và cả hai
@@ -46,9 +46,15 @@ vào mà không ai nhận ra."""
 
 
 class AccountingScheme(StrEnum):
-    """Chế độ kế toán áp dụng cho năm (LD-06, FR-SYS-004)."""
+    """Chế độ kế toán áp dụng cho năm (LD-06, FR-SYS-004).
 
-    TT200 = "TT200"
+    `TT99` (Thông tư 99/2025/TT-BTC, hiệu lực từ năm tài chính 2026) thay thế
+    `TT200`/2014 (Điều 31 TT99) — quyết định người dùng 2026-08-19. TT200 không
+    còn là chế độ chọn được ở v1; sổ cũ theo TT200 (nếu cần) là gói cấu hình bổ
+    sung ở v1.x theo đúng cơ chế FR-NFR-055, không phải một giá trị enum riêng.
+    """
+
+    TT99 = "TT99"
     TT133 = "TT133"
 
 

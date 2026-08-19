@@ -100,7 +100,7 @@ def make_year(session: Session, *, code: str, start: date) -> int:
     year = PeriodService(session).create_fiscal_year(
         code=code,
         start_date=start,
-        accounting_scheme=AccountingScheme.TT200,
+        accounting_scheme=AccountingScheme.TT99,
         base_currency="VND",
         inventory_valuation_method=InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING,
         vat_method=VatMethod.DEDUCTION,

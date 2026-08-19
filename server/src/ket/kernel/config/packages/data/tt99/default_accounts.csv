@@ -1,0 +1,12 @@
+document_type,purpose,account_code
+*,cash,111
+*,bank,112
+*,vat_input,1331
+*,vat_output,33311
+*,ar_trade,131
+*,ap_trade,331
+*,employee_advance,141
+*,payroll,334
+*,income_summary,911
+*,retained_earnings,421
+*,fx_revaluation,413

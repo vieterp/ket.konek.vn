@@ -67,7 +67,7 @@ ADMIN_ROLE_CODE = "admin"
 """Vai trò hệ thống duy nhất được gieo sẵn.
 
 Một chứ không phải ba (`admin`/`ke-toan`/`xem`): bộ vai trò mẫu thật thuộc gói
-cấu hình TT200/TT133 ở phase 5, và gieo sẵn một bộ nửa vời bây giờ sẽ tạo ra dữ
+cấu hình TT99/TT133 ở phase 5, và gieo sẵn một bộ nửa vời bây giờ sẽ tạo ra dữ
 liệu mà phase 5 phải đi dọn. Cái duy nhất bắt buộc phải có ngay là **một đường
 để người đầu tiên làm được việc** — nếu không, dữ liệu kế toán vừa tạo là một
 cái hộp không ai mở được."""
@@ -228,7 +228,7 @@ def _role_requires_second_factor(
     một danh sách mã vai trò nhạy cảm viết cứng sẽ không thấy điều đó.
 
     **Ràng buộc cho lát sau:** hàm này chỉ chạy lúc **gán vai trò**. Mọi đường
-    ghi `role_permissions` (màn hình sửa vai trò, gói cấu hình TT200/TT133 ở
+    ghi `role_permissions` (màn hình sửa vai trò, gói cấu hình TT99/TT133 ở
     phase 5) **phải** chạy lại bước bật cờ cho những `user_roles` đang trỏ tới
     vai trò đó — thêm một quyền nhạy cảm vào vai trò đã có người giữ mà không
     làm việc đó là vô hiệu FR-NFR-016 trong im lặng. Hôm nay chưa hở: nguồn ghi

@@ -43,7 +43,7 @@ const GROUPS = {
           {
             key: 'accounting_scheme',
             title: 'Chế độ kế toán',
-            value: 'TT200',
+            value: 'TT99',
             source: 'fiscal_year',
             fiscal_year_code: '2026',
             is_editable: false,

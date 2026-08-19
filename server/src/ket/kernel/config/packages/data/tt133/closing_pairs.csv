@@ -1,0 +1,12 @@
+source_account,target_account,sequence,description
+511,911,10,Kết chuyển doanh thu Doanh thu bán hàng và cung cấp dịch vụ
+515,911,11,Kết chuyển doanh thu Doanh thu hoạt động tài chính
+611,911,20,Kết chuyển chi phí Mua hàng
+631,911,21,Kết chuyển chi phí Chi phí sản xuất
+632,911,22,Kết chuyển chi phí Giá vốn hàng bán
+635,911,23,Kết chuyển chi phí Chi phí tài chính
+642,911,24,Kết chuyển chi phí Chi phí quản lý doanh nghiệp
+711,911,25,Kết chuyển chi phí Thu nhập khác
+811,911,26,Kết chuyển chi phí Chi phí khác
+821,911,27,Kết chuyển chi phí Chi phí thuế thu nhập doanh nghiệp
+911,421,90,Kết chuyển lợi nhuận/lỗ cuối năm

@@ -262,7 +262,7 @@ def test_dataset_schema_usage_is_granted_only_to_its_own_role(
 def test_dropping_a_dataset_also_drops_its_role(owner_engine: Engine) -> None:
     """Vai trò sót lại sau khi xóa dataset = mã dùng lại sẽ trúng quyền cũ."""
     code = "temp_role_cleanup"
-    provision_dataset(owner_engine, code=code, name="Tạm để kiểm dọn vai trò", scheme="TT200")
+    provision_dataset(owner_engine, code=code, name="Tạm để kiểm dọn vai trò", scheme="TT99")
     role = role_name_for_schema(schema_name_for(code))
 
     with owner_engine.connect() as connection:
@@ -336,7 +336,7 @@ def test_ensure_dataset_roles_rebuilds_a_role_lost_with_the_cluster(
     đăng ký. Đây là đúng loại lỗi chỉ xuất hiện ở nơi cài đặt.
     """
     code = "temp_restore_probe"
-    dataset = provision_dataset(owner_engine, code=code, name="Dò khôi phục", scheme="TT200")
+    dataset = provision_dataset(owner_engine, code=code, name="Dò khôi phục", scheme="TT99")
     role = role_name_for_schema(dataset.schema_name)
     try:
         # Mô phỏng cụm mới: dữ liệu còn, vai trò biến mất.
@@ -375,7 +375,7 @@ def test_provisioning_refuses_a_role_it_cannot_administer(
         connection.exec_driver_sql(f"CREATE ROLE {role} NOLOGIN INHERIT")
     try:
         with pytest.raises(DatasetRoleNotAdministrableError):
-            provision_dataset(owner_engine, code=code, name="Vai trò lạ", scheme="TT200")
+            provision_dataset(owner_engine, code=code, name="Vai trò lạ", scheme="TT99")
     finally:
         with superuser_engine.connect().execution_options(
             isolation_level="AUTOCOMMIT"
@@ -419,7 +419,7 @@ def test_repair_keeps_append_only_and_read_only_tables_downgraded(
     4) để bắt được đúng kiểu hồi quy đó, chứ không chỉ canh mỗi `audit_log`.
     """
     code = "temp_repair_probe"
-    dataset = provision_dataset(owner_engine, code=code, name="Dò sửa chữa", scheme="TT200")
+    dataset = provision_dataset(owner_engine, code=code, name="Dò sửa chữa", scheme="TT99")
     schema = dataset.schema_name
     role = role_name_for_schema(schema)
     second_append_only = "ledger_probe"
@@ -474,7 +474,7 @@ def test_ensure_cluster_rebuilds_dataset_roles(owner_engine: Engine, app_engine:
     lời gọi `ensure_dataset_roles` bên trong mà toàn bộ bộ test vẫn xanh.
     """
     code = "temp_cluster_probe"
-    dataset = provision_dataset(owner_engine, code=code, name="Dò ensure_cluster", scheme="TT200")
+    dataset = provision_dataset(owner_engine, code=code, name="Dò ensure_cluster", scheme="TT99")
     role = role_name_for_schema(dataset.schema_name)
     try:
         with owner_engine.begin() as connection:

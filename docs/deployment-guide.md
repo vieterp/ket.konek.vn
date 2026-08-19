@@ -201,7 +201,7 @@ mà chưa ai được cấp quyền đó trên một dữ liệu kế toán vừ
 ```python
 from ket.kernel.datasets.provisioning import provision_dataset
 
-provision_dataset(owner, code="kt2026", name="Công ty A", scheme="TT200")
+provision_dataset(owner, code="kt2026", name="Công ty A", scheme="TT99")
 ```
 
 Tạo schema `ds_kt2026`, vai trò `ds_kt2026_app`, chạy toàn bộ migration lên schema đó,

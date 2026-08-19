@@ -1,6 +1,6 @@
 """Tra hệ thống tài khoản qua HTTP (`/api/v1/accounts`) — lát 4E.
 
-Đọc-only: hệ thống TK là dữ liệu của gói cấu hình (TT200/TT133), sửa đổi thuộc
+Đọc-only: hệ thống TK là dữ liệu của gói cấu hình (TT99/TT133), sửa đổi thuộc
 màn hình quản trị gói (phase 5). Mọi truy vấn đi qua `resolve_package` theo
 `(chế độ kế toán của năm, ngày)` — đúng quy tắc đọc của phase-05: không code
 nào đoán gói hay tra `chart_of_accounts` bằng `code` cứng.

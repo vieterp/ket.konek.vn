@@ -1,13 +1,13 @@
 """Gói cấu hình pháp lý và hệ thống tài khoản — phần **schema** (LD-06, RT-07).
 
-Hai bảng này thuộc phạm vi phase 5 (gói TT200/TT133 đầy đủ: nhập từ CSV, kích
+Hai bảng này thuộc phạm vi phase 5 (gói TT99/TT133 đầy đủ: nhập từ CSV, kích
 hoạt, ký số, layout BCTC), nhưng **hình dạng bảng** phải có từ phase 4: mọi dòng
 `gl_postings.account_id` trỏ vào `chart_of_accounts`, và một khóa ngoại không
 thêm sau được lên bảng phát sinh triệu dòng mà không khóa bảng. Hình dạng lấy
 nguyên văn từ phase-05 §Gói cấu hình — phase 5 chỉ **đổ dữ liệu và dựng máy
 móc quanh nó**, không đổi cột.
 
-Tài khoản thuộc **gói** chứ không đứng một mình: TT200 và TT133 là hai hệ thống
+Tài khoản thuộc **gói** chứ không đứng một mình: TT99 và TT133 là hai hệ thống
 tài khoản khác nhau cùng tồn tại (LD-06), và một dòng phát sinh năm 2026 phải
 trỏ mãi vào tài khoản của gói đã dùng năm 2026 — kể cả khi doanh nghiệp đổi chế
 độ vào 2027. Đó là lý do khóa duy nhất là `(package_id, code)` chứ không `code`.
@@ -119,7 +119,7 @@ class ConfigPackage(DatasetBase, Audited):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
-    """`TT200-2014`, `TT133-2016` — mã mà gói ký số của phase 5 sẽ ghim."""
+    """`TT99-2025`, `TT133-2016` — mã mà gói ký số của phase 5 sẽ ghim."""
 
     name: Mapped[str] = mapped_column(String(NAME_MAX_LENGTH), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
@@ -199,3 +199,73 @@ class ChartOfAccount(DatasetBase, Audited):
     is_inactive: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+
+
+DEFAULT_ACCOUNT_WILDCARD_DOCUMENT_TYPE = "*"
+"""`document_type` đại diện cho "mọi loại chứng từ" trong `default_accounts`.
+
+Một gói cấu hình khai `purpose='vat_output'` một lần cho `'*'` thay vì lặp lại
+cho từng loại chứng từ (phiếu bán hàng, hóa đơn dịch vụ…) — logic nghiệp vụ tra
+theo `(document_type cụ thể, purpose)` trước, rồi lùi về `('*', purpose)` khi
+không có dòng riêng (`accounts_provider.default_account`)."""
+
+DOCUMENT_TYPE_MAX_LENGTH = 20
+PURPOSE_MAX_LENGTH = 50
+
+
+class DefaultAccount(DatasetBase, Audited):
+    """Tài khoản ngầm định theo mục đích nghiệp vụ (FR-SYS-024, ngoại lệ có kiểm soát).
+
+    Đây là lối thoát duy nhất cho logic nghiệp vụ cần một TK **cụ thể** (khấu
+    trừ thuế: Nợ 33311 / Có 133 — FR-TAX-004) mà không hard-code số hiệu: khai
+    `purpose` mang nghĩa (`vat_output`, `vat_input`), gói cấu hình gán số hiệu.
+    `account_code` là **số hiệu**, không phải `id`: gói cấu hình ghi tệp CSV
+    trước khi biết `id` mà `ChartOfAccount` sẽ được cấp lúc nhập.
+    """
+
+    __tablename__ = "default_accounts"
+    __table_args__ = (
+        CheckConstraint("document_type <> ''", name="document_type_not_blank"),
+        CheckConstraint("purpose <> ''", name="purpose_not_blank"),
+        CheckConstraint("account_code <> ''", name="account_code_not_blank"),
+    )
+
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("config_packages.id", ondelete="RESTRICT"), primary_key=True
+    )
+    document_type: Mapped[str] = mapped_column(String(DOCUMENT_TYPE_MAX_LENGTH), primary_key=True)
+    """Mã loại chứng từ cụ thể, hoặc `DEFAULT_ACCOUNT_WILDCARD_DOCUMENT_TYPE`."""
+    purpose: Mapped[str] = mapped_column(String(PURPOSE_MAX_LENGTH), primary_key=True)
+    account_code: Mapped[str] = mapped_column(String(ACCOUNT_CODE_MAX_LENGTH), nullable=False)
+
+
+class ClosingAccountPair(DatasetBase, Audited):
+    """Một cặp tài khoản kết chuyển cuối kỳ, theo thứ tự (FR-SYS-023, FR-GLE-022).
+
+    `sequence` quyết định thứ tự chạy: kết chuyển giá vốn/doanh thu phải xong
+    trước khi kết chuyển 911 sang 421, nếu không bút toán kết chuyển sau đọc
+    một số dư 911 chưa đầy đủ. Không suy thứ tự từ số hiệu TK — dãy kết chuyển
+    của mỗi chế độ kế toán là một quyết định nghiệp vụ, không phải một quy luật
+    số học.
+    """
+
+    __tablename__ = "closing_account_pairs"
+    __table_args__ = (
+        CheckConstraint("source_account <> ''", name="source_account_not_blank"),
+        CheckConstraint("target_account <> ''", name="target_account_not_blank"),
+        UniqueConstraint(
+            "package_id",
+            "source_account",
+            "target_account",
+            name="uq_closing_account_pairs_package_pair",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("config_packages.id", ondelete="RESTRICT"), nullable=False
+    )
+    source_account: Mapped[str] = mapped_column(String(ACCOUNT_CODE_MAX_LENGTH), nullable=False)
+    target_account: Mapped[str] = mapped_column(String(ACCOUNT_CODE_MAX_LENGTH), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)

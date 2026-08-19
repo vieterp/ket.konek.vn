@@ -1,0 +1,11 @@
+{
+  "code": "TEST-MIN-1",
+  "scheme": "TT99",
+  "name": "Gói tối thiểu cho test loader",
+  "name_en": "Minimal package for loader tests",
+  "description": "Chỉ dùng trong test — không phải dữ liệu thật",
+  "legal_reference": null,
+  "effective_from": "2020-01-01",
+  "effective_to": null,
+  "version": 1
+}

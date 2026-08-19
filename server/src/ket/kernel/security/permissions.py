@@ -244,13 +244,32 @@ REGISTRY.register(
     DocumentType(
         module=MASTER_MODULE,
         code="account",
-        # Hệ thống tài khoản: dữ liệu của gói cấu hình (TT200/TT133), không phải
+        # Hệ thống tài khoản: dữ liệu của gói cấu hình (TT99/TT133), không phải
         # danh mục người dùng tự thêm dòng — nên chỉ `view`. Ai lập được chứng
         # từ đều cần tra TK (form ghi sổ hiện cột chiều theo `detail_tracking`),
         # nên đây là quyền đọc phổ thông, tách khỏi quyền xem số dư
-        # (`posting.balance.view`). Sửa/kích hoạt gói là việc của gói cấu hình
-        # (hệ quyền riêng, khi có màn hình quản trị gói).
+        # (`posting.balance.view`) và tách khỏi `system.config_package` (quản
+        # trị **gói**, xem ngay dưới đây) — xem một TK cụ thể không cần biết
+        # gói nào kích hoạt nó.
         actions=frozenset({Action.VIEW}),
+    )
+)
+REGISTRY.register(
+    DocumentType(
+        module=SYSTEM_MODULE,
+        code="config_package",
+        # Quản trị **gói** cấu hình (không phải xem từng TK — đó là
+        # `master.account.view` ở trên): `view` liệt kê gói + cây TK của một
+        # gói cụ thể (`GET .../accounts`), `edit` kích hoạt (đổi trạng thái một
+        # gói đã có), `create` nhập gói `.zip` mới ký số (RT-07) — tạo bản ghi
+        # `config_packages` mới, đúng nghĩa `create` của `CATALOG_ACTIONS`.
+        # Không `delete`: một gói đã kích hoạt để lại vết trong TK/số dư, xóa
+        # nó là xóa lịch sử "chế độ kế toán nào áp dụng lúc nào" (FR-NFR-013).
+        actions=frozenset({Action.VIEW, Action.EDIT, Action.CREATE}),
+        # Đòi 2FA: kích hoạt/nhập gói đổi **cả hệ thống tài khoản** của dữ liệu
+        # kế toán — cùng mức rủi ro với `system.installation` (tác vụ vượt
+        # phạm vi nghiệp vụ thường ngày, hậu quả khó đảo ngược).
+        requires_second_factor=True,
     )
 )
 REGISTRY.register(

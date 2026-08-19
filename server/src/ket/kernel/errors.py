@@ -977,7 +977,7 @@ class PeriodLockScopeError(DomainError):
 
 
 class AccountingSchemeLockedError(DomainError):
-    """Đổi chế độ kế toán (TT200 ↔ TT133) trên năm đã có chứng từ (FR-SYS-004).
+    """Đổi chế độ kế toán (TT99 ↔ TT133) trên năm đã có chứng từ (FR-SYS-004).
 
     Đây là nhóm thiết lập "chốt một lần" của nguyên tắc U14: hệ thống tài khoản,
     layout báo cáo tài chính và mẫu tờ khai đều dẫn xuất từ chế độ, nên đổi giữa
@@ -1168,7 +1168,7 @@ class ImportParentUnresolvableError(DomainError):
 class ConfigPackageNotFoundError(DomainError):
     """Không có gói cấu hình nào hiệu lực cho chế độ kế toán tại ngày này.
 
-    Xảy ra khi ghi sổ vào một ngày mà chưa gói TT200/TT133 nào phủ
+    Xảy ra khi ghi sổ vào một ngày mà chưa gói TT99/TT133 nào phủ
     (`effective_from`/`effective_to`). Cách sửa nằm ở màn hình gói cấu hình,
     không phải ở chứng từ — nên thông điệp phải chỉ về đó.
     """
@@ -1319,3 +1319,66 @@ class OpeningBranchRequiredError(DomainError):
     """
 
     error_code: ClassVar[str] = "opening.branch_required"
+
+
+# ---------------------------------------------------------------------------
+# Gói cấu hình pháp lý — máy móc quanh TT99/TT133 (phase 5, lát 5A)
+# ---------------------------------------------------------------------------
+
+
+class ConfigPackageIdUnknownError(DomainError):
+    """Không có gói cấu hình nào mang `id` này.
+
+    Khác `ConfigPackageNotFoundError` (không gói nào hiệu lực **tại một ngày**
+    cho một chế độ): lỗi này là gọi nhầm `id`, thường ở đường kích hoạt hoặc
+    đường tra tài khoản của một gói cụ thể.
+    """
+
+    error_code: ClassVar[str] = "config.package_unknown"
+    http_status: ClassVar[int] = 404
+
+
+class ConfigPackageDataInvalidError(DomainError):
+    """Bộ dữ liệu của một gói cấu hình (thư mục hoặc gói `.zip`) không hợp lệ.
+
+    Ném ở **loader**, trước khi bất kỳ dòng nào được ghi (fail-closed, RT-07):
+    mã tham chiếu sai, số hiệu trùng, `detail_tracking` chứa token lạ, tính
+    chất dư ngoài khoảng — mọi sai sót của gói cấu hình đều đi qua đây, mang
+    theo đủ ngữ cảnh (`file`, `code`, `reason`) để người biên soạn gói sửa
+    đúng dòng, không phải dò cả tệp.
+    """
+
+    error_code: ClassVar[str] = "config.package_data_invalid"
+
+
+class DefaultAccountNotConfiguredError(DomainError):
+    """Gói cấu hình đang hiệu lực chưa khai tài khoản ngầm định cho mục đích này.
+
+    Khác lỗi "gõ nhầm mã TK": đây là một **khoảng trống cấu hình** — gói thiếu
+    dòng `default_accounts` cho `purpose` này (cả bản ghi riêng lẫn bản ghi
+    dùng chung `'*'`). Cách sửa nằm ở màn hình gói cấu hình, không ở chứng từ.
+    """
+
+    error_code: ClassVar[str] = "config.default_account_not_configured"
+
+
+class ConfigPackageSignatureInvalidError(DomainError):
+    """Gói `.zip` không qua được lớp ký số (RT-07): sai chữ ký, sai khóa, hoặc lệch checksum.
+
+    Toàn bộ gói bị từ chối — không có "nhập một phần": một tệp trong gói bị sửa
+    sau khi ký thì không có cách nào biết những tệp còn lại có đáng tin không.
+    """
+
+    error_code: ClassVar[str] = "config.package_signature_invalid"
+
+
+class ConfigPackageArchiveInvalidError(DomainError):
+    """Gói `.zip` không đúng cấu trúc cho phép: tệp lạ, đường dẫn thoát thư mục,
+    tệp bị thiếu, hoặc vượt trần dung lượng.
+
+    Kiểm **trước** khi verify chữ ký nội dung từng tệp: một gói cố tình mang
+    theo đường dẫn `../../etc/passwd` phải bị chặn ngay ở bước đọc danh sách
+    tệp, không phải chờ tới lúc ghi xuống đĩa.
+    """
+
+    error_code: ClassVar[str] = "config.package_archive_invalid"

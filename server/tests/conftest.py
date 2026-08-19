@@ -356,7 +356,7 @@ def drain_jobs(owner_engine: Engine) -> Callable[..., None]:
 
 @pytest.fixture(scope="session")
 def dataset_alpha(owner_engine: Engine) -> DatasetRef:
-    return provision_dataset(owner_engine, code="alpha", name="Công ty Alpha", scheme="TT200")
+    return provision_dataset(owner_engine, code="alpha", name="Công ty Alpha", scheme="TT99")
 
 
 @pytest.fixture(scope="session")

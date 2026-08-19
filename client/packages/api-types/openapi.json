@@ -859,6 +859,20 @@
         "title": "BanksUpdateRequest",
         "type": "object"
       },
+      "Body_import_config_package_api_v1_config_packages_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_config_package_api_v1_config_packages_import_post",
+        "type": "object"
+      },
       "Body_upload_attachment_api_v1_attachments_post": {
         "properties": {
           "entity_id": {
@@ -1527,6 +1541,248 @@
           "new_password"
         ],
         "title": "ChangePasswordRequest",
+        "type": "object"
+      },
+      "ConfigPackageAccountResponse": {
+        "description": "Một TK trong cây hệ thống tài khoản của một gói cụ thể (màn hình quản trị gói).\n\nKhác `AccountResponse` (`accounts_schemas.py`, tra TK theo ngày hạch toán\ncho form chứng từ): endpoint này trả **cả cây** của đúng một gói, kể cả TK\nngừng dùng — người quản trị gói cần thấy toàn bộ, không phải chỉ phần đang\nhiệu lực cho một ngày.",
+        "properties": {
+          "balance_nature": {
+            "title": "Balance Nature",
+            "type": "integer"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "detail_tracking": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail Tracking"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_foreign_currency": {
+            "title": "Is Foreign Currency",
+            "type": "boolean"
+          },
+          "is_inactive": {
+            "title": "Is Inactive",
+            "type": "boolean"
+          },
+          "is_locked": {
+            "title": "Is Locked",
+            "type": "boolean"
+          },
+          "is_summary": {
+            "title": "Is Summary",
+            "type": "boolean"
+          },
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "name_en",
+          "parent_id",
+          "path",
+          "level",
+          "balance_nature",
+          "is_summary",
+          "is_foreign_currency",
+          "detail_tracking",
+          "is_locked",
+          "is_inactive"
+        ],
+        "title": "ConfigPackageAccountResponse",
+        "type": "object"
+      },
+      "ConfigPackageAccountsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigPackageAccountResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "package_id": {
+            "title": "Package Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "package_id",
+          "items"
+        ],
+        "title": "ConfigPackageAccountsResponse",
+        "type": "object"
+      },
+      "ConfigPackageListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigPackageResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ConfigPackageListResponse",
+        "type": "object"
+      },
+      "ConfigPackageResponse": {
+        "description": "Một gói cấu hình — dòng của `config_packages`.",
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "activated_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated By"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_builtin": {
+            "title": "Is Builtin",
+            "type": "boolean"
+          },
+          "legal_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legal Reference"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scheme": {
+            "title": "Scheme",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "description",
+          "scheme",
+          "legal_reference",
+          "effective_from",
+          "effective_to",
+          "version",
+          "is_builtin",
+          "activated_at",
+          "activated_by"
+        ],
+        "title": "ConfigPackageResponse",
         "type": "object"
       },
       "ContractsCreateRequest": {
@@ -10844,6 +11100,176 @@
         "summary": "Enroll Totp",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/config-packages": {
+      "get": {
+        "description": "Mọi gói cấu hình đã có trong dataset — dựng sẵn lẫn nhập thêm, mới nhất trước.",
+        "operationId": "list_config_packages_api_v1_config_packages_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigPackageListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Config Packages",
+        "tags": [
+          "config-packages"
+        ]
+      }
+    },
+    "/api/v1/config-packages/import": {
+      "post": {
+        "description": "Nhập một gói `.zip` đã ký (RT-07). Sai chữ ký/checksum/cấu trúc → từ\nchối cả gói, không ghi gì (`importer.import_package`).\n\nĐọc trọn nội dung tệp **trước** khi mở transaction ghi: verify chữ ký +\nchecksum là việc CPU-bound, không cần giữ transaction DB mở trong lúc đó.",
+        "operationId": "import_config_package_api_v1_config_packages_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_config_package_api_v1_config_packages_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigPackageResponse"
+                }
+              }
+            },
+            "description": "Lần gửi lại: gói đã nhập"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigPackageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Import Config Package",
+        "tags": [
+          "config-packages"
+        ]
+      }
+    },
+    "/api/v1/config-packages/{package_id}/accounts": {
+      "get": {
+        "description": "Toàn bộ cây TK của một gói — kể cả TK ngừng dùng (màn hình quản trị gói,\nkhác `GET /api/v1/accounts` là tra theo ngày hạch toán cho form chứng từ).",
+        "operationId": "get_package_accounts_api_v1_config_packages__package_id__accounts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "title": "Package Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigPackageAccountsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Package Accounts",
+        "tags": [
+          "config-packages"
+        ]
+      }
+    },
+    "/api/v1/config-packages/{package_id}/actions/activate": {
+      "post": {
+        "description": "Kích hoạt một gói cấu hình (FR-SYS-004). Chặn khi đổi `scheme` trên dữ\nliệu đã có chứng từ theo chế độ khác — xem `activator.activate`.",
+        "operationId": "activate_config_package_api_v1_config_packages__package_id__actions_activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "title": "Package Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigPackageResponse"
+                }
+              }
+            },
+            "description": "Lần gửi lại: gói hiện tại"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Activate Config Package",
+        "tags": [
+          "config-packages"
         ]
       }
     },

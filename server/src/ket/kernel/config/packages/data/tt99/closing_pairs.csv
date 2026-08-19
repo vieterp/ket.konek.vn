@@ -1,0 +1,16 @@
+source_account,target_account,sequence,description
+511,911,10,Kết chuyển doanh thu Doanh thu bán hàng và cung cấp dịch vụ
+515,911,11,Kết chuyển doanh thu Doanh thu hoạt động tài chính
+521,911,12,Kết chuyển doanh thu Các khoản giảm trừ doanh thu
+621,911,20,"Kết chuyển chi phí Chi phí nguyên liệu, vật liệu trực tiếp"
+622,911,21,Kết chuyển chi phí Chi phí nhân công trực tiếp
+623,911,22,Kết chuyển chi phí Chi phí sử dụng máy thi công
+627,911,23,Kết chuyển chi phí Chi phí sản xuất chung
+632,911,24,Kết chuyển chi phí Giá vốn hàng bán
+635,911,25,Kết chuyển chi phí Chi phí tài chính
+641,911,26,Kết chuyển chi phí Chi phí bán hàng
+642,911,27,Kết chuyển chi phí Chi phí quản lý doanh nghiệp
+711,911,28,Kết chuyển chi phí Thu nhập khác
+811,911,29,Kết chuyển chi phí Chi phí khác
+821,911,30,Kết chuyển chi phí Chi phí thuế thu nhập doanh nghiệp
+911,421,90,Kết chuyển lợi nhuận/lỗ cuối năm

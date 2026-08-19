@@ -16,20 +16,32 @@ chúng.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import date
 
 import pytest
 from alembic import command
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, select, text
+from sqlalchemy.orm import Session, sessionmaker
 
+from ket.kernel.currency.models import Currency
 from ket.kernel.datasets.naming import role_name_for_schema
 from ket.kernel.datasets.provisioning import (
     ALEMBIC_SCHEMA_ATTRIBUTE,
     DatasetRef,
+    current_revision,
     drop_dataset_schema,
     find_alembic_config,
     provision_dataset,
     upgrade_dataset_schema,
 )
+from ket.kernel.periods.models import (
+    AccountingScheme,
+    FiscalYear,
+    InventoryValuationMethod,
+    VatMethod,
+)
+from ket.kernel.periods.service import PeriodService
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 
 pytestmark = pytest.mark.db
 
@@ -49,7 +61,7 @@ CATALOG_TABLES = (
 @pytest.fixture
 def probe_dataset(owner_engine: Engine) -> Iterator[DatasetRef]:
     dataset = provision_dataset(
-        owner_engine, code=DATASET_CODE, name="Dữ liệu thử hạ cấp", scheme="TT200"
+        owner_engine, code=DATASET_CODE, name="Dữ liệu thử hạ cấp", scheme="TT99"
     )
     try:
         yield dataset
@@ -142,3 +154,58 @@ def test_the_dataset_role_still_writes_after_a_downgrade_round_trip(
             text("SELECT code FROM warehouses WHERE code = 'KHO_SAU_HA'")
         ).all()
     assert list(written) == ["KHO_SAU_HA"]
+
+
+# ---------------------------------------------------------------------------
+# `0010` — fail-closed khi dataset đã có năm tài chính TT99 (sửa sau review, H1)
+# ---------------------------------------------------------------------------
+
+
+def test_downgrading_0010_without_tt99_fiscal_years_succeeds(
+    owner_engine: Engine, probe_dataset: DatasetRef
+) -> None:
+    """Dataset mới cấp (chưa có năm tài chính nào) — hạ `0010`→`0009` phải chạy
+    trót lọt, dọn `config_packages`/`chart_of_accounts` scheme=TT99 (dữ liệu
+    gieo tự động) mà không đụng `fiscal_years` (rỗng, không có gì để chặn).
+    """
+    schema = probe_dataset.schema_name
+    _downgrade(owner_engine, schema, "0009")
+    assert current_revision(owner_engine, schema) == "0009"
+
+    with owner_engine.begin() as connection:
+        connection.exec_driver_sql(f'SET search_path TO "{schema}", pg_temp')
+        remaining_tt99 = connection.execute(
+            text("SELECT count(*) FROM config_packages WHERE scheme = 'TT99'")
+        ).scalar_one()
+    assert remaining_tt99 == 0, "downgrade() phải dọn sạch config_packages scheme=TT99"
+
+
+def test_downgrading_0010_with_a_tt99_fiscal_year_is_refused(
+    owner_engine: Engine, session_factory: sessionmaker[Session], probe_dataset: DatasetRef
+) -> None:
+    """Một năm tài chính TT99 đã tồn tại (quyết định người dùng, không phải dữ
+    liệu dựng sẵn) — hạ `0010`→`0009` phải bị từ chối, không âm thầm xóa năm đó
+    và cũng không để `CheckViolation` thô của PostgreSQL đổ ra giữa chừng.
+    """
+    schema = probe_dataset.schema_name
+    scope = RequestScope(dataset_schema=schema, user_id=1, branch_ids=())
+    with unit_of_work(session_factory, scope) as session:
+        session.add(Currency(code="VND", name="Đồng Việt Nam", decimal_places=0, is_base=True))
+        session.flush()
+        PeriodService(session).create_fiscal_year(
+            code="2026",
+            start_date=date(2026, 1, 1),
+            accounting_scheme=AccountingScheme.TT99,
+            base_currency="VND",
+            inventory_valuation_method=InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING,
+            vat_method=VatMethod.DEDUCTION,
+        )
+
+    with pytest.raises(RuntimeError, match="TT99"):
+        _downgrade(owner_engine, schema, "0009")
+
+    # Hạ cấp bị từ chối phải là TOÀN BỘ-hoặc-KHÔNG-GÌ: revision không nhúc
+    # nhích, và năm tài chính vừa tạo vẫn còn nguyên (không bị dọn nhầm).
+    assert current_revision(owner_engine, schema) == "0010"
+    with unit_of_work(session_factory, scope) as session:
+        assert session.scalar(select(FiscalYear.code).where(FiscalYear.code == "2026")) == "2026"

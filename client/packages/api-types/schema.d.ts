@@ -270,6 +270,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config-packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Config Packages
+         * @description Mọi gói cấu hình đã có trong dataset — dựng sẵn lẫn nhập thêm, mới nhất trước.
+         */
+        get: operations["list_config_packages_api_v1_config_packages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config-packages/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Config Package
+         * @description Nhập một gói `.zip` đã ký (RT-07). Sai chữ ký/checksum/cấu trúc → từ
+         *     chối cả gói, không ghi gì (`importer.import_package`).
+         *
+         *     Đọc trọn nội dung tệp **trước** khi mở transaction ghi: verify chữ ký +
+         *     checksum là việc CPU-bound, không cần giữ transaction DB mở trong lúc đó.
+         */
+        post: operations["import_config_package_api_v1_config_packages_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config-packages/{package_id}/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Package Accounts
+         * @description Toàn bộ cây TK của một gói — kể cả TK ngừng dùng (màn hình quản trị gói,
+         *     khác `GET /api/v1/accounts` là tra theo ngày hạch toán cho form chứng từ).
+         */
+        get: operations["get_package_accounts_api_v1_config_packages__package_id__accounts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config-packages/{package_id}/actions/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate Config Package
+         * @description Kích hoạt một gói cấu hình (FR-SYS-004). Chặn khi đổi `scheme` trên dữ
+         *     liệu đã có chứng từ theo chế độ khác — xem `activator.activate`.
+         */
+        post: operations["activate_config_package_api_v1_config_packages__package_id__actions_activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dimensions": {
         parameters: {
             query?: never;
@@ -6303,6 +6389,11 @@ export interface components {
             /** Mã SWIFT */
             swift_code?: string | null;
         };
+        /** Body_import_config_package_api_v1_config_packages_import_post */
+        Body_import_config_package_api_v1_config_packages_import_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_attachment_api_v1_attachments_post */
         Body_upload_attachment_api_v1_attachments_post: {
             /** Entity Id */
@@ -6568,6 +6659,88 @@ export interface components {
              * Format: password
              */
             new_password: string;
+        };
+        /**
+         * ConfigPackageAccountResponse
+         * @description Một TK trong cây hệ thống tài khoản của một gói cụ thể (màn hình quản trị gói).
+         *
+         *     Khác `AccountResponse` (`accounts_schemas.py`, tra TK theo ngày hạch toán
+         *     cho form chứng từ): endpoint này trả **cả cây** của đúng một gói, kể cả TK
+         *     ngừng dùng — người quản trị gói cần thấy toàn bộ, không phải chỉ phần đang
+         *     hiệu lực cho một ngày.
+         */
+        ConfigPackageAccountResponse: {
+            /** Balance Nature */
+            balance_nature: number;
+            /** Code */
+            code: string;
+            /** Detail Tracking */
+            detail_tracking: string[] | null;
+            /** Id */
+            id: number;
+            /** Is Foreign Currency */
+            is_foreign_currency: boolean;
+            /** Is Inactive */
+            is_inactive: boolean;
+            /** Is Locked */
+            is_locked: boolean;
+            /** Is Summary */
+            is_summary: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+        };
+        /** ConfigPackageAccountsResponse */
+        ConfigPackageAccountsResponse: {
+            /** Items */
+            items: components["schemas"]["ConfigPackageAccountResponse"][];
+            /** Package Id */
+            package_id: number;
+        };
+        /** ConfigPackageListResponse */
+        ConfigPackageListResponse: {
+            /** Items */
+            items: components["schemas"]["ConfigPackageResponse"][];
+        };
+        /**
+         * ConfigPackageResponse
+         * @description Một gói cấu hình — dòng của `config_packages`.
+         */
+        ConfigPackageResponse: {
+            /** Activated At */
+            activated_at: string | null;
+            /** Activated By */
+            activated_by: number | null;
+            /** Code */
+            code: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to: string | null;
+            /** Id */
+            id: number;
+            /** Is Builtin */
+            is_builtin: boolean;
+            /** Legal Reference */
+            legal_reference: string | null;
+            /** Name */
+            name: string;
+            /** Scheme */
+            scheme: string;
+            /** Version */
+            version: number;
         };
         /**
          * ContractsCreateRequest
@@ -10156,6 +10329,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TotpEnrollResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_config_packages_api_v1_config_packages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigPackageListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    import_config_package_api_v1_config_packages_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_config_package_api_v1_config_packages_import_post"];
+            };
+        };
+        responses: {
+            /** @description Lần gửi lại: gói đã nhập */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigPackageResponse"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigPackageResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_package_accounts_api_v1_config_packages__package_id__accounts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigPackageAccountsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    activate_config_package_api_v1_config_packages__package_id__actions_activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lần gửi lại: gói hiện tại */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigPackageResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
