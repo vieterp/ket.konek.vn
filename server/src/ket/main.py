@@ -53,6 +53,7 @@ from ket.api.routers.attachments import router as attachments_router
 from ket.api.routers.auth import router as auth_router
 from ket.api.routers.dimensions import router as dimensions_router
 from ket.api.routers.exports import router as exports_router
+from ket.api.routers.gl_journal import router as gl_journal_router
 from ket.api.routers.imports import router as imports_router
 from ket.api.routers.items_units import router as item_units_router
 from ket.api.routers.items_variants import router as item_variants_router
@@ -63,6 +64,7 @@ from ket.api.routers.setup import router as setup_router
 from ket.api.routers.system import router as system_router
 from ket.api.routers.system_settings import router as settings_router
 from ket.api.routers.updates import router as updates_router
+from ket.api.routers.vouchers import router as vouchers_router
 from ket.kernel.datasets.bootstrap import verify_control_schema
 from ket.kernel.datasets.provisioning import find_alembic_config, verify_dataset_schema_version
 from ket.kernel.datasets.service import list_datasets
@@ -251,6 +253,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(item_variants_router)
     app.include_router(setup_router)
     app.include_router(dimensions_router)
+    # Phase 4 — posting engine: chứng từ nghiệp vụ khác + hành động chứng từ
+    # dùng chung (ghi sổ / bỏ ghi sổ / xóa).
+    app.include_router(gl_journal_router)
+    app.include_router(vouchers_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

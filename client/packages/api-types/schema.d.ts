@@ -321,6 +321,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/gl/journal-vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Journal Voucher
+         * @description Cất chứng từ; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.
+         *
+         *     Khi chế độ Cất-đồng-thời-ghi-sổ bật, người tạo phải có **cả** quyền `post`
+         *     — kiểm trong `work` vì chỉ service mới biết tùy chọn đang bật hay không;
+         *     ném ở đó thì khóa idempotency và số chứng từ cùng rollback.
+         */
+        post: operations["create_journal_voucher_api_v1_gl_journal_vouchers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gl/journal-vouchers/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Journal Voucher */
+        get: operations["get_journal_voucher_api_v1_gl_journal_vouchers__voucher_id__get"];
+        /**
+         * Update Journal Voucher
+         * @description Sửa chứng từ Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).
+         *
+         *     Không cần khóa idempotency: gửi lại cùng `row_version` thì lần thứ hai đã
+         *     bị chính khóa lạc quan chặn (`409`), và bản thân phép ghi là thay-thế-trọn
+         *     nên không nhân đôi được gì.
+         */
+        put: operations["update_journal_voucher_api_v1_gl_journal_vouchers__voucher_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs": {
         parameters: {
             query?: never;
@@ -5507,6 +5556,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Vouchers
+         * @description Danh sách chứng từ, lọc theo loại/kỳ/trạng thái/chi nhánh, mới nhất trước.
+         *
+         *     Không nêu `type` thì trả về chứng từ của **những loại người gọi được xem**
+         *     — mỗi loại một mã quyền `view`, và danh sách trộn không được là đường vòng
+         *     qua phân quyền của một loại. RLS đã lọc chi nhánh trước khi mã này chạy.
+         */
+        get: operations["list_vouchers_api_v1_vouchers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vouchers/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Voucher
+         * @description Xóa chứng từ Đã cất. Lặp lại cho `404` — tự nhiên đã idempotent.
+         *
+         *     Số chứng từ không tái sử dụng (máy trạng thái); bảng chi tiết module đi
+         *     theo `ON DELETE CASCADE`.
+         */
+        delete: operations["delete_voucher_api_v1_vouchers__voucher_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vouchers/{voucher_id}/actions/post": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Voucher
+         * @description Ghi sổ một chứng từ Đã cất (SRS 00 §3.3, FR-NFR-003).
+         */
+        post: operations["post_voucher_api_v1_vouchers__voucher_id__actions_post_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vouchers/{voucher_id}/actions/unpost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unpost Voucher
+         * @description Bỏ ghi sổ — chứng từ về Đã cất, dòng sổ bị xóa (không phải bút toán đảo).
+         */
+        post: operations["unpost_voucher_api_v1_vouchers__voucher_id__actions_unpost_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -6746,6 +6882,13 @@ export interface components {
             /** Row Version */
             row_version: number;
         };
+        /** ExtendedDimensionIn */
+        ExtendedDimensionIn: {
+            /** Dimension Id */
+            dimension_id: number;
+            /** Value Id */
+            value_id: number;
+        };
         /**
          * GrantResponse
          * @description `changed=False` nghĩa là đã có sẵn — gọi lại không phải lỗi.
@@ -7237,6 +7380,222 @@ export interface components {
             resume_semantics: string;
         };
         /**
+         * JournalLineIn
+         * @description Một dòng định khoản gửi lên — nguyên tệ + tỷ giá là bắt buộc.
+         */
+        JournalLineIn: {
+            /** Account Id */
+            account_id: number;
+            /** Contract Id */
+            contract_id?: number | null;
+            /** Corresponding Account Id */
+            corresponding_account_id?: number | null;
+            /** Cost Object Id */
+            cost_object_id?: number | null;
+            /** Credit */
+            credit?: number | string | null;
+            /**
+             * Credit Fc
+             * @default 0
+             */
+            credit_fc: number | string;
+            /** Currency Code */
+            currency_code?: string | null;
+            /** Debit */
+            debit?: number | string | null;
+            /**
+             * Debit Fc
+             * @default 0
+             */
+            debit_fc: number | string;
+            /** Description */
+            description?: string | null;
+            /** Exchange Rate */
+            exchange_rate?: number | string | null;
+            /** Expense Item Id */
+            expense_item_id?: number | null;
+            /**
+             * Extended
+             * @default []
+             */
+            extended: components["schemas"]["ExtendedDimensionIn"][];
+            /** Item Id */
+            item_id?: number | null;
+            /** Order Id */
+            order_id?: number | null;
+            /** Partner Id */
+            partner_id?: number | null;
+            partner_kind?: components["schemas"]["PartnerKind"] | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Warehouse Id */
+            warehouse_id?: number | null;
+        };
+        /** JournalLineOut */
+        JournalLineOut: {
+            /** Account Id */
+            account_id: number;
+            /** Contract Id */
+            contract_id: number | null;
+            /** Corresponding Account Id */
+            corresponding_account_id: number | null;
+            /** Cost Object Id */
+            cost_object_id: number | null;
+            /** Credit Fc */
+            credit_fc: string;
+            /** Currency Code */
+            currency_code: string;
+            /** Debit Fc */
+            debit_fc: string;
+            /** Description */
+            description: string | null;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /** Expense Item Id */
+            expense_item_id: number | null;
+            /** Extended Dimensions */
+            extended_dimensions: {
+                [key: string]: number;
+            } | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Item Id */
+            item_id: number | null;
+            /** Line No */
+            line_no: number;
+            /** Order Id */
+            order_id: number | null;
+            /** Partner Id */
+            partner_id: number | null;
+            /** Partner Kind */
+            partner_kind: number | null;
+            /** Project Id */
+            project_id: number | null;
+            /** Warehouse Id */
+            warehouse_id: number | null;
+        };
+        /**
+         * JournalVoucherIn
+         * @description Thân chứng từ cho cả tạo mới lẫn sửa (PUT gửi trọn bộ dòng thay thế).
+         */
+        JournalVoucherIn: {
+            /** Branch Id */
+            branch_id: number;
+            /** Cashflow Activity */
+            cashflow_activity?: number | null;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Lines */
+            lines: components["schemas"]["JournalLineIn"][];
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+        };
+        /** JournalVoucherOut */
+        JournalVoucherOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Cashflow Activity */
+            cashflow_activity: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Document Type */
+            document_type: string;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["JournalLineOut"][];
+            /** Period Id */
+            period_id: number;
+            /** Posted At */
+            posted_at: string | null;
+            /** Posted By */
+            posted_by: number | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Row Version */
+            row_version: number;
+            /** Status */
+            status: number;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /**
+         * JournalVoucherUpdate
+         * @description PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).
+         */
+        JournalVoucherUpdate: {
+            /** Branch Id */
+            branch_id: number;
+            /** Cashflow Activity */
+            cashflow_activity?: number | null;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Lines */
+            lines: components["schemas"]["JournalLineIn"][];
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
          * LoginRequest
          * @description Đăng nhập. `totp_code` chỉ cần cho tài khoản bắt buộc 2FA.
          *
@@ -7441,6 +7800,16 @@ export interface components {
             /** Row Version */
             row_version: number;
         };
+        /**
+         * PartnerKind
+         * @description Loại đối tác trên dòng hạch toán — `0 customer 1 vendor 2 employee`.
+         *
+         *     Một cột `partner_id` + một cột loại, chứ không ba cột khóa riêng: TK 131
+         *     theo dõi khách, 331 theo dõi nhà cung cấp, 141 theo dõi nhân viên — mỗi
+         *     dòng chỉ có **một** đối tượng công nợ, và ba cột sẽ cho phép điền hai.
+         * @enum {integer}
+         */
+        PartnerKind: 0 | 1 | 2;
         /**
          * PartnersCreateRequest
          * @description Đối tác — tạo mới.
@@ -8520,6 +8889,69 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** VoucherListResponse */
+        VoucherListResponse: {
+            /** Items */
+            items: components["schemas"]["VoucherResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * VoucherResponse
+         * @description Header chứng từ — đủ cho danh sách và cho phản hồi của hành động.
+         */
+        VoucherResponse: {
+            /** Branch Id */
+            branch_id: number;
+            /** Cashflow Activity */
+            cashflow_activity: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Document Type */
+            document_type: string;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Period Id */
+            period_id: number;
+            /** Posted At */
+            posted_at: string | null;
+            /** Posted By */
+            posted_by: number | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Row Version */
+            row_version: number;
+            /** Status */
+            status: number;
+            /** Voucher No */
+            voucher_no: string;
+        };
         /**
          * WarehousesCreateRequest
          * @description Kho — tạo mới.
@@ -9107,6 +9539,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DimensionValueResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_journal_voucher_api_v1_gl_journal_vouchers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JournalVoucherIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JournalVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_journal_voucher_api_v1_gl_journal_vouchers__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JournalVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_journal_voucher_api_v1_gl_journal_vouchers__voucher_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JournalVoucherUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JournalVoucherOut"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -17426,6 +17957,133 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GrantResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_vouchers_api_v1_vouchers_get: {
+        parameters: {
+            query?: {
+                type?: string | null;
+                period_id?: number | null;
+                status?: number | null;
+                branch_id?: number | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_voucher_api_v1_vouchers__voucher_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    post_voucher_api_v1_vouchers__voucher_id__actions_post_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    unpost_voucher_api_v1_vouchers__voucher_id__actions_unpost_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

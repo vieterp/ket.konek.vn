@@ -132,6 +132,7 @@ def _check_bounds(definition: SettingDefinition, number: int) -> None:
 MONEY_SCALE_KEY: Final[str] = "money.scale"
 LOCALE_KEY: Final[str] = "ui.locale"
 GRID_ENTER_KEY: Final[str] = "ui.grid_enter_moves_to_next_row"
+SAVE_ALSO_POSTS_KEY: Final[str] = "posting.save_also_posts"
 
 CATALOG: Final[dict[str, SettingDefinition]] = {
     definition.key: definition
@@ -171,6 +172,20 @@ CATALOG: Final[dict[str, SettingDefinition]] = {
             # chậm một nửa số người nhập liệu.
             scopes=frozenset({SettingScope.SYSTEM, SettingScope.USER}),
             description="Phím Enter chuyển xuống dòng kế trong lưới nhập liệu",
+        ),
+        SettingDefinition(
+            key=SAVE_ALSO_POSTS_KEY,
+            value_type=ValueType.BOOLEAN,
+            default=FALSE_LITERAL,
+            # Chế độ ghi sổ (FR-SYS-061, SRS 01 §8.2): "Cất đồng thời ghi sổ"
+            # hay "Cất không ghi sổ". Cấp hệ thống, không theo người: hai kế
+            # toán viên cùng một quy trình phải cho ra chứng từ ở cùng trạng
+            # thái, nếu không tab "chưa ghi sổ" (U1) của mỗi người nói một kiểu.
+            #
+            # Mặc định **tắt** — Cất và Ghi sổ là hai bước tách bạch (SRS 00
+            # §3.3). Bật là lựa chọn của đơn vị muốn bỏ bước duyệt trung gian.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Cất chứng từ thì ghi sổ luôn trong cùng một lần lưu",
         ),
     )
 }

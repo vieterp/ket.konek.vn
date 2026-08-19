@@ -1094,3 +1094,108 @@ class ImportParentUnresolvableError(DomainError):
     """
 
     error_code: ClassVar[str] = "import.parent_unresolvable"
+
+
+class ConfigPackageNotFoundError(DomainError):
+    """Không có gói cấu hình nào hiệu lực cho chế độ kế toán tại ngày này.
+
+    Xảy ra khi ghi sổ vào một ngày mà chưa gói TT200/TT133 nào phủ
+    (`effective_from`/`effective_to`). Cách sửa nằm ở màn hình gói cấu hình,
+    không phải ở chứng từ — nên thông điệp phải chỉ về đó.
+    """
+
+    error_code: ClassVar[str] = "config.package_not_found"
+
+
+class AccountNotFoundError(DomainError):
+    """Số hiệu tài khoản không có trong gói cấu hình đang hiệu lực."""
+
+    error_code: ClassVar[str] = "account.not_found"
+
+
+class VoucherNotFoundError(DomainError):
+    """Chứng từ không tồn tại trong dữ liệu kế toán đang mở."""
+
+    error_code: ClassVar[str] = "voucher.not_found"
+    http_status: ClassVar[int] = 404
+
+
+class VoucherTransitionError(DomainError):
+    """Thao tác không hợp lệ với trạng thái hiện tại của chứng từ.
+
+    Mã lỗi mang cả trạng thái hiện tại lẫn thao tác bị từ chối: client dựng
+    được câu "chứng từ đã ghi sổ nên không xóa được — bỏ ghi sổ trước", thay vì
+    một câu chung chung bắt người dùng tự đoán bước còn thiếu.
+    """
+
+    error_code: ClassVar[str] = "voucher.invalid_transition"
+
+
+class VoucherBranchImmutableError(DomainError):
+    """Chi nhánh của chứng từ đã cất không đổi được.
+
+    Số chứng từ cấp theo **dãy của chi nhánh** (`per_branch`, FR-NFR-006): mang
+    số của chi nhánh A sang chi nhánh B thì hoặc đụng ràng buộc duy nhất, hoặc
+    chiếm chỗ một số mà bộ đếm của B chưa cấp — và lần Cất kế tiếp của B đổ vĩnh
+    viễn. Đổi chi nhánh = xóa chứng từ rồi lập lại ở chi nhánh đúng, mỗi bước có
+    vết riêng.
+    """
+
+    error_code: ClassVar[str] = "voucher.branch_immutable"
+
+
+class PostingViolation:
+    """Một vi phạm mà validator ghi sổ tìm thấy — dạng dữ liệu, không phải ngoại lệ.
+
+    Lớp thường chứ không dataclass Pydantic: kernel không phụ thuộc tầng API,
+    và thứ duy nhất cần là chuyển được thành JSON cho `problem_extra`.
+    """
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        ledger: int | None = None,
+        line_no: int | None = None,
+        **details: str | int | None,
+    ) -> None:
+        self.code = code
+        self.message = message
+        self.ledger = ledger
+        self.line_no = line_no
+        self.details = details
+
+    def as_json(self) -> dict[str, Any]:
+        body: dict[str, Any] = {"code": self.code, "message": self.message}
+        if self.ledger is not None:
+            body["ledger"] = self.ledger
+        if self.line_no is not None:
+            body["line_no"] = self.line_no
+        if self.details:
+            body["details"] = self.details
+        return body
+
+
+class PostingValidationError(DomainError):
+    """Chứng từ không đủ điều kiện ghi sổ — mang **toàn bộ** vi phạm.
+
+    Validator chạy hết rồi mới ném (phase-04 §Posting engine): người dùng sửa
+    một lượt thay vì sửa–gửi–lại-lỗi từng vòng. Danh sách vi phạm đi trong
+    `problem_extra` vì `details` chỉ nhận vô hướng.
+    """
+
+    error_code: ClassVar[str] = "posting.invalid"
+
+    def __init__(self, message: str, *, violations: list[PostingViolation]) -> None:
+        super().__init__(message, violation_count=len(violations))
+        self.violations = violations
+
+    def problem_extra(self) -> dict[str, Any]:
+        return {"violations": [violation.as_json() for violation in self.violations]}
+
+
+class DocumentTypeUnknownError(DomainError):
+    """Loại chứng từ chưa được module nào đăng ký với posting engine."""
+
+    error_code: ClassVar[str] = "voucher.document_type_unknown"

@@ -26,6 +26,7 @@ from ket.kernel.attachments import models as attachment_models
 from ket.kernel.auditing import control_log as control_audit_models
 from ket.kernel.auditing import models as auditing_models
 from ket.kernel.bank_import import profile_models as bank_import_models
+from ket.kernel.config import accounts_models
 from ket.kernel.currency import models as currency_models
 from ket.kernel.datasets import models as control_models
 from ket.kernel.dimensions import models as dimension_models
@@ -39,24 +40,35 @@ from ket.kernel.periods import models as period_models
 from ket.kernel.persistence.base import ControlBase, DatasetBase
 from ket.kernel.security import auth_models
 from ket.kernel.security import models as security_models
+from ket.modules.general_ledger.journal import models as gl_journal_models
+from ket.posting.balances import models as balance_models
+from ket.posting.documents import models as voucher_models
+from ket.posting.engine import models as gl_posting_models
+from ket.posting.opening_balances import models as opening_balance_models
 
 __all__ = [
     "ControlBase",
     "DatasetBase",
+    "accounts_models",
     "attachment_models",
     "auditing_models",
     "auth_models",
+    "balance_models",
     "bank_import_models",
     "control_audit_models",
     "control_models",
     "currency_models",
     "dimension_models",
     "excel_models",
+    "gl_journal_models",
+    "gl_posting_models",
     "idempotency_models",
     "jobs_models",
     "master_data_models",
     "master_data_usage_models",
     "numbering_models",
+    "opening_balance_models",
     "period_models",
     "security_models",
+    "voucher_models",
 ]
