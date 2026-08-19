@@ -33,6 +33,12 @@ ALLOWED_FILES: dict[str, str] = {
         "CREATE/DROP SCHEMA + đọc `alembic_version` của một schema cụ thể: tên schema là "
         "identifier, không tham số hóa được, đã qua `validate_schema_name`"
     ),
+    "posting/integrity/runner.py": (
+        "Bọc `SELECT count(*)/LIMIT` quanh câu check đọc từ tệp `.sql` ĐÓNG GÓI cùng mã "
+        "nguồn (`importlib.resources`, registry đóng) — cùng hạng tin cậy với chuỗi bọc, "
+        "không phải dữ liệu ngoài; mọi giá trị động (`branch_id`, `sample_limit`) vẫn đi "
+        "qua tham số ràng buộc"
+    ),
 }
 """Tệp được phép ghép chuỗi vào SQL, kèm lý do.
 

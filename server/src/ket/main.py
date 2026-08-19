@@ -62,6 +62,7 @@ from ket.api.routers.ledger import router as ledger_router
 from ket.api.routers.master_data import router as master_data_router
 from ket.api.routers.opening_balances import router as opening_balances_router
 from ket.api.routers.partners import router as partner_bank_accounts_router
+from ket.api.routers.period_lock import router as period_lock_router
 from ket.api.routers.setup import router as setup_router
 from ket.api.routers.system import router as system_router
 from ket.api.routers.system_settings import router as settings_router
@@ -261,6 +262,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(vouchers_router)
     app.include_router(ledger_router)
     app.include_router(opening_balances_router)
+    app.include_router(period_lock_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

@@ -5389,6 +5389,38 @@
         "title": "JournalVoucherUpdate",
         "type": "object"
       },
+      "LockWarningResponse": {
+        "description": "Một việc còn dở mà lượt khóa cho qua nhưng phải nói ra (U11).",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "sample": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sample",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "count",
+          "sample"
+        ],
+        "title": "LockWarningResponse",
+        "type": "object"
+      },
       "LoginRequest": {
         "description": "Đăng nhập. `totp_code` chỉ cần cho tài khoản bắt buộc 2FA.\n\nClient bình thường gửi lần đầu **không** kèm mã; nhận `auth.totp_required`\nthì hỏi mã rồi gửi lại. Nhờ vậy màn hình đăng nhập không phải hỏi mã 2FA của\nnhững người không dùng 2FA.",
         "properties": {
@@ -7151,6 +7183,255 @@
           "is_active"
         ],
         "title": "PaymentTermsUpdateRequest",
+        "type": "object"
+      },
+      "PendingIssueGroupResponse": {
+        "description": "Việc còn thiếu của MỘT loại chứng từ (U1): đếm + mẫu, kèm mã hành động.\n\n`next_action` là mã máy (`post`) chứ không phải nhãn tiếng Việt: nhãn\n\"Ghi sổ\" thuộc tầng i18n của client, còn mã thì client dùng để dựng đúng\nnút gọi `POST /vouchers/{id}/actions/post`.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "next_action": {
+            "title": "Next Action",
+            "type": "string"
+          },
+          "sample": {
+            "items": {
+              "$ref": "#/components/schemas/PendingVoucherResponse"
+            },
+            "title": "Sample",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_type",
+          "title",
+          "count",
+          "next_action",
+          "sample"
+        ],
+        "title": "PendingIssueGroupResponse",
+        "type": "object"
+      },
+      "PendingIssuesResponse": {
+        "description": "Nguồn của tab \"việc còn thiếu\" (U1) — phase 4 có hai loại việc:\nchứng từ Đã cất chưa ghi sổ và kỳ đang chờ tính lại số dư.",
+        "properties": {
+          "recalc_pending": {
+            "items": {
+              "$ref": "#/components/schemas/PendingRecalcResponse"
+            },
+            "title": "Recalc Pending",
+            "type": "array"
+          },
+          "unposted": {
+            "items": {
+              "$ref": "#/components/schemas/PendingIssueGroupResponse"
+            },
+            "title": "Unposted",
+            "type": "array"
+          }
+        },
+        "required": [
+          "unposted",
+          "recalc_pending"
+        ],
+        "title": "PendingIssuesResponse",
+        "type": "object"
+      },
+      "PendingRecalcResponse": {
+        "description": "Một dấu bẩn trong hàng đợi tính lại — kỳ nhìn thấy số liệu chưa chốt.",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "from_period_id": {
+            "title": "From Period Id",
+            "type": "integer"
+          },
+          "ledger": {
+            "title": "Ledger",
+            "type": "integer"
+          },
+          "marked_at": {
+            "format": "date-time",
+            "title": "Marked At",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "ledger",
+          "branch_id",
+          "from_period_id",
+          "marked_at",
+          "reason"
+        ],
+        "title": "PendingRecalcResponse",
+        "type": "object"
+      },
+      "PendingVoucherResponse": {
+        "description": "Một chứng từ Đã cất chưa ghi sổ — đủ để UI mở đúng chứng từ.",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "period_id": {
+            "title": "Period Id",
+            "type": "integer"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "voucher_no",
+          "branch_id",
+          "posting_date",
+          "period_id",
+          "description"
+        ],
+        "title": "PendingVoucherResponse",
+        "type": "object"
+      },
+      "PeriodLockResponse": {
+        "properties": {
+          "period": {
+            "$ref": "#/components/schemas/PeriodResponse"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/LockWarningResponse"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "period",
+          "warnings"
+        ],
+        "title": "PeriodLockResponse",
+        "type": "object"
+      },
+      "PeriodResponse": {
+        "description": "Dòng kỳ sau thao tác — đủ để màn hình khóa sổ vẽ lại trạng thái.",
+        "properties": {
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "fiscal_year_id": {
+            "title": "Fiscal Year Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "locked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked At"
+          },
+          "locked_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked By"
+          },
+          "period_no": {
+            "title": "Period No",
+            "type": "integer"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fiscal_year_id",
+          "period_no",
+          "start_date",
+          "end_date",
+          "locked_at",
+          "locked_by"
+        ],
+        "title": "PeriodResponse",
+        "type": "object"
+      },
+      "PeriodUnlockRequest": {
+        "description": "Mở kỳ bắt buộc nêu lý do — nó đi thẳng vào `audit_log` (FR-GLE-031).\n\n`strip_whitespace` trước `min_length`: một chuỗi toàn khoảng trắng là \"không\ncó lý do\" mặc áo hợp lệ, và chỗ nó lộ ra là bản ghi kiểm toán — quá muộn.",
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "PeriodUnlockRequest",
         "type": "object"
       },
       "PitTablesCreateRequest": {
@@ -22179,6 +22460,102 @@
         ]
       }
     },
+    "/api/v1/periods/{period_id}/actions/lock": {
+      "post": {
+        "description": "Khóa sổ một kỳ (RT-09, U11). Cảnh báo trong response, không nằm trong khóa replay.\n\nLần gửi lại trả về dòng kỳ với danh sách cảnh báo **rỗng**: khóa idempotency\nlưu *tham chiếu* kết quả chứ không phải thân response (RT-12), và cảnh báo\nlà thông tin của đúng khoảnh khắc khóa — phát lại một con số đếm cũ còn dễ\ngây hiểu nhầm hơn là không nói gì.",
+        "operationId": "lock_period_api_v1_periods__period_id__actions_lock_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "period_id",
+            "required": true,
+            "schema": {
+              "title": "Period Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeriodLockResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Lock Period",
+        "tags": [
+          "periods"
+        ]
+      }
+    },
+    "/api/v1/periods/{period_id}/actions/unlock": {
+      "post": {
+        "description": "Mở lại kỳ đã khóa — quyền riêng + lý do bắt buộc, ghi audit (FR-GLE-031).",
+        "operationId": "unlock_period_api_v1_periods__period_id__actions_unlock_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "period_id",
+            "required": true,
+            "schema": {
+              "title": "Period Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeriodUnlockRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeriodLockResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Unlock Period",
+        "tags": [
+          "periods"
+        ]
+      }
+    },
     "/api/v1/setup/settings-groups": {
       "get": {
         "description": "Thiết lập chia hai nhóm: đổi bất kỳ lúc nào / chốt một lần (U14).\n\nPhân nhóm theo hệ quả là toàn bộ điểm của màn hình này. Một danh sách phẳng\nxếp \"ngôn ngữ giao diện\" cạnh \"phương pháp tính giá xuất kho\" nói rằng hai\nthứ đó cùng mức rủi ro — trong khi đổi cái thứ hai giữa năm làm giá vốn của\nmọi phiếu xuất còn lại tính theo một luật khác.",
@@ -22900,6 +23277,38 @@
           }
         },
         "summary": "List Vouchers",
+        "tags": [
+          "vouchers"
+        ]
+      }
+    },
+    "/api/v1/vouchers/pending-issues": {
+      "get": {
+        "description": "BFF cho tab \"việc còn thiếu\" (U1, phase-04 bước 16).\n\nHai nguồn việc của phase 4, cả hai trong `ket.posting` — đây là BFF theo\nnghĩa \"một màn hình đọc nhiều bảng\", không phải cửa ngang qua phân quyền:\nnhóm chứng từ lọc theo quyền `view` từng loại (cùng luật `list_vouchers`),\nhàng đợi tính lại đòi `posting.balance.view`, và RLS lọc chi nhánh trước\nkhi mã này chạy.",
+        "operationId": "pending_issues_api_v1_vouchers_pending_issues_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingIssuesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Pending Issues",
         "tags": [
           "vouchers"
         ]

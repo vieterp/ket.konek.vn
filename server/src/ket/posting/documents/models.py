@@ -61,7 +61,15 @@ class VoucherStatus(IntEnum):
     """Đã ghi sổ — có dòng trong `gl_postings`, xuất hiện trên báo cáo (N1)."""
 
     DA_KHOA_SO = 3
-    """Thuộc kỳ đã khóa — bất động cho tới khi kỳ được mở lại (phase 4D)."""
+    """Thuộc kỳ đã khóa — bất động cho tới khi kỳ được mở lại.
+
+    **Không bao giờ được ghi vào cột `status`** (quyết định 4D): nguồn sự thật
+    là `accounting_periods.locked_at`, và trạng thái này là dữ liệu **suy ra**
+    lúc đọc (chứng từ Đã ghi sổ + kỳ của nó đã khóa). Ghi nó xuống hàng nghĩa
+    là mỗi lần khóa/mở kỳ phải UPDATE hàng loạt voucher — O(n) giữ `FOR UPDATE`
+    trên dòng kỳ, một trận diff vô nghĩa vào `audit_log`, và hai nguồn sự thật
+    thì một trong hai sẽ nói dối. Giá trị 3 giữ chỗ trong dãy để client nào
+    muốn hiển thị nó có một mã ổn định."""
 
     DA_HUY = 4
     """Đã hủy — giữ số chứng từ (số không tái sử dụng), dùng từ phase 7."""

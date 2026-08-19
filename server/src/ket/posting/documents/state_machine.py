@@ -26,8 +26,6 @@ class VoucherAction(StrEnum):
     POST = "post"
     UNPOST = "unpost"
     DELETE = "delete"
-    LOCK = "lock"
-    UNLOCK = "unlock"
     CANCEL = "cancel"
 
 
@@ -38,11 +36,16 @@ TRANSITIONS: Final[dict[tuple[VoucherStatus, VoucherAction], VoucherStatus | Non
     # tái sử dụng (bảng chuyển của phase-04) — dãy có thể thủng với chứng từ
     # nội bộ (`allow_gaps=True`), còn dãy liên tục thì đi đường Hủy giữ số.
     (VoucherStatus.DA_CAT, VoucherAction.DELETE): None,
-    (VoucherStatus.DA_GHI_SO, VoucherAction.LOCK): VoucherStatus.DA_KHOA_SO,
-    (VoucherStatus.DA_KHOA_SO, VoucherAction.UNLOCK): VoucherStatus.DA_GHI_SO,
     (VoucherStatus.DA_CAT, VoucherAction.CANCEL): VoucherStatus.DA_HUY,
 }
-"""Mọi cạnh hợp lệ. Vắng mặt = bị từ chối — không có nhánh mặc định."""
+"""Mọi cạnh hợp lệ. Vắng mặt = bị từ chối — không có nhánh mặc định.
+
+Khóa/mở kỳ **không phải** một cạnh ở đây (quyết định 4D): `DA_KHOA_SO` là
+trạng thái suy ra từ `accounting_periods.locked_at` lúc đọc, không ai ghi nó
+xuống hàng (xem docstring `VoucherStatus.DA_KHOA_SO`). Chứng từ trong kỳ đã
+khóa vẫn bất động — nhưng bởi `PostingService` kiểm kỳ (FOR SHARE, RT-09) và
+trigger `gl_postings_period_guard`, không phải bởi một trạng thái được chép
+xuống từng dòng."""
 
 
 def transition(status: VoucherStatus, action: VoucherAction) -> VoucherStatus | None:

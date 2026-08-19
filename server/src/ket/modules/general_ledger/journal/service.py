@@ -21,6 +21,7 @@ from ket.kernel.errors import (
     VoucherBranchImmutableError,
 )
 from ket.kernel.money import convert_currency
+from ket.kernel.numbering.models import ResetRule
 from ket.kernel.numbering.service import NumberingRule
 from ket.kernel.persistence.versioning import require_row_version
 from ket.modules.general_ledger.journal import JOURNAL_DOCUMENT_TYPE
@@ -34,10 +35,19 @@ from ket.posting.contracts import (
     VoucherService,
 )
 
-JOURNAL_NUMBERING_RULE = NumberingRule(document_type=JOURNAL_DOCUMENT_TYPE, prefix="GLE")
+JOURNAL_NUMBERING_RULE = NumberingRule(
+    document_type=JOURNAL_DOCUMENT_TYPE, prefix="GLE", reset_rule=ResetRule.NEVER
+)
 """Quy tắc đánh số mặc định. Từ phase 5 quy tắc là dữ liệu của gói cấu hình
 (FR-SYS-063) và sẽ được tra thay vì hằng này — chữ ký `create` đã nhận rule
-từ ngoài nên chỗ đổi khu trú ở đây."""
+từ ngoài nên chỗ đổi khu trú ở đây.
+
+`NEVER` chứ không `YEARLY` (phát hiện ở 4D khi test chạy nhiều niên độ):
+`uq_vouchers_type_branch_no` duy nhất theo (loại, chi nhánh, số) **không có
+chiều năm**, nên một dãy reset hằng năm sẽ cấp lại `GLE00001` vào tháng 1 năm
+sau và chứng từ đầu tiên của năm mới chết bằng lỗi trùng khóa. Đánh số lại
+theo năm quay lại ở phase 5, khi định dạng số (do gói cấu hình quyết) mang
+được thành phần năm — còn một dãy chạy suốt thì không bao giờ đụng ràng buộc."""
 
 
 class JournalVoucherService:

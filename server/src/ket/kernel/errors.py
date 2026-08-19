@@ -907,6 +907,75 @@ class PeriodClosedError(DomainError):
     error_code: ClassVar[str] = "period.closed"
 
 
+class IntegrityCheckUnknownError(DomainError):
+    """Yêu cầu chạy một phép kiểm toàn vẹn không có trong registry."""
+
+    error_code: ClassVar[str] = "integrity.check_unknown"
+
+
+class PeriodNotLockedError(DomainError):
+    """Mở khóa một kỳ đang mở — không có gì để mở.
+
+    Lỗi riêng chứ không phải no-op im lặng: "mở kỳ" là thao tác có quyền riêng
+    và có lý do bắt buộc; một lượt gọi vào kỳ đang mở gần như chắc chắn là nhầm
+    kỳ, và nhật ký của một thao tác không-làm-gì sẽ đánh lừa người kiểm toán.
+    """
+
+    error_code: ClassVar[str] = "period.not_locked"
+
+
+class PeriodLockSequenceError(DomainError):
+    """Khóa/mở kỳ phải tuần tự trong một niên độ (bàn giao 4B→4D, review L-B).
+
+    Recalc snapshot viết lại cả kỳ **đã khóa** khi kỳ trước nó đổi — đúng thiết
+    kế, nhưng chỉ an toàn khi "đã khóa" đồng nghĩa "mọi kỳ trước cũng đã khóa":
+    lúc đó không còn đường ghi nào đổi được kỳ trước nữa. Khóa kỳ 2 khi kỳ 1
+    còn mở phá đúng bất biến đó; mở kỳ 3 khi kỳ 4 còn khóa cũng vậy, ở chiều
+    ngược lại.
+    """
+
+    error_code: ClassVar[str] = "period.lock_out_of_sequence"
+
+
+class PeriodRecalcPendingError(DomainError):
+    """Khóa kỳ khi hàng đợi tính lại còn dấu bẩn chạm tới kỳ đó.
+
+    Số của kỳ đã khóa là số **đã chốt**; một dấu bẩn còn nằm trong hàng đợi
+    nghĩa là snapshot của kỳ sẽ còn đổi sau khi khóa — báo cáo in ra trước và
+    sau lượt tính lại sẽ khác nhau. Chạy tính lại số dư cho hết dấu bẩn rồi
+    khóa (phase-04 §RT-09: kiểm **bên trong** transaction khóa, không phải
+    trước đó).
+    """
+
+    error_code: ClassVar[str] = "period.recalc_pending"
+
+
+class PeriodLockChecklistError(DomainError):
+    """Một mục **chặn** trong danh mục kiểm tra khóa sổ chưa xanh (U11).
+
+    Phase 4 mới có một mục chặn: số dư ban đầu của năm phải cân Nợ/Có trước khi
+    khóa kỳ đầu năm — 4C ghi lệch là *cảnh báo* đúng chữ FR-OPB-006, và chặn
+    cứng được hoãn tới cổng khóa sổ này. Danh mục đầy đủ (bút toán kết chuyển,
+    đối chiếu tồn kho…) thuộc phase 10a; mỗi mục thêm vào đây phải kèm `details`
+    chỉ thẳng chỗ sửa.
+    """
+
+    error_code: ClassVar[str] = "period.lock_checklist_failed"
+
+
+class PeriodLockScopeError(DomainError):
+    """Khóa kỳ đòi phạm vi mọi chi nhánh của dữ liệu kế toán.
+
+    Kỳ kế toán không thuộc chi nhánh nào — khóa nó là chốt số của **tất cả**
+    chi nhánh cùng lúc. Phép kiểm "hàng đợi tính lại rỗng" và "chứng từ chưa
+    ghi sổ" chạy dưới RLS, nên một phạm vi thiếu chi nhánh sẽ nhìn hàng đợi
+    của chi nhánh vắng mặt như thể rỗng — khóa mà không thấy việc còn dở
+    (bàn giao 4C→4D).
+    """
+
+    error_code: ClassVar[str] = "period.lock_scope_incomplete"
+
+
 class AccountingSchemeLockedError(DomainError):
     """Đổi chế độ kế toán (TT200 ↔ TT133) trên năm đã có chứng từ (FR-SYS-004).
 
