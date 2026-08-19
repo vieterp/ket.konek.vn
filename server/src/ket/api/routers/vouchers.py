@@ -28,11 +28,20 @@ from ket.api.dependencies import (
     SessionFactory,
 )
 from ket.api.idempotency import idempotency_key_dependency
-from ket.api.routers.vouchers_schemas import VoucherListResponse, VoucherResponse
+from ket.api.routers.vouchers_schemas import (
+    PendingIssueGroupResponse,
+    PendingIssuesResponse,
+    PendingRecalcResponse,
+    PendingVoucherResponse,
+    VoucherListResponse,
+    VoucherResponse,
+)
 from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action
-from ket.posting.documents.models import Voucher
+from ket.posting.balances.models import BalanceRecalcQueue
+from ket.posting.balances.recalc_job import BALANCE_VIEW
+from ket.posting.documents.models import Voucher, VoucherStatus
 from ket.posting.documents.registry import REGISTRY, PostingDocumentType
 from ket.posting.documents.service import VoucherService
 from ket.posting.engine.service import PostingService
@@ -107,6 +116,88 @@ def list_vouchers(
             page=page,
             page_size=page_size,
         )
+
+
+PENDING_SAMPLE_LIMIT: Final[int] = 10
+"""Số chứng từ nêu đích danh mỗi nhóm — tab U1 là bảng tóm tắt dẫn đường,
+danh sách đầy đủ nằm ở `GET /vouchers?status=1&type=…`."""
+
+
+@router.get("/pending-issues", response_model=PendingIssuesResponse)
+def pending_issues(
+    authorized: Authorized,
+    factory: SessionFactory,
+) -> PendingIssuesResponse:
+    """BFF cho tab "việc còn thiếu" (U1, phase-04 bước 16).
+
+    Hai nguồn việc của phase 4, cả hai trong `ket.posting` — đây là BFF theo
+    nghĩa "một màn hình đọc nhiều bảng", không phải cửa ngang qua phân quyền:
+    nhóm chứng từ lọc theo quyền `view` từng loại (cùng luật `list_vouchers`),
+    hàng đợi tính lại đòi `posting.balance.view`, và RLS lọc chi nhánh trước
+    khi mã này chạy.
+    """
+    viewable_types = [
+        code
+        for code in REGISTRY.codes()
+        if authorized.access.has(REGISTRY.get(code).permission(Action.VIEW))
+    ]
+
+    with unit_of_work(factory, authorized.scope) as session:
+        groups: list[PendingIssueGroupResponse] = []
+        if viewable_types:
+            counts: dict[str, int] = {
+                row.document_type: row.pending
+                for row in session.execute(
+                    select(
+                        Voucher.document_type,
+                        func.count().label("pending"),
+                    )
+                    .where(Voucher.document_type.in_(viewable_types))
+                    .where(Voucher.status == VoucherStatus.DA_CAT)
+                    .group_by(Voucher.document_type)
+                )
+            }
+            for code in viewable_types:
+                count = counts.get(code, 0)
+                if count == 0:
+                    continue
+                sample = (
+                    session.execute(
+                        select(Voucher)
+                        .where(Voucher.document_type == code)
+                        .where(Voucher.status == VoucherStatus.DA_CAT)
+                        .order_by(Voucher.posting_date, Voucher.voucher_no)
+                        .limit(PENDING_SAMPLE_LIMIT)
+                    )
+                    .scalars()
+                    .all()
+                )
+                groups.append(
+                    PendingIssueGroupResponse(
+                        document_type=code,
+                        title=REGISTRY.get(code).title,
+                        count=count,
+                        next_action=Action.POST.value,
+                        sample=[PendingVoucherResponse.model_validate(row) for row in sample],
+                    )
+                )
+
+        recalc_pending: list[PendingRecalcResponse] = []
+        if authorized.access.has(BALANCE_VIEW):
+            marks = (
+                session.execute(
+                    select(BalanceRecalcQueue).order_by(
+                        BalanceRecalcQueue.ledger,
+                        BalanceRecalcQueue.branch_id,
+                        BalanceRecalcQueue.from_period_id,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            recalc_pending = [PendingRecalcResponse.model_validate(mark) for mark in marks]
+
+    return PendingIssuesResponse(unposted=groups, recalc_pending=recalc_pending)
 
 
 def _run_action(

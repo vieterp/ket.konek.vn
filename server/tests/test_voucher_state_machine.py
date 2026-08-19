@@ -22,13 +22,17 @@ from ket.posting.documents.state_machine import (
 
 
 def test_the_declared_edges_are_exactly_the_business_flow() -> None:
-    """SRS 00 §3.3: Cất → Ghi sổ → Khóa sổ, với đường lui tương ứng."""
+    """SRS 00 §3.3: Cất → Ghi sổ, với đường lui tương ứng.
+
+    Khóa sổ KHÔNG phải một cạnh (quyết định 4D): `DA_KHOA_SO` là trạng thái
+    suy ra từ `accounting_periods.locked_at` lúc đọc, không ai ghi nó vào cột
+    `status` — xem docstring `VoucherStatus.DA_KHOA_SO` và
+    `posting/periods/lock_service.py`.
+    """
     assert TRANSITIONS == {
         (VoucherStatus.DA_CAT, VoucherAction.POST): VoucherStatus.DA_GHI_SO,
         (VoucherStatus.DA_GHI_SO, VoucherAction.UNPOST): VoucherStatus.DA_CAT,
         (VoucherStatus.DA_CAT, VoucherAction.DELETE): None,
-        (VoucherStatus.DA_GHI_SO, VoucherAction.LOCK): VoucherStatus.DA_KHOA_SO,
-        (VoucherStatus.DA_KHOA_SO, VoucherAction.UNLOCK): VoucherStatus.DA_GHI_SO,
         (VoucherStatus.DA_CAT, VoucherAction.CANCEL): VoucherStatus.DA_HUY,
     }
 
@@ -44,14 +48,11 @@ def test_every_undeclared_pair_is_refused(status: VoucherStatus, action: Voucher
     assert caught.value.details["action"] == action.value
 
 
-def test_locked_vouchers_cannot_be_touched_at_all() -> None:
-    """Đã khóa sổ thì post/unpost/delete/cancel đều bị chặn — chỉ UNLOCK mở lại."""
-    for action in (
-        VoucherAction.POST,
-        VoucherAction.UNPOST,
-        VoucherAction.DELETE,
-        VoucherAction.CANCEL,
-    ):
+def test_locked_status_has_no_edges_because_it_is_derived() -> None:
+    """`DA_KHOA_SO` không có cạnh vào/ra: nó không bao giờ nằm trong cột
+    `status`, nên máy trạng thái từ chối mọi thao tác nhận nó làm trạng thái
+    nguồn — hàng rào thật của kỳ khóa là RT-09 + trigger, không phải cạnh máy."""
+    for action in VoucherAction:
         with pytest.raises(VoucherTransitionError):
             transition(VoucherStatus.DA_KHOA_SO, action)
 

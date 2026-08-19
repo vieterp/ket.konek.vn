@@ -38,3 +38,51 @@ class VoucherListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class PendingVoucherResponse(BaseModel):
+    """Một chứng từ Đã cất chưa ghi sổ — đủ để UI mở đúng chứng từ."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    voucher_no: str
+    branch_id: int
+    posting_date: date
+    period_id: int
+    description: str | None
+
+
+class PendingIssueGroupResponse(BaseModel):
+    """Việc còn thiếu của MỘT loại chứng từ (U1): đếm + mẫu, kèm mã hành động.
+
+    `next_action` là mã máy (`post`) chứ không phải nhãn tiếng Việt: nhãn
+    "Ghi sổ" thuộc tầng i18n của client, còn mã thì client dùng để dựng đúng
+    nút gọi `POST /vouchers/{id}/actions/post`.
+    """
+
+    document_type: str
+    title: str
+    count: int
+    next_action: str
+    sample: list[PendingVoucherResponse]
+
+
+class PendingRecalcResponse(BaseModel):
+    """Một dấu bẩn trong hàng đợi tính lại — kỳ nhìn thấy số liệu chưa chốt."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    ledger: int
+    branch_id: int
+    from_period_id: int
+    marked_at: datetime
+    reason: str | None
+
+
+class PendingIssuesResponse(BaseModel):
+    """Nguồn của tab "việc còn thiếu" (U1) — phase 4 có hai loại việc:
+    chứng từ Đã cất chưa ghi sổ và kỳ đang chờ tính lại số dư."""
+
+    unposted: list[PendingIssueGroupResponse]
+    recalc_pending: list[PendingRecalcResponse]

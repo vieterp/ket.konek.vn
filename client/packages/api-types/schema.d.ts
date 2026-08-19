@@ -5370,6 +5370,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/periods/{period_id}/actions/lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lock Period
+         * @description Khóa sổ một kỳ (RT-09, U11). Cảnh báo trong response, không nằm trong khóa replay.
+         *
+         *     Lần gửi lại trả về dòng kỳ với danh sách cảnh báo **rỗng**: khóa idempotency
+         *     lưu *tham chiếu* kết quả chứ không phải thân response (RT-12), và cảnh báo
+         *     là thông tin của đúng khoảnh khắc khóa — phát lại một con số đếm cũ còn dễ
+         *     gây hiểu nhầm hơn là không nói gì.
+         */
+        post: operations["lock_period_api_v1_periods__period_id__actions_lock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/periods/{period_id}/actions/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlock Period
+         * @description Mở lại kỳ đã khóa — quyền riêng + lý do bắt buộc, ghi audit (FR-GLE-031).
+         */
+        post: operations["unlock_period_api_v1_periods__period_id__actions_unlock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/settings-groups": {
         parameters: {
             query?: never;
@@ -5708,6 +5753,32 @@ export interface paths {
          *     qua phân quyền của một loại. RLS đã lọc chi nhánh trước khi mã này chạy.
          */
         get: operations["list_vouchers_api_v1_vouchers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vouchers/pending-issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pending Issues
+         * @description BFF cho tab "việc còn thiếu" (U1, phase-04 bước 16).
+         *
+         *     Hai nguồn việc của phase 4, cả hai trong `ket.posting` — đây là BFF theo
+         *     nghĩa "một màn hình đọc nhiều bảng", không phải cửa ngang qua phân quyền:
+         *     nhóm chứng từ lọc theo quyền `view` từng loại (cùng luật `list_vouchers`),
+         *     hàng đợi tính lại đòi `posting.balance.view`, và RLS lọc chi nhánh trước
+         *     khi mã này chạy.
+         */
+        get: operations["pending_issues_api_v1_vouchers_pending_issues_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7744,6 +7815,20 @@ export interface components {
             row_version: number;
         };
         /**
+         * LockWarningResponse
+         * @description Một việc còn dở mà lượt khóa cho qua nhưng phải nói ra (U11).
+         */
+        LockWarningResponse: {
+            /** Code */
+            code: string;
+            /** Count */
+            count: number;
+            /** Message */
+            message: string;
+            /** Sample */
+            sample: string[];
+        };
+        /**
          * LoginRequest
          * @description Đăng nhập. `totp_code` chỉ cần cho tài khoản bắt buộc 2FA.
          *
@@ -8406,6 +8491,123 @@ export interface components {
             name_en?: string | null;
             /** Row Version */
             row_version: number;
+        };
+        /**
+         * PendingIssueGroupResponse
+         * @description Việc còn thiếu của MỘT loại chứng từ (U1): đếm + mẫu, kèm mã hành động.
+         *
+         *     `next_action` là mã máy (`post`) chứ không phải nhãn tiếng Việt: nhãn
+         *     "Ghi sổ" thuộc tầng i18n của client, còn mã thì client dùng để dựng đúng
+         *     nút gọi `POST /vouchers/{id}/actions/post`.
+         */
+        PendingIssueGroupResponse: {
+            /** Count */
+            count: number;
+            /** Document Type */
+            document_type: string;
+            /** Next Action */
+            next_action: string;
+            /** Sample */
+            sample: components["schemas"]["PendingVoucherResponse"][];
+            /** Title */
+            title: string;
+        };
+        /**
+         * PendingIssuesResponse
+         * @description Nguồn của tab "việc còn thiếu" (U1) — phase 4 có hai loại việc:
+         *     chứng từ Đã cất chưa ghi sổ và kỳ đang chờ tính lại số dư.
+         */
+        PendingIssuesResponse: {
+            /** Recalc Pending */
+            recalc_pending: components["schemas"]["PendingRecalcResponse"][];
+            /** Unposted */
+            unposted: components["schemas"]["PendingIssueGroupResponse"][];
+        };
+        /**
+         * PendingRecalcResponse
+         * @description Một dấu bẩn trong hàng đợi tính lại — kỳ nhìn thấy số liệu chưa chốt.
+         */
+        PendingRecalcResponse: {
+            /** Branch Id */
+            branch_id: number;
+            /** From Period Id */
+            from_period_id: number;
+            /** Ledger */
+            ledger: number;
+            /**
+             * Marked At
+             * Format: date-time
+             */
+            marked_at: string;
+            /** Reason */
+            reason: string | null;
+        };
+        /**
+         * PendingVoucherResponse
+         * @description Một chứng từ Đã cất chưa ghi sổ — đủ để UI mở đúng chứng từ.
+         */
+        PendingVoucherResponse: {
+            /** Branch Id */
+            branch_id: number;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Period Id */
+            period_id: number;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /** PeriodLockResponse */
+        PeriodLockResponse: {
+            period: components["schemas"]["PeriodResponse"];
+            /** Warnings */
+            warnings: components["schemas"]["LockWarningResponse"][];
+        };
+        /**
+         * PeriodResponse
+         * @description Dòng kỳ sau thao tác — đủ để màn hình khóa sổ vẽ lại trạng thái.
+         */
+        PeriodResponse: {
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Fiscal Year Id */
+            fiscal_year_id: number;
+            /** Id */
+            id: number;
+            /** Locked At */
+            locked_at: string | null;
+            /** Locked By */
+            locked_by: number | null;
+            /** Period No */
+            period_no: number;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+        };
+        /**
+         * PeriodUnlockRequest
+         * @description Mở kỳ bắt buộc nêu lý do — nó đi thẳng vào `audit_log` (FR-GLE-031).
+         *
+         *     `strip_whitespace` trước `min_length`: một chuỗi toàn khoảng trắng là "không
+         *     có lý do" mặc áo hợp lệ, và chỗ nó lộ ra là bản ghi kiểm toán — quá muộn.
+         */
+        PeriodUnlockRequest: {
+            /** Reason */
+            reason: string;
         };
         /**
          * PitTablesCreateRequest
@@ -18041,6 +18243,72 @@ export interface operations {
             };
         };
     };
+    lock_period_api_v1_periods__period_id__actions_lock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                period_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeriodLockResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    unlock_period_api_v1_periods__period_id__actions_unlock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                period_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PeriodUnlockRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeriodLockResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     settings_groups_api_v1_setup_settings_groups_get: {
         parameters: {
             query?: never;
@@ -18507,6 +18775,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VoucherListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    pending_issues_api_v1_vouchers_pending_issues_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingIssuesResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

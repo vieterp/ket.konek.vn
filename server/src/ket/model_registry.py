@@ -41,6 +41,13 @@ from ket.kernel.persistence.base import ControlBase, DatasetBase
 from ket.kernel.security import auth_models
 from ket.kernel.security import models as security_models
 from ket.modules.general_ledger.journal import models as gl_journal_models
+
+# Hai gói không có model — import để đăng ký mã quyền (`posting.period.*`,
+# `posting.integrity.*`) và loại job trước khi `provision_dataset` gieo bảng
+# `permissions` và trước khi worker nhận job. Cùng cơ chế với việc import
+# `balance_models` kéo theo `ket.posting.balances.__init__` ở dưới.
+from ket.posting import integrity as integrity_registration
+from ket.posting import periods as periods_registration
 from ket.posting.balances import models as balance_models
 from ket.posting.documents import models as voucher_models
 from ket.posting.engine import models as gl_posting_models
@@ -63,12 +70,14 @@ __all__ = [
     "gl_journal_models",
     "gl_posting_models",
     "idempotency_models",
+    "integrity_registration",
     "jobs_models",
     "master_data_models",
     "master_data_usage_models",
     "numbering_models",
     "opening_balance_models",
     "period_models",
+    "periods_registration",
     "security_models",
     "voucher_models",
 ]
