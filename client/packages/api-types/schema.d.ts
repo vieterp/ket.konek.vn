@@ -5257,6 +5257,119 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/opening-balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Opening Balances
+         * @description Dòng số dư của một (năm, sổ), kèm hai tổng cân đối (FR-OPB-006).
+         *
+         *     RLS lọc chi nhánh trước khi truy vấn này chạy; `branch_id` chỉ thu hẹp thêm
+         *     trong phạm vi đã thấy — cùng hợp đồng với `GET /ledger/trial-balance`.
+         */
+        get: operations["list_opening_balances_api_v1_opening_balances_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opening-balances/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Số dư ban đầu — ghi dữ liệu đã kiểm
+         * @description Xếp lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Thân job kiểm lại lượt kiểm được trỏ tới: đúng loại, đã xong, không dòng
+         *     lỗi, và đúng (năm, sổ) mà endpoint này vừa xét quyền (H89).
+         */
+        post: operations["commit_import_api_v1_opening_balances_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opening-balances/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Số dư ban đầu — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp lượt kiểm — không ghi gì. Báo cáo ở `jobs.result`.
+         */
+        post: operations["validate_import_api_v1_opening_balances_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opening-balances/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Số dư ban đầu — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu bốn sheet nhóm 0–4 (FR-OPB-002).
+         *
+         *     Quyền `view` chứ không `create`, cùng lý do tệp mẫu danh mục: tệp không
+         *     chứa dữ liệu, và người chuẩn bị tệp thường không phải người bấm nút ghi.
+         */
+        get: operations["download_template_api_v1_opening_balances_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opening-balances/{opening_balance_id}/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Opening Invoices
+         * @description Chi tiết hóa đơn/tạm ứng của một dòng số dư (FR-OPB-003).
+         *
+         *     JOIN qua dòng cha là bắt buộc: RLS chi nhánh nằm trên `opening_balances`,
+         *     còn bảng con không có cột chi nhánh — thiếu JOIN thì id đoán được của chi
+         *     nhánh khác cũng đọc ra hóa đơn.
+         */
+        get: operations["list_opening_invoices_api_v1_opening_balances__opening_balance_id__invoices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/settings-groups": {
         parameters: {
             query?: never;
@@ -6188,6 +6301,18 @@ export interface components {
             missing_reference: components["schemas"]["MissingReferenceMode"];
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_opening_balances_import_validate_post */
+        Body_validate_import_api_v1_opening_balances_import_validate_post: {
+            /** File */
+            file: string;
+            /** Fiscal Year Id */
+            fiscal_year_id: number;
+            /**
+             * Ledger
+             * @default 0
+             */
+            ledger: number;
         };
         /** BranchCreateRequest */
         BranchCreateRequest: {
@@ -7741,6 +7866,133 @@ export interface components {
             rows: number;
             /** Table */
             table: string;
+        };
+        /**
+         * OpeningBalanceListResponse
+         * @description Trang dòng số dư + hai tổng cân đối của cả phạm vi (FR-OPB-006).
+         *
+         *     Hai tổng tính trên **toàn bộ** (năm, sổ) trong phạm vi chi nhánh nhìn thấy,
+         *     không phải trên trang hiện tại — banner "chưa cân" phải đúng kể cả khi
+         *     người dùng đang đứng ở trang 3.
+         */
+        OpeningBalanceListResponse: {
+            /** Balanced */
+            balanced: boolean;
+            /** Items */
+            items: components["schemas"]["OpeningBalanceRowResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+            /** Total Credit */
+            total_credit: string;
+            /** Total Debit */
+            total_debit: string;
+        };
+        /**
+         * OpeningBalanceRowResponse
+         * @description Một dòng số dư ban đầu, kèm mã/tên để màn hình không phải tra thêm.
+         */
+        OpeningBalanceRowResponse: {
+            /** Account Code */
+            account_code: string;
+            /** Account Name */
+            account_name: string;
+            /** Credit */
+            credit: string;
+            /** Credit Fc */
+            credit_fc: string;
+            /** Currency Code */
+            currency_code: string;
+            /** Debit */
+            debit: string;
+            /** Debit Fc */
+            debit_fc: string;
+            /** Detail Kind */
+            detail_kind: number;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /** Id */
+            id: number;
+            /** Partner Code */
+            partner_code: string | null;
+            /** Partner Name */
+            partner_name: string | null;
+        };
+        /**
+         * OpeningCommitRequest
+         * @description Lượt ghi trỏ vào một lượt kiểm đã đạt (H78/H89).
+         */
+        OpeningCommitRequest: {
+            /** Fiscal Year Id */
+            fiscal_year_id: number;
+            /**
+             * Ledger
+             * @default 0
+             */
+            ledger: number;
+            /**
+             * Validation Job Id
+             * Format: uuid
+             */
+            validation_job_id: string;
+        };
+        /** OpeningCommitResponse */
+        OpeningCommitResponse: {
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+        };
+        /** OpeningInvoiceListResponse */
+        OpeningInvoiceListResponse: {
+            /** Items */
+            items: components["schemas"]["OpeningInvoiceResponse"][];
+        };
+        /**
+         * OpeningInvoiceResponse
+         * @description Một dòng chi tiết hóa đơn/tạm ứng của một dòng số dư (FR-OPB-003).
+         */
+        OpeningInvoiceResponse: {
+            /** Amount */
+            amount: string;
+            /** Amount Fc */
+            amount_fc: string;
+            /** Due Date */
+            due_date: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invoice Date */
+            invoice_date: string | null;
+            /** Invoice No */
+            invoice_no: string | null;
+            /** Paid Amount */
+            paid_amount: string;
+        };
+        /**
+         * OpeningValidateResponse
+         * @description Lượt kiểm đã xếp hàng — báo cáo đọc ở `GET /jobs/{id}` khi job xong.
+         */
+        OpeningValidateResponse: {
+            /** Content Hash */
+            content_hash: string;
+            /** File Name */
+            file_name: string;
+            /** Fiscal Year Id */
+            fiscal_year_id: number;
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+            /** Ledger */
+            ledger: number;
         };
         /**
          * PartnerBankAccountCreateRequest
@@ -17614,6 +17866,168 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WarehousesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_opening_balances_api_v1_opening_balances_get: {
+        parameters: {
+            query: {
+                fiscal_year_id: number;
+                ledger?: number;
+                detail_kind?: number | null;
+                branch_id?: number | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpeningBalanceListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_opening_balances_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpeningCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpeningCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_opening_balances_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_opening_balances_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpeningValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_opening_balances_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_opening_invoices_api_v1_opening_balances__opening_balance_id__invoices_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                opening_balance_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpeningInvoiceListResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

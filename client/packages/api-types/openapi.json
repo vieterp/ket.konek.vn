@@ -1222,6 +1222,33 @@
         "title": "Body_validate_import_api_v1_master_warehouses_import_validate_post",
         "type": "object"
       },
+      "Body_validate_import_api_v1_opening_balances_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "fiscal_year_id": {
+            "minimum": 1.0,
+            "title": "Fiscal Year Id",
+            "type": "integer"
+          },
+          "ledger": {
+            "default": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Ledger",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file",
+          "fiscal_year_id"
+        ],
+        "title": "Body_validate_import_api_v1_opening_balances_import_validate_post",
+        "type": "object"
+      },
       "BranchCreateRequest": {
         "properties": {
           "code": {
@@ -5596,6 +5623,307 @@
           "rows"
         ],
         "title": "MovedReferenceResponse",
+        "type": "object"
+      },
+      "OpeningBalanceListResponse": {
+        "description": "Trang dòng số dư + hai tổng cân đối của cả phạm vi (FR-OPB-006).\n\nHai tổng tính trên **toàn bộ** (năm, sổ) trong phạm vi chi nhánh nhìn thấy,\nkhông phải trên trang hiện tại — banner \"chưa cân\" phải đúng kể cả khi\nngười dùng đang đứng ở trang 3.",
+        "properties": {
+          "balanced": {
+            "title": "Balanced",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OpeningBalanceRowResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_credit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Credit",
+            "type": "string"
+          },
+          "total_debit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Debit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_debit",
+          "total_credit",
+          "balanced"
+        ],
+        "title": "OpeningBalanceListResponse",
+        "type": "object"
+      },
+      "OpeningBalanceRowResponse": {
+        "description": "Một dòng số dư ban đầu, kèm mã/tên để màn hình không phải tra thêm.",
+        "properties": {
+          "account_code": {
+            "title": "Account Code",
+            "type": "string"
+          },
+          "account_name": {
+            "title": "Account Name",
+            "type": "string"
+          },
+          "credit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Credit",
+            "type": "string"
+          },
+          "credit_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Credit Fc",
+            "type": "string"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "debit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Debit",
+            "type": "string"
+          },
+          "debit_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Debit Fc",
+            "type": "string"
+          },
+          "detail_kind": {
+            "title": "Detail Kind",
+            "type": "integer"
+          },
+          "exchange_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exchange Rate",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "partner_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Code"
+          },
+          "partner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Name"
+          }
+        },
+        "required": [
+          "id",
+          "detail_kind",
+          "account_code",
+          "account_name",
+          "partner_code",
+          "partner_name",
+          "currency_code",
+          "exchange_rate",
+          "debit_fc",
+          "credit_fc",
+          "debit",
+          "credit"
+        ],
+        "title": "OpeningBalanceRowResponse",
+        "type": "object"
+      },
+      "OpeningCommitRequest": {
+        "description": "Lượt ghi trỏ vào một lượt kiểm đã đạt (H78/H89).",
+        "properties": {
+          "fiscal_year_id": {
+            "minimum": 1.0,
+            "title": "Fiscal Year Id",
+            "type": "integer"
+          },
+          "ledger": {
+            "default": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Ledger",
+            "type": "integer"
+          },
+          "validation_job_id": {
+            "format": "uuid",
+            "title": "Validation Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "validation_job_id",
+          "fiscal_year_id"
+        ],
+        "title": "OpeningCommitRequest",
+        "type": "object"
+      },
+      "OpeningCommitResponse": {
+        "properties": {
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "OpeningCommitResponse",
+        "type": "object"
+      },
+      "OpeningInvoiceListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OpeningInvoiceResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "OpeningInvoiceListResponse",
+        "type": "object"
+      },
+      "OpeningInvoiceResponse": {
+        "description": "Một dòng chi tiết hóa đơn/tạm ứng của một dòng số dư (FR-OPB-003).",
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Fc",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invoice_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Date"
+          },
+          "invoice_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice No"
+          },
+          "paid_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Paid Amount",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "invoice_no",
+          "invoice_date",
+          "due_date",
+          "amount_fc",
+          "amount",
+          "paid_amount"
+        ],
+        "title": "OpeningInvoiceResponse",
+        "type": "object"
+      },
+      "OpeningValidateResponse": {
+        "description": "Lượt kiểm đã xếp hàng — báo cáo đọc ở `GET /jobs/{id}` khi job xong.",
+        "properties": {
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "fiscal_year_id": {
+            "title": "Fiscal Year Id",
+            "type": "integer"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "ledger": {
+            "title": "Ledger",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "fiscal_year_id",
+          "ledger",
+          "file_name",
+          "content_hash"
+        ],
+        "title": "OpeningValidateResponse",
         "type": "object"
       },
       "PartnerBankAccountCreateRequest": {
@@ -21579,6 +21907,275 @@
         "summary": "Kho — chuyển nhánh",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/opening-balances": {
+      "get": {
+        "description": "Dòng số dư của một (năm, sổ), kèm hai tổng cân đối (FR-OPB-006).\n\nRLS lọc chi nhánh trước khi truy vấn này chạy; `branch_id` chỉ thu hẹp thêm\ntrong phạm vi đã thấy — cùng hợp đồng với `GET /ledger/trial-balance`.",
+        "operationId": "list_opening_balances_api_v1_opening_balances_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fiscal_year_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Fiscal Year Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ledger",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Ledger",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "detail_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 9,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Detail Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpeningBalanceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Opening Balances",
+        "tags": [
+          "opening-balances"
+        ]
+      }
+    },
+    "/api/v1/opening-balances/import/commit": {
+      "post": {
+        "description": "Xếp lượt ghi cho một lượt kiểm đã đạt (H78).\n\nThân job kiểm lại lượt kiểm được trỏ tới: đúng loại, đã xong, không dòng\nlỗi, và đúng (năm, sổ) mà endpoint này vừa xét quyền (H89).",
+        "operationId": "commit_import_api_v1_opening_balances_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpeningCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpeningCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Số dư ban đầu — ghi dữ liệu đã kiểm",
+        "tags": [
+          "opening-balances"
+        ]
+      }
+    },
+    "/api/v1/opening-balances/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp lượt kiểm — không ghi gì. Báo cáo ở `jobs.result`.",
+        "operationId": "validate_import_api_v1_opening_balances_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_opening_balances_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpeningValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Số dư ban đầu — kiểm tra tệp nhập liệu",
+        "tags": [
+          "opening-balances"
+        ]
+      }
+    },
+    "/api/v1/opening-balances/template": {
+      "get": {
+        "description": "Tệp mẫu bốn sheet nhóm 0–4 (FR-OPB-002).\n\nQuyền `view` chứ không `create`, cùng lý do tệp mẫu danh mục: tệp không\nchứa dữ liệu, và người chuẩn bị tệp thường không phải người bấm nút ghi.",
+        "operationId": "download_template_api_v1_opening_balances_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Số dư ban đầu — tải tệp mẫu nhập liệu",
+        "tags": [
+          "opening-balances"
+        ]
+      }
+    },
+    "/api/v1/opening-balances/{opening_balance_id}/invoices": {
+      "get": {
+        "description": "Chi tiết hóa đơn/tạm ứng của một dòng số dư (FR-OPB-003).\n\nJOIN qua dòng cha là bắt buộc: RLS chi nhánh nằm trên `opening_balances`,\ncòn bảng con không có cột chi nhánh — thiếu JOIN thì id đoán được của chi\nnhánh khác cũng đọc ra hóa đơn.",
+        "operationId": "list_opening_invoices_api_v1_opening_balances__opening_balance_id__invoices_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opening_balance_id",
+            "required": true,
+            "schema": {
+              "title": "Opening Balance Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpeningInvoiceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Opening Invoices",
+        "tags": [
+          "opening-balances"
         ]
       }
     },

@@ -157,11 +157,14 @@ class OpeningBalance(DatasetBase, Audited):
 
 
 class OpeningBalanceInvoice(DatasetBase, Audited):
-    """Chi tiết hóa đơn còn nợ của số dư phải thu/phải trả (FR-OPB-003).
+    """Chi tiết chứng từ còn nợ của số dư công nợ (FR-OPB-003, SRS 02 §1.1).
 
-    Bảng con của một dòng `opening_balances` nhóm 2/3: tổng các hóa đơn phải
-    khớp dòng cha (BR-OPB-02, kiểm ở slice 4C). Không có `branch_id` riêng —
-    phạm vi là phạm vi dòng cha, cùng lối `opening_balance_id CASCADE`.
+    Bảng con của một dòng `opening_balances` nhóm 2/3/4: hóa đơn của phải
+    thu/phải trả, và **từng lần tạm ứng** của nhóm nhân viên — SRS đòi chi tiết
+    theo lần cho cả ba. Tổng các dòng con phải khớp bên còn-nợ của dòng cha
+    (BR-OPB-02 — đúng theo cách dựng ở lượt nhập; lượt chuyển năm đo lệch bằng
+    `invoice_overrun_parents`). Không có `branch_id` riêng — phạm vi là phạm vi
+    dòng cha, cùng lối `opening_balance_id CASCADE`.
     """
 
     __tablename__ = "opening_balance_invoices"
