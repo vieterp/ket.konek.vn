@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
@@ -37,7 +38,22 @@ from ket.kernel.config.accounts_models import (
     BalanceNature,
     DetailTracking,
 )
-from ket.kernel.errors import ConfigPackageDataInvalidError
+from ket.kernel.config.statements.formula.evaluator import evaluate_rows
+from ket.kernel.config.statements.formula.parser import (
+    FormulaNode,
+    account_ranges_of,
+    parse_formula,
+)
+from ket.kernel.config.statements.models import (
+    FORMULA_MAX_LENGTH,
+    LABEL_MAX_LENGTH,
+    LAYOUT_CODE_MAX_LENGTH,
+    NOTE_REF_MAX_LENGTH,
+    ROW_CODE_MAX_LENGTH,
+    ROW_NOTE_MAX_LENGTH,
+    StatementKind,
+)
+from ket.kernel.errors import ConfigPackageDataInvalidError, StatementFormulaInvalidError
 from ket.kernel.periods.models import AccountingScheme
 
 _PACKAGE_CODE_MAX_LENGTH = 50
@@ -53,6 +69,7 @@ PACKAGE_MANIFEST_FILE = "package.json"
 ACCOUNTS_FILE = "accounts.csv"
 DEFAULT_ACCOUNTS_FILE = "default_accounts.csv"
 CLOSING_PAIRS_FILE = "closing_pairs.csv"
+STATEMENTS_FILE = "statements.json"
 
 REQUIRED_DATA_FILES: tuple[str, ...] = (
     PACKAGE_MANIFEST_FILE,
@@ -61,8 +78,14 @@ REQUIRED_DATA_FILES: tuple[str, ...] = (
     CLOSING_PAIRS_FILE,
 )
 """Danh sách tệp mà một gói **phải** có — dùng chung cho cả thư mục lẫn `.zip`
-(`importer.py` chỉ đọc đúng bốn tên này, không đọc theo danh sách trong gói —
-xem docstring `importer.py` về chống zip-slip)."""
+(`importer.py` chỉ đọc theo danh sách tên cố định này, không đọc theo danh sách
+trong gói — xem docstring `importer.py` về chống zip-slip)."""
+
+OPTIONAL_DATA_FILES: tuple[str, ...] = (STATEMENTS_FILE,)
+"""Tệp một gói **được phép** có thêm (lát 5B): `statements.json` — mọi layout
+BCTC của gói trong MỘT tệp phẳng, không thư mục con, để hợp đồng "chỉ những tên
+tệp cố định, không ghép đường dẫn" của importer giữ nguyên. Gói không có tệp
+này hợp lệ (gói nhập ngoài có thể chỉ mang hệ thống TK)."""
 
 _ACCOUNTS_HEADER = (
     "code",
@@ -133,6 +156,35 @@ class ClosingPairRow:
 
 
 @dataclass(frozen=True)
+class StatementRowData:
+    """Một chỉ tiêu trong `statements.json`, đã kiểm (công thức parse được,
+    rowref/dải TK đã đối chiếu). `display_order` suy từ thứ tự trong tệp —
+    thứ tự viết chính là thứ tự mẫu thông tư, không khai số riêng để lệch."""
+
+    row_code: str
+    label: str
+    label_en: str | None
+    note_ref: str | None
+    formula: str
+    indent_level: int
+    display_order: int
+    is_bold: bool
+    hide_when_zero: bool
+    note: str | None
+
+
+@dataclass(frozen=True)
+class StatementLayoutData:
+    """Một layout BCTC trong `statements.json`, đã kiểm."""
+
+    code: str
+    name: str
+    name_en: str | None
+    statement_kind: str
+    rows: tuple[StatementRowData, ...]
+
+
+@dataclass(frozen=True)
 class LoadedPackage:
     """Một gói cấu hình đã đọc và kiểm hết — sẵn sàng để `seed.py`/`importer.py` ghi."""
 
@@ -140,6 +192,7 @@ class LoadedPackage:
     accounts: tuple[AccountRow, ...]
     default_accounts: tuple[DefaultAccountRow, ...]
     closing_pairs: tuple[ClosingPairRow, ...]
+    statements: tuple[StatementLayoutData, ...] = ()
 
 
 def _fail(reason: str, **details: str | int | None) -> ConfigPackageDataInvalidError:
@@ -496,6 +549,219 @@ def _load_closing_pairs(text: str, known_codes: frozenset[str]) -> tuple[Closing
     return tuple(result)
 
 
+_MAX_INDENT_LEVEL = 6
+"""Trần thụt lề chỉ tiêu — mẫu thông tư sâu nhất (B01 mục 233→235) dùng 4 mức."""
+
+_LAYOUT_CODE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*$")
+"""Mã layout đi thẳng vào URL path (`GET /statements/{layout_code}/preview`) —
+khớp khuôn mã mẫu thông tư (`B01-DN`, `B01a-DNN`), chặn `/`, khoảng trắng, `%`
+từ gói `.zip` nhập ngoài (review 5B, M-3)."""
+
+
+def _statements_fail(
+    reason: str, *, layout: str | None = None, row: str | None = None
+) -> ConfigPackageDataInvalidError:
+    return _fail(reason, file=STATEMENTS_FILE, layout=layout, row=row)
+
+
+def _statement_required_str(
+    raw: Mapping[str, object],
+    field: str,
+    *,
+    max_length: int,
+    layout: str | None,
+    row: str | None,
+) -> str:
+    value = raw.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise _statements_fail(f"Trường `{field}` thiếu hoặc rỗng", layout=layout, row=row)
+    stripped = value.strip()
+    if len(stripped) > max_length:
+        raise _statements_fail(
+            f"Trường `{field}` dài {len(stripped)} ký tự, vượt trần {max_length}",
+            layout=layout,
+            row=row,
+        )
+    return stripped
+
+
+def _statement_optional_str(
+    raw: Mapping[str, object],
+    field: str,
+    *,
+    max_length: int,
+    layout: str | None,
+    row: str | None,
+) -> str | None:
+    if raw.get(field) is None:
+        return None
+    return _statement_required_str(raw, field, max_length=max_length, layout=layout, row=row)
+
+
+def _statement_bool(raw: Mapping[str, object], field: str, *, layout: str, row: str) -> bool:
+    value = raw.get(field, False)
+    if not isinstance(value, bool):
+        raise _statements_fail(f"Trường `{field}` phải là true/false", layout=layout, row=row)
+    return value
+
+
+def _load_statement_row(
+    raw: object, *, layout_code: str, display_order: int
+) -> tuple[StatementRowData, FormulaNode]:
+    if not isinstance(raw, Mapping):
+        raise _statements_fail(
+            f"Chỉ tiêu thứ {display_order} phải là một object JSON", layout=layout_code
+        )
+    row_code = _statement_required_str(
+        raw, "row_code", max_length=ROW_CODE_MAX_LENGTH, layout=layout_code, row=None
+    )
+    if not row_code.isalnum():
+        raise _statements_fail(
+            "Mã chỉ tiêu (`row_code`) chỉ được chứa chữ/số", layout=layout_code, row=row_code
+        )
+    label = _statement_required_str(
+        raw, "label", max_length=LABEL_MAX_LENGTH, layout=layout_code, row=row_code
+    )
+    formula_text = _statement_required_str(
+        raw, "formula", max_length=FORMULA_MAX_LENGTH, layout=layout_code, row=row_code
+    )
+    try:
+        node = parse_formula(formula_text)
+    except StatementFormulaInvalidError as error:
+        raise _statements_fail(
+            f"Công thức của chỉ tiêu {row_code} không hợp lệ: {error.message}",
+            layout=layout_code,
+            row=row_code,
+        ) from error
+
+    indent_raw = raw.get("indent_level", 0)
+    if (
+        not isinstance(indent_raw, int)
+        or isinstance(indent_raw, bool)
+        or not 0 <= indent_raw <= _MAX_INDENT_LEVEL
+    ):
+        raise _statements_fail(
+            f"`indent_level` phải là số nguyên 0..{_MAX_INDENT_LEVEL}",
+            layout=layout_code,
+            row=row_code,
+        )
+
+    data = StatementRowData(
+        row_code=row_code,
+        label=label,
+        label_en=_statement_optional_str(
+            raw, "label_en", max_length=LABEL_MAX_LENGTH, layout=layout_code, row=row_code
+        ),
+        note_ref=_statement_optional_str(
+            raw, "note_ref", max_length=NOTE_REF_MAX_LENGTH, layout=layout_code, row=row_code
+        ),
+        formula=formula_text,
+        indent_level=indent_raw,
+        display_order=display_order,
+        is_bold=_statement_bool(raw, "is_bold", layout=layout_code, row=row_code),
+        hide_when_zero=_statement_bool(raw, "hide_when_zero", layout=layout_code, row=row_code),
+        note=_statement_optional_str(
+            raw, "note", max_length=ROW_NOTE_MAX_LENGTH, layout=layout_code, row=row_code
+        ),
+    )
+    return data, node
+
+
+def _check_statement_account_refs(
+    rows: dict[str, FormulaNode], known_codes: frozenset[str], *, layout_code: str
+) -> None:
+    """Mỗi dải TK trong công thức phải khớp ≥1 TK của `accounts.csv` — một dải
+    khớp 0 TK gần như chắc chắn là gõ nhầm số hiệu, và giá của nó là một chỉ
+    tiêu BCTC lặng lẽ bằng 0 (đúng loại sai "Rất cao" trong bảng rủi ro phase)."""
+    for row_code, node in rows.items():
+        for account_range in account_ranges_of(node):
+            if not any(account_range.matches(code) for code in known_codes):
+                raise _statements_fail(
+                    f"Dải tài khoản `{account_range.spec()}` trong công thức không khớp "
+                    f"tài khoản nào của {ACCOUNTS_FILE}",
+                    layout=layout_code,
+                    row=row_code,
+                )
+
+
+def _load_statements(text: str, known_codes: frozenset[str]) -> tuple[StatementLayoutData, ...]:
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise _statements_fail(f"Tệp {STATEMENTS_FILE} không phải JSON hợp lệ: {error}") from error
+    if not isinstance(raw, list):
+        raise _statements_fail(f"Tệp {STATEMENTS_FILE} phải là một mảng JSON các layout")
+
+    layouts: list[StatementLayoutData] = []
+    seen_layouts: set[str] = set()
+    for layout_raw in raw:
+        if not isinstance(layout_raw, Mapping):
+            raise _statements_fail("Mỗi layout phải là một object JSON")
+        code = _statement_required_str(
+            layout_raw, "code", max_length=LAYOUT_CODE_MAX_LENGTH, layout=None, row=None
+        )
+        if not _LAYOUT_CODE_PATTERN.fullmatch(code):
+            raise _statements_fail(
+                "Mã layout chỉ được chứa chữ/số/gạch nối và bắt đầu bằng chữ/số "
+                "(mã nằm trên đường dẫn URL của API xem trước)",
+                layout=code,
+            )
+        if code in seen_layouts:
+            raise _statements_fail(f"Mã layout {code} bị khai trùng", layout=code)
+        seen_layouts.add(code)
+        name = _statement_required_str(
+            layout_raw, "name", max_length=NAME_MAX_LENGTH, layout=code, row=None
+        )
+        kind = _statement_required_str(
+            layout_raw, "statement_kind", max_length=20, layout=code, row=None
+        )
+        if kind not in StatementKind.ALL:
+            raise _statements_fail(
+                f"`statement_kind` `{kind}` không thuộc danh sách đã biết "
+                f"({', '.join(sorted(StatementKind.ALL))})",
+                layout=code,
+            )
+        rows_raw = layout_raw.get("rows")
+        if not isinstance(rows_raw, list) or not rows_raw:
+            raise _statements_fail("Layout phải có mảng `rows` không rỗng", layout=code)
+
+        rows: list[StatementRowData] = []
+        nodes: dict[str, FormulaNode] = {}
+        for display_order, row_raw in enumerate(rows_raw, start=1):
+            data, node = _load_statement_row(row_raw, layout_code=code, display_order=display_order)
+            if data.row_code in nodes:
+                raise _statements_fail(
+                    f"Mã chỉ tiêu {data.row_code} bị khai trùng trong layout",
+                    layout=code,
+                    row=data.row_code,
+                )
+            rows.append(data)
+            nodes[data.row_code] = node
+
+        # Rowref trỏ ra ngoài layout + chu trình: chạy evaluator trên bộ số
+        # RỖNG — rẻ, và dùng đúng bộ luật mà lúc lập báo cáo thật sẽ dùng.
+        try:
+            evaluate_rows(nodes, {})
+        except StatementFormulaInvalidError as error:
+            raise _statements_fail(
+                f"Bộ công thức của layout không hợp lệ: {error.message}", layout=code
+            ) from error
+        _check_statement_account_refs(nodes, known_codes, layout_code=code)
+
+        layouts.append(
+            StatementLayoutData(
+                code=code,
+                name=name,
+                name_en=_statement_optional_str(
+                    layout_raw, "name_en", max_length=NAME_MAX_LENGTH, layout=code, row=None
+                ),
+                statement_kind=kind,
+                rows=tuple(rows),
+            )
+        )
+    return tuple(layouts)
+
+
 def load_package_from_texts(texts: Mapping[str, str]) -> LoadedPackage:
     """Đọc + kiểm một gói cấu hình từ nội dung **đã có sẵn trong bộ nhớ**.
 
@@ -511,12 +777,17 @@ def load_package_from_texts(texts: Mapping[str, str]) -> LoadedPackage:
     known_codes = frozenset(row.code for row in accounts)
     default_accounts = _load_default_accounts(texts[DEFAULT_ACCOUNTS_FILE], known_codes)
     closing_pairs = _load_closing_pairs(texts[CLOSING_PAIRS_FILE], known_codes)
+    statements_text = texts.get(STATEMENTS_FILE)
+    statements = (
+        _load_statements(statements_text, known_codes) if statements_text is not None else ()
+    )
 
     return LoadedPackage(
         manifest=manifest,
         accounts=accounts,
         default_accounts=default_accounts,
         closing_pairs=closing_pairs,
+        statements=statements,
     )
 
 
@@ -536,6 +807,9 @@ def load_package_directory(directory: Path) -> LoadedPackage:
     texts = {
         name: (directory / name).read_text(encoding="utf-8-sig") for name in REQUIRED_DATA_FILES
     }
+    for name in OPTIONAL_DATA_FILES:
+        if (directory / name).is_file():
+            texts[name] = (directory / name).read_text(encoding="utf-8-sig")
     return load_package_from_texts(texts)
 
 
@@ -559,13 +833,17 @@ __all__ = [
     "ACCOUNTS_FILE",
     "CLOSING_PAIRS_FILE",
     "DEFAULT_ACCOUNTS_FILE",
+    "OPTIONAL_DATA_FILES",
     "PACKAGE_MANIFEST_FILE",
     "REQUIRED_DATA_FILES",
+    "STATEMENTS_FILE",
     "AccountRow",
     "ClosingPairRow",
     "DefaultAccountRow",
     "LoadedPackage",
     "PackageManifest",
+    "StatementLayoutData",
+    "StatementRowData",
     "builtin_data_directory",
     "load_builtin_package",
     "load_package_directory",

@@ -346,3 +346,59 @@ def test_non_utf8_member_is_rejected(
             select(ConfigPackage).where(ConfigPackage.code == "IMPORT-TEST-UTF8")
         )
         assert package is None
+
+
+_STATEMENTS_JSON = (
+    b'[{"code": "T01", "name": "Layout test", "statement_kind": "balance_sheet",'
+    b' "rows": [{"row_code": "110", "label": "Ti\xe1\xbb\x81n", "formula": "DR(111)"},'
+    b' {"row_code": "100", "label": "T\xe1\xbb\x95ng", "formula": "[110]"}]}]'
+)
+
+
+def test_signed_statements_json_is_imported_with_layouts(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
+) -> None:
+    """`statements.json` là mục tùy chọn thứ bảy (lát 5B): có mặt + có checksum
+    trong manifest đã ký → layout vào DB cùng transaction với gói."""
+    from ket.kernel.config.statements.models import StatementLayout, StatementRow
+
+    signer = Ed25519PrivateKey.generate()
+    files = _sample_files(code="IMPORT-TEST-STMT")
+    files["statements.json"] = _STATEMENTS_JSON
+    archive_bytes = _build_zip(files, signer=signer)
+
+    with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
+        package = import_package(
+            session, archive_bytes=archive_bytes, public_keys=(signer.public_key(),)
+        )
+        layout = session.scalar(
+            select(StatementLayout).where(StatementLayout.package_id == package.id)
+        )
+        assert layout is not None and layout.code == "T01"
+        rows = session.scalars(
+            select(StatementRow)
+            .where(StatementRow.layout_id == layout.id)
+            .order_by(StatementRow.display_order)
+        ).all()
+        assert [row.row_code for row in rows] == ["110", "100"]
+
+
+def test_statements_json_without_signed_checksum_is_rejected(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
+) -> None:
+    """Tệp có mặt trong `.zip` mà không có sha256 trong manifest đã ký = nội
+    dung không ai ký — kiểm HAI CHIỀU của `verify_file_checksums` phải chặn,
+    nếu không mục tùy chọn thành cửa nhét layout không ký vào gói (RT-07)."""
+    signer = Ed25519PrivateKey.generate()
+    files = _sample_files(code="IMPORT-TEST-STMT-UNSIGNED")
+    archive_bytes = _build_zip(
+        files, signer=signer, extra_entries={"statements.json": _STATEMENTS_JSON}
+    )
+
+    with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
+        with pytest.raises(ConfigPackageSignatureInvalidError):
+            import_package(session, archive_bytes=archive_bytes, public_keys=(signer.public_key(),))
+        package = session.scalar(
+            select(ConfigPackage).where(ConfigPackage.code == "IMPORT-TEST-STMT-UNSIGNED")
+        )
+        assert package is None

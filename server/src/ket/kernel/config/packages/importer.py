@@ -49,10 +49,12 @@ from ket.kernel.config.packages.loader import (
     CLOSING_PAIRS_FILE,
     DEFAULT_ACCOUNTS_FILE,
     PACKAGE_MANIFEST_FILE,
+    STATEMENTS_FILE,
     LoadedPackage,
     load_package_from_texts,
 )
 from ket.kernel.config.packages.publisher_keys import pinned_public_keys
+from ket.kernel.config.statements.models import StatementLayout, StatementRow
 from ket.kernel.errors import ConfigPackageArchiveInvalidError, DuplicateValueError
 from ket.kernel.master_data.tree_path import ROOT_LEVEL, child_path, level_of
 
@@ -66,6 +68,11 @@ _DATA_FILES: tuple[str, ...] = (
     CLOSING_PAIRS_FILE,
 )
 _EXPECTED_ENTRIES = frozenset({*_DATA_FILES, MANIFEST_FILE, SIGNATURE_FILE})
+_EXPECTED_ENTRIES_WITH_STATEMENTS = frozenset({*_EXPECTED_ENTRIES, STATEMENTS_FILE})
+"""`statements.json` là mục **tùy chọn** duy nhất (lát 5B) — vẫn là tập tên cố
+định, phẳng, không thư mục con: hai tập hợp lệ thay vì một, không phải "tên gì
+cũng nhận". Checksum của nó bắt buộc có trong manifest đã ký khi tệp có mặt
+(`signature_verifier.verify_file_checksums` kiểm hai chiều)."""
 
 MAX_ARCHIVE_BYTES = 5 * 1024 * 1024
 """Trần dung lượng gói `.zip` — fail-closed. Gói cấu hình là văn bản (CSV/JSON),
@@ -89,10 +96,11 @@ def _open_validated_zip(archive_bytes: bytes) -> zipfile.ZipFile:
     names = [info.filename for info in infos]
     if len(names) != len(set(names)):
         raise _reject("Gói .zip chứa tên tệp trùng lặp")
-    if set(names) != _EXPECTED_ENTRIES:
+    if set(names) not in (_EXPECTED_ENTRIES, _EXPECTED_ENTRIES_WITH_STATEMENTS):
         raise _reject(
-            "Gói .zip không đúng cấu trúc cho phép — phải đúng sáu tệp của hợp đồng",
-            expected=",".join(sorted(_EXPECTED_ENTRIES)),
+            "Gói .zip không đúng cấu trúc cho phép — phải đúng sáu tệp của hợp đồng "
+            f"(cộng {STATEMENTS_FILE} nếu gói mang layout BCTC)",
+            expected=",".join(sorted(_EXPECTED_ENTRIES_WITH_STATEMENTS)),
             found=",".join(sorted(names)),
         )
     for info in infos:
@@ -117,7 +125,8 @@ def _read_all(archive: zipfile.ZipFile) -> dict[str, bytes]:
     FR-NFR-050.
     """
     result: dict[str, bytes] = {}
-    for name in _EXPECTED_ENTRIES:
+    present = set(archive.namelist())
+    for name in sorted(_EXPECTED_ENTRIES_WITH_STATEMENTS & present):
         try:
             result[name] = archive.read(name)
         except (zipfile.BadZipFile, zlib.error) as error:
@@ -138,10 +147,11 @@ def _verify_and_load(
         signature_bytes=raw[SIGNATURE_FILE],
         public_keys=public_keys,
     )
-    signature_verifier.verify_file_checksums(verified, {name: raw[name] for name in _DATA_FILES})
+    data_names = tuple(name for name in raw if name not in (MANIFEST_FILE, SIGNATURE_FILE))
+    signature_verifier.verify_file_checksums(verified, {name: raw[name] for name in data_names})
 
     texts: dict[str, str] = {}
-    for name in _DATA_FILES:
+    for name in data_names:
         try:
             texts[name] = raw[name].decode("utf-8-sig")
         except UnicodeDecodeError as error:
@@ -222,6 +232,32 @@ def _insert_imported_package(session: Session, loaded: LoadedPackage) -> ConfigP
                 description=pair_row.description,
             )
         )
+    for layout in loaded.statements:
+        layout_row = StatementLayout(
+            package_id=package.id,
+            code=layout.code,
+            name=layout.name,
+            name_en=layout.name_en,
+            statement_kind=layout.statement_kind,
+        )
+        session.add(layout_row)
+        session.flush()
+        for statement_row in layout.rows:
+            session.add(
+                StatementRow(
+                    layout_id=layout_row.id,
+                    row_code=statement_row.row_code,
+                    label=statement_row.label,
+                    label_en=statement_row.label_en,
+                    note_ref=statement_row.note_ref,
+                    formula=statement_row.formula,
+                    indent_level=statement_row.indent_level,
+                    display_order=statement_row.display_order,
+                    is_bold=statement_row.is_bold,
+                    hide_when_zero=statement_row.hide_when_zero,
+                    note=statement_row.note,
+                )
+            )
     session.flush()
     return package
 

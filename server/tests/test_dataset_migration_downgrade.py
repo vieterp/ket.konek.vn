@@ -201,11 +201,17 @@ def test_downgrading_0010_with_a_tt99_fiscal_year_is_refused(
             vat_method=VatMethod.DEDUCTION,
         )
 
+    revision_before = current_revision(owner_engine, schema)
+
     with pytest.raises(RuntimeError, match="TT99"):
         _downgrade(owner_engine, schema, "0009")
 
     # Hạ cấp bị từ chối phải là TOÀN BỘ-hoặc-KHÔNG-GÌ: revision không nhúc
-    # nhích, và năm tài chính vừa tạo vẫn còn nguyên (không bị dọn nhầm).
-    assert current_revision(owner_engine, schema) == "0010"
+    # nhích (kể cả các bước TRÊN 0010 đã chạy trót lọt trước khi 0010 từ chối —
+    # DDL transactional cuộn lại trọn gói), và năm tài chính vừa tạo vẫn còn
+    # nguyên (không bị dọn nhầm). So với revision TRƯỚC lượt hạ chứ không ghim
+    # "0010": mỗi migration mới xếp lên đầu sẽ đổi con số đó mà bất biến
+    # all-or-nothing không đổi.
+    assert current_revision(owner_engine, schema) == revision_before
     with unit_of_work(session_factory, scope) as session:
         assert session.scalar(select(FiscalYear.code).where(FiscalYear.code == "2026")) == "2026"

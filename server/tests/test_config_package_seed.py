@@ -159,3 +159,110 @@ def test_seeding_twice_does_not_duplicate_rows(
             .all()
         )
     assert rows == before, "gieo lại không được tạo dòng `config_packages` thứ hai"
+
+
+def test_seeded_package_carries_statement_layouts(
+    owner_engine: Engine, dataset_alpha: DatasetRef
+) -> None:
+    """Gói builtin gieo lúc provision phải mang layout BCTC (lát 5B)."""
+    from ket.kernel.config.statements.models import StatementLayout
+
+    with owner_engine.begin() as connection:
+        bind_seed_schema(connection, dataset_alpha.schema_name)
+        package_id = connection.execute(
+            select(ConfigPackage.id).where(ConfigPackage.code == "TT99-2025")
+        ).scalar_one()
+        codes = set(
+            connection.execute(
+                select(StatementLayout.code).where(StatementLayout.package_id == package_id)
+            ).scalars()
+        )
+    assert codes == {"B01-DN", "B02-DN"}
+
+
+def test_reseeding_backfills_missing_statement_layouts_only(
+    owner_engine: Engine, dataset_alpha: DatasetRef
+) -> None:
+    """Dataset cấp giữa migration 0010 và 0011 có gói nhưng trống layout —
+    lượt gieo kế tiếp phải lấp đúng chỗ trống, không đụng gì khác
+    (`seed._ensure_statements_backfilled`)."""
+    from sqlalchemy import delete
+
+    from ket.kernel.config.statements.models import StatementLayout, StatementRow
+
+    with owner_engine.begin() as connection:
+        bind_seed_schema(connection, dataset_alpha.schema_name)
+        package_id = connection.execute(
+            select(ConfigPackage.id).where(ConfigPackage.code == "TT133-2016")
+        ).scalar_one()
+        layout_ids = list(
+            connection.execute(
+                select(StatementLayout.id).where(StatementLayout.package_id == package_id)
+            ).scalars()
+        )
+        assert layout_ids, "TT133 phải đã có layout từ lúc provision"
+        connection.execute(delete(StatementRow).where(StatementRow.layout_id.in_(layout_ids)))
+        connection.execute(delete(StatementLayout).where(StatementLayout.id.in_(layout_ids)))
+
+    with owner_engine.begin() as connection:
+        added = ensure_builtin_packages(connection, dataset_alpha.schema_name)
+    assert added == 0, "backfill layout không được tính là 'gói mới'"
+
+    with owner_engine.begin() as connection:
+        bind_seed_schema(connection, dataset_alpha.schema_name)
+        codes = set(
+            connection.execute(
+                select(StatementLayout.code).where(StatementLayout.package_id == package_id)
+            ).scalars()
+        )
+    assert codes == {"B01a-DNN", "B02-DNN"}
+
+
+def test_backfill_is_skipped_when_package_version_mismatches(
+    owner_engine: Engine, dataset_alpha: DatasetRef
+) -> None:
+    """Version gói trong DB lệch với data trên đĩa → KHÔNG backfill layout:
+    công thức được loader kiểm dải TK theo accounts.csv CÙNG version trên đĩa,
+    gắn vào hệ TK version cũ là đi vòng qua lượt kiểm đó (review 5B, M-1)."""
+    from sqlalchemy import delete, update
+
+    from ket.kernel.config.statements.models import StatementLayout, StatementRow
+
+    with owner_engine.begin() as connection:
+        bind_seed_schema(connection, dataset_alpha.schema_name)
+        package_id = connection.execute(
+            select(ConfigPackage.id).where(ConfigPackage.code == "TT133-2016")
+        ).scalar_one()
+        layout_ids = list(
+            connection.execute(
+                select(StatementLayout.id).where(StatementLayout.package_id == package_id)
+            ).scalars()
+        )
+        connection.execute(delete(StatementRow).where(StatementRow.layout_id.in_(layout_ids)))
+        connection.execute(delete(StatementLayout).where(StatementLayout.id.in_(layout_ids)))
+        connection.execute(
+            update(ConfigPackage).where(ConfigPackage.id == package_id).values(version=999)
+        )
+
+    try:
+        with owner_engine.begin() as connection:
+            ensure_builtin_packages(connection, dataset_alpha.schema_name)
+        with owner_engine.begin() as connection:
+            bind_seed_schema(connection, dataset_alpha.schema_name)
+            count = (
+                connection.execute(
+                    select(StatementLayout.id).where(StatementLayout.package_id == package_id)
+                )
+                .scalars()
+                .all()
+            )
+        assert count == [], "version lệch mà vẫn backfill là đi vòng qua lượt kiểm dải TK"
+    finally:
+        # Trả version về đúng rồi gieo lại layout — dataset_alpha dùng chung.
+        with owner_engine.begin() as connection:
+            bind_seed_schema(connection, dataset_alpha.schema_name)
+            connection.execute(
+                update(ConfigPackage).where(ConfigPackage.id == package_id).values(version=1)
+            )
+        with owner_engine.begin() as connection:
+            ensure_builtin_packages(connection, dataset_alpha.schema_name)

@@ -9294,6 +9294,211 @@
         "title": "SetupItem",
         "type": "object"
       },
+      "StatementLayoutListResponse": {
+        "properties": {
+          "layouts": {
+            "items": {
+              "$ref": "#/components/schemas/StatementLayoutSummaryResponse"
+            },
+            "title": "Layouts",
+            "type": "array"
+          },
+          "package_code": {
+            "title": "Package Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "package_code",
+          "layouts"
+        ],
+        "title": "StatementLayoutListResponse",
+        "type": "object"
+      },
+      "StatementLayoutSummaryResponse": {
+        "description": "Một mẫu BCTC trong gói cấu hình đang hiệu lực.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "statement_kind": {
+            "title": "Statement Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "name_en",
+          "statement_kind"
+        ],
+        "title": "StatementLayoutSummaryResponse",
+        "type": "object"
+      },
+      "StatementPreviewResponse": {
+        "description": "Một BCTC đã lập cho `(layout, kỳ, sổ[, chi nhánh])`.\n\nCột so sánh (`comparative`) là \"Số đầu năm\" với báo cáo tình hình tài\nchính; với báo cáo phát sinh nó là `null` ở v1 — xem bất biến H1 trong\n`reporting/statements/builder.py`.",
+        "properties": {
+          "branch_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch Id"
+          },
+          "layout_code": {
+            "title": "Layout Code",
+            "type": "string"
+          },
+          "ledger": {
+            "title": "Ledger",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "package_code": {
+            "title": "Package Code",
+            "type": "string"
+          },
+          "period_id": {
+            "title": "Period Id",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/StatementRowValueResponse"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "statement_kind": {
+            "title": "Statement Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "layout_code",
+          "name",
+          "name_en",
+          "statement_kind",
+          "package_code",
+          "ledger",
+          "period_id",
+          "branch_id",
+          "rows"
+        ],
+        "title": "StatementPreviewResponse",
+        "type": "object"
+      },
+      "StatementRowValueResponse": {
+        "description": "Một chỉ tiêu đã tính — giá trị cột chính + cột so sánh.",
+        "properties": {
+          "comparative": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparative"
+          },
+          "hide_when_zero": {
+            "title": "Hide When Zero",
+            "type": "boolean"
+          },
+          "indent_level": {
+            "title": "Indent Level",
+            "type": "integer"
+          },
+          "is_bold": {
+            "title": "Is Bold",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "label_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label En"
+          },
+          "note_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note Ref"
+          },
+          "row_code": {
+            "title": "Row Code",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row_code",
+          "label",
+          "label_en",
+          "note_ref",
+          "indent_level",
+          "is_bold",
+          "hide_when_zero",
+          "value",
+          "comparative"
+        ],
+        "title": "StatementRowValueResponse",
+        "type": "object"
+      },
       "TimekeepingSymbolsCreateRequest": {
         "additionalProperties": false,
         "description": "Ký hiệu chấm công — tạo mới.",
@@ -23652,6 +23857,132 @@
         "summary": "Settings Groups",
         "tags": [
           "setup"
+        ]
+      }
+    },
+    "/api/v1/statements": {
+      "get": {
+        "description": "Mọi mẫu BCTC của gói cấu hình hiệu lực cho kỳ đã chọn.\n\nNhận `period_id` chứ không nhận mã gói: gói nào hiệu lực là chuyện của\n`resolve_package` (chế độ kế toán của năm + ngày cuối kỳ), client không\nđược chọn tay để khỏi xem nhầm bộ mẫu của chế độ khác (FR-NFR-070).",
+        "operationId": "get_statement_layouts_api_v1_statements_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Period Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementLayoutListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Statement Layouts",
+        "tags": [
+          "statements"
+        ]
+      }
+    },
+    "/api/v1/statements/{layout_code}/preview": {
+      "get": {
+        "description": "Lập một BCTC và trả dạng lưới để client xem trước (FR-GLE-043).\n\nĐổi `ledger` cho hai bộ số độc lập trên cùng mẫu (BR-RPT-04); bỏ trống\n`branch_id` là BCTC gộp mọi chi nhánh trong phạm vi người gọi thấy.",
+        "operationId": "preview_statement_api_v1_statements__layout_code__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "layout_code",
+            "required": true,
+            "schema": {
+              "title": "Layout Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Period Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ledger",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Ledger",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Preview Statement",
+        "tags": [
+          "statements"
         ]
       }
     },

@@ -23,9 +23,12 @@ from pathlib import Path
 
 ACCOUNT_LITERAL_PATTERN = re.compile(r"^[1-9][0-9]{2,4}$")
 
-SCANNED_SUBDIRS: tuple[str, ...] = ("modules", "posting")
-"""Hai tầng nghiệp vụ được quét — kernel không hạch toán trực tiếp, và
-`accounts_provider`/gói cấu hình chính là nơi **được phép** cầm số hiệu TK."""
+SCANNED_SUBDIRS: tuple[str, ...] = ("modules", "posting", "reporting")
+"""Ba tầng nghiệp vụ được quét — kernel không hạch toán trực tiếp, và
+`accounts_provider`/gói cấu hình chính là nơi **được phép** cầm số hiệu TK.
+`reporting` vào danh sách từ lát 5B: công thức chỉ tiêu là DỮ LIỆU của gói
+(`statements.json`), builder chỉ được đọc chúng — một số hiệu TK viết cứng
+trong builder là đường vòng qua chính cơ chế layout mà nó phục vụ."""
 
 ALLOWLIST: dict[tuple[str, int], str] = {}
 """`(đường dẫn tương đối tới domain_root, dòng)` → lý do được phép.
