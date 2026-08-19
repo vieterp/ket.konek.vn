@@ -3408,6 +3408,25 @@
         "title": "ExpenseItemsUpdateRequest",
         "type": "object"
       },
+      "ExtendedDimensionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "dimension_id": {
+            "title": "Dimension Id",
+            "type": "integer"
+          },
+          "value_id": {
+            "title": "Value Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dimension_id",
+          "value_id"
+        ],
+        "title": "ExtendedDimensionIn",
+        "type": "object"
+      },
       "GrantResponse": {
         "description": "`changed=False` nghĩa là đã có sẵn — gọi lại không phải lỗi.\n\nIdempotent có chủ đích: màn hình phân quyền là nơi người ta bấm hai lần vì\nkhông chắc lần đầu đã ăn chưa, và một lỗi `409` ở đó chỉ làm họ hoang mang.",
         "properties": {
@@ -4623,6 +4642,726 @@
         "title": "JobTypeResponse",
         "type": "object"
       },
+      "JournalLineIn": {
+        "additionalProperties": false,
+        "description": "Một dòng định khoản gửi lên — nguyên tệ + tỷ giá là bắt buộc.",
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "corresponding_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corresponding Account Id"
+          },
+          "cost_object_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Object Id"
+          },
+          "credit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit"
+          },
+          "credit_fc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Credit Fc"
+          },
+          "currency_code": {
+            "anyOf": [
+              {
+                "maxLength": 3,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency Code"
+          },
+          "debit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debit"
+          },
+          "debit_fc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Debit Fc"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "exchange_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exchange Rate"
+          },
+          "expense_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expense Item Id"
+          },
+          "extended": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtendedDimensionIn"
+            },
+            "title": "Extended",
+            "type": "array"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartnerKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          }
+        },
+        "required": [
+          "account_id"
+        ],
+        "title": "JournalLineIn",
+        "type": "object"
+      },
+      "JournalLineOut": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "corresponding_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corresponding Account Id"
+          },
+          "cost_object_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Object Id"
+          },
+          "credit_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Credit Fc",
+            "type": "string"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "debit_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Debit Fc",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "exchange_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exchange Rate",
+            "type": "string"
+          },
+          "expense_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expense Item Id"
+          },
+          "extended_dimensions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extended Dimensions"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Kind"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          }
+        },
+        "required": [
+          "id",
+          "line_no",
+          "account_id",
+          "corresponding_account_id",
+          "currency_code",
+          "exchange_rate",
+          "debit_fc",
+          "credit_fc",
+          "partner_id",
+          "partner_kind",
+          "cost_object_id",
+          "project_id",
+          "order_id",
+          "contract_id",
+          "expense_item_id",
+          "item_id",
+          "warehouse_id",
+          "extended_dimensions",
+          "description"
+        ],
+        "title": "JournalLineOut",
+        "type": "object"
+      },
+      "JournalVoucherIn": {
+        "additionalProperties": false,
+        "description": "Thân chứng từ cho cả tạo mới lẫn sửa (PUT gửi trọn bộ dòng thay thế).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "cashflow_activity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cashflow Activity"
+          },
+          "currency_code": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "exchange_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Exchange Rate"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/JournalLineIn"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "currency_code",
+          "lines"
+        ],
+        "title": "JournalVoucherIn",
+        "type": "object"
+      },
+      "JournalVoucherOut": {
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "cashflow_activity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cashflow Activity"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "exchange_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exchange Rate",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/JournalLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "period_id": {
+            "title": "Period Id",
+            "type": "integer"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "posted_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted By"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "document_type",
+          "voucher_no",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "period_id",
+          "currency_code",
+          "exchange_rate",
+          "description",
+          "status",
+          "cashflow_activity",
+          "created_at",
+          "created_by",
+          "posted_at",
+          "posted_by",
+          "row_version"
+        ],
+        "title": "JournalVoucherOut",
+        "type": "object"
+      },
+      "JournalVoucherUpdate": {
+        "additionalProperties": false,
+        "description": "PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "cashflow_activity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cashflow Activity"
+          },
+          "currency_code": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "exchange_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Exchange Rate"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/JournalLineIn"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "currency_code",
+          "lines",
+          "row_version"
+        ],
+        "title": "JournalVoucherUpdate",
+        "type": "object"
+      },
       "LoginRequest": {
         "description": "Đăng nhập. `totp_code` chỉ cần cho tài khoản bắt buộc 2FA.\n\nClient bình thường gửi lần đầu **không** kèm mã; nhận `auth.totp_required`\nthì hỏi mã rồi gửi lại. Nhờ vậy màn hình đăng nhập không phải hỏi mã 2FA của\nnhững người không dùng 2FA.",
         "properties": {
@@ -5041,6 +5780,16 @@
         ],
         "title": "PartnerBankAccountUpdateRequest",
         "type": "object"
+      },
+      "PartnerKind": {
+        "description": "Loại đối tác trên dòng hạch toán — `0 customer 1 vendor 2 employee`.\n\nMột cột `partner_id` + một cột loại, chứ không ba cột khóa riêng: TK 131\ntheo dõi khách, 331 theo dõi nhà cung cấp, 141 theo dõi nhân viên — mỗi\ndòng chỉ có **một** đối tượng công nợ, và ba cột sẽ cho phép điền hai.",
+        "enum": [
+          0,
+          1,
+          2
+        ],
+        "title": "PartnerKind",
+        "type": "integer"
       },
       "PartnersCreateRequest": {
         "additionalProperties": false,
@@ -8101,6 +8850,165 @@
         "title": "UpdateManifest",
         "type": "object"
       },
+      "VoucherListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VoucherResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "VoucherListResponse",
+        "type": "object"
+      },
+      "VoucherResponse": {
+        "description": "Header chứng từ — đủ cho danh sách và cho phản hồi của hành động.",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "cashflow_activity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cashflow Activity"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "exchange_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exchange Rate",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "period_id": {
+            "title": "Period Id",
+            "type": "integer"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "posted_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted By"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "document_type",
+          "voucher_no",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "period_id",
+          "currency_code",
+          "exchange_rate",
+          "description",
+          "status",
+          "cashflow_activity",
+          "created_at",
+          "created_by",
+          "posted_at",
+          "posted_by",
+          "row_version"
+        ],
+        "title": "VoucherResponse",
+        "type": "object"
+      },
       "WarehousesCreateRequest": {
         "additionalProperties": false,
         "description": "Kho — tạo mới.",
@@ -8998,6 +9906,143 @@
         "summary": "Add Dimension Value",
         "tags": [
           "master-data"
+        ]
+      }
+    },
+    "/api/v1/gl/journal-vouchers": {
+      "post": {
+        "description": "Cất chứng từ; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.\n\nKhi chế độ Cất-đồng-thời-ghi-sổ bật, người tạo phải có **cả** quyền `post`\n— kiểm trong `work` vì chỉ service mới biết tùy chọn đang bật hay không;\nném ở đó thì khóa idempotency và số chứng từ cùng rollback.",
+        "operationId": "create_journal_voucher_api_v1_gl_journal_vouchers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JournalVoucherIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Create Journal Voucher",
+        "tags": [
+          "general-ledger"
+        ]
+      }
+    },
+    "/api/v1/gl/journal-vouchers/{voucher_id}": {
+      "get": {
+        "operationId": "get_journal_voucher_api_v1_gl_journal_vouchers__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Journal Voucher",
+        "tags": [
+          "general-ledger"
+        ]
+      },
+      "put": {
+        "description": "Sửa chứng từ Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).\n\nKhông cần khóa idempotency: gửi lại cùng `row_version` thì lần thứ hai đã\nbị chính khóa lạc quan chặn (`409`), và bản thân phép ghi là thay-thế-trọn\nnên không nhân đôi được gì.",
+        "operationId": "update_journal_voucher_api_v1_gl_journal_vouchers__voucher_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JournalVoucherUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Update Journal Voucher",
+        "tags": [
+          "general-ledger"
         ]
       }
     },
@@ -20962,6 +22007,252 @@
         "summary": "Revoke Role",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/v1/vouchers": {
+      "get": {
+        "description": "Danh sách chứng từ, lọc theo loại/kỳ/trạng thái/chi nhánh, mới nhất trước.\n\nKhông nêu `type` thì trả về chứng từ của **những loại người gọi được xem**\n— mỗi loại một mã quyền `view`, và danh sách trộn không được là đường vòng\nqua phân quyền của một loại. RLS đã lọc chi nhánh trước khi mã này chạy.",
+        "operationId": "list_vouchers_api_v1_vouchers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoucherListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Vouchers",
+        "tags": [
+          "vouchers"
+        ]
+      }
+    },
+    "/api/v1/vouchers/{voucher_id}": {
+      "delete": {
+        "description": "Xóa chứng từ Đã cất. Lặp lại cho `404` — tự nhiên đã idempotent.\n\nSố chứng từ không tái sử dụng (máy trạng thái); bảng chi tiết module đi\ntheo `ON DELETE CASCADE`.",
+        "operationId": "delete_voucher_api_v1_vouchers__voucher_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Delete Voucher",
+        "tags": [
+          "vouchers"
+        ]
+      }
+    },
+    "/api/v1/vouchers/{voucher_id}/actions/post": {
+      "post": {
+        "description": "Ghi sổ một chứng từ Đã cất (SRS 00 §3.3, FR-NFR-003).",
+        "operationId": "post_voucher_api_v1_vouchers__voucher_id__actions_post_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoucherResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Post Voucher",
+        "tags": [
+          "vouchers"
+        ]
+      }
+    },
+    "/api/v1/vouchers/{voucher_id}/actions/unpost": {
+      "post": {
+        "description": "Bỏ ghi sổ — chứng từ về Đã cất, dòng sổ bị xóa (không phải bút toán đảo).",
+        "operationId": "unpost_voucher_api_v1_vouchers__voucher_id__actions_unpost_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoucherResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Unpost Voucher",
+        "tags": [
+          "vouchers"
         ]
       }
     },
