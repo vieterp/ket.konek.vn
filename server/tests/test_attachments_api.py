@@ -190,6 +190,7 @@ def _actor(
         user_id=user.id,
         role_code=role_code,
         actor_user_id=user.id,
+        actor_permissions=None,
     )
     for branch_code in branch_codes:
         role_service.assign_branch(

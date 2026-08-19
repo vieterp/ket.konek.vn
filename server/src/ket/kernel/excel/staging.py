@@ -15,7 +15,7 @@ Core; lý do (và nó là một lý do bảo mật, không phải thẩm mỹ) n
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Final
@@ -30,6 +30,7 @@ from sqlalchemy import (
     Select,
     Table,
     Text,
+    and_,
     case,
     cast,
     delete,
@@ -243,7 +244,12 @@ class StagingTable:
 
     # ------------------------------------------------------------------ nạp
 
-    def load(self, rows: Iterable[tuple[int, dict[str, str | None]]]) -> int:
+    def load(
+        self,
+        rows: Iterable[tuple[int, dict[str, str | None]]],
+        *,
+        on_batch: Callable[[int], None] | None = None,
+    ) -> int:
         """Đổ dòng thô vào bảng đệm theo lô. Trả về số dòng đã nạp.
 
         `uid` sinh **ở đây**, một giá trị cho mỗi dòng, chứ không bằng một hàm
@@ -253,6 +259,11 @@ class StagingTable:
         đều. Nó sẽ chạy trót lọt, không lỗi, và mất đúng tính chất mà cột này tồn
         tại vì nó. `tests/test_uuid7_identifiers.py` canh `version == 7`, nhưng
         nó canh đường ghi thông thường; nhập liệu là đường thứ hai.
+
+        `on_batch` được gọi sau **mỗi lô** với tổng số dòng đã nạp — đây là ranh
+        giới lô mà thân job dùng để gia hạn lease và kiểm cờ hủy (audit phase
+        1–3, C1/C2): vòng đọc tệp là phần chạy lâu nhất của cả lượt nhập, và nó
+        là vòng lặp Python duy nhất nên chỉ nó mới có "ranh giới" để đứng.
         """
         total = 0
         batch: list[dict[str, object]] = []
@@ -268,6 +279,8 @@ class StagingTable:
             if len(batch) >= INSERT_BATCH:
                 total += self._flush(batch)
                 batch = []
+                if on_batch is not None:
+                    on_batch(total)
         total += self._flush(batch)
         return total
 
@@ -295,6 +308,7 @@ class StagingTable:
         mode: ImportMode,
         branch_id: int | None,
         autocreate: frozenset[str] = frozenset(),
+        on_check: Callable[[], None] | None = None,
     ) -> Iterator[RowError]:
         """Mọi sai sót của lượt nhập, gộp từ các phép kiểm độc lập.
 
@@ -302,7 +316,19 @@ class StagingTable:
         (mã không tra được, mã trùng). Người dùng sửa được nhóm đầu mà không cần
         biết gì về dữ liệu đang có trong hệ thống, nên đọc danh sách từ trên
         xuống cũng là thứ tự việc phải làm.
+
+        `on_check` được gọi trước **mỗi nhóm phép kiểm** — cùng hợp đồng nhịp
+        với `load(on_batch=…)`: pha kiểm là một chuỗi câu SQL tập hợp, và trên
+        tệp cây lớn thì mỗi câu (EXISTS tương quan trên jsonb bảng đệm) đủ dài
+        để cả pha vượt lease nếu không có nhịp nào ở giữa (review lát vá, M1).
+        Một câu **đơn lẻ** vượt lease thì nhịp nào cũng không cứu — hàng rào
+        trước-commit của worker nhận phần đó.
         """
+
+        def _pulse() -> None:
+            if on_check is not None:
+                on_check()
+
         # Vắt cạn **trước**, không `yield` dần: tập dòng đã lỗi phải đầy đủ trước
         # khi truy vấn của `_row_rule_errors` chạy, vì phép loại trừ nay nằm
         # trong chính câu SQL đó chứ không ở Python.
@@ -317,18 +343,27 @@ class StagingTable:
         # đã chạy thì đã muộn.
         earlier: list[RowError] = []
         for column in self._descriptor.columns:
+            _pulse()
             earlier.extend(self._required_errors(column))
             earlier.extend(self._length_errors(column))
             earlier.extend(self._type_errors(column))
             earlier.extend(self._range_errors(column))
             earlier.extend(self._allowed_value_errors(column))
+        _pulse()
         earlier.extend(self._duplicate_in_file_errors())
+        _pulse()
         earlier.extend(self._reference_errors(branch_id, autocreate=autocreate))
+        _pulse()
+        earlier.extend(self._parent_not_group_errors(branch_id))
+        _pulse()
         earlier.extend(self._existing_code_errors(spec, mode=mode, branch_id=branch_id))
+        _pulse()
         earlier.extend(self._shared_record_errors(spec, mode=mode, branch_id=branch_id))
+        _pulse()
         earlier.extend(self._reference_moved_errors(spec, mode=mode, branch_id=branch_id))
         flagged = {error.row for error in earlier}
         yield from earlier
+        _pulse()
         # Luật liên-trường chạy **cuối**, và bỏ qua dòng đã có lỗi khác: chúng
         # đọc *giá trị hiệu lực*, nên một ô hỏng ở trên biến thành `NULL` ở đây
         # và kéo theo một lỗi thứ hai mô tả **hệ quả** thay vì nguyên nhân. Ca
@@ -579,6 +614,75 @@ class StagingTable:
                     column=column.display_header,
                     code="import.reference_not_found",
                     message=f"Không tìm thấy mã {value!r} trong danh mục {column.reference_slug!r}",
+                    value=value,
+                )
+
+    def _parent_not_group_errors(self, branch_id: int | None) -> Iterator[RowError]:
+        """Mã nhóm cha trỏ vào một nút **lá** — cùng luật với `MasterDataService`.
+
+        `_ensure_parent_is_group` chặn đường tạo/chuyển cha trên API (audit phase
+        1–3, H2 trục kernel); nhập Excel là đường ghi cây thứ hai và không đi qua
+        service, nên thiếu phép kiểm này thì nó là đường vòng quanh đúng luật đó.
+
+        Hai đường phân giải của mã nhóm cha, hai phép kiểm:
+
+        * mã **đã có trong danh mục** — bước ghi sẽ nối vào bản ghi đó, nên nó
+          phải là nhóm;
+        * mã **chỉ khai trong tệp** — bước ghi sẽ tạo nó ở vòng trước rồi nối
+          con vào, nên chính dòng khai nó phải đánh dấu "Là nhóm". Ô bỏ trống
+          nghĩa là "không phải nhóm" (cùng cách đọc với `boolean_expression`).
+        """
+        for column in self._descriptor.references:
+            if column.target_field != "parent_id":
+                continue
+            target = table_of(column.reference_slug)
+            visible_parent = and_(
+                target.c.code == cell(column.field), visible_to(target, branch_id)
+            )
+            points_at_leaf_in_catalog = exists(
+                select(target.c.id).where(visible_parent).where(target.c.is_group.is_(False))
+            )
+            statement = (
+                self._base(cell(column.field))
+                .where(cell_or_null(column.field).is_not(None))
+                .where(points_at_leaf_in_catalog)
+            )
+            for row_number, value in self._rows(statement):
+                yield RowError(
+                    row=row_number,
+                    column=column.display_header,
+                    code="import.parent_not_group",
+                    message=f"Mã nhóm cha {value!r} trỏ vào một bản ghi không phải nhóm",
+                    value=value,
+                )
+
+            declared = table_for(ImportStagingRow).alias("declared_parent")
+            declared_as_leaf = exists(
+                select(declared.c.id)
+                .where(declared.c.job_id == self._job_id)
+                .where(func.btrim(declared.c["cells"]["code"].astext) == cell(column.field))
+                .where(
+                    func.lower(
+                        func.coalesce(func.btrim(declared.c["cells"]["is_group"].astext), "")
+                    ).notin_(TRUE_WORDS)
+                )
+            )
+            in_catalog = exists(select(target.c.id).where(visible_parent))
+            statement = (
+                self._base(cell(column.field))
+                .where(cell_or_null(column.field).is_not(None))
+                .where(~in_catalog)
+                .where(declared_as_leaf)
+            )
+            for row_number, value in self._rows(statement):
+                yield RowError(
+                    row=row_number,
+                    column=column.display_header,
+                    code="import.parent_not_group",
+                    message=(
+                        f"Dòng khai mã {value!r} trong tệp không đánh dấu 'Là nhóm' "
+                        "nên không nhận con được"
+                    ),
                     value=value,
                 )
 

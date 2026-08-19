@@ -273,6 +273,9 @@ def grant_role(
         user_id=user_id,
         role_code=payload.role_code,
         actor_user_id=authorized.scope.user_id,
+        # Chốt chống leo thang (cùng khuôn với `assign_branch` bên dưới): chỉ
+        # gán được vai trò mà quyền của nó nằm trọn trong quyền của người gọi.
+        actor_permissions=frozenset(authorized.access.permissions),
         correlation_id=authorized.scope.correlation_id,
         client_info=authorized.scope.client_info,
     )
@@ -287,6 +290,7 @@ def revoke_role(
     changed = role_service.revoke_role(
         factory,
         dataset_schema=authorized.scope.dataset_schema,
+        actor_permissions=frozenset(authorized.access.permissions),
         user_id=user_id,
         role_code=role_code,
         actor_user_id=authorized.scope.user_id,

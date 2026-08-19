@@ -317,6 +317,9 @@ export const vi = {
   'error.master_data.in_use':
     'Bản ghi đã được sử dụng nên không xóa được. Dùng "Ngừng theo dõi" thay vì xóa.',
   'error.master_data.parent_cycle': 'Không thể đặt nhóm cha là chính nó hoặc nhánh con của nó.',
+  'error.master_data.parent_not_group': 'Bản ghi được chọn làm nhóm cha không phải là nhóm.',
+  'error.auth.role_grant_too_wide':
+    'Không gán được vai trò mang quyền mà chính bạn không có.',
   'error.master_data.parent_scope_mismatch':
     'Nhóm cha thuộc phạm vi chi nhánh khác với bản ghi này.',
   'error.master_data.group_not_postable': 'Nút nhóm chỉ để gom, không dùng trực tiếp được.',

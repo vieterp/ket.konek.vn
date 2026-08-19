@@ -104,6 +104,7 @@ def _grant(
         user_id=user_id,
         role_code=role_code,
         actor_user_id=user_id,
+        actor_permissions=None,
         client_info="pytest",
     )
 
@@ -387,6 +388,7 @@ def test_revoking_a_role_leaves_two_factor_on(
             user_id=user.id,
             role_code="admin",
             actor_user_id=user.id,
+            actor_permissions=None,
         )
         is True
     )

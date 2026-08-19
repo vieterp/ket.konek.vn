@@ -100,6 +100,7 @@ def headers(
         user_id=user.id,
         role_code=RESPONSIVENESS_ROLE,
         actor_user_id=user.id,
+        actor_permissions=None,
     )
     login = client.post(
         "/api/v1/auth/login", json={"username": user.username, "password": PASSWORD}

@@ -80,6 +80,7 @@ def test_granting_the_same_role_concurrently_never_errors(
             user_id=user.id,
             role_code="admin",
             actor_user_id=user.id,
+            actor_permissions=None,
         )
     )
 

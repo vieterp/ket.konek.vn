@@ -115,6 +115,7 @@ def test_a_days_work_goes_through_every_layer_and_leaves_an_unforgeable_trail(
         user_id=user.id,
         role_code=walkthrough_role,
         actor_user_id=user.id,
+        actor_permissions=None,
     )
     role_service.assign_branch(
         session_factory,

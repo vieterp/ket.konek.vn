@@ -44,8 +44,14 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 
 from ket.kernel.datasets.bootstrap import ensure_cluster
+from ket.kernel.datasets.provisioning import (
+    current_revision,
+    find_alembic_config,
+    head_revision,
+    upgrade_dataset_schema,
+)
 from ket.kernel.datasets.service import list_datasets, resolve_dataset
-from ket.kernel.errors import DomainError
+from ket.kernel.errors import DatasetNotFoundError, DomainError
 from ket.kernel.idempotency import service as idempotency_service
 from ket.kernel.persistence.session import control_session, create_session_factory
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
@@ -111,6 +117,74 @@ def command_ensure_cluster(_args: argparse.Namespace, settings: Settings) -> Non
     finally:
         engine.dispose()
     print("Đã dựng/cập nhật bảng điều khiển và vai trò dataset.")  # noqa: T201
+
+
+def command_upgrade_datasets(args: argparse.Namespace, settings: Settings) -> None:
+    """Nâng schema của các dataset **đã tồn tại** lên revision của mã nguồn (LD-05).
+
+    Đây là nửa còn thiếu của đường nâng cấp (audit phase 1–3, HIGH trục nền
+    tảng): `upgrade_dataset_schema` trước đó chỉ được gọi lúc **tạo** dataset,
+    còn app server thì fail-closed khi thấy schema lệch phiên bản — tức là sau
+    một lần cập nhật binary có migration mới, người vận hành không có lệnh nào
+    để mở máy trở lại. Quy trình nâng cấp từ nay: dừng dịch vụ → thay binary →
+    `python -m ket.admin upgrade-datasets` → khởi động lại.
+
+    Từng dataset một, dataset hỏng không chặn dataset sau: một schema đang khôi
+    phục dở phải là **một** dòng lỗi trong bản tổng kết, không phải lý do mọi
+    dataset khác cũng kẹt ở phiên bản cũ. Có lỗi nào thì thoát mã 1 để script
+    cài đặt dừng đúng chỗ.
+    """
+    engine = _owner_engine(settings)
+    try:
+        # Rào lúc chạy (review lát vá, M3): app server chỉ kiểm phiên bản schema
+        # lúc KHỞI ĐỘNG, nên migration chạy dưới chân một tiến trình đang sống
+        # là đổi bàn trong lúc đang ăn — ORM cũ ghi vào schema mới. Đếm phiên
+        # của hai vai trò runtime; còn phiên nào thì dừng, trừ khi người vận
+        # hành nói tường minh rằng họ hiểu (--force, cho ca phiên treo/mồ côi).
+        with engine.connect() as connection:
+            live = connection.exec_driver_sql(
+                "SELECT count(*) FROM pg_stat_activity "
+                "WHERE usename IN ('ket_app', 'ket_worker') AND pid <> pg_backend_pid()"
+            ).scalar_one()
+        if live and not args.force:
+            print(  # noqa: T201
+                f"Còn {live} phiên của ket_app/ket_worker đang mở — dừng app server và "
+                "worker trước khi nâng schema, hoặc chạy lại với --force nếu chắc chắn "
+                "đó là phiên mồ côi.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        config = find_alembic_config()
+        expected = head_revision(config)
+        datasets = list_datasets(engine, include_inactive=True)
+        if args.dataset is not None:
+            datasets = tuple(d for d in datasets if d.code == args.dataset)
+            if not datasets:
+                raise DatasetNotFoundError("Không có dữ liệu kế toán với mã này", code=args.dataset)
+        if not datasets:
+            print("Chưa có dữ liệu kế toán nào được đăng ký.")  # noqa: T201
+            return
+        failures = 0
+        for dataset in datasets:
+            found = current_revision(engine, dataset.schema_name)
+            if found == expected:
+                print(f"{dataset.code}: đã ở {expected}, bỏ qua.")  # noqa: T201
+                continue
+            try:
+                upgrade_dataset_schema(engine, dataset.schema_name, config)
+            # Bắt rộng có chủ đích: tổng kết per-dataset, không dừng giữa chừng.
+            except Exception as exc:
+                failures += 1
+                print(  # noqa: T201
+                    f"{dataset.code}: LỖI khi nâng từ {found or '(chưa có)'} — {exc}",
+                    file=sys.stderr,
+                )
+            else:
+                print(f"{dataset.code}: {found or '(chưa có)'} → {expected}.")  # noqa: T201
+        if failures:
+            raise SystemExit(1)
+    finally:
+        engine.dispose()
 
 
 def command_create_user(args: argparse.Namespace, settings: Settings) -> None:
@@ -231,6 +305,8 @@ def command_grant_role(args: argparse.Namespace, settings: Settings) -> None:
             user_id=user_id,
             role_code=args.role,
             actor_user_id=actor_user_id,
+            # Đường phá-kính: chạy tại máy chủ, không có tập quyền nào để so.
+            actor_permissions=None,
             client_info="ket.admin",
         )
     finally:
@@ -407,6 +483,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Dựng/nâng cấp bảng điều khiển và vai trò DB của mọi dataset",
     )
     ensure.set_defaults(handler=command_ensure_cluster)
+
+    upgrade = subparsers.add_parser(
+        "upgrade-datasets",
+        help="Nâng schema của mọi dataset đã tồn tại lên revision của mã nguồn (sau khi thay binary)",
+    )
+    upgrade.add_argument(
+        "--dataset", default=None, help="Chỉ nâng một dữ liệu kế toán (mặc định: tất cả)"
+    )
+    upgrade.add_argument(
+        "--force",
+        action="store_true",
+        help="Nâng cả khi còn phiên ket_app/ket_worker đang mở (chỉ khi chắc đó là phiên mồ côi)",
+    )
+    upgrade.set_defaults(handler=command_upgrade_datasets)
 
     create = subparsers.add_parser("create-user", help="Tạo danh tính đăng nhập")
     create.add_argument("username")

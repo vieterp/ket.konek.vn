@@ -344,6 +344,20 @@ class BranchNotInScopeError(DomainError):
     http_status: ClassVar[int] = 403
 
 
+class RoleGrantTooWideError(DomainError):
+    """Gán một vai trò mang quyền mà chính người thực hiện không có.
+
+    Cùng luật với `BranchNotInScopeError` nhưng cho trục **quyền** thay vì trục
+    chi nhánh: giữ `system.role.edit` nghĩa là được phân phát phần quyền mình
+    đang có, không phải được tự nâng mình (hay đồng minh) lên `admin` trong một
+    request (audit phase 1–3, H-1 trục bảo mật). Đường phá-kính tại máy chủ
+    (`ket.admin grant-role`) được miễn — ai chạm được máy chủ thì đã chạm được DB.
+    """
+
+    error_code: ClassVar[str] = "auth.role_grant_too_wide"
+    http_status: ClassVar[int] = 403
+
+
 class RoleNotFoundError(DomainError):
     """Không có vai trò với mã này trong dữ liệu kế toán đang mở."""
 
@@ -711,6 +725,20 @@ class MasterDataParentScopeError(DomainError):
     """
 
     error_code: ClassVar[str] = "master_data.parent_scope_mismatch"
+
+
+class MasterDataParentNotGroupError(DomainError):
+    """Chọn một nút **lá** làm nhóm cha (`is_group = false`).
+
+    Chiều ngược của `MasterDataGroupNotPostableError`: lá tồn tại để hạch toán,
+    nhóm tồn tại để gom. Một nút lá vừa có phát sinh vừa có con biến câu hỏi
+    "số của nút này là số của chính nó hay tổng các con?" thành không trả lời
+    được — và mọi báo cáo cộng dồn theo nhóm (LD-08) lệch từ đó. Chặn ở tầng
+    dịch vụ vì mọi đường ghi cây (tạo, chuyển cha, nhập Excel) đều phải qua
+    cùng một luật (audit phase 1–3, finding H2 trục kernel).
+    """
+
+    error_code: ClassVar[str] = "master_data.parent_not_group"
 
 
 class MasterDataGroupNotPostableError(DomainError):

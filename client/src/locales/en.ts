@@ -312,6 +312,9 @@ export const en: Record<TranslationKey, string> = {
   'error.master_data.in_use':
     'The record is already in use and cannot be deleted. Use "Discontinued" instead.',
   'error.master_data.parent_cycle': 'A record cannot be its own parent or descendant.',
+  'error.master_data.parent_not_group': 'The record chosen as parent is not a group.',
+  'error.auth.role_grant_too_wide':
+    'You cannot grant a role that carries permissions you do not hold yourself.',
   'error.master_data.parent_scope_mismatch':
     'The parent group belongs to a different branch scope.',
   'error.master_data.group_not_postable': 'Group nodes only organize records and cannot be used directly.',
