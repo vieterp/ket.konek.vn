@@ -48,11 +48,13 @@ from ket.api.middleware.schema_version_gate import (
     CLIENT_VERSION_HEADER,
     SchemaVersionGateMiddleware,
 )
+from ket.api.routers.accounts import router as accounts_router
 from ket.api.routers.attachments import ATTACHMENTS_PREFIX
 from ket.api.routers.attachments import router as attachments_router
 from ket.api.routers.auth import router as auth_router
 from ket.api.routers.dimensions import router as dimensions_router
 from ket.api.routers.exports import router as exports_router
+from ket.api.routers.fiscal_years import router as fiscal_years_router
 from ket.api.routers.gl_journal import router as gl_journal_router
 from ket.api.routers.imports import router as imports_router
 from ket.api.routers.items_units import router as item_units_router
@@ -258,6 +260,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(dimensions_router)
     # Phase 4 — posting engine: chứng từ nghiệp vụ khác + hành động chứng từ
     # dùng chung (ghi sổ / bỏ ghi sổ / xóa).
+    app.include_router(accounts_router)
+    app.include_router(fiscal_years_router)
     app.include_router(gl_journal_router)
     app.include_router(vouchers_router)
     app.include_router(ledger_router)

@@ -242,6 +242,19 @@ REGISTRY.register(
 )
 REGISTRY.register(
     DocumentType(
+        module=MASTER_MODULE,
+        code="account",
+        # Hệ thống tài khoản: dữ liệu của gói cấu hình (TT200/TT133), không phải
+        # danh mục người dùng tự thêm dòng — nên chỉ `view`. Ai lập được chứng
+        # từ đều cần tra TK (form ghi sổ hiện cột chiều theo `detail_tracking`),
+        # nên đây là quyền đọc phổ thông, tách khỏi quyền xem số dư
+        # (`posting.balance.view`). Sửa/kích hoạt gói là việc của gói cấu hình
+        # (hệ quyền riêng, khi có màn hình quản trị gói).
+        actions=frozenset({Action.VIEW}),
+    )
+)
+REGISTRY.register(
+    DocumentType(
         module=SYSTEM_MODULE,
         code="maintenance",
         # Tác vụ dọn dẹp chạy tại máy chủ (dọn khóa idempotency, dọn phiên đăng

@@ -43,6 +43,111 @@
         "title": "AccessResponse",
         "type": "object"
       },
+      "AccountListResponse": {
+        "description": "Kết quả tra TK — tối đa `limit` dòng, xếp theo số hiệu.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AccountResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "package_id": {
+            "title": "Package Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "package_id",
+          "items"
+        ],
+        "title": "AccountListResponse",
+        "type": "object"
+      },
+      "AccountResponse": {
+        "description": "Một tài khoản trong gói cấu hình đang hiệu lực.\n\n`detail_tracking` là danh sách chiều bắt buộc khi hạch toán (FR-SYS-021) —\nform chứng từ đọc nó để hiện đúng cột chiều cho TK đã chọn. `is_summary`\ntrả về để UI hiện cây nhưng chặn chọn: validator ghi sổ từ chối TK tổng\nhợp (BR-SYS-03), chặn sớm ở form đỡ một vòng gửi-nhận lỗi.",
+        "properties": {
+          "balance_nature": {
+            "title": "Balance Nature",
+            "type": "integer"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "detail_tracking": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail Tracking"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_foreign_currency": {
+            "title": "Is Foreign Currency",
+            "type": "boolean"
+          },
+          "is_summary": {
+            "title": "Is Summary",
+            "type": "boolean"
+          },
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "name_en",
+          "parent_id",
+          "level",
+          "is_summary",
+          "balance_nature",
+          "is_foreign_currency",
+          "detail_tracking"
+        ],
+        "title": "AccountResponse",
+        "type": "object"
+      },
       "AssetTypesCreateRequest": {
         "additionalProperties": false,
         "description": "Loại tài sản cố định — tạo mới.",
@@ -3454,6 +3559,77 @@
         "title": "ExtendedDimensionIn",
         "type": "object"
       },
+      "FiscalYearListResponse": {
+        "description": "Mọi năm tài chính của dataset, năm mới nhất trước.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FiscalYearResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "FiscalYearListResponse",
+        "type": "object"
+      },
+      "FiscalYearResponse": {
+        "description": "Một năm tài chính kèm trọn danh sách kỳ của nó, xếp theo `period_no`.",
+        "properties": {
+          "accounting_scheme": {
+            "title": "Accounting Scheme",
+            "type": "string"
+          },
+          "base_currency": {
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_closed": {
+            "title": "Is Closed",
+            "type": "boolean"
+          },
+          "periods": {
+            "items": {
+              "$ref": "#/components/schemas/PeriodResponse"
+            },
+            "title": "Periods",
+            "type": "array"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "start_date",
+          "end_date",
+          "accounting_scheme",
+          "base_currency",
+          "is_closed",
+          "periods"
+        ],
+        "title": "FiscalYearResponse",
+        "type": "object"
+      },
       "GrantResponse": {
         "description": "`changed=False` nghĩa là đã có sẵn — gọi lại không phải lỗi.\n\nIdempotent có chủ đích: màn hình phân quyền là nơi người ta bấm hai lần vì\nkhông chắc lần đầu đã ăn chưa, và một lỗi `409` ở đó chỉ làm họ hoang mang.",
         "properties": {
@@ -5387,6 +5563,192 @@
           "row_version"
         ],
         "title": "JournalVoucherUpdate",
+        "type": "object"
+      },
+      "LedgerPostingListResponse": {
+        "description": "Một trang phát sinh + tổng số dòng khớp bộ lọc.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerPostingResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "LedgerPostingListResponse",
+        "type": "object"
+      },
+      "LedgerPostingResponse": {
+        "description": "Một dòng phát sinh sổ cái kèm ngữ cảnh chứng từ (lát 4E).",
+        "properties": {
+          "account_code": {
+            "title": "Account Code",
+            "type": "string"
+          },
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "account_name": {
+            "title": "Account Name",
+            "type": "string"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "corresponding_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corresponding Account Id"
+          },
+          "credit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Credit",
+            "type": "string"
+          },
+          "credit_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Credit Fc",
+            "type": "string"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "debit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Debit",
+            "type": "string"
+          },
+          "debit_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Debit Fc",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "exchange_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exchange Rate",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ledger": {
+            "title": "Ledger",
+            "type": "integer"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Kind"
+          },
+          "period_id": {
+            "title": "Period Id",
+            "type": "integer"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "voucher_id": {
+            "format": "uuid",
+            "title": "Voucher Id",
+            "type": "string"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "voucher_id",
+          "voucher_no",
+          "document_type",
+          "line_no",
+          "ledger",
+          "branch_id",
+          "posting_date",
+          "period_id",
+          "account_id",
+          "account_code",
+          "account_name",
+          "corresponding_account_id",
+          "currency_code",
+          "exchange_rate",
+          "debit_fc",
+          "credit_fc",
+          "debit",
+          "credit",
+          "partner_id",
+          "partner_kind",
+          "description"
+        ],
+        "title": "LedgerPostingResponse",
         "type": "object"
       },
       "LockWarningResponse": {
@@ -9952,6 +10314,99 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/accounts": {
+      "get": {
+        "description": "Tài khoản của gói hiệu lực tại `on_date` — client gửi ngày hạch toán.\n\n`on_date` bắt buộc thay vì mặc-định-hôm-nay: \"hôm nay\" của server và của\nclient có thể khác múi giờ, mà gói cấu hình hiệu lực theo ngày — form đã\nbiết ngày hạch toán nên cứ gửi nó lên.\n\n`search` khớp **tiền tố số hiệu** hoặc **chứa trong tên** (không phân biệt\nhoa thường; `%`/`_` do người dùng gõ được escape — họ tra mã, không tra\nmẫu) — hai cách kế toán viên tra TK: gõ \"156\" hoặc gõ \"hàng hóa\".\nTK ngừng dùng không trả về: form không được chọn thêm vào chứng từ mới.\n\n`ids` là đường **dựng lại** (hydrate) cho form sửa chứng từ: dòng cũ chỉ\nmang `account_id`, và hệ TK thật vượt trần `limit` nên không thể trông vào\ntrang đầu. Khi có `ids`: bỏ `search`, và **gồm cả TK ngừng dùng** — chứng\ntừ cũ trỏ vào TK nay đã ngừng vẫn phải hiện được mã/tên của nó.",
+        "operationId": "search_accounts_api_v1_accounts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "on_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "On Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Search Accounts",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
     "/api/v1/attachments": {
       "get": {
         "description": "Tệp đang đính vào một bản ghi.",
@@ -10622,6 +11077,38 @@
         ]
       }
     },
+    "/api/v1/fiscal-years": {
+      "get": {
+        "description": "Năm + kỳ để các màn hình dựng bộ chọn — `locked_at` cho biết kỳ đã khóa.",
+        "operationId": "list_fiscal_years_api_v1_fiscal_years_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FiscalYearListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Fiscal Years",
+        "tags": [
+          "fiscal-years"
+        ]
+      }
+    },
     "/api/v1/gl/journal-vouchers": {
       "post": {
         "description": "Cất chứng từ; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.\n\nKhi chế độ Cất-đồng-thời-ghi-sổ bật, người tạo phải có **cả** quyền `post`\n— kiểm trong `work` vì chỉ service mới biết tùy chọn đang bật hay không;\nném ở đó thì khóa idempotency và số chứng từ cùng rollback.",
@@ -10978,6 +11465,160 @@
         "summary": "Cancel Job",
         "tags": [
           "jobs"
+        ]
+      }
+    },
+    "/api/v1/ledger/postings": {
+      "get": {
+        "description": "Danh sách phát sinh sổ cái theo bộ lọc, cũ trước — thứ tự đọc sổ.\n\nChỉ chứng từ đã ghi sổ có mặt ở đây (N1 — `gl_postings` chỉ tồn tại khi đã\nghi sổ) nên không cần cờ `stale`. Đây là nền drill-down của bảng cân đối:\nlọc theo `account_id` + `period_id` là \"mở một dòng\" (U10, phase 10a).",
+        "operationId": "list_postings_api_v1_ledger_postings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ledger",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Ledger",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Account Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerPostingListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Postings",
+        "tags": [
+          "ledger"
         ]
       }
     },
