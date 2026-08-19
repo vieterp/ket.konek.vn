@@ -11,12 +11,12 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.currency.exchange_rate_service import ExchangeRateService
 from ket.kernel.currency.models import Currency, ExchangeRate, RateType
-from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.datasets.provisioning import DatasetRef, provision_dataset
 from ket.kernel.errors import BaseCurrencyMisconfiguredError, ExchangeRateNotFoundError
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 
@@ -148,8 +148,13 @@ def test_updating_a_rate_replaces_the_row_for_that_day(
 
 
 def test_a_dataset_without_a_base_currency_refuses_to_convert(
-    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
+    session_factory: sessionmaker[Session], owner_engine: Engine
 ) -> None:
-    with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
+    # Dataset RIÊNG, vừa cấp xong nên chắc chắn chưa có đồng tiền nào — dùng
+    # `dataset_alpha` như trước là dựa vào việc KHÔNG test nào xếp trước theo
+    # bảng chữ cái gieo đồng tiền vào đó, và điều đó đã hết đúng từ khi bộ
+    # test posting (4B) đứng trước tệp này.
+    bare = provision_dataset(owner_engine, code="nomoney", name="Chưa có tiền", scheme="TT200")
+    with unit_of_work(session_factory, _scope(bare)) as session:
         with pytest.raises(BaseCurrencyMisconfiguredError):
             ExchangeRateService(session).base_currency()

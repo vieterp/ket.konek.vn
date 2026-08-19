@@ -8594,6 +8594,110 @@
         "title": "TotpEnrollResponse",
         "type": "object"
       },
+      "TrialBalanceResponse": {
+        "description": "Bảng cân đối tài khoản của một (kỳ, sổ).\n\n`stale=True`: kỳ còn chờ tính lại snapshot — số vừa tính thẳng từ sổ cái\n(đúng nhưng chậm hơn); UI hiện chỉ báo \"đang chờ tính lại\" và gợi ý chạy\ntác vụ `posting.balances.recalc`.",
+        "properties": {
+          "branch_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch Id"
+          },
+          "ledger": {
+            "title": "Ledger",
+            "type": "integer"
+          },
+          "period_id": {
+            "title": "Period Id",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/TrialBalanceRowResponse"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ledger",
+          "period_id",
+          "branch_id",
+          "stale",
+          "rows"
+        ],
+        "title": "TrialBalanceResponse",
+        "type": "object"
+      },
+      "TrialBalanceRowResponse": {
+        "description": "Một tài khoản trên bảng cân đối: dư đầu / phát sinh / dư cuối.",
+        "properties": {
+          "account_code": {
+            "title": "Account Code",
+            "type": "string"
+          },
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "account_name": {
+            "title": "Account Name",
+            "type": "string"
+          },
+          "closing_credit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Closing Credit",
+            "type": "string"
+          },
+          "closing_debit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Closing Debit",
+            "type": "string"
+          },
+          "opening_credit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Opening Credit",
+            "type": "string"
+          },
+          "opening_debit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Opening Debit",
+            "type": "string"
+          },
+          "period_credit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Period Credit",
+            "type": "string"
+          },
+          "period_debit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Period Debit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "account_code",
+          "account_name",
+          "opening_debit",
+          "opening_credit",
+          "period_debit",
+          "period_credit",
+          "closing_debit",
+          "closing_credit"
+        ],
+        "title": "TrialBalanceRowResponse",
+        "type": "object"
+      },
       "UnitsOfMeasureCreateRequest": {
         "additionalProperties": false,
         "description": "Đơn vị tính — tạo mới.",
@@ -10265,6 +10369,79 @@
         "summary": "Cancel Job",
         "tags": [
           "jobs"
+        ]
+      }
+    },
+    "/api/v1/ledger/trial-balance": {
+      "get": {
+        "description": "Bảng cân đối tài khoản của một (kỳ, sổ) — dư đầu, phát sinh, dư cuối.\n\nKỳ còn dấu bẩn thì số tính thẳng từ sổ cái và `stale=true` — client hiện\nchỉ báo \"đang chờ tính lại\" thay vì âm thầm nhận số chậm hơn bình thường.",
+        "operationId": "get_trial_balance_api_v1_ledger_trial_balance_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Period Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ledger",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Ledger",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrialBalanceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Trial Balance",
+        "tags": [
+          "ledger"
         ]
       }
     },

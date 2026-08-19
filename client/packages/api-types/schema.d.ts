@@ -479,6 +479,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ledger/trial-balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Trial Balance
+         * @description Bảng cân đối tài khoản của một (kỳ, sổ) — dư đầu, phát sinh, dư cuối.
+         *
+         *     Kỳ còn dấu bẩn thì số tính thẳng từ sổ cái và `stale=true` — client hiện
+         *     chỉ báo "đang chờ tính lại" thay vì âm thầm nhận số chậm hơn bình thường.
+         */
+        get: operations["get_trial_balance_api_v1_ledger_trial_balance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/asset_types": {
         parameters: {
             query?: never;
@@ -8791,6 +8814,50 @@ export interface components {
             provisioning_uri: string;
         };
         /**
+         * TrialBalanceResponse
+         * @description Bảng cân đối tài khoản của một (kỳ, sổ).
+         *
+         *     `stale=True`: kỳ còn chờ tính lại snapshot — số vừa tính thẳng từ sổ cái
+         *     (đúng nhưng chậm hơn); UI hiện chỉ báo "đang chờ tính lại" và gợi ý chạy
+         *     tác vụ `posting.balances.recalc`.
+         */
+        TrialBalanceResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Ledger */
+            ledger: number;
+            /** Period Id */
+            period_id: number;
+            /** Rows */
+            rows: components["schemas"]["TrialBalanceRowResponse"][];
+            /** Stale */
+            stale: boolean;
+        };
+        /**
+         * TrialBalanceRowResponse
+         * @description Một tài khoản trên bảng cân đối: dư đầu / phát sinh / dư cuối.
+         */
+        TrialBalanceRowResponse: {
+            /** Account Code */
+            account_code: string;
+            /** Account Id */
+            account_id: number;
+            /** Account Name */
+            account_name: string;
+            /** Closing Credit */
+            closing_credit: string;
+            /** Closing Debit */
+            closing_debit: string;
+            /** Opening Credit */
+            opening_credit: string;
+            /** Opening Debit */
+            opening_debit: string;
+            /** Period Credit */
+            period_credit: string;
+            /** Period Debit */
+            period_debit: string;
+        };
+        /**
          * UnitsOfMeasureCreateRequest
          * @description Đơn vị tính — tạo mới.
          */
@@ -9794,6 +9861,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_trial_balance_api_v1_ledger_trial_balance_get: {
+        parameters: {
+            query: {
+                period_id: number;
+                ledger?: number;
+                branch_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialBalanceResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

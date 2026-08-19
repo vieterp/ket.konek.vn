@@ -16,6 +16,13 @@ from collections.abc import Sequence
 
 from sqlalchemy import Engine, create_engine
 
+# Nạp mọi model + đăng ký đi kèm (mã quyền, loại chứng từ, LOẠI JOB của các
+# gói nghiệp vụ — `master.import.*` trong `kernel.excel`, `posting.balances.*`
+# trong `ket.posting.balances`). Worker không đi qua FastAPI nên không có ai
+# import chuỗi này hộ; thiếu nó thì job của module bị đánh hỏng với
+# "không biết loại tác vụ" ngay trên bản cài thật, dù mọi test (vốn import
+# model_registry qua conftest) đều xanh.
+import ket.model_registry  # noqa: F401
 from ket.kernel.logging_setup import configure_logging, get_logger
 from ket.kernel.persistence.session import create_session_factory
 from ket.settings import Settings, get_settings
