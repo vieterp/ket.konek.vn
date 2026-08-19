@@ -11,5 +11,6 @@
  */
 
 export { CatalogListPage } from './catalog-list-page'
+export { OpeningBalancePage } from './opening-balance-page'
 export { PartnerPage } from './partner-page'
 export { SettingsPage } from './settings-page'

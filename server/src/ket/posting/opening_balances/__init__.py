@@ -6,8 +6,8 @@ hai thứ, cùng khuôn với `posting/balances/__init__.py`:
 * mã quyền `posting.opening_balance.view` (xem, kiểm tệp) và
   `posting.opening_balance.create` (ghi từ tệp đã kiểm, chuyển số dư năm sau)
   — phải có mặt trước khi `provision_dataset` gieo bảng `permissions`;
-* ba loại job (kiểm tệp, ghi tệp, chuyển năm) vào registry hàng đợi — worker
-  và API cùng nhìn thấy chúng.
+* bốn loại job (kiểm tệp, ghi tệp, chuyển năm, xóa nhóm) vào registry hàng đợi
+  — worker và API cùng nhìn thấy chúng.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from ket.kernel.security.permissions import (
     DocumentType,
 )
 from ket.posting.opening_balances import carry_forward_job as carry_forward_job
+from ket.posting.opening_balances import clear_job as clear_job
 from ket.posting.opening_balances import import_job as import_job
 
 PERMISSION_REGISTRY.register(

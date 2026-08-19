@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -36,3 +38,41 @@ class TrialBalanceResponse(BaseModel):
     branch_id: int | None
     stale: bool
     rows: list[TrialBalanceRowResponse]
+
+
+class LedgerPostingResponse(BaseModel):
+    """Một dòng phát sinh sổ cái kèm ngữ cảnh chứng từ (lát 4E)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    voucher_id: UUID
+    voucher_no: str
+    document_type: str
+    line_no: int
+    ledger: int
+    branch_id: int
+    posting_date: date
+    period_id: int
+    account_id: int
+    account_code: str
+    account_name: str
+    corresponding_account_id: int | None
+    currency_code: str
+    exchange_rate: Decimal
+    debit_fc: Decimal
+    credit_fc: Decimal
+    debit: Decimal
+    credit: Decimal
+    partner_id: int | None
+    partner_kind: int | None
+    description: str | None
+
+
+class LedgerPostingListResponse(BaseModel):
+    """Một trang phát sinh + tổng số dòng khớp bộ lọc."""
+
+    items: list[LedgerPostingResponse]
+    total: int
+    page: int
+    page_size: int

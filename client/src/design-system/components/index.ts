@@ -16,6 +16,8 @@
  * (thư mục `data-grid/`). Hai component vì hai bài toán — xem quyết định H7.
  */
 
+export { AdvancedSection } from './advanced-section'
+export type { AdvancedSectionProps } from './advanced-section'
 export { Alert } from './alert'
 export type { AlertTone } from './alert'
 export { Button } from './button'

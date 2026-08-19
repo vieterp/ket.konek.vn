@@ -5,7 +5,12 @@
  *
  * Thư mục theo NHÓM MÀN HÌNH của design, không theo ranh giới module backend
  * (xem bảng "IA màn hình ≠ ranh giới module" trong docs/system-architecture.md).
- * Phase 1 cố ý rỗng.
+ *
+ * Lát 4E dựng ba màn hình đầu tiên của nhóm: danh sách chứng từ, form chứng từ
+ * nghiệp vụ khác, và bảng cân đối tài khoản — phần còn lại (thuế, chi phí, báo
+ * cáo) hoãn tới phase 9/10a.
  */
 
-export {}
+export { VoucherListPage } from './voucher-list-page'
+export { JournalVoucherForm } from './journal-voucher-form'
+export { TrialBalancePage } from './trial-balance-page'

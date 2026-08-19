@@ -56,6 +56,9 @@ export function FeatureNav(): ReactElement {
         </div>
       ))}
       <div className="border-t border-border-default pt-2">
+        <NavLink to="/danh-muc-thiet-lap/so-du-ban-dau" className={LINK_CLASS}>
+          {t('opening.nav.title')}
+        </NavLink>
         <NavLink to="/danh-muc-thiet-lap/thiet-lap" className={LINK_CLASS}>
           <span className="flex items-center gap-2">
             <Settings size={14} aria-hidden />

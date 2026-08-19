@@ -4,6 +4,40 @@
  */
 
 export interface paths {
+    "/api/v1/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Accounts
+         * @description Tài khoản của gói hiệu lực tại `on_date` — client gửi ngày hạch toán.
+         *
+         *     `on_date` bắt buộc thay vì mặc-định-hôm-nay: "hôm nay" của server và của
+         *     client có thể khác múi giờ, mà gói cấu hình hiệu lực theo ngày — form đã
+         *     biết ngày hạch toán nên cứ gửi nó lên.
+         *
+         *     `search` khớp **tiền tố số hiệu** hoặc **chứa trong tên** (không phân biệt
+         *     hoa thường; `%`/`_` do người dùng gõ được escape — họ tra mã, không tra
+         *     mẫu) — hai cách kế toán viên tra TK: gõ "156" hoặc gõ "hàng hóa".
+         *     TK ngừng dùng không trả về: form không được chọn thêm vào chứng từ mới.
+         *
+         *     `ids` là đường **dựng lại** (hydrate) cho form sửa chứng từ: dòng cũ chỉ
+         *     mang `account_id`, và hệ TK thật vượt trần `limit` nên không thể trông vào
+         *     trang đầu. Khi có `ids`: bỏ `search`, và **gồm cả TK ngừng dùng** — chứng
+         *     từ cũ trỏ vào TK nay đã ngừng vẫn phải hiện được mã/tên của nó.
+         */
+        get: operations["search_accounts_api_v1_accounts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/attachments": {
         parameters: {
             query?: never;
@@ -321,6 +355,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/fiscal-years": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fiscal Years
+         * @description Năm + kỳ để các màn hình dựng bộ chọn — `locked_at` cho biết kỳ đã khóa.
+         */
+        get: operations["list_fiscal_years_api_v1_fiscal_years_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gl/journal-vouchers": {
         parameters: {
             query?: never;
@@ -473,6 +527,30 @@ export interface paths {
          *     "đã ghi nhận", không phải "đã dừng" — trạng thái thật đọc ở lần `GET` sau.
          */
         post: operations["cancel_job_api_v1_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/postings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Postings
+         * @description Danh sách phát sinh sổ cái theo bộ lọc, cũ trước — thứ tự đọc sổ.
+         *
+         *     Chỉ chứng từ đã ghi sổ có mặt ở đây (N1 — `gl_postings` chỉ tồn tại khi đã
+         *     ghi sổ) nên không cần cờ `stale`. Đây là nền drill-down của bảng cân đối:
+         *     lọc theo `account_id` + `period_id` là "mở một dòng" (U10, phase 10a).
+         */
+        get: operations["list_postings_api_v1_ledger_postings_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5943,6 +6021,47 @@ export interface components {
             permissions: string[];
         };
         /**
+         * AccountListResponse
+         * @description Kết quả tra TK — tối đa `limit` dòng, xếp theo số hiệu.
+         */
+        AccountListResponse: {
+            /** Items */
+            items: components["schemas"]["AccountResponse"][];
+            /** Package Id */
+            package_id: number;
+        };
+        /**
+         * AccountResponse
+         * @description Một tài khoản trong gói cấu hình đang hiệu lực.
+         *
+         *     `detail_tracking` là danh sách chiều bắt buộc khi hạch toán (FR-SYS-021) —
+         *     form chứng từ đọc nó để hiện đúng cột chiều cho TK đã chọn. `is_summary`
+         *     trả về để UI hiện cây nhưng chặn chọn: validator ghi sổ từ chối TK tổng
+         *     hợp (BR-SYS-03), chặn sớm ở form đỡ một vòng gửi-nhận lỗi.
+         */
+        AccountResponse: {
+            /** Balance Nature */
+            balance_nature: number;
+            /** Code */
+            code: string;
+            /** Detail Tracking */
+            detail_tracking: string[] | null;
+            /** Id */
+            id: number;
+            /** Is Foreign Currency */
+            is_foreign_currency: boolean;
+            /** Is Summary */
+            is_summary: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+        };
+        /**
          * AssetTypesCreateRequest
          * @description Loại tài sản cố định — tạo mới.
          */
@@ -7109,6 +7228,42 @@ export interface components {
             value_id: number;
         };
         /**
+         * FiscalYearListResponse
+         * @description Mọi năm tài chính của dataset, năm mới nhất trước.
+         */
+        FiscalYearListResponse: {
+            /** Items */
+            items: components["schemas"]["FiscalYearResponse"][];
+        };
+        /**
+         * FiscalYearResponse
+         * @description Một năm tài chính kèm trọn danh sách kỳ của nó, xếp theo `period_no`.
+         */
+        FiscalYearResponse: {
+            /** Accounting Scheme */
+            accounting_scheme: string;
+            /** Base Currency */
+            base_currency: string;
+            /** Code */
+            code: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Id */
+            id: number;
+            /** Is Closed */
+            is_closed: boolean;
+            /** Periods */
+            periods: components["schemas"]["PeriodResponse"][];
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+        };
+        /**
          * GrantResponse
          * @description `changed=False` nghĩa là đã có sẵn — gọi lại không phải lỗi.
          *
@@ -7813,6 +7968,76 @@ export interface components {
             posting_date: string;
             /** Row Version */
             row_version: number;
+        };
+        /**
+         * LedgerPostingListResponse
+         * @description Một trang phát sinh + tổng số dòng khớp bộ lọc.
+         */
+        LedgerPostingListResponse: {
+            /** Items */
+            items: components["schemas"]["LedgerPostingResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * LedgerPostingResponse
+         * @description Một dòng phát sinh sổ cái kèm ngữ cảnh chứng từ (lát 4E).
+         */
+        LedgerPostingResponse: {
+            /** Account Code */
+            account_code: string;
+            /** Account Id */
+            account_id: number;
+            /** Account Name */
+            account_name: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Corresponding Account Id */
+            corresponding_account_id: number | null;
+            /** Credit */
+            credit: string;
+            /** Credit Fc */
+            credit_fc: string;
+            /** Currency Code */
+            currency_code: string;
+            /** Debit */
+            debit: string;
+            /** Debit Fc */
+            debit_fc: string;
+            /** Description */
+            description: string | null;
+            /** Document Type */
+            document_type: string;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /** Id */
+            id: number;
+            /** Ledger */
+            ledger: number;
+            /** Line No */
+            line_no: number;
+            /** Partner Id */
+            partner_id: number | null;
+            /** Partner Kind */
+            partner_kind: number | null;
+            /** Period Id */
+            period_id: number;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /**
+             * Voucher Id
+             * Format: uuid
+             */
+            voucher_id: string;
+            /** Voucher No */
+            voucher_no: string;
         };
         /**
          * LockWarningResponse
@@ -9559,6 +9784,40 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    search_accounts_api_v1_accounts_get: {
+        parameters: {
+            query: {
+                on_date: string;
+                search?: string | null;
+                ids?: number[] | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_attachments_api_v1_attachments_get: {
         parameters: {
             query: {
@@ -10073,6 +10332,35 @@ export interface operations {
             };
         };
     };
+    list_fiscal_years_api_v1_fiscal_years_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiscalYearListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     create_journal_voucher_api_v1_gl_journal_vouchers_post: {
         parameters: {
             query?: never;
@@ -10315,6 +10603,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_postings_api_v1_ledger_postings_get: {
+        parameters: {
+            query?: {
+                ledger?: number;
+                account_id?: number | null;
+                period_id?: number | null;
+                from?: string | null;
+                to?: string | null;
+                branch_id?: number | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerPostingListResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

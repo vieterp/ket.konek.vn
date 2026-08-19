@@ -34,8 +34,9 @@ import { NAVIGATION } from '@/app/navigation'
 import { PlaceholderPage } from '@/app/placeholder-page'
 import { SessionGate } from '@/app/session-gate'
 import { DataGridBenchPage } from '@/features/bench/data-grid-bench-page'
-import { CatalogListPage, PartnerPage, SettingsPage } from '@/features/danh-muc-thiet-lap'
+import { CatalogListPage, OpeningBalancePage, PartnerPage, SettingsPage } from '@/features/danh-muc-thiet-lap'
 import { KitchenSinkPage } from '@/features/kitchen-sink/kitchen-sink-page'
+import { JournalVoucherForm, TrialBalancePage, VoucherListPage } from '@/features/so-sach-thue'
 
 const [home, ...groups] = NAVIGATION
 
@@ -50,7 +51,30 @@ const danhMucThietLapRoutes: RouteObject[] = [
       { index: true, element: <Navigate to="danh-muc/doi-tac" replace /> },
       { path: 'danh-muc/:segment', element: <CatalogListPage /> },
       { path: 'doi-tac/:id', element: <PartnerPage /> },
+      { path: 'so-du-ban-dau', element: <OpeningBalancePage /> },
       { path: 'thiet-lap', element: <SettingsPage /> },
+    ],
+  },
+]
+
+/**
+ * Nhóm 09 (Sổ sách & Thuế), lát 4E: ba route thay một trang tạm — danh sách
+ * chứng từ, form chứng từ nghiệp vụ khác, bảng cân đối tài khoản.
+ *
+ * `chung-tu/moi` khai TRƯỚC `chung-tu/:id`: hai route cùng cấp, không phải
+ * lồng nhau, nên thứ tự khớp của `react-router` mới là thứ quyết định — khai
+ * `:id` trước sẽ nuốt mất `/moi` (khớp `id = "moi"`) và không bao giờ tới
+ * được nhánh tạo mới.
+ */
+const soSachThueRoutes: RouteObject[] = [
+  {
+    path: 'so-sach-thue',
+    children: [
+      { index: true, element: <Navigate to="chung-tu" replace /> },
+      { path: 'chung-tu', element: <VoucherListPage /> },
+      { path: 'chung-tu/moi', element: <JournalVoucherForm /> },
+      { path: 'chung-tu/:id', element: <JournalVoucherForm /> },
+      { path: 'bang-can-doi-tai-khoan', element: <TrialBalancePage /> },
     ],
   },
 ]
@@ -73,12 +97,13 @@ const router = createBrowserRouter([
     children: [
       ...(home === undefined ? [] : [{ index: true, element: <PlaceholderPage item={home} /> }]),
       ...groups
-        .filter((item) => item.path !== '/danh-muc-thiet-lap')
+        .filter((item) => item.path !== '/danh-muc-thiet-lap' && item.path !== '/so-sach-thue')
         .map((item) => ({
           path: item.path.slice(1),
           element: <PlaceholderPage item={item} />,
         })),
       ...danhMucThietLapRoutes,
+      ...soSachThueRoutes,
       // Đường dẫn lạ (người dùng gõ tay, dấu trang cũ sau khi đổi IA) rơi về
       // trang tổng quan thay vì một trang trắng không lối ra.
       ...(home === undefined ? [] : [{ path: '*', element: <PlaceholderPage item={home} /> }]),
