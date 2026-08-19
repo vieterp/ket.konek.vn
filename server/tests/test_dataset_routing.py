@@ -142,7 +142,7 @@ def test_provisioning_refuses_duplicate_code(
     from ket.kernel.datasets.provisioning import provision_dataset
 
     with pytest.raises(DatasetAlreadyExistsError):
-        provision_dataset(owner_engine, code=dataset_alpha.code, name="Trùng mã", scheme="TT200")
+        provision_dataset(owner_engine, code=dataset_alpha.code, name="Trùng mã", scheme="TT99")
 
 
 def test_list_datasets_returns_registered_datasets(

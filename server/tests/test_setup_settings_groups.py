@@ -115,7 +115,7 @@ def closed_year(session_factory: sessionmaker[Session], dataset_alpha: DatasetRe
             year = PeriodService(session).create_fiscal_year(
                 code=CLOSED_YEAR_CODE,
                 start_date=date(2019, 1, 1),
-                accounting_scheme=AccountingScheme.TT200,
+                accounting_scheme=AccountingScheme.TT99,
                 base_currency="VND",
                 inventory_valuation_method=InventoryValuationMethod.WEIGHTED_AVERAGE_PERIOD,
                 vat_method=VatMethod.DEDUCTION,

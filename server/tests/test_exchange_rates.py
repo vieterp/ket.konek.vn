@@ -154,7 +154,7 @@ def test_a_dataset_without_a_base_currency_refuses_to_convert(
     # `dataset_alpha` như trước là dựa vào việc KHÔNG test nào xếp trước theo
     # bảng chữ cái gieo đồng tiền vào đó, và điều đó đã hết đúng từ khi bộ
     # test posting (4B) đứng trước tệp này.
-    bare = provision_dataset(owner_engine, code="nomoney", name="Chưa có tiền", scheme="TT200")
+    bare = provision_dataset(owner_engine, code="nomoney", name="Chưa có tiền", scheme="TT99")
     with unit_of_work(session_factory, _scope(bare)) as session:
         with pytest.raises(BaseCurrencyMisconfiguredError):
             ExchangeRateService(session).base_currency()

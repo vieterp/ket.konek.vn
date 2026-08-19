@@ -22,6 +22,7 @@ from sqlalchemy import Connection, Engine, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ket.kernel.config.packages.seed import ensure_builtin_packages
 from ket.kernel.datasets.models import Dataset
 from ket.kernel.datasets.naming import (
     role_name_for_schema,
@@ -227,6 +228,12 @@ def provision_dataset(
         # nên một dữ liệu kế toán có vai trò nhưng thiếu nó là trạng thái dở
         # dang mà không lệnh nào sửa về sau.
         ensure_builtin_dimensions(connection, schema)
+        # Cùng lý do, cùng transaction: một dữ liệu kế toán không có hệ thống
+        # tài khoản là cái hộp không ai ghi sổ được. `ensure_builtin_packages`
+        # nổ `ConfigPackageDataInvalidError` nếu `data/tt99`/`data/tt133` thiếu
+        # hoặc sai hợp đồng — fail-closed có chủ đích, không tạo dataset dở dang
+        # với hệ TK rỗng mà không ai phát hiện ra cho tới lần ghi sổ đầu tiên.
+        ensure_builtin_packages(connection, schema)
 
     try:
         with Session(owner_engine) as session, session.begin():

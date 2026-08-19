@@ -49,7 +49,7 @@ def _create_year(service: PeriodService, *, code: str, start: date) -> int:
     year = service.create_fiscal_year(
         code=code,
         start_date=start,
-        accounting_scheme=AccountingScheme.TT200,
+        accounting_scheme=AccountingScheme.TT99,
         base_currency="VND",
         inventory_valuation_method=InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING,
         vat_method=VatMethod.DEDUCTION,
@@ -124,7 +124,7 @@ def test_the_database_itself_refuses_an_overlapping_year(
                     code="KY-EXCL-CHONG",
                     start_date=date(2055, 7, 1),
                     end_date=date(2056, 6, 30),
-                    accounting_scheme=AccountingScheme.TT200.value,
+                    accounting_scheme=AccountingScheme.TT99.value,
                     base_currency="VND",
                     inventory_valuation_method=InventoryValuationMethod.FIFO.value,
                     vat_method=VatMethod.DEDUCTION.value,

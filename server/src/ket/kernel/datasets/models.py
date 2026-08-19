@@ -2,7 +2,7 @@
 
 Ba bảng nền của schema điều khiển nằm ở tệp này:
 
-* `datasets` — sổ đăng ký dữ liệu kế toán: mã, schema, chế độ TT200/TT133.
+* `datasets` — sổ đăng ký dữ liệu kế toán: mã, schema, chế độ TT99/TT133.
 * `users` — danh tính đăng nhập **toàn cục**: một người dùng một mật khẩu, mở
   được nhiều dữ liệu kế toán. Quyền thì per-dataset (`user_roles`,
   `user_branches` nằm trong schema dataset) vì vai trò của một người ở mỗi
@@ -57,7 +57,7 @@ class Dataset(ControlBase):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     scheme: Mapped[str] = mapped_column(String(10), nullable=False)
-    """`TT200` hoặc `TT133` — chế độ kế toán áp dụng. Là **dữ liệu**, không phải
+    """`TT99` hoặc `TT133` — chế độ kế toán áp dụng. Là **dữ liệu**, không phải
     nhánh code (LD-06): đổi chế độ = kích hoạt gói cấu hình khác ở phase 5."""
 
     is_active: Mapped[bool] = mapped_column(

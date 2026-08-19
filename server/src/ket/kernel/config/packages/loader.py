@@ -1,0 +1,573 @@
+"""Đọc và kiểm một thư mục dữ liệu gói cấu hình (hợp đồng 4 tệp, RT-07/FR-SYS-024).
+
+Hợp đồng thư mục — **không đổi** khi phase sau thêm gói mới, vì cả seeder
+(`seed.py`, đọc trực tiếp từ đĩa) lẫn `importer.py` (đọc từ `.zip` đã verify chữ
+ký) đều đi qua đúng module này:
+
+* `package.json` — khóa `code`, `scheme`, `name`, `name_en`, `description`,
+  `legal_reference`, `effective_from` (ISO date), `effective_to` (`null` được),
+  `version` (int).
+* `accounts.csv` — cột `code,name,name_en,parent_code,balance_nature,
+  is_summary,is_foreign_currency,detail_tracking,is_locked`. Cha đứng trước
+  con trong tệp; `parent_code` rỗng = gốc; `detail_tracking` là các token của
+  `DetailTracking` nối bằng `;`; cột boolean là `0`/`1`.
+* `default_accounts.csv` — cột `document_type,purpose,account_code`.
+* `closing_pairs.csv` — cột `source_account,target_account,sequence,description`.
+
+**Kiểm hết trước khi trả** (fail-closed): một dòng sai ở giữa tệp 200 dòng thì
+toàn bộ gói bị từ chối, không có "nạp một phần". Không dòng nào trong module
+này ghi xuống DB — đó là việc của `seed.py`/`importer.py`, module này chỉ đọc
+đĩa và trả về dữ liệu **đã kiểm**.
+"""
+
+from __future__ import annotations
+
+import csv
+import json
+from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+
+from ket.kernel.config.accounts_models import (
+    ACCOUNT_CODE_MAX_LENGTH,
+    DOCUMENT_TYPE_MAX_LENGTH,
+    NAME_MAX_LENGTH,
+    PURPOSE_MAX_LENGTH,
+    BalanceNature,
+    DetailTracking,
+)
+from ket.kernel.errors import ConfigPackageDataInvalidError
+from ket.kernel.periods.models import AccountingScheme
+
+_PACKAGE_CODE_MAX_LENGTH = 50
+_PACKAGE_DESCRIPTION_MAX_LENGTH = 1000
+_PACKAGE_REFERENCE_MAX_LENGTH = 255
+_CLOSING_DESCRIPTION_MAX_LENGTH = 500
+"""Bốn trần này soi gương độ dài cột của `ConfigPackage`/`ClosingAccountPair`
+(các cột đó khai độ dài inline, không có hằng số tên). Test
+`test_loader_length_limits_match_orm_columns` canh cho hai bên không trôi
+khỏi nhau."""
+
+PACKAGE_MANIFEST_FILE = "package.json"
+ACCOUNTS_FILE = "accounts.csv"
+DEFAULT_ACCOUNTS_FILE = "default_accounts.csv"
+CLOSING_PAIRS_FILE = "closing_pairs.csv"
+
+REQUIRED_DATA_FILES: tuple[str, ...] = (
+    PACKAGE_MANIFEST_FILE,
+    ACCOUNTS_FILE,
+    DEFAULT_ACCOUNTS_FILE,
+    CLOSING_PAIRS_FILE,
+)
+"""Danh sách tệp mà một gói **phải** có — dùng chung cho cả thư mục lẫn `.zip`
+(`importer.py` chỉ đọc đúng bốn tên này, không đọc theo danh sách trong gói —
+xem docstring `importer.py` về chống zip-slip)."""
+
+_ACCOUNTS_HEADER = (
+    "code",
+    "name",
+    "name_en",
+    "parent_code",
+    "balance_nature",
+    "is_summary",
+    "is_foreign_currency",
+    "detail_tracking",
+    "is_locked",
+)
+_DEFAULT_ACCOUNTS_HEADER = ("document_type", "purpose", "account_code")
+_CLOSING_PAIRS_HEADER = ("source_account", "target_account", "sequence", "description")
+
+_KNOWN_SCHEMES = frozenset(member.value for member in AccountingScheme)
+_BALANCE_NATURE_RANGE = range(
+    BalanceNature.DEBIT, BalanceNature.NONE + 1
+)  # 0..3, hai đầu đều hợp lệ
+
+_DETAIL_TRACKING_SEPARATOR = ";"
+
+
+@dataclass(frozen=True)
+class PackageManifest:
+    """Nội dung `package.json`, đã kiểu hóa và kiểm."""
+
+    code: str
+    scheme: str
+    name: str
+    name_en: str | None
+    description: str | None
+    legal_reference: str | None
+    effective_from: date
+    effective_to: date | None
+    version: int
+
+
+@dataclass(frozen=True)
+class AccountRow:
+    """Một dòng `accounts.csv`, đã kiểm — thứ tự trong `LoadedPackage.accounts`
+    giữ nguyên thứ tự tệp (cha trước con, đúng bất biến mà `seed.py` cần)."""
+
+    code: str
+    name: str
+    name_en: str | None
+    parent_code: str | None
+    balance_nature: int
+    is_summary: bool
+    is_foreign_currency: bool
+    detail_tracking: tuple[str, ...]
+    is_locked: bool
+
+
+@dataclass(frozen=True)
+class DefaultAccountRow:
+    document_type: str
+    purpose: str
+    account_code: str
+
+
+@dataclass(frozen=True)
+class ClosingPairRow:
+    source_account: str
+    target_account: str
+    sequence: int
+    description: str | None
+
+
+@dataclass(frozen=True)
+class LoadedPackage:
+    """Một gói cấu hình đã đọc và kiểm hết — sẵn sàng để `seed.py`/`importer.py` ghi."""
+
+    manifest: PackageManifest
+    accounts: tuple[AccountRow, ...]
+    default_accounts: tuple[DefaultAccountRow, ...]
+    closing_pairs: tuple[ClosingPairRow, ...]
+
+
+def _fail(reason: str, **details: str | int | None) -> ConfigPackageDataInvalidError:
+    return ConfigPackageDataInvalidError(reason, **details)
+
+
+def _require_str(value: object, *, field: str, file: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise _fail(f"Trường `{field}` thiếu hoặc rỗng", file=file, field=field)
+    return value.strip()
+
+
+def _bounded(
+    value: str | None, *, field: str, file: str, max_length: int, line: int | None = None
+) -> str | None:
+    """Chặn chuỗi dài hơn cột DB ngay ở lượt kiểm dữ liệu.
+
+    Không kiểm ở đây thì giá trị quá dài sống sót tới lượt flush và đổ
+    `DataError` DBAPI thô (HTTP 500) — trái với cam kết fail-closed "kiểm hết
+    trước khi trả" của module này và FR-NFR-050 (lỗi nghiệp vụ phải có thông
+    điệp nêu nguyên nhân).
+    """
+    if value is not None and len(value) > max_length:
+        raise _fail(
+            f"Trường `{field}` dài {len(value)} ký tự, vượt trần {max_length}",
+            file=file,
+            field=field,
+            line=line,
+        )
+    return value
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
+def _parse_date(value: object, *, field: str, file: str) -> date:
+    if not isinstance(value, str):
+        raise _fail(f"Trường `{field}` phải là chuỗi ngày ISO (YYYY-MM-DD)", file=file, field=field)
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        raise _fail(
+            f"Trường `{field}` không đúng định dạng ngày ISO (YYYY-MM-DD)",
+            file=file,
+            field=field,
+            value=value,
+        ) from error
+
+
+def _load_manifest(text: str) -> PackageManifest:
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise _fail(
+            f"Tệp {PACKAGE_MANIFEST_FILE} không phải JSON hợp lệ: {error}",
+            file=PACKAGE_MANIFEST_FILE,
+        ) from error
+    if not isinstance(raw, Mapping):
+        raise _fail(
+            f"Tệp {PACKAGE_MANIFEST_FILE} phải là một object JSON", file=PACKAGE_MANIFEST_FILE
+        )
+
+    code = _require_str(raw.get("code"), field="code", file=PACKAGE_MANIFEST_FILE)
+    scheme = _require_str(raw.get("scheme"), field="scheme", file=PACKAGE_MANIFEST_FILE)
+    if scheme not in _KNOWN_SCHEMES:
+        raise _fail(
+            f"Chế độ kế toán `{scheme}` không thuộc danh sách đã biết",
+            file=PACKAGE_MANIFEST_FILE,
+            scheme=scheme,
+        )
+    name = _require_str(raw.get("name"), field="name", file=PACKAGE_MANIFEST_FILE)
+    version_raw = raw.get("version")
+    if not isinstance(version_raw, int) or isinstance(version_raw, bool) or version_raw < 1:
+        raise _fail(
+            "Trường `version` phải là số nguyên dương", file=PACKAGE_MANIFEST_FILE, field="version"
+        )
+    effective_from = _parse_date(
+        raw.get("effective_from"), field="effective_from", file=PACKAGE_MANIFEST_FILE
+    )
+    effective_to_raw = raw.get("effective_to")
+    effective_to = (
+        None
+        if effective_to_raw is None
+        else _parse_date(effective_to_raw, field="effective_to", file=PACKAGE_MANIFEST_FILE)
+    )
+    if effective_to is not None and effective_to <= effective_from:
+        raise _fail(
+            "`effective_to` phải sau `effective_from`",
+            file=PACKAGE_MANIFEST_FILE,
+            effective_from=effective_from.isoformat(),
+            effective_to=effective_to.isoformat(),
+        )
+
+    name_en = _optional_str(raw.get("name_en"))
+    description = _optional_str(raw.get("description"))
+    legal_reference = _optional_str(raw.get("legal_reference"))
+    for field, value, limit in (
+        ("code", code, _PACKAGE_CODE_MAX_LENGTH),
+        ("name", name, NAME_MAX_LENGTH),
+        ("name_en", name_en, NAME_MAX_LENGTH),
+        ("description", description, _PACKAGE_DESCRIPTION_MAX_LENGTH),
+        ("legal_reference", legal_reference, _PACKAGE_REFERENCE_MAX_LENGTH),
+    ):
+        _bounded(value, field=field, file=PACKAGE_MANIFEST_FILE, max_length=limit)
+
+    return PackageManifest(
+        code=code,
+        scheme=scheme,
+        name=name,
+        name_en=name_en,
+        description=description,
+        legal_reference=legal_reference,
+        effective_from=effective_from,
+        effective_to=effective_to,
+        version=version_raw,
+    )
+
+
+def _parse_csv_text(text: str, file_name: str, header: tuple[str, ...]) -> list[dict[str, str]]:
+    reader = csv.DictReader(text.splitlines())
+    found_header = tuple(reader.fieldnames or ())
+    if found_header != header:
+        raise _fail(
+            f"Tiêu đề cột của {file_name} không đúng hợp đồng",
+            file=file_name,
+            expected=",".join(header),
+            found=",".join(found_header),
+        )
+    return list(reader)
+
+
+def _parse_bool(value: str, *, field: str, file: str, line: int) -> bool:
+    if value not in {"0", "1"}:
+        raise _fail(
+            f"Trường `{field}` phải là 0 hoặc 1", file=file, field=field, value=value, line=line
+        )
+    return value == "1"
+
+
+def _parse_detail_tracking(value: str, *, file: str, line: int, code: str) -> tuple[str, ...]:
+    if not value:
+        return ()
+    tokens = tuple(
+        token.strip() for token in value.split(_DETAIL_TRACKING_SEPARATOR) if token.strip()
+    )
+    unknown = [token for token in tokens if token not in DetailTracking.ALL]
+    if unknown:
+        raise _fail(
+            f"`detail_tracking` của TK {code} chứa token không hợp lệ: {', '.join(unknown)}",
+            file=file,
+            line=line,
+            code=code,
+            unknown=", ".join(unknown),
+        )
+    return tokens
+
+
+def _load_accounts(text: str) -> tuple[AccountRow, ...]:
+    rows = _parse_csv_text(text, ACCOUNTS_FILE, _ACCOUNTS_HEADER)
+    seen: dict[str, int] = {}
+    result: list[AccountRow] = []
+    for line, raw in enumerate(rows, start=2):  # dòng 1 là header
+        code = _require_str(raw.get("code"), field="code", file=ACCOUNTS_FILE)
+        if code in seen:
+            raise _fail(
+                f"Số hiệu TK {code} bị khai trùng (đã có ở dòng {seen[code]})",
+                file=ACCOUNTS_FILE,
+                code=code,
+                line=line,
+            )
+        parent_code = _optional_str(raw.get("parent_code"))
+        if parent_code is not None and parent_code not in seen:
+            raise _fail(
+                f"TK {code} khai `parent_code={parent_code}` nhưng TK cha chưa xuất hiện "
+                "trước nó trong tệp (cha phải đứng trước con)",
+                file=ACCOUNTS_FILE,
+                code=code,
+                parent_code=parent_code,
+                line=line,
+            )
+        name = _require_str(raw.get("name"), field="name", file=ACCOUNTS_FILE)
+        name_en = _optional_str(raw.get("name_en"))
+        _bounded(
+            code, field="code", file=ACCOUNTS_FILE, max_length=ACCOUNT_CODE_MAX_LENGTH, line=line
+        )
+        _bounded(name, field="name", file=ACCOUNTS_FILE, max_length=NAME_MAX_LENGTH, line=line)
+        _bounded(
+            name_en, field="name_en", file=ACCOUNTS_FILE, max_length=NAME_MAX_LENGTH, line=line
+        )
+        balance_nature_raw = _require_str(
+            raw.get("balance_nature"), field="balance_nature", file=ACCOUNTS_FILE
+        )
+        try:
+            balance_nature = int(balance_nature_raw)
+        except ValueError as error:
+            raise _fail(
+                f"`balance_nature` của TK {code} không phải số nguyên",
+                file=ACCOUNTS_FILE,
+                code=code,
+                line=line,
+            ) from error
+        if balance_nature not in _BALANCE_NATURE_RANGE:
+            raise _fail(
+                f"`balance_nature` của TK {code} ngoài khoảng hợp lệ (0-3)",
+                file=ACCOUNTS_FILE,
+                code=code,
+                value=balance_nature,
+                line=line,
+            )
+        result.append(
+            AccountRow(
+                code=code,
+                name=name,
+                name_en=name_en,
+                parent_code=parent_code,
+                balance_nature=balance_nature,
+                is_summary=_parse_bool(
+                    _require_str(raw.get("is_summary"), field="is_summary", file=ACCOUNTS_FILE),
+                    field="is_summary",
+                    file=ACCOUNTS_FILE,
+                    line=line,
+                ),
+                is_foreign_currency=_parse_bool(
+                    _require_str(
+                        raw.get("is_foreign_currency"),
+                        field="is_foreign_currency",
+                        file=ACCOUNTS_FILE,
+                    ),
+                    field="is_foreign_currency",
+                    file=ACCOUNTS_FILE,
+                    line=line,
+                ),
+                detail_tracking=_parse_detail_tracking(
+                    raw.get("detail_tracking") or "", file=ACCOUNTS_FILE, line=line, code=code
+                ),
+                is_locked=_parse_bool(
+                    _require_str(raw.get("is_locked"), field="is_locked", file=ACCOUNTS_FILE),
+                    field="is_locked",
+                    file=ACCOUNTS_FILE,
+                    line=line,
+                ),
+            )
+        )
+        seen[code] = line
+    return tuple(result)
+
+
+def _load_default_accounts(text: str, known_codes: frozenset[str]) -> tuple[DefaultAccountRow, ...]:
+    rows = _parse_csv_text(text, DEFAULT_ACCOUNTS_FILE, _DEFAULT_ACCOUNTS_HEADER)
+    seen: dict[tuple[str, str], int] = {}
+    result: list[DefaultAccountRow] = []
+    for line, raw in enumerate(rows, start=2):
+        document_type = _require_str(
+            raw.get("document_type"), field="document_type", file=DEFAULT_ACCOUNTS_FILE
+        )
+        purpose = _require_str(raw.get("purpose"), field="purpose", file=DEFAULT_ACCOUNTS_FILE)
+        account_code = _require_str(
+            raw.get("account_code"), field="account_code", file=DEFAULT_ACCOUNTS_FILE
+        )
+        for field, value, limit in (
+            ("document_type", document_type, DOCUMENT_TYPE_MAX_LENGTH),
+            ("purpose", purpose, PURPOSE_MAX_LENGTH),
+            ("account_code", account_code, ACCOUNT_CODE_MAX_LENGTH),
+        ):
+            _bounded(value, field=field, file=DEFAULT_ACCOUNTS_FILE, max_length=limit, line=line)
+        key = (document_type, purpose)
+        if key in seen:
+            raise _fail(
+                f"Cặp (document_type={document_type}, purpose={purpose}) bị khai trùng "
+                f"(đã có ở dòng {seen[key]})",
+                file=DEFAULT_ACCOUNTS_FILE,
+                document_type=document_type,
+                purpose=purpose,
+                line=line,
+            )
+        if account_code not in known_codes:
+            raise _fail(
+                f"`default_accounts` trỏ tới TK {account_code} không có trong {ACCOUNTS_FILE}",
+                file=DEFAULT_ACCOUNTS_FILE,
+                account_code=account_code,
+                line=line,
+            )
+        result.append(
+            DefaultAccountRow(
+                document_type=document_type, purpose=purpose, account_code=account_code
+            )
+        )
+        seen[key] = line
+    return tuple(result)
+
+
+def _load_closing_pairs(text: str, known_codes: frozenset[str]) -> tuple[ClosingPairRow, ...]:
+    rows = _parse_csv_text(text, CLOSING_PAIRS_FILE, _CLOSING_PAIRS_HEADER)
+    seen: dict[tuple[str, str], int] = {}
+    result: list[ClosingPairRow] = []
+    for line, raw in enumerate(rows, start=2):
+        source_account = _require_str(
+            raw.get("source_account"), field="source_account", file=CLOSING_PAIRS_FILE
+        )
+        target_account = _require_str(
+            raw.get("target_account"), field="target_account", file=CLOSING_PAIRS_FILE
+        )
+        for role, code in (("source_account", source_account), ("target_account", target_account)):
+            if code not in known_codes:
+                raise _fail(
+                    f"`closing_pairs` trỏ tới TK {code} không có trong {ACCOUNTS_FILE}",
+                    file=CLOSING_PAIRS_FILE,
+                    field=role,
+                    account_code=code,
+                    line=line,
+                )
+        key = (source_account, target_account)
+        if key in seen:
+            raise _fail(
+                f"Cặp kết chuyển ({source_account} → {target_account}) bị khai trùng "
+                f"(đã có ở dòng {seen[key]})",
+                file=CLOSING_PAIRS_FILE,
+                source_account=source_account,
+                target_account=target_account,
+                line=line,
+            )
+        sequence_raw = _require_str(raw.get("sequence"), field="sequence", file=CLOSING_PAIRS_FILE)
+        try:
+            sequence = int(sequence_raw)
+        except ValueError as error:
+            raise _fail(
+                "`sequence` của cặp kết chuyển không phải số nguyên",
+                file=CLOSING_PAIRS_FILE,
+                source_account=source_account,
+                target_account=target_account,
+                line=line,
+            ) from error
+        description = _optional_str(raw.get("description"))
+        for field, value, limit in (
+            ("source_account", source_account, ACCOUNT_CODE_MAX_LENGTH),
+            ("target_account", target_account, ACCOUNT_CODE_MAX_LENGTH),
+            ("description", description, _CLOSING_DESCRIPTION_MAX_LENGTH),
+        ):
+            _bounded(value, field=field, file=CLOSING_PAIRS_FILE, max_length=limit, line=line)
+        result.append(
+            ClosingPairRow(
+                source_account=source_account,
+                target_account=target_account,
+                sequence=sequence,
+                description=description,
+            )
+        )
+        seen[key] = line
+    return tuple(result)
+
+
+def load_package_from_texts(texts: Mapping[str, str]) -> LoadedPackage:
+    """Đọc + kiểm một gói cấu hình từ nội dung **đã có sẵn trong bộ nhớ**.
+
+    Lõi dùng chung của `load_package_directory` (đọc từ đĩa) và
+    `importer.py` (đọc từ `.zip` đã verify chữ ký + checksum) — hai nguồn khác
+    nhau, cùng một bộ luật kiểm. `texts` phải đủ bốn khóa của
+    `REQUIRED_DATA_FILES`; thiếu khóa nào là lỗi lập trình của nơi gọi
+    (`KeyError`), không phải lỗi dữ liệu gói — nơi gọi chịu trách nhiệm đọc đủ
+    tệp trước khi tới đây.
+    """
+    manifest = _load_manifest(texts[PACKAGE_MANIFEST_FILE])
+    accounts = _load_accounts(texts[ACCOUNTS_FILE])
+    known_codes = frozenset(row.code for row in accounts)
+    default_accounts = _load_default_accounts(texts[DEFAULT_ACCOUNTS_FILE], known_codes)
+    closing_pairs = _load_closing_pairs(texts[CLOSING_PAIRS_FILE], known_codes)
+
+    return LoadedPackage(
+        manifest=manifest,
+        accounts=accounts,
+        default_accounts=default_accounts,
+        closing_pairs=closing_pairs,
+    )
+
+
+def load_package_directory(directory: Path) -> LoadedPackage:
+    """Đọc + kiểm một thư mục gói cấu hình. Ném `ConfigPackageDataInvalidError`
+    ngay tại lỗi đầu tiên tìm thấy — không có gói "nạp một phần".
+    """
+    if not directory.is_dir():
+        raise _fail(f"Thư mục dữ liệu gói cấu hình không tồn tại: {directory}", path=str(directory))
+    missing = [name for name in REQUIRED_DATA_FILES if not (directory / name).is_file()]
+    if missing:
+        raise _fail(
+            f"Thiếu tệp bắt buộc: {', '.join(missing)}",
+            path=str(directory),
+            missing=", ".join(missing),
+        )
+    texts = {
+        name: (directory / name).read_text(encoding="utf-8-sig") for name in REQUIRED_DATA_FILES
+    }
+    return load_package_from_texts(texts)
+
+
+def builtin_data_directory(slug: str) -> Path:
+    """Thư mục `data/<slug>` cạnh module này — nguồn của gói dựng sẵn.
+
+    Đường dẫn tương đối theo vị trí gói cài đặt (không `importlib.resources`):
+    thư mục `data/` đi thẳng cùng mã nguồn trong wheel/venv, và Path tương đối
+    đơn giản hơn API tài nguyên trong khi vẫn hoạt động đúng sau khi cài đặt —
+    xem cách `provisioning.find_alembic_config` suy đường dẫn từ vị trí gói.
+    """
+    return Path(__file__).resolve().parent / "data" / slug
+
+
+def load_builtin_package(slug: str) -> LoadedPackage:
+    """Nạp một gói dựng sẵn theo tên thư mục con của `data/` (`tt99`, `tt133`)."""
+    return load_package_directory(builtin_data_directory(slug))
+
+
+__all__ = [
+    "ACCOUNTS_FILE",
+    "CLOSING_PAIRS_FILE",
+    "DEFAULT_ACCOUNTS_FILE",
+    "PACKAGE_MANIFEST_FILE",
+    "REQUIRED_DATA_FILES",
+    "AccountRow",
+    "ClosingPairRow",
+    "DefaultAccountRow",
+    "LoadedPackage",
+    "PackageManifest",
+    "builtin_data_directory",
+    "load_builtin_package",
+    "load_package_directory",
+    "load_package_from_texts",
+]

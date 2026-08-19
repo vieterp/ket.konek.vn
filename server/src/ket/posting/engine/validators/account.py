@@ -4,7 +4,7 @@ Bốn câu hỏi cho mỗi TK mà chứng từ chạm: có tồn tại không, c
 hình đang hiệu lực tại ngày hạch toán không, có đang hoạt động không, và có
 phải TK tổng hợp không. Câu thứ hai là hệ quả của việc TK thuộc **gói** (LD-06):
 một chứng từ năm 2026 trỏ vào TK của gói TT133 trong khi năm 2026 đang chạy
-TT200 là hạch toán vào một hệ thống TK khác — cân đến đâu cũng vô nghĩa.
+TT99 là hạch toán vào một hệ thống TK khác — cân đến đâu cũng vô nghĩa.
 """
 
 from __future__ import annotations

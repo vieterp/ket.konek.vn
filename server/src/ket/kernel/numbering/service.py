@@ -47,7 +47,7 @@ class NumberingRule:
 
     Là **giá trị truyền vào**, không phải thứ dịch vụ tự tra: quy tắc thuộc về
     định nghĩa loại chứng từ, mà định nghĩa đó là dữ liệu cấu hình của gói
-    TT200/TT133 (phase 5). Nhận từ ngoài vào giữ cho `kernel.numbering` không
+    TT99/TT133 (phase 5). Nhận từ ngoài vào giữ cho `kernel.numbering` không
     phải biết loại chứng từ nào tồn tại — đúng luật phụ thuộc #5.
     """
 

@@ -7,7 +7,7 @@
 
 ## 1. Mục tiêu & bối cảnh
 
-Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn trên một máy hoặc LAN** (mô hình desktop tại từng máy trạm + DB dùng chung). Không cloud v1. Đáp ứng TT200/TT133, xử lý trọn vòng đời chứng từ, hỗ trợ đa chi nhánh, đa tiền tệ, HĐĐT.
+Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn trên một máy hoặc LAN** (mô hình desktop tại từng máy trạm + DB dùng chung). Không cloud v1. Đáp ứng TT99/TT133, xử lý trọn vòng đời chứng từ, hỗ trợ đa chi nhánh, đa tiền tệ, HĐĐT.
 
 **Ba mục tiêu chất lượng chi phối thiết kế, theo thứ tự:**
 1. **Đúng số liệu** (FR-NFR-001..007) — sai số liệu thì mọi ưu điểm khác vô nghĩa.
@@ -82,7 +82,7 @@ Bảng còn lại trong §11 và phần lớn §12 là **thiết kế đích**, 
 | N4 | Đa chi nhánh | Mọi chứng từ gắn chi nhánh; cô lập bằng RLS trên bảng gốc (GUC tenant per-request) | RT-04; phase-2 |
 | N5 | Đa tiền tệ | Mỗi dòng lưu bộ (currency, rate, amount_fc, amount_debit, amount_credit); sổ cái quy VND | phase-3, phase-4 |
 | N6 | Kỳ khóa được | Sau khóa sổ, chứng từ trong kỳ chặn sửa/xóa; chứng từ lùi ngày có quy trình tính lại | phase-4, phase-8 |
-| N7 | Chế độ kế toán là cấu hình | TT200/TT133 quyết định hệ thống TK, mẫu chứng từ, BCTC — tất cả dữ liệu config có hiệu lực theo ngày | ADR-008; phase-5 |
+| N7 | Chế độ kế toán là cấu hình | TT99/TT133 quyết định hệ thống TK, mẫu chứng từ, BCTC — tất cả dữ liệu config có hiệu lực theo ngày | ADR-008; phase-5 |
 
 ---
 
@@ -464,7 +464,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | **Đánh số** (RT-12) | Bảng counter + `SELECT … FOR UPDATE`; idempotency **giành khóa trước rồi làm việc, cùng một txn**, scope theo route, miễn `/reports`,`/jobs` và các thao tác tự nó idempotent (gán vai trò/chi nhánh) | 2, 3 |
 | **Nhật ký** (RT-02) | `audit_log` thuộc `ket_owner`; `ket_app` chỉ INSERT/SELECT (không UPDATE/DELETE/DROP); ghi trước–sau JSONB theo schema dataset | 2 |
 | **Nhiều dữ liệu kế toán** (RT-17, D2) | **Schema-per-dataset trong 1 PG DB (ADR-017)**; routing schema session; handshake/đánh số/audit/RLS/backup per-schema | 2, 3, 11 |
-| **Cấu hình pháp lý** (RT-07) | `config_packages` + bảng con có `effective_from/to` + `scheme(TT200/TT133)`; ký số; SQL/template sandbox | 5 |
+| **Cấu hình pháp lý** (RT-07) | `config_packages` + bảng con có `effective_from/to` + `scheme(TT99/TT133)`; ký số; SQL/template sandbox | 5 |
 | **Báo cáo** (RT-01, RT-04) | Metadata-driven: `report_definitions` (dataset + layout + params); render server-side; mẫu in Jinja2 sandbox + WeasyPrint `url_fetcher` chặn `file://`; **RLS trên bảng gốc** | 5 |
 | **Tồn kho** | `inventory_balances (branch, warehouse, item, lot_id NULL, serial_id NULL)` khóa từ ngày đầu | 8 |
 
@@ -482,7 +482,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | `inventory_balances` | Tồn kho (warehouse, item, lot, serial, qty) | 8 | `inventory` |
 | `audit_log` | Nhật ký bất biến (người, hành động, giá trị trước–sau) | 2 | `ket_owner` |
 | `attachments` | Metadata tệp đính kèm (`entity_type`+`entity_id`, `content_hash`, `branch_id`, `detached_at`). Nội dung nằm ngoài DB | 2 | `kernel` |
-| `config_packages` | Gói cấu hình pháp lý (TT200/TT133, hiệu lực từ…) | 5 | `kernel` |
+| `config_packages` | Gói cấu hình pháp lý (TT99/TT133, hiệu lực từ…) | 5 | `kernel` |
 | `report_definitions` | Báo cáo metadata (layout, tham số, query) | 5 | `reporting` |
 | `number_sequences` | Bộ đếm đánh số chứng từ (`scope_key` gói cả chi nhánh + chu kỳ reset) | 2 (bảng), 3 (cấp số) | `kernel` |
 | `allocated_numbers` | Sổ cấp số: số nào đã cấp cho chứng từ nào. Chỉ ghi cho dãy **liên tục** (hóa đơn) — `UNIQUE (scope_key, number)` là hàng rào cuối nếu một đường ghi ở phase sau quên đi qua dịch vụ (RT-10) | 3 | `kernel` |
@@ -528,7 +528,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 
 | # | Rủi ro (SRS 19 §9) | Ảnh hưởng | ADR xử lý | Phase |
 | --- | --- | --- | --- | --- |
-| 1 | Hard-code TK/BCTC/tờ khai → sửa code mỗi lần thông tư đổi | Thời gian phát triển bùng nổ | ADR-008 (gói config TT200/TT133 với hiệu lực theo ngày) | 5 |
+| 1 | Hard-code TK/BCTC/tờ khai → sửa code mỗi lần thông tư đổi | Thời gian phát triển bùng nổ | ADR-008 (gói config TT99/TT133 với hiệu lực theo ngày) | 5 |
 | 2 | Xây ~155 báo cáo riêng lẻ → bảo trì không khả thi | Chi phí bùng nổ | ADR-009 (report engine metadata-driven) | 5 |
 | 3 | Tồn kho không tính serial/lô từ đầu → không thêm được | Kiến trúc data phải viết lại | ADR-010 (schema `lot/serial` từ phase 1, UI hoãn) | 8 |
 | 4 | Hai sổ thêm sau → sửa tất cả bảng phát sinh + số dư | Effort và rủi ro kiến trúc rất cao | ADR-006 (cột `ledger` từ phase 1) | 4 |

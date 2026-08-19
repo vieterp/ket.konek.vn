@@ -12,7 +12,7 @@ từ của nhau — cách rẻ nhất để không phải dọn bảng phát sin
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -37,7 +37,7 @@ SEED_ACTOR_ID = 1
 FISCAL_YEAR_CODE = "2026"
 FISCAL_YEAR_START = date(2026, 1, 1)
 
-PACKAGE_CODE = "TT200-TEST"
+PACKAGE_CODE = "TT99-TEST"
 
 USD_RATE = Decimal("25000")
 
@@ -87,7 +87,7 @@ def _ensure_fiscal_year(session: Session) -> int:
     year = PeriodService(session).create_fiscal_year(
         code=FISCAL_YEAR_CODE,
         start_date=FISCAL_YEAR_START,
-        accounting_scheme=AccountingScheme.TT200,
+        accounting_scheme=AccountingScheme.TT99,
         base_currency="VND",
         inventory_valuation_method=InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING,
         vat_method=VatMethod.DEDUCTION,
@@ -112,9 +112,21 @@ def _ensure_package_and_accounts(session: Session) -> tuple[int, dict[str, int]]
     if package_id is None:
         package = ConfigPackage(
             code=PACKAGE_CODE,
-            name="Gói TT200 cho test",
-            scheme=AccountingScheme.TT200.value,
-            effective_from=date(2000, 1, 1),
+            name="Gói TT99 cho test",
+            scheme=AccountingScheme.TT99.value,
+            # CÙNG ngày hiệu lực với gói TT99 dựng sẵn thật (`TT99-2025`,
+            # 2026-01-01 — gieo tự động lúc cấp dữ liệu kế toán): số dư ban đầu
+            # ghi đúng ngày đầu năm tài chính, nên gói test phải phủ được ngày
+            # đó. `resolve_package` chỉ đọc gói **đã kích hoạt**, xếp theo
+            # `effective_from DESC, activated_at DESC, id DESC` — gói này phải
+            # `activated_at` **và** kích hoạt sau gói thật (luôn đúng: gói thật
+            # kích hoạt lúc `provision_dataset`, gói này tạo sau đó, lúc test
+            # chạy) để thắng cả hai tiêu chí, tránh chứng từ test resolve nhầm
+            # sang hệ TK thật (185 TK) trong khi `context.accounts` vẫn trỏ ID
+            # của gói tối giản này.
+            effective_from=FISCAL_YEAR_START,
+            activated_at=datetime.now(UTC),
+            activated_by=SEED_ACTOR_ID,
         )
         session.add(package)
         session.flush()

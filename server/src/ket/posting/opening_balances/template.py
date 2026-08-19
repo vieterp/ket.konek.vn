@@ -46,7 +46,7 @@ ACCOUNT_CODE_COLUMN: Final[ColumnDescriptor] = ColumnDescriptor(
     kind=CellKind.TEXT,
     required=True,
     max_length=20,
-    note="Số hiệu trong hệ thống tài khoản của chế độ kế toán năm (TT200/TT133).",
+    note="Số hiệu trong hệ thống tài khoản của chế độ kế toán năm (TT99/TT133).",
 )
 
 _CURRENCY_COLUMNS: Final[tuple[ColumnDescriptor, ...]] = (

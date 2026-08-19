@@ -91,7 +91,7 @@ def _context_for(
 def test_forced_recalc_requires_both_ledger_and_period() -> None:
     # Phép kiểm cặp tham số đứng TRƯỚC mọi lượt chạm session, nên context ở
     # đây mang session giả — tới được DB là test này phải đổ.
-    fake_dataset = DatasetRef(id=0, code="x", schema_name="ds_x", scheme="TT200")
+    fake_dataset = DatasetRef(id=0, code="x", schema_name="ds_x", scheme="TT99")
     with pytest.raises(JobParamsInvalidError):
         run_balance_recalc(
             _context_for(None, fake_dataset, branch_id=1),  # type: ignore[arg-type]
