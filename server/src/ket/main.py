@@ -58,6 +58,7 @@ from ket.api.routers.imports import router as imports_router
 from ket.api.routers.items_units import router as item_units_router
 from ket.api.routers.items_variants import router as item_variants_router
 from ket.api.routers.jobs import router as jobs_router
+from ket.api.routers.ledger import router as ledger_router
 from ket.api.routers.master_data import router as master_data_router
 from ket.api.routers.partners import router as partner_bank_accounts_router
 from ket.api.routers.setup import router as setup_router
@@ -257,6 +258,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # dùng chung (ghi sổ / bỏ ghi sổ / xóa).
     app.include_router(gl_journal_router)
     app.include_router(vouchers_router)
+    app.include_router(ledger_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:
