@@ -1199,3 +1199,54 @@ class DocumentTypeUnknownError(DomainError):
     """Loại chứng từ chưa được module nào đăng ký với posting engine."""
 
     error_code: ClassVar[str] = "voucher.document_type_unknown"
+
+
+class OpeningPeriodMissingError(DomainError):
+    """Năm tài chính chưa có kỳ kế toán nào — số dư ban đầu không có kỳ để đổ vào."""
+
+    error_code: ClassVar[str] = "opening.period_missing"
+
+
+class OpeningPeriodLockedError(DomainError):
+    """Kỳ đầu năm đã khóa sổ — số dư ban đầu chỉ sửa được sau khi mở khóa (FR-OPB-011)."""
+
+    error_code: ClassVar[str] = "opening.period_locked"
+
+
+class OpeningFiscalYearClosedError(DomainError):
+    """Năm tài chính đã quyết toán (`fiscal_years.is_closed`) — chặn cả kỳ 13."""
+
+    error_code: ClassVar[str] = "opening.fiscal_year_closed"
+
+
+class OpeningCarryForwardTargetMissingError(DomainError):
+    """Chưa có năm tài chính liền sau để nhận số dư chuyển sang (FR-OPB-010).
+
+    Cách sửa nằm ở màn hình năm tài chính (tạo năm mới), không ở chính lượt
+    chuyển — thông điệp phải chỉ về đó.
+    """
+
+    error_code: ClassVar[str] = "opening.carry_forward_target_missing"
+
+
+class OpeningCarryForwardExistsError(DomainError):
+    """Năm nhận đã có số dư ban đầu — ghi đè phải là lựa chọn tường minh.
+
+    Cùng triết lý `ImportMode.CREATE_ONLY` (H80): lượt chạy lại là chuyện bình
+    thường (chốt lại số cuối năm sau kiểm toán), nhưng nó **thay trọn** số dư
+    người dùng có thể đã sửa tay — nên client phải gửi `overwrite=true` sau khi
+    người dùng đọc cảnh báo, không phải job tự quyết.
+    """
+
+    error_code: ClassVar[str] = "opening.carry_forward_exists"
+
+
+class OpeningBranchRequiredError(DomainError):
+    """Người dùng nhiều chi nhánh chưa chọn chi nhánh đang thao tác.
+
+    Số dư ban đầu ghi theo chi nhánh (FR-OPB-009) và job chạy dưới phạm vi RLS
+    của chi nhánh đang thao tác. Không chặn ở đây thì lượt xếp hàng nhận `202`
+    rồi job chắc chắn fail — người dùng biết muộn hơn đúng một vòng đợi.
+    """
+
+    error_code: ClassVar[str] = "opening.branch_required"
