@@ -28,12 +28,9 @@ ASSET_SCHEME: Final = "asset:"
 _ALLOWED_ASSETS: Final[frozenset[str]] = frozenset(
     {
         "print_base.css",
-        "fonts/be-vietnam-pro-latin-400-normal.woff2",
-        "fonts/be-vietnam-pro-latin-600-normal.woff2",
-        "fonts/be-vietnam-pro-latin-700-normal.woff2",
-        "fonts/be-vietnam-pro-vietnamese-400-normal.woff2",
-        "fonts/be-vietnam-pro-vietnamese-600-normal.woff2",
-        "fonts/be-vietnam-pro-vietnamese-700-normal.woff2",
+        "fonts/be-vietnam-pro-400-normal.woff2",
+        "fonts/be-vietnam-pro-600-normal.woff2",
+        "fonts/be-vietnam-pro-700-normal.woff2",
     }
 )
 """Danh sách ĐÓNG — khẳng định bằng giá trị, không bằng `Path.exists()`: một

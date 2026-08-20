@@ -65,20 +65,24 @@ def get_report_params(
     (FR-RPT-002; bộ chuẩn là hợp đồng cố định, xem `reports_schemas`)."""
     with unit_of_work(factory, authorized.scope) as session:
         definition, spec = resolve_definition(session, code=code)
-        return ReportParamsResponse(
-            code=definition.code,
-            name=definition.name,
-            ledger_scope=definition.ledger_scope,  # type: ignore[arg-type]
-            params=[
-                ReportParamFieldResponse(
-                    name=param.name,
-                    kind=param.kind,
-                    label=param.label,
-                    label_en=param.label_en,
-                    required=param.required,
-                )
-                for param in spec.params
-            ],
+        # `model_validate` thay vì gọi constructor: `ledger_scope` trong DB là
+        # chuỗi tự do, để pydantic tự kiểm nó thuộc đúng bộ Literal của schema.
+        return ReportParamsResponse.model_validate(
+            {
+                "code": definition.code,
+                "name": definition.name,
+                "ledger_scope": definition.ledger_scope,
+                "params": [
+                    ReportParamFieldResponse(
+                        name=param.name,
+                        kind=param.kind,
+                        label=param.label,
+                        label_en=param.label_en,
+                        required=param.required,
+                    )
+                    for param in spec.params
+                ],
+            }
         )
 
 

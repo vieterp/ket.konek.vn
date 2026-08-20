@@ -162,6 +162,31 @@ class TestPdf:
         # Tổng nhóm không bị chia lát cắt làm sai: 8 dòng × 100.000.
         assert "800.000" in joined
 
+    def test_pdf_embeds_be_vietnam_pro_not_os_fallback(self) -> None:
+        """Font phải là Be Vietnam Pro nhúng từ assets, không phải font hệ
+        điều hành: khi allowlist/CSS/tệp woff2 hỏng, WeasyPrint chỉ log rồi
+        lặng lẽ rơi về font máy — bản in mỗi nền một kiểu, chữ có dấu vỡ khi
+        trích xuất. Soi tên font thật trong PDF nên bắt được trên mọi nền."""
+        rows = [_row("111", 5, debit=1_000_000)]
+        pdf = render_pdf(
+            title="Sổ Cái",
+            unit=UNIT,
+            param_lines=(),
+            layout_spec=LAYOUT,
+            display_rows=group_rows(iter(rows), layout_spec=LAYOUT),
+            signature_date=date(2026, 8, 20),
+        )
+        base_fonts: set[str] = set()
+        for page in PdfReader(io.BytesIO(pdf)).pages:
+            fonts = page["/Resources"]["/Font"].get_object()
+            for key in fonts:
+                base_fonts.add(str(fonts[key].get_object()["/BaseFont"]))
+        assert base_fonts, "PDF không nhúng font nào"
+        for name in base_fonts:
+            # Tên dạng "ABCDEF+Be-Vietnam-Pro-Bold" — tiền tố subset + family;
+            # cách chấm câu tùy phiên bản WeasyPrint nên so sau khi bỏ "-".
+            assert "BeVietnamPro" in name.replace("-", ""), f"font lạ trong PDF: {name}"
+
     def test_group_totals_survive_chunk_boundaries(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(pdf_renderer, "CHUNK_DATA_ROWS", 2)
         rows = [_row("111", day, debit=1) for day in range(1, 6)]

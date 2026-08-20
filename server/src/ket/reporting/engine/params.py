@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
@@ -68,21 +68,21 @@ class BoundParams:
         return binds
 
 
-def _base_fields() -> dict[str, tuple[type | object, object]]:
-    return {
-        "from_date": (date, Field()),
-        "to_date": (date, Field()),
-        "ledger": (
-            int,
-            Field(
-                default=int(Ledger.FINANCIAL), ge=int(Ledger.FINANCIAL), le=int(Ledger.MANAGEMENT)
-            ),
-        ),
-        "branch_ids": (tuple[int, ...] | None, Field(default=None)),
-    }
+class _BaseReportParams(BaseModel):
+    """Bộ tham số chuẩn — lớp nền tĩnh để mypy thấy kiểu từng trường; các
+    tham số NGOÀI bộ chuẩn được `create_model` ghép thêm ở lớp con động."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    from_date: date
+    to_date: date
+    ledger: int = Field(
+        default=int(Ledger.FINANCIAL), ge=int(Ledger.FINANCIAL), le=int(Ledger.MANAGEMENT)
+    )
+    branch_ids: tuple[int, ...] | None = None
 
 
-def _extra_field(param: ParamSpec) -> tuple[type | object, object]:
+def _extra_field(param: ParamSpec) -> tuple[Any, Any]:
     base = _KIND_TYPES[param.kind]
     if param.required:
         return (base, Field())
@@ -96,15 +96,8 @@ def validate_params(
     ledger_scope: str,
 ) -> BoundParams:
     """Kiểm và ràng tham số một lượt render (FR-RPT-002, BR-RPT-04)."""
-    fields = _base_fields()
-    for param in spec.params:
-        fields[param.name] = _extra_field(param)
-
-    model_type: type[BaseModel] = create_model(  # type: ignore[call-overload]
-        "ReportParams",
-        __config__=ConfigDict(extra="forbid", frozen=True),
-        **fields,
-    )
+    fields: dict[str, Any] = {param.name: _extra_field(param) for param in spec.params}
+    model_type = create_model("ReportParams", __base__=_BaseReportParams, **fields)
     try:
         validated = model_type.model_validate(dict(raw))
     except ValidationError as exc:
@@ -115,10 +108,10 @@ def validate_params(
             param=location,
         ) from exc
 
-    from_date: date = validated.from_date  # type: ignore[attr-defined]
-    to_date: date = validated.to_date  # type: ignore[attr-defined]
-    ledger: int = validated.ledger  # type: ignore[attr-defined]
-    branch_ids: tuple[int, ...] | None = validated.branch_ids  # type: ignore[attr-defined]
+    from_date = validated.from_date
+    to_date = validated.to_date
+    ledger = validated.ledger
+    branch_ids = validated.branch_ids
 
     if from_date > to_date:
         raise ReportParamsInvalidError(
