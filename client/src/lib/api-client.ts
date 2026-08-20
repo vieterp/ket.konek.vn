@@ -211,6 +211,56 @@ export class ApiClient {
     }
   }
 
+  /**
+   * POST rồi nhận về **hoặc** một tệp nhị phân **hoặc** một thân JSON — hai
+   * đường của lát 5E cần đúng hình dạng này:
+   *
+   * - `POST /reports/{code}/render`: báo cáo nhỏ trả tệp `200`; vượt ngưỡng
+   *   chuyển-job trả `202` + JSON `{job_id, estimated_rows}`.
+   * - `POST /vouchers/{id}/print`: luôn trả tệp, nhưng chỗ gọi cần đọc header
+   *   (`X-Print-Reprint`, `X-Print-Copy-No`) để hiện cảnh báo in lại — nên
+   *   `headers` nằm trong kết quả thay vì bị nuốt.
+   *
+   * Phân nhánh theo `Content-Type` của phản hồi, không theo mã trạng thái:
+   * chính kiểu nội dung mới quyết định cách đọc thân.
+   */
+  async postBlob(
+    path: string,
+    body?: Body,
+    options?: RequestOptions,
+  ): Promise<
+    | {
+        readonly kind: 'file'
+        readonly blob: Blob
+        readonly fileName: string | null
+        readonly headers: Headers
+      }
+    | { readonly kind: 'json'; readonly status: number; readonly data: unknown }
+  > {
+    const response = await this.send('POST', path, body, options)
+    if (!response.ok) {
+      const error = await this.toError(response, path)
+      if (error.isSessionLost) {
+        this.token = null
+        this.onSessionLost()
+      }
+      if (error.isClientTooOld) {
+        this.onClientTooOld()
+      }
+      throw error
+    }
+    const contentType = response.headers.get('Content-Type') ?? ''
+    if (contentType.includes('application/json')) {
+      return { kind: 'json', status: response.status, data: (await response.json()) as unknown }
+    }
+    return {
+      kind: 'file',
+      blob: await response.blob(),
+      fileName: fileNameFromDisposition(response.headers.get('Content-Disposition')),
+      headers: response.headers,
+    }
+  }
+
   /** `/health` — dùng cho màn hình chẩn đoán kết nối tới máy chủ. */
   async health(): Promise<HealthStatus> {
     return this.get<HealthStatus>('/health')

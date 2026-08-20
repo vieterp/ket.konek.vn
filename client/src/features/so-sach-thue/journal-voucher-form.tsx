@@ -340,6 +340,7 @@ function VoucherFormBody({
 
       <JournalVoucherActionsFooter
         voucherStatus={voucher?.status ?? null}
+        voucherId={voucher?.id ?? null}
         readOnly={readOnly}
         busy={busy}
         confirmDelete={confirmDelete}

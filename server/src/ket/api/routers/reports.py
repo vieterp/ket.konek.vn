@@ -1,26 +1,28 @@
-"""Báo cáo metadata-driven qua HTTP (`/api/v1/reports`) — lát 5C.
+"""Báo cáo metadata-driven qua HTTP (`/api/v1/reports`) — lát 5C + 5E.
 
 | Đường dẫn | Việc | Quyền |
 | --- | --- | --- |
 | `GET  /api/v1/reports` | Danh mục báo cáo (lọc category/module) | `reporting.report.view` |
 | `GET  /api/v1/reports/{code}/params` | Spec tham số để client dựng form | `reporting.report.view` |
-| `POST /api/v1/reports/{code}/render` | Kết xuất PDF/XLSX (FR-RPT-006) | `reporting.report.export` |
+| `POST /api/v1/reports/{code}/preview` | Lưới xem trước (bước 14) | `reporting.report.view` |
+| `POST /api/v1/reports/{code}/render` | Kết xuất PDF/XLSX (FR-RPT-006); vượt ngưỡng → `202` + job nền (bước 19) | `reporting.report.export` |
+| `GET  /api/v1/reports/render-jobs/{job_id}/file` | Tải tệp của job render đã xong | `reporting.report.export` |
 
 `POST …/render` nằm trong `IDEMPOTENCY_EXEMPT_PREFIXES` (`/api/v1/reports/`,
 khai từ phase 2 theo plan.md §Đánh số RT-12): render là phép ĐỌC trả tệp, chạy
-hai lần cho cùng một tệp — không có trạng thái nghiệp vụ nào để nhân đôi.
-
-Đồng bộ, không qua hàng đợi — cùng lý lẽ với `routers/exports.py`; ngưỡng
-chuyển báo cáo lớn (>20.000 dòng ước lượng) sang job queue là bước 19 của
-phase-05, thuộc lát 5E.
+hai lần cho cùng một tệp — không có trạng thái nghiệp vụ nào để nhân đôi. Điều
+đó đúng cả cho nhánh `202`: bấm hai lần ra hai job cùng đọc một số liệu, tốn
+thời gian máy chứ không nhân đôi trạng thái nghiệp vụ nào.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
+from fastapi.responses import FileResponse, JSONResponse
 
 from ket.api.dependencies import (
     AppSettings,
@@ -38,17 +40,34 @@ from ket.api.routers.reports_schemas import (
     ReportParamsResponse,
     ReportPreviewRequest,
     ReportPreviewResponse,
+    ReportRenderAcceptedResponse,
     ReportRenderRequest,
     ReportSummaryResponse,
 )
+from ket.kernel.attachments.storage import blob_path
+from ket.kernel.config.catalog import (
+    REPORT_PDF_JOB_THRESHOLD_KEY,
+    REPORT_XLSX_JOB_THRESHOLD_KEY,
+)
+from ket.kernel.config.settings_service import value_of
+from ket.kernel.errors import (
+    AttachmentContentMissingError,
+    AttachmentStorageNotConfiguredError,
+    JobNotFoundError,
+    ReportRenderNotReadyError,
+)
+from ket.kernel.jobs import queue
+from ket.kernel.jobs.models import JobStatus
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.reporting.engine import REPORT_EXPORT, REPORT_VIEW
 from ket.reporting.engine.engine import (
+    estimate_report_rows,
     list_definitions,
     preview_report,
     render_report,
     resolve_definition,
 )
+from ket.reporting.render_job import RENDER_JOB, RENDER_JOB_CODE
 
 router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
 
@@ -163,6 +182,14 @@ def preview(
             },
             "description": "Tệp báo cáo theo `format` đã chọn",
         },
+        202: {
+            "model": ReportRenderAcceptedResponse,
+            "description": (
+                "Báo cáo vượt ngưỡng chuyển-job (bước 19) — đã xếp job nền; "
+                "theo dõi qua `/api/v1/jobs/{job_id}`, tải tệp ở "
+                "`/api/v1/reports/render-jobs/{job_id}/file`"
+            ),
+        },
         404: {"description": "Không có báo cáo mang mã này"},
         422: {"description": "Tham số không hợp lệ (FR-RPT-002)"},
     },
@@ -175,8 +202,31 @@ def render(
     body: ReportRenderRequest,
 ) -> Response:
     """Kết xuất một báo cáo (FR-RPT-006). Số liệu chạy trong phạm vi RLS của
-    người gọi; `branch_ids` chỉ thu hẹp thêm (BR-RPT-04/05)."""
+    người gọi; `branch_ids` chỉ thu hẹp thêm (BR-RPT-04/05).
+
+    Trước khi render, đếm số dòng bằng CHÍNH câu SQL đã bọc phạm vi: vượt
+    ngưỡng (`report.{pdf,xlsx}_job_threshold_rows`) thì trả `202` + job nền
+    thay vì giữ request nhiều giây (FR-NFR-041/042/044, giải M2 review 5C —
+    render đồng bộ giữ transaction + RAM suốt lượt chạy).
+    """
     with unit_of_work(factory, authorized.scope) as session:
+        estimated = estimate_report_rows(session, code=code, raw_params=body.params)
+        threshold_key = (
+            REPORT_PDF_JOB_THRESHOLD_KEY if body.format == "pdf" else REPORT_XLSX_JOB_THRESHOLD_KEY
+        )
+        threshold = value_of(session, key=threshold_key, user_id=authorized.scope.user_id)
+        if isinstance(threshold, int) and estimated > threshold:
+            job = queue.enqueue(
+                session,
+                job_type=RENDER_JOB,
+                params={"code": code, "format": body.format, "params": body.params},
+                requested_by=authorized.scope.user_id,
+                # Chi nhánh đang thao tác — cùng quyết định với `routers/jobs.py`:
+                # nó quyết định phạm vi RLS mà thân job chạy dưới.
+                branch_id=authorized.scope.acting_branch_id,
+            )
+            accepted = ReportRenderAcceptedResponse(job_id=job.id, estimated_rows=estimated)
+            return JSONResponse(status_code=202, content=accepted.model_dump(mode="json"))
         options = build_render_options(
             session,
             settings=settings,
@@ -200,4 +250,81 @@ def render(
             "Content-Disposition": f'attachment; filename="{rendered.filename}"',
             "X-Content-Type-Options": "nosniff",
         },
+    )
+
+
+@router.get(
+    "/render-jobs/{job_id}/file",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "application/pdf": {},
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {},
+            },
+            "description": "Tệp kết quả của job render đã `done`",
+        },
+        404: {"description": "Không có job render này trong phạm vi người gọi"},
+        409: {"description": "Job chưa xong (đang chạy / đã hỏng / đã hủy)"},
+    },
+)
+def download_render_job_file(
+    authorized: ReportExporter,
+    factory: SessionFactory,
+    settings: AppSettings,
+    job_id: UUID,
+) -> Response:
+    """Tải tệp của một job `reporting.report.render` đã xong (bước 19).
+
+    Chỉ **người yêu cầu** tải được (404 cho người khác, kể cả người thấy dòng
+    job qua RLS chi nhánh): thân job chạy dưới TOÀN BỘ chi nhánh hiện hành của
+    người yêu cầu (`JobBranchScope.REQUESTER_BRANCHES`, vá C1 review 5E), nên
+    tệp có thể mang số liệu RỘNG hơn phạm vi của một người cùng chi nhánh —
+    dòng job nhìn thấy được không có nghĩa tệp đọc được.
+    """
+    with unit_of_work(factory, authorized.scope) as session:
+        job = queue.get_job(session, job_id)
+        if job.type != RENDER_JOB_CODE or job.requested_by != authorized.scope.user_id:
+            raise JobNotFoundError("Không tìm thấy tác vụ", job_id=str(job_id))
+        if job.status != JobStatus.DONE.value:
+            raise ReportRenderNotReadyError(
+                "Tác vụ kết xuất chưa có tệp để tải",
+                job_id=str(job_id),
+                job_status=job.status,
+            )
+        result = job.result or {}
+        content_hash = result.get("content_hash")
+        file_name = result.get("file_name")
+        media_type = result.get("media_type")
+        if (
+            not isinstance(content_hash, str)
+            or not isinstance(file_name, str)
+            or not isinstance(media_type, str)
+        ):  # pragma: no cover - thân job luôn ghi đủ ba khóa khi done
+            raise AttachmentContentMissingError(
+                "Kết quả của tác vụ kết xuất thiếu tham chiếu tệp", job_id=str(job_id)
+            )
+        if settings.attachments_dir is None:
+            raise AttachmentStorageNotConfiguredError(
+                "Bản cài chưa cấu hình thư mục tệp đính kèm (KET_ATTACHMENTS_DIR)"
+            )
+        try:
+            path = blob_path(
+                settings.attachments_dir, authorized.scope.dataset_schema, content_hash
+            )
+        except ValueError as error:
+            raise AttachmentContentMissingError(
+                "Tệp kết quả không còn trên đĩa", job_id=str(job_id)
+            ) from error
+        if not path.is_file():
+            raise AttachmentContentMissingError(
+                "Tệp kết quả không còn trên đĩa", job_id=str(job_id)
+            )
+    # `FileResponse` stream từ đĩa (M-4 review 5E): trần blob là 512 MiB — đọc
+    # trọn vào RAM nghĩa là vài lượt tải song song đủ OOM một bản cài 4 GB.
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=file_name,
+        headers={"X-Content-Type-Options": "nosniff"},
     )

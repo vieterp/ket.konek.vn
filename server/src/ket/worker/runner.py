@@ -42,6 +42,7 @@ from ket.kernel.jobs.models import Job
 from ket.kernel.jobs.reaper import reap_expired_leases
 from ket.kernel.jobs.registry import (
     REGISTRY,
+    JobBranchScope,
     JobCancelled,
     JobContext,
     JobPrivilege,
@@ -54,6 +55,7 @@ from ket.kernel.logging_setup import get_logger
 from ket.kernel.persistence.session import control_session, worker_session
 from ket.kernel.persistence.types import JsonPrimitive
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.authorization import resolve_access
 from ket.settings import Settings
 from ket.worker.progress import LeaseLostError, WorkerProgress
 
@@ -89,6 +91,53 @@ class ClaimedJob:
             requested_by=job.requested_by,
             attempt=job.attempt,
         )
+
+
+def resolve_body_scope(
+    factory: sessionmaker[Session],
+    dataset: DatasetRef,
+    *,
+    job_type: JobType[Any],
+    job_id: UUID,
+    requested_by: int,
+    branch_id: int | None,
+) -> RequestScope:
+    """Phạm vi RLS mà THÂN một job chạy dưới (review 5E, C1).
+
+    Hàm module-level chứ không phải chi tiết riêng của runner: bài test nào
+    dựng "worker thu nhỏ" phải gọi ĐÚNG hàm này thay vì tự chế scope — chính
+    khoảng cách giữa harness và runner là chỗ C1 trốn được toàn bộ test (H1).
+
+    Hai chế độ, khai trên `JobType.branch_scope`:
+
+    * `ACTING_BRANCH` (mặc định — job ghi theo chi nhánh): phạm vi = đúng chi
+      nhánh ghi trên dòng job; job không mang chi nhánh chạy với phạm vi rỗng,
+      chỉ thấy dòng `branch_id IS NULL` — fail-closed.
+    * `REQUESTER_BRANCHES` (job đọc xuyên chi nhánh — render báo cáo là loại
+      đầu tiên): phạm vi = danh sách chi nhánh **hiện hành** của người yêu cầu,
+      đọc lại ngay lúc chạy bằng chính `resolve_access` của tầng API (một lượt
+      đọc phạm-vi-rỗng, cùng khuôn `dependencies.authorize`). Nhờ đó tệp job
+      và bản render đồng bộ cùng người cùng tham số là MỘT bộ số; quyền bị rút
+      giữa enqueue và chạy thì phạm vi tự hẹp theo quyền thật.
+    """
+    if job_type.branch_scope is JobBranchScope.REQUESTER_BRANCHES:
+        read_scope = RequestScope(
+            dataset_schema=dataset.schema_name,
+            user_id=requested_by,
+            branch_ids=(),
+            client_info=f"ket.worker job={job_id} scope-lookup",
+        )
+        with unit_of_work(factory, read_scope) as session:
+            branch_ids = resolve_access(session, user_id=requested_by).branch_ids
+    else:
+        branch_ids = (branch_id,) if branch_id is not None else ()
+    return RequestScope(
+        dataset_schema=dataset.schema_name,
+        user_id=requested_by,
+        branch_ids=branch_ids,
+        client_info=f"ket.worker job={job_id}",
+        acting_branch_id=branch_id,
+    )
 
 
 class Worker:
@@ -319,16 +368,13 @@ class Worker:
             with control_session(self._owner_factory) as session:
                 return self._call(job_type, session, dataset, claimed, progress)
 
-        scope = RequestScope(
-            dataset_schema=dataset.schema_name,
-            user_id=claimed.requested_by,
-            # Phạm vi chi nhánh của job = đúng chi nhánh ghi trên dòng job. Job
-            # không mang chi nhánh (tác vụ mức dữ liệu kế toán) chạy với phạm vi
-            # rỗng, tức là chỉ thấy dòng `branch_id IS NULL` — fail-closed,
-            # cùng hướng với mọi chỗ khác của RLS.
-            branch_ids=(claimed.branch_id,) if claimed.branch_id is not None else (),
-            client_info=f"ket.worker job={claimed.job_id}",
-            acting_branch_id=claimed.branch_id,
+        scope = resolve_body_scope(
+            self._factory,
+            dataset,
+            job_type=job_type,
+            job_id=claimed.job_id,
+            requested_by=claimed.requested_by,
+            branch_id=claimed.branch_id,
         )
         with unit_of_work(self._factory, scope) as session:
             result = self._call(job_type, session, dataset, claimed, progress)

@@ -39,6 +39,11 @@ export function FeatureNav(): ReactElement {
             {t('trialBalance.nav.title')}
           </NavLink>
         </li>
+        <li>
+          <NavLink to="/so-sach-thue/bao-cao" className={LINK_CLASS}>
+            {t('reports.nav.title')}
+          </NavLink>
+        </li>
       </ul>
     </nav>
   )

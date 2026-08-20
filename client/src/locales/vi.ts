@@ -511,6 +511,42 @@ export const vi = {
   'error.dimension.value_source_mismatch': 'Giá trị chiều dữ liệu không khớp danh mục nguồn.',
   'error.opening.carry_forward_exists':
     'Năm nhận đã có số dư ban đầu. Bấm "Ghi đè và chuyển lại" nếu muốn thay bằng số cuối năm nguồn.',
+
+  'reports.nav.title': 'Báo cáo & Sổ sách',
+  'reports.catalog.title': 'Báo cáo & Sổ sách',
+  'reports.catalog.loading': 'Đang tải danh mục báo cáo…',
+  'reports.catalog.pickOne': 'Chọn một báo cáo ở danh sách bên trái để xem hoặc kết xuất.',
+  'reports.params.fromDate': 'Từ ngày',
+  'reports.params.toDate': 'Đến ngày',
+  'reports.params.ledger': 'Sổ',
+  'reports.params.ledgerFinancial': 'Tài chính',
+  'reports.params.ledgerManagement': 'Quản trị',
+  'reports.action.preview': 'Xem trước',
+  'reports.action.exportPdf': 'Xuất PDF',
+  'reports.action.exportXlsx': 'Xuất Excel',
+  'reports.preview.truncated':
+    'Lưới xem trước cắt ở 2.000 dòng — xuất Excel để lấy đủ dữ liệu.',
+  'reports.job.running': 'Báo cáo lớn đang chạy nền: {progress}%',
+  'reports.job.done': 'Báo cáo đã sẵn sàng.',
+  'reports.job.failed': 'Kết xuất nền thất bại.',
+  'reports.job.cancelled': 'Đã hủy kết xuất.',
+  'reports.job.cancel': 'Hủy',
+  'reports.job.download': 'Tải tệp',
+
+  'gl.print.button': 'In',
+  'gl.print.reprintWarning': 'In lại lần {copy} — mỗi lần in đều được ghi vào sổ theo dõi.',
+
+  'setup.logo.title': 'Logo trên báo cáo',
+  'setup.logo.present': 'Đã có logo — bản in và báo cáo sẽ mang logo này.',
+  'setup.logo.absent': 'Chưa có logo trên bản in.',
+  'setup.logo.saved': 'Đã lưu logo.',
+  'setup.logo.choose': 'Chọn tệp logo…',
+  'setup.logo.replace': 'Đổi logo…',
+  'setup.logo.uploading': 'Đang tải lên…',
+
+  'error.report.not_found': 'Không có báo cáo mang mã này trong chế độ kế toán đang dùng.',
+  'error.report.render_not_ready': 'Tác vụ kết xuất chưa có tệp để tải — chờ chạy xong hoặc xem trạng thái.',
+  'error.report.params_invalid': 'Tham số báo cáo không hợp lệ — kiểm tra khoảng ngày và các ô nhập.',
   'error.opening.carry_forward_target_missing':
     'Chưa có năm tài chính liền sau để nhận số dư — tạo năm mới ở màn hình năm tài chính trước.',
   'error.transport.unexpected_response': 'Máy chủ trả lời không đọc được.',

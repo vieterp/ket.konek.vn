@@ -11,15 +11,21 @@
  * mã này phải chạy được ở chế độ trình duyệt LAN v1.x.
  */
 
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 
 import type { Schemas } from '@api-types'
 
+import type { JobResponse } from '@/lib/job-tracking'
+import { isJobRunning, saveBlob, useJob } from '@/lib/job-tracking'
 import { useSession } from '@/lib/session'
+
+// Bộ theo dõi job + lưu tệp chuyển về `@/lib/job-tracking` ở lát 5E (nhóm Sổ
+// sách & Thuế cũng cần chúng); re-export để mọi chỗ gọi cũ giữ nguyên.
+export { isJobRunning, saveBlob, useJob }
+export type { JobResponse }
 
 export type ImportValidateResponse = Schemas['ImportValidateResponse']
 export type ImportCommitResponse = Schemas['ImportCommitResponse']
-export type JobResponse = Schemas['JobResponse']
 
 /** `jobs.result` của một job nhập danh mục — model `ImportReport` phía server. */
 export interface ImportReport {
@@ -42,25 +48,6 @@ export interface ImportReport {
   }[]
   readonly truncated_errors: boolean
   readonly committed: boolean
-}
-
-const RUNNING_STATUSES: readonly string[] = ['queued', 'running']
-
-export function isJobRunning(job: JobResponse | undefined): boolean {
-  return job !== undefined && RUNNING_STATUSES.includes(job.status)
-}
-
-/** Theo dõi một job: hỏi lại mỗi giây khi còn chạy, dừng hẳn khi có kết cục. */
-export function useJob(jobId: string | null) {
-  const { client, datasetCode } = useSession()
-
-  return useQuery({
-    queryKey: ['job', datasetCode, jobId],
-    enabled: datasetCode !== null && jobId !== null,
-    queryFn: () =>
-      client.get<JobResponse>(`/api/v1/jobs/${jobId ?? ''}`, { datasetCode }),
-    refetchInterval: (query) => (isJobRunning(query.state.data) ? 1000 : false),
-  })
 }
 
 /** Đọc `ImportReport` từ `jobs.result` — `null` khi job chưa xong hoặc không có report. */
@@ -119,18 +106,6 @@ export function useCommitImport(slug: string) {
         { datasetCode, idempotencyKey },
       ),
   })
-}
-
-/** Lưu một blob xuống máy bằng thẻ `<a download>` — đường chuẩn trình duyệt. */
-export function saveBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = fileName
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  URL.revokeObjectURL(url)
 }
 
 /** Tải tệp mẫu Excel của danh mục (FR-SYS-080). */

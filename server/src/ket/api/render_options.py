@@ -1,32 +1,20 @@
-"""Dựng `RenderOptions` từ settings của dữ liệu kế toán (FR-RPT-010/012).
+"""Lớp bọc mỏng của tầng API quanh `reporting.rendering.options_factory`.
 
-Ở tầng API vì cần cả ba thứ mà renderer không nên tự với tới: settings phân
-giải theo `user_id`, thư mục kho tệp (cấu hình bản cài), và schema dataset của
-phiên — cùng lý do tầng API là nơi ráp voucher với mẫu in (C5).
+Phần dựng `RenderOptions` chuyển về `reporting` ở lát 5E vì thân job render nền
+cũng cần nó mà không có `Settings` (worker chỉ cấp `storage_root` qua
+`JobContext`). Tầng API giữ lại đúng một việc: bóc `attachments_dir` ra khỏi
+lớp cấu hình ứng dụng — thứ mà `reporting` không được import (C5, LD-13).
 """
 
 from __future__ import annotations
 
-import structlog
 from sqlalchemy.orm import Session
 
-from ket.kernel.attachments.storage import blob_path
-from ket.kernel.config.catalog import (
-    QUANTITY_DECIMALS_KEY,
-    REPORT_FONT_SIZE_KEY,
-    REPORT_LOGO_HASH_KEY,
-    REPORT_LOGO_MEDIA_KEY,
-)
-from ket.kernel.config.settings_service import value_of
-from ket.reporting.rendering.options import (
-    DEFAULT_FONT_SIZE_PT,
-    DEFAULT_QUANTITY_DECIMALS,
-    LogoAsset,
-    RenderOptions,
+from ket.reporting.rendering.options import RenderOptions
+from ket.reporting.rendering.options_factory import (
+    build_render_options as _build_from_storage_root,
 )
 from ket.settings import Settings
-
-logger = structlog.get_logger(__name__)
 
 
 def build_render_options(
@@ -37,40 +25,11 @@ def build_render_options(
     user_id: int,
     include_logo: bool = True,
 ) -> RenderOptions:
-    """Tùy chọn trình bày đang hiệu lực cho một lượt render.
-
-    Logo hỏng (hash sai, tệp mất, kho chưa cấu hình) làm bản in **thiếu logo**
-    kèm một dòng log — không làm hỏng lượt render: người cần Sổ Cái để chốt
-    thuế không nên bị chặn bởi một tệp trang trí.
-    """
-    quantity = value_of(session, key=QUANTITY_DECIMALS_KEY, user_id=user_id)
-    font_size = value_of(session, key=REPORT_FONT_SIZE_KEY, user_id=user_id)
-    return RenderOptions(
-        quantity_decimals=(quantity if isinstance(quantity, int) else DEFAULT_QUANTITY_DECIMALS),
-        font_size_pt=font_size if isinstance(font_size, int) else DEFAULT_FONT_SIZE_PT,
-        # Preview lưới không nhúng logo — đọc blob mỗi lượt là I/O thừa (L4).
-        logo=(
-            _load_logo(session, settings=settings, dataset_schema=dataset_schema, user_id=user_id)
-            if include_logo
-            else None
-        ),
+    """Tùy chọn trình bày đang hiệu lực cho một lượt render qua HTTP."""
+    return _build_from_storage_root(
+        session,
+        storage_root=settings.attachments_dir,
+        dataset_schema=dataset_schema,
+        user_id=user_id,
+        include_logo=include_logo,
     )
-
-
-def _load_logo(
-    session: Session, *, settings: Settings, dataset_schema: str, user_id: int
-) -> LogoAsset | None:
-    content_hash = value_of(session, key=REPORT_LOGO_HASH_KEY, user_id=user_id)
-    if not isinstance(content_hash, str) or not content_hash:
-        return None
-    if settings.attachments_dir is None:
-        logger.warning("report_logo.storage_not_configured")
-        return None
-    media_type = value_of(session, key=REPORT_LOGO_MEDIA_KEY, user_id=user_id)
-    try:
-        path = blob_path(settings.attachments_dir, dataset_schema, content_hash)
-        content = path.read_bytes()
-    except (ValueError, OSError):
-        logger.warning("report_logo.unreadable", content_hash=content_hash)
-        return None
-    return LogoAsset(content=content, media_type=str(media_type))

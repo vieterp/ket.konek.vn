@@ -195,4 +195,52 @@ describe('ApiClient', () => {
 
     await expect(client.post('/api/v1/auth/logout')).resolves.toBeUndefined()
   })
+
+  it('postBlob phân nhánh theo Content-Type: tệp thì trả blob kèm header', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': 'attachment; filename="GLE26-00001-lan-2.pdf"',
+          'X-Print-Copy-No': '2',
+          'X-Print-Reprint': 'true',
+        },
+      }),
+    )
+    const client = new ApiClient({ baseUrl: BASE })
+
+    const outcome = await client.postBlob('/api/v1/vouchers/x/print', {})
+    expect(outcome.kind).toBe('file')
+    if (outcome.kind === 'file') {
+      expect(outcome.fileName).toBe('GLE26-00001-lan-2.pdf')
+      expect(outcome.headers.get('X-Print-Reprint')).toBe('true')
+    }
+  })
+
+  it('postBlob phân nhánh theo Content-Type: JSON (202 chuyển-job) thì trả thân đã parse', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ job_id: 'j-1', estimated_rows: 50000 }, 202),
+    )
+    const client = new ApiClient({ baseUrl: BASE })
+
+    const outcome = await client.postBlob('/api/v1/reports/S03b-DN/render', {
+      format: 'pdf',
+      params: {},
+    })
+    expect(outcome.kind).toBe('json')
+    if (outcome.kind === 'json') {
+      expect(outcome.status).toBe(202)
+      expect(outcome.data).toEqual({ job_id: 'j-1', estimated_rows: 50000 })
+    }
+  })
+
+  it('postBlob vẫn ném ApiError mang mã lỗi của server', async () => {
+    fetchMock.mockResolvedValue(problemResponse('report.render_not_ready', 409))
+    const client = new ApiClient({ baseUrl: BASE })
+
+    await expect(client.postBlob('/api/v1/reports/x/render', {})).rejects.toMatchObject({
+      errorCode: 'report.render_not_ready',
+    })
+  })
 })

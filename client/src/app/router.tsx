@@ -36,7 +36,12 @@ import { SessionGate } from '@/app/session-gate'
 import { DataGridBenchPage } from '@/features/bench/data-grid-bench-page'
 import { CatalogListPage, OpeningBalancePage, PartnerPage, SettingsPage } from '@/features/danh-muc-thiet-lap'
 import { KitchenSinkPage } from '@/features/kitchen-sink/kitchen-sink-page'
-import { JournalVoucherForm, TrialBalancePage, VoucherListPage } from '@/features/so-sach-thue'
+import {
+  JournalVoucherForm,
+  ReportCatalogPage,
+  TrialBalancePage,
+  VoucherListPage,
+} from '@/features/so-sach-thue'
 
 const [home, ...groups] = NAVIGATION
 
@@ -75,6 +80,7 @@ const soSachThueRoutes: RouteObject[] = [
       { path: 'chung-tu/moi', element: <JournalVoucherForm /> },
       { path: 'chung-tu/:id', element: <JournalVoucherForm /> },
       { path: 'bang-can-doi-tai-khoan', element: <TrialBalancePage /> },
+      { path: 'bao-cao', element: <ReportCatalogPage /> },
     ],
   },
 ]

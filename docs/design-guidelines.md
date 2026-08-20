@@ -395,3 +395,45 @@ Mẫu in PDF render **ở server** bằng WeasyPrint từ chính HTML/CSS + toke
 design system này (ADR-009), nên bảng màu và font dùng chung với UI. Ràng buộc
 bảo mật: Jinja2 chạy trong `SandboxedEnvironment`, `url_fetcher` của WeasyPrint
 **chặn `file://`**. Chi tiết ở phase 5.
+
+## 8. Cách thêm một báo cáo mới — chỉ bằng dữ liệu
+
+Dành cho phase 6–10: một báo cáo mới là **bốn dòng metadata**, không phải một
+module. Engine (`ket.reporting.engine`) không biết "Sổ Cái" là gì — nó chỉ chạy
+những gì bốn bảng `report_*` (schema dataset) mô tả. Không restart server.
+
+1. **Dataset** (`report_datasets`) — chỉ khi các dataset có sẵn không đủ.
+   `sql_text` là một câu `SELECT` (được phép CTE/window function), **mọi giá
+   trị động qua placeholder** khai trong `allowed_params`; cấm nối chuỗi. Nếu
+   dataset trả dòng theo chi nhánh, khai `supports_branch` để lớp bọc thêm điều
+   kiện — nhưng cô lập thật là RLS trên bảng gốc, lớp bọc chỉ là phòng thủ thứ
+   hai. **Trần ≤30 dataset toàn hệ; 4 dataset đầu (gl_journal, gl_ledger,
+   gl_detail, trial_balance) đang phục vụ 8 báo cáo** — thêm dataset mới phải
+   trả lời được "vì sao không thêm cột vào dataset có sẵn".
+2. **Layout** (`report_layouts`) — cột (key, nhãn vi/en, kiểu `text|date|money|
+   quantity`, căn lề), nhóm + dòng tổng, khóa sắp xếp. Khóa nhóm phải là tiền
+   tố của khóa sắp (bất biến kiểm lúc parse).
+3. **Bộ tham số** (`report_param_sets`) — các ô NGOÀI bộ chuẩn (`from_date`,
+   `to_date`, `ledger`, `branch_ids` luôn có sẵn). Client dựng form tự động từ
+   spec này (`GET /reports/{code}/params`) — không sửa màn hình nào.
+4. **Definition** (`report_definitions`) — mã (= **mã mẫu thông tư** nếu có),
+   tên, nhóm hiển thị, trỏ ba mảnh trên, `ledger_scope`, và `package_id` của
+   gói builtin cùng chế độ kế toán khi báo cáo thuộc một thông tư (catalog và
+   render lọc theo scheme của dữ liệu — mã chéo thông tư trả 404).
+
+Báo cáo builtin khai ở `kernel/config/reports/data/builtin_reports.json` +
+`datasets/*.sql` (seed idempotent, probe `LIMIT 0` chạy chính câu SQL lúc
+provision). Kết xuất lớn tự chuyển job nền theo ngưỡng
+`report.{pdf,xlsx}_job_threshold_rows` — người thêm báo cáo không phải làm gì.
+
+## 9. Cách sửa mẫu in — chỉ bằng dữ liệu
+
+Mẫu in chứng từ là **dòng dữ liệu** trong `print_templates`: thân Jinja2
+(sandbox) + `css_extra`, unique theo `(document_type, code)`, mỗi loại đúng một
+mẫu mặc định. Sửa mẫu = sửa dòng; thêm mẫu = thêm dòng rồi đặt làm mặc định —
+không sửa code, không restart. Biến ngữ cảnh của mẫu do tầng API ráp từ chính
+`build_request` của nút Ghi sổ, nên không có đường "in một đằng ghi một nẻo".
+Logo/cỡ chữ/số lẻ đọc từ settings (`report.*`, `format.*`) — logo gán bằng nút
+một-bước ở màn Thiết lập. Mọi lần in ghi `print_log` (`copy_no` nối tiếp, cảnh
+báo in lại); nháp in được mang watermark BẢN NHÁP trừ khi đơn vị tắt
+`print.allow_draft_vouchers` (FR-RPT-011).

@@ -40,6 +40,14 @@ class SettingListResponse(BaseModel):
     items: list[SettingResponse]
 
 
+class ReportLogoResponse(BaseModel):
+    """Kết quả nút một-bước gán logo báo cáo (FR-RPT-010, lát 5E)."""
+
+    content_hash: str
+    media_type: str
+    byte_size: int
+
+
 class SettingUpdateRequest(BaseModel):
     """Ghi một tùy chọn ở đúng một cấp.
 

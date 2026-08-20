@@ -16,6 +16,7 @@ import { SessionGate } from '@/app/session-gate'
 import { APP_VERSION } from '@/lib/app-version'
 
 import { JournalVoucherForm } from './journal-voucher-form'
+import { ReportCatalogPage } from './report-catalog-page'
 import { TrialBalancePage } from './trial-balance-page'
 import { VoucherListPage } from './voucher-list-page'
 
@@ -127,6 +128,7 @@ export function renderFeatureAt(path: string): void {
                 <Route path="chung-tu/moi" element={<JournalVoucherForm />} />
                 <Route path="chung-tu/:id" element={<JournalVoucherForm />} />
                 <Route path="bang-can-doi-tai-khoan" element={<TrialBalancePage />} />
+                <Route path="bao-cao" element={<ReportCatalogPage />} />
               </Route>
             </Route>
           </Routes>

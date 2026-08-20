@@ -59,6 +59,9 @@ def test_worker_entrypoint_sees_module_job_types() -> None:
         "codes = set(REGISTRY.codes())\n"
         "assert 'posting.balances.recalc' in codes, codes\n"
         "assert 'master.import.validate' in codes, codes\n"
+        # Lát 5E (M-1 review): gỡ import `render_job` khỏi `model_registry`
+        # từng sống qua mọi test — tệp test render tự import job type hộ.
+        "assert 'reporting.report.render' in codes, codes\n"
     )
     result = subprocess.run(  # noqa: S603 — chạy chính interpreter của test, đối số cố định
         [sys.executable, "-c", code],

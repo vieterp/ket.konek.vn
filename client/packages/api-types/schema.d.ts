@@ -5622,6 +5622,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/render-jobs/{job_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Render Job File
+         * @description Tải tệp của một job `reporting.report.render` đã xong (bước 19).
+         *
+         *     Chỉ **người yêu cầu** tải được (404 cho người khác, kể cả người thấy dòng
+         *     job qua RLS chi nhánh): thân job chạy dưới TOÀN BỘ chi nhánh hiện hành của
+         *     người yêu cầu (`JobBranchScope.REQUESTER_BRANCHES`, vá C1 review 5E), nên
+         *     tệp có thể mang số liệu RỘNG hơn phạm vi của một người cùng chi nhánh —
+         *     dòng job nhìn thấy được không có nghĩa tệp đọc được.
+         */
+        get: operations["download_render_job_file_api_v1_reports_render_jobs__job_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/{code}/params": {
         parameters: {
             query?: never;
@@ -5680,6 +5706,11 @@ export interface paths {
          * Render
          * @description Kết xuất một báo cáo (FR-RPT-006). Số liệu chạy trong phạm vi RLS của
          *     người gọi; `branch_ids` chỉ thu hẹp thêm (BR-RPT-04/05).
+         *
+         *     Trước khi render, đếm số dòng bằng CHÍNH câu SQL đã bọc phạm vi: vượt
+         *     ngưỡng (`report.{pdf,xlsx}_job_threshold_rows`) thì trả `202` + job nền
+         *     thay vì giữ request nhiều giây (FR-NFR-041/042/044, giải M2 review 5C —
+         *     render đồng bộ giữ transaction + RAM suốt lượt chạy).
          */
         post: operations["render_api_v1_reports__code__render_post"];
         delete?: never;
@@ -5939,6 +5970,37 @@ export interface paths {
         get: operations["list_settings_api_v1_system_settings_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/settings/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Report Logo
+         * @description Nút một-bước gán logo báo cáo (FR-RPT-010, lát 5E).
+         *
+         *     Trước lát này, gán logo là hai việc tay: tải tệp lên kho rồi dán
+         *     `content_hash` vào `report.logo_content_hash` — đường mà không kế toán nào
+         *     tự đi được. Ở đây gộp lại: ghi blob vào kho content-addressed (KHÔNG tạo
+         *     dòng `attachments` — logo là nhận diện đơn vị mọi chi nhánh cùng thấy, còn
+         *     bảng attachments nằm sau RLS chi nhánh, xem quyết định 5D) rồi ghi cả hai
+         *     khóa settings trong một transaction.
+         *
+         *     Quyền `system.setting.edit` — đúng quyền của việc nó làm (đổi hai khóa cấp
+         *     hệ thống). Không đòi idempotency key: gửi lại cùng tệp ghi lại cùng hash và
+         *     cùng giá trị — không có trạng thái nào bị nhân đôi.
+         */
+        post: operations["upload_report_logo_api_v1_system_settings_logo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6579,6 +6641,11 @@ export interface components {
             entity_id: string;
             /** Entity Type */
             entity_type: string;
+            /** File */
+            file: string;
+        };
+        /** Body_upload_report_logo_api_v1_system_settings_logo_post */
+        Body_upload_report_logo_api_v1_system_settings_logo_post: {
             /** File */
             file: string;
         };
@@ -9545,6 +9612,18 @@ export interface components {
             reports: components["schemas"]["ReportSummaryResponse"][];
         };
         /**
+         * ReportLogoResponse
+         * @description Kết quả nút một-bước gán logo báo cáo (FR-RPT-010, lát 5E).
+         */
+        ReportLogoResponse: {
+            /** Byte Size */
+            byte_size: number;
+            /** Content Hash */
+            content_hash: string;
+            /** Media Type */
+            media_type: string;
+        };
+        /**
          * ReportParamFieldResponse
          * @description Một ô nhập NGOÀI bộ chuẩn — client dựng form từ danh sách này.
          *
@@ -9609,6 +9688,23 @@ export interface components {
             rows: components["schemas"]["PreviewRowResponse"][];
             /** Truncated */
             truncated: boolean;
+        };
+        /**
+         * ReportRenderAcceptedResponse
+         * @description Thân `202` của `POST /reports/{code}/render` — báo cáo vượt ngưỡng
+         *     chuyển-job (bước 19), đã xếp vào hàng đợi thay vì render trong request.
+         *
+         *     Client theo dõi qua `GET /api/v1/jobs/{job_id}` (tiến độ + nút Hủy) rồi tải
+         *     tệp ở `GET /reports/render-jobs/{job_id}/file` khi job `done`.
+         */
+        ReportRenderAcceptedResponse: {
+            /** Estimated Rows */
+            estimated_rows: number;
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
         };
         /**
          * ReportRenderRequest
@@ -19454,6 +19550,52 @@ export interface operations {
             };
         };
     };
+    download_render_job_file_api_v1_reports_render_jobs__job_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp kết quả của job render đã `done` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Không có job render này trong phạm vi người gọi */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Job chưa xong (đang chạy / đã hỏng / đã hủy) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_report_params_api_v1_reports__code__params_get: {
         parameters: {
             query?: never;
@@ -19543,6 +19685,15 @@ export interface operations {
                 content: {
                     "application/pdf": unknown;
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Báo cáo vượt ngưỡng chuyển-job (bước 19) — đã xếp job nền; theo dõi qua `/api/v1/jobs/{job_id}`, tải tệp ở `/api/v1/reports/render-jobs/{job_id}/file` */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportRenderAcceptedResponse"];
                 };
             };
             /** @description Không có báo cáo mang mã này */
@@ -19897,6 +20048,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    upload_report_logo_api_v1_system_settings_logo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_report_logo_api_v1_system_settings_logo_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportLogoResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

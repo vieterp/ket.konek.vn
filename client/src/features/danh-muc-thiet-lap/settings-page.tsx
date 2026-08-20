@@ -18,6 +18,7 @@ import { translateErrorCode, useI18n } from '@/lib/i18n'
 import { ApiError, useSession } from '@/lib/session'
 
 import { FeatureNav } from './feature-nav'
+import { ReportLogoCard } from './report-logo-card'
 import { SettingsGroupLockedBanner } from './settings-group-locked-banner'
 import type { Setting, SetupGroup, SetupItem } from './use-settings-groups'
 import { useSettings, useSettingsGroups, useUpdateSetting } from './use-settings-groups'
@@ -108,6 +109,10 @@ export function SettingsPage(): ReactElement {
             onEdit={openEdit}
           />
         ))}
+
+        {/* Logo là tệp, không phải giá trị gõ được — thẻ riêng với nút một
+            bước thay vì một dòng trong GroupCard (lát 5E). */}
+        <ReportLogoCard readOnly={readOnly} />
 
         <Drawer
           open={edit !== null}
