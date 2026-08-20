@@ -30,6 +30,10 @@ dependencies = [
     # và ghi bằng `write_only=True` nên bộ nhớ không tăng theo số dòng — điều
     # kiện để 10.000 dòng của FR-NFR-043 không phải là 10.000 đối tượng ô.
     "openpyxl>=3.1",
+    "jinja2>=3.1",
+    "weasyprint>=63",
+    "xlsxwriter>=3.2",
+    "pypdf>=6.16.1",
 ]
 
 [dependency-groups]
@@ -119,6 +123,14 @@ warn_unused_ignores = true
 warn_unreachable = true
 # `# type: ignore` trần bị cấm — phải nêu mã lỗi và lý do (ADR-015).
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+# WeasyPrint và xlsxwriter không có `py.typed` lẫn stub trên typeshed (khác
+# openpyxl — có `types-openpyxl`). Cô lập `Any` của chúng vào đúng hai tệp
+# renderer (`reporting/rendering/{pdf,xlsx}_renderer.py`) — phần còn lại của
+# `reporting` chỉ thấy hàm render có chữ ký đầy đủ.
+[[tool.mypy.overrides]]
+module = ["weasyprint", "weasyprint.*", "xlsxwriter", "xlsxwriter.*"]
+ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
 # pytest

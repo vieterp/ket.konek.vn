@@ -27,6 +27,7 @@ from ket.kernel.auditing import control_log as control_audit_models
 from ket.kernel.auditing import models as auditing_models
 from ket.kernel.bank_import import profile_models as bank_import_models
 from ket.kernel.config import accounts_models
+from ket.kernel.config.reports import models as report_models
 from ket.kernel.config.statements import models as statement_models
 from ket.kernel.currency import models as currency_models
 from ket.kernel.datasets import models as control_models
@@ -54,8 +55,10 @@ from ket.posting.documents import models as voucher_models
 from ket.posting.engine import models as gl_posting_models
 from ket.posting.opening_balances import models as opening_balance_models
 
-# Không có model — import để đăng ký mã quyền `reporting.statement.view` trước
-# khi `provision_dataset` gieo bảng `permissions` (cùng cơ chế `posting.periods`).
+# Không có model — import để đăng ký mã quyền `reporting.statement.view` /
+# `reporting.report.*` trước khi `provision_dataset` gieo bảng `permissions`
+# (cùng cơ chế `posting.periods`).
+from ket.reporting import engine as report_permission_registration
 from ket.reporting import statements as statement_permission_registration
 
 __all__ = [
@@ -83,6 +86,8 @@ __all__ = [
     "opening_balance_models",
     "period_models",
     "periods_registration",
+    "report_models",
+    "report_permission_registration",
     "security_models",
     "statement_models",
     "statement_permission_registration",

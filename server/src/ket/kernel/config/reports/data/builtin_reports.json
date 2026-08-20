@@ -1,0 +1,64 @@
+{
+  "__doc__": "Báo cáo dựng sẵn không phụ thuộc chế độ kế toán. Lát 5C gieo một báo cáo (Sổ Cái) để chứng minh engine end-to-end + chạy spike S2; 5D đăng ký 8–10 báo cáo đầu và đổi mã theo mẫu thông tư khi có print_templates. `sql_file` trỏ vào `datasets/`.",
+  "datasets": [
+    {
+      "code": "gl_ledger",
+      "sql_file": "gl_ledger.sql",
+      "allowed_params": ["from_date", "to_date", "ledger", "branch_ids", "account_code"],
+      "supports_branch": true,
+      "supports_ledger": true,
+      "description": "Dòng phát sinh chi tiết theo tài khoản (Sổ Cái, sổ chi tiết TK)"
+    }
+  ],
+  "param_sets": [
+    {
+      "code": "gl_ledger_params",
+      "spec": {
+        "params": [
+          {
+            "name": "account_code",
+            "kind": "text",
+            "label": "Tài khoản",
+            "label_en": "Account",
+            "required": false
+          }
+        ]
+      }
+    }
+  ],
+  "layouts": [
+    {
+      "code": "gl-ledger",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          { "key": "posting_date", "label": "Ngày ghi sổ", "label_en": "Posting date", "type": "date", "width": 10 },
+          { "key": "voucher_no", "label": "Số chứng từ", "label_en": "Voucher no.", "type": "text", "width": 12 },
+          { "key": "description", "label": "Diễn giải", "label_en": "Description", "type": "text" },
+          { "key": "corresponding_account", "label": "TK đối ứng", "label_en": "Corresp. acct", "type": "text", "align": "center", "width": 9 },
+          { "key": "debit", "label": "Nợ", "label_en": "Debit", "type": "money", "width": 14 },
+          { "key": "credit", "label": "Có", "label_en": "Credit", "type": "money", "width": 14 }
+        ],
+        "group_by": [
+          { "key": "account_code", "heading_keys": ["account_code", "account_name"] }
+        ],
+        "totals": ["debit", "credit"],
+        "sort": ["account_code", "posting_date", "voucher_no", "line_no"],
+        "page": { "orientation": "portrait" }
+      }
+    }
+  ],
+  "definitions": [
+    {
+      "code": "SO-CAI",
+      "name": "Sổ Cái (theo tài khoản)",
+      "name_en": "General Ledger",
+      "category": "so-ke-toan",
+      "module": "general_ledger",
+      "dataset_code": "gl_ledger",
+      "layout_code": "gl-ledger",
+      "param_set_code": "gl_ledger_params",
+      "ledger_scope": "both"
+    }
+  ]
+}

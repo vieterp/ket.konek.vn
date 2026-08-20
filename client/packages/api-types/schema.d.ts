@@ -5579,6 +5579,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reports
+         * @description Danh mục báo cáo đã đăng ký trong dữ liệu kế toán này (FR-RPT-001).
+         */
+        get: operations["get_reports_api_v1_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{code}/params": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Report Params
+         * @description Tham số NGOÀI bộ chuẩn của một báo cáo — client dựng form từ đây
+         *     (FR-RPT-002; bộ chuẩn là hợp đồng cố định, xem `reports_schemas`).
+         */
+        get: operations["get_report_params_api_v1_reports__code__params_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{code}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render
+         * @description Kết xuất một báo cáo (FR-RPT-006). Số liệu chạy trong phạm vi RLS của
+         *     người gọi; `branch_ids` chỉ thu hẹp thêm (BR-RPT-04/05).
+         */
+        post: operations["render_api_v1_reports__code__render_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/settings-groups": {
         parameters: {
             query?: never;
@@ -8201,6 +8263,7 @@ export interface components {
             /** Row Version */
             row_version: number;
         };
+        JsonValue: unknown;
         /**
          * LedgerPostingListResponse
          * @description Một trang phát sinh + tổng số dòng khớp bộ lọc.
@@ -9339,6 +9402,88 @@ export interface components {
             name_en?: string | null;
             /** Row Version */
             row_version: number;
+        };
+        /** ReportListResponse */
+        ReportListResponse: {
+            /** Reports */
+            reports: components["schemas"]["ReportSummaryResponse"][];
+        };
+        /**
+         * ReportParamFieldResponse
+         * @description Một ô nhập NGOÀI bộ chuẩn — client dựng form từ danh sách này.
+         *
+         *     Bộ chuẩn (`from_date`, `to_date`, `branch_ids`, `ledger`) là hợp đồng cố
+         *     định FR-RPT-002, client dựng sẵn, không lặp lại ở đây.
+         */
+        ReportParamFieldResponse: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "date" | "int" | "text" | "bool" | "decimal";
+            /** Label */
+            label: string;
+            /** Label En */
+            label_en: string | null;
+            /** Name */
+            name: string;
+            /** Required */
+            required: boolean;
+        };
+        /** ReportParamsResponse */
+        ReportParamsResponse: {
+            /** Code */
+            code: string;
+            /**
+             * Ledger Scope
+             * @enum {string}
+             */
+            ledger_scope: "both" | "financial" | "management";
+            /** Name */
+            name: string;
+            /** Params */
+            params: components["schemas"]["ReportParamFieldResponse"][];
+        };
+        /**
+         * ReportRenderRequest
+         * @description Thân `POST /reports/{code}/render`.
+         *
+         *     `params` là JSON tự do Ở RANH GIỚI — engine kiểm bằng model Pydantic sinh
+         *     động từ `param_set.spec` (FR-RPT-002) rồi mới cho đi tiếp dưới dạng có kiểu
+         *     (`BoundParams`), đúng tinh thần LD-13: dict thô không đi QUA ranh giới
+         *     module, nó dừng ở bộ kiểm.
+         */
+        ReportRenderRequest: {
+            /**
+             * Format
+             * @enum {string}
+             */
+            format: "pdf" | "xlsx";
+            /** Params */
+            params?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
+        /**
+         * ReportSummaryResponse
+         * @description Một dòng trong danh mục báo cáo (màn *Sổ sách & Thuế*).
+         */
+        ReportSummaryResponse: {
+            /** Category */
+            category: string;
+            /** Code */
+            code: string;
+            /**
+             * Ledger Scope
+             * @enum {string}
+             */
+            ledger_scope: "both" | "financial" | "management";
+            /** Module */
+            module: string;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
         };
         /**
          * ResourceTaxTablesCreateRequest
@@ -19060,6 +19205,119 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PeriodLockResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_reports_api_v1_reports_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+                module?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_report_params_api_v1_reports__code__params_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportParamsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    render_api_v1_reports__code__render_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportRenderRequest"];
+            };
+        };
+        responses: {
+            /** @description Tệp báo cáo theo `format` đã chọn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Không có báo cáo mang mã này */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tham số không hợp lệ (FR-RPT-002) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {

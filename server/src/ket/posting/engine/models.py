@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from enum import IntEnum
 from uuid import UUID
 
 from sqlalchemy import (
@@ -39,6 +38,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from ket.kernel.contracts import Ledger as Ledger  # re-export — xem ghi chú dưới
 from ket.kernel.currency.models import CURRENCY_CODE_LENGTH, RATE_PRECISION
 from ket.kernel.money import RATE_SCALE_DEFAULT
 from ket.kernel.persistence.base import DatasetBase
@@ -53,11 +53,8 @@ sẽ bị cột này làm tròn thêm một lần: giới hạn đã biết, ghi
 DESCRIPTION_MAX_LENGTH = 500
 
 
-class Ledger(IntEnum):
-    """Hai hệ thống sổ hoạt động song song (N3, LD-07, FR-NFR-031)."""
-
-    FINANCIAL = 0
-    MANAGEMENT = 1
+# `Ledger` nay khai ở `kernel.contracts` (lát 5C — reporting cần nó mà C5 cấm
+# import posting); re-export giữ nguyên mọi import hiện có.
 
 
 class GlPosting(DatasetBase):

@@ -39,6 +39,12 @@ ALLOWED_FILES: dict[str, str] = {
         "không phải dữ liệu ngoài; mọi giá trị động (`branch_id`, `sample_limit`) vẫn đi "
         "qua tham số ràng buộc"
     ),
+    "kernel/config/reports/seed.py": (
+        "Probe `LIMIT 0` bọc quanh câu SQL từ `compose_scoped_query` trên dữ liệu builtin "
+        "ĐÓNG GÓI (`data/builtin_reports.json` + `datasets/*.sql` qua importlib.resources) "
+        "— cùng hạng tin cậy với integrity/runner; identifier sắp xếp đã ràng regex ở "
+        "`scope.py`, mọi giá trị động đi qua tham số ràng buộc (`_probe_binds`)"
+    ),
 }
 """Tệp được phép ghép chuỗi vào SQL, kèm lý do.
 
