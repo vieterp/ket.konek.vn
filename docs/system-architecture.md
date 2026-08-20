@@ -16,7 +16,7 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 
 ---
 
-## 1b. Trạng thái hiện thực hóa (2026-08-20)
+## 1b. Trạng thái hiện thực hóa (2026-08-20, lát 4F)
 
 | Thành phần | Trạng thái |
 | --- | --- |
@@ -27,6 +27,7 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | Migration `0004` — Hai danh mục mới: `partners` (14 cột) + `employees` (9 cột) + bảng con `partner_bank_accounts` | ✅ chạy thật (3B-2) |
 | Migration `0005` — Danh mục vật tư `items` (4 cột riêng: `nature`, `base_unit_id`, `warehouse_id`, `description`) + hai bảng con: `item_units` (quy đổi **phẳng** về đơn vị chính) + `item_variants` (mã quy cách — trục khóa của bảng tồn kho phase 8); `NUMERIC(20,6)` cho số lượng + tỷ lệ | ✅ chạy thật (3B-3) |
 | Migration `0011` — `statement_layouts` + `statement_rows` (layout BCTC + dòng chỉ tiêu, khóa `(package_id, code)`/`(layout_id, row_code)`, không RLS, gói cấu hình chứ không per-dữ-liệu) | ✅ chạy thật (5B) |
+| Migration `0012` — `entry_kind` trên `vouchers` (nguồn sự thật) + `gl_postings` (denormalize): bản chất bút toán (LD-17) — B02 lọc bút toán kết chuyển khỏi phát sinh, số dư luôn gồm mọi bút toán; bảng cân đối TK + BCTC gộp theo **số hiệu TK** (không theo `account_id` — TK thuộc gói cấu hình) | ✅ chạy thật (4F) |
 | **Formula engine & statement builder (lát 5B)** — `ket.kernel.config.statements` (grammar 7 hàm, evaluator tô-pô, account range), `ket.reporting.statements` (builder lấy `opening_balances`+`gl_postings` — KHÔNG snapshot, API `/api/v1/statements` + `/api/v1/statements/{layout_code}/preview`, quyền `reporting.statement.view`, layout giải quyết qua `resolve_package(scheme, cuối_kỳ)`) | ✅ chạy thật (5B) |
 | RLS cô lập chi nhánh theo GUC `ket.branch_ids` | ✅ chạy thật (trên `audit_log`, `jobs`, `attachments`). **Danh mục cố ý KHÔNG bật RLS** — `branch_id IS NULL` = dùng chung toàn công ty (FR-SYS-018), mà policy chi nhánh sẽ giấu đúng những dòng đó; lọc theo chi nhánh nằm ở `MasterDataService._visible_to` + tầng HTTP (H39) |
 | Nhật ký bất biến ghi cùng transaction | ✅ chạy thật |

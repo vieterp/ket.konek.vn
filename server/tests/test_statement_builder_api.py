@@ -55,6 +55,7 @@ from ket.modules.general_ledger.journal.service import (
     JOURNAL_NUMBERING_RULE,
     JournalVoucherService,
 )
+from ket.posting.balances.models import AccountBalance
 from ket.posting.balances.query_service import trial_balance
 from ket.posting.documents.models import EntryKind, Voucher
 from ket.posting.documents.service import VoucherDraft, VoucherService
@@ -490,7 +491,8 @@ class TestStatementBuilder:
     ) -> None:
         """Bảng cân đối đọc **mọi** loại bút toán: kết chuyển là thứ đưa lãi
         vào 421, lọc nó ra thì [440] mất đúng phần lợi nhuận và bảng không cân.
-        Đây là bất biến canh việc `builder` truyền đúng `closing_in_turnover`."""
+        Đây là bất biến canh việc số dư luôn suy từ TOÀN BỘ bút toán
+        (`turnover_*` đầy đủ), bất kể layout thuộc loại nào."""
         context = books
 
         def work(session: Session) -> object:
@@ -1055,3 +1057,59 @@ class TestEntryKindReviewFixes:
             return None
 
         run(work)
+
+
+class TestTrialBalanceCodeAxis:
+    """Trục gộp của bảng cân đối TK là SỐ HIỆU, không phải `account_id`
+    (quyết định user 2026-08-20; đột biến M6 lượt 1 + M2 lượt 2 sống sót vì
+    chưa có dữ liệu hai-gói-cùng-mã trên đường snapshot)."""
+
+    def test_snapshot_path_merges_two_packages_sharing_a_code(
+        self,
+        session_factory: sessionmaker[Session],
+        statement_dataset: DatasetRef,
+    ) -> None:
+        """Ca thật của đổi gói giữa vòng đời: số dư ban đầu trỏ TK của gói CŨ,
+        phát sinh trong năm trỏ TK của gói MỚI — cùng số hiệu, hai `id`. Bảng
+        cân đối phải ra MỘT dòng mỗi số hiệu, cộng cả hai; tách theo `id` là
+        đúng đột biến mà test này sinh ra để giết."""
+        # Chi nhánh RIÊNG chưa từng ghi sổ: hàng đợi recalc rỗng nên
+        # `trial_balance` đi đường SNAPSHOT — đúng đường mang đột biến sống
+        # sót; nhánh của `books` có phát sinh thật nên rơi sang đường direct
+        # (stale) và nuốt mất dữ liệu dựng.
+        context = seed_posting_context(session_factory, statement_dataset)
+        scope = posting_scope(statement_dataset, context, user_id=ACTOR_ID)
+        with unit_of_work(session_factory, scope) as session:
+            prior_accounts = _ensure_prior_year_package(session, context)
+            period_id = _period_id(session, context, 1)
+            # Hai dòng snapshot cùng kỳ/sổ/chi nhánh, cùng mã 111, khác gói.
+            # `AccountBalance` là bảng đệm không audit — ghi thẳng được, không
+            # cần chạy job recalc chỉ để dựng dữ liệu cho một phép gộp.
+            for account_id, amount in (
+                (context.accounts["111"], Decimal("70000.00")),
+                (prior_accounts["111"], Decimal("30000.00")),
+            ):
+                session.add(
+                    AccountBalance(
+                        period_id=period_id,
+                        ledger=Ledger.MANAGEMENT.value,
+                        branch_id=context.branch_id,
+                        account_id=account_id,
+                        currency_code=VND,
+                        closing_debit=amount,
+                        period_debit=amount,
+                    )
+                )
+            session.flush()
+
+            result = trial_balance(
+                session,
+                ledger=Ledger.MANAGEMENT,
+                period_id=period_id,
+                branch_id=context.branch_id,
+            )
+            rows_111 = [row for row in result.rows if row.account_code == "111"]
+            assert len(rows_111) == 1, "một số hiệu phải là MỘT dòng, kể cả khi hai gói cùng mã"
+            assert rows_111[0].closing_debit == Decimal("100000.00")
+            # Đại diện là hàng của gói đang hiệu lực, không phải gói năm trước.
+            assert rows_111[0].account_id == context.accounts["111"]

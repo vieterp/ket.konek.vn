@@ -216,7 +216,10 @@ def _attach_accounts(
         for account in session.execute(
             select(ChartOfAccount)
             .where(ChartOfAccount.code.in_(codes))
-            .order_by((ChartOfAccount.package_id == package_id).asc())
+            # Thứ tự phụ cho nhánh fallback (mã không có trong gói hiệu lực):
+            # gói id lớn hơn = mới hơn thắng — deterministic, không phụ thuộc
+            # thứ tự trả hàng của planner (review 4F lượt 2, L).
+            .order_by((ChartOfAccount.package_id == package_id).asc(), ChartOfAccount.package_id)
         ).scalars()
     }
     rows = []

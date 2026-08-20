@@ -209,7 +209,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 
 ---
 
-## 5. Bộ test (**1.522 case**: 886 cần PostgreSQL 16, 636 không) — lát 3B-1 tăng 145 test; lát 3B-2 tăng 104 test; lát 3B-3 tăng 49 test; lát 5B tăng ~57 test (formula + loader + builder API)
+## 5. Bộ test (**1.527 case**: 891 cần PostgreSQL 16, 636 không) — lát 3B-1 tăng 145 test; lát 3B-2 tăng 104 test; lát 3B-3 tăng 49 test; lát 5B tăng ~57 test (formula + loader + builder API); lát 4F thêm test entry_kind + trục gộp theo số hiệu TK
 
 | Tệp | Chứng minh điều gì |
 | --- | --- |
@@ -255,7 +255,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_statement_layout_loader.py` (non-db) | **Lát 5B**: fail-closed loader — sai công thức, rowref, chu trình, TK không khớp accounts.csv; golden test B01/B02 khớp mẫu đúng thứ tự; chỉ tiêu ngoại lệ không cộng dương; layout income cấm hàm số dư |
 | `test_statement_builder_api.py` (db) | **Lát 5B**: dataset riêng `bctc5b` — statement builder lấy `opening_balances`+`gl_postings`, cột so sánh (N/A khi chưa lập), test BR-GLE-04/BR-RPT-01/BR-RPT-04; API `/api/v1/statements` + `/api/v1/statements/{layout_code}/preview` + quyền + 403/404 |
 
-Tổng **1.522 test** (886 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
+Tổng **1.527 test** (891 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
 
 ---
 
