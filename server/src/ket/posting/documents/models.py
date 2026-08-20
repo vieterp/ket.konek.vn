@@ -75,6 +75,39 @@ class VoucherStatus(IntEnum):
     """Đã hủy — giữ số chứng từ (số không tái sử dụng), dùng từ phase 7."""
 
 
+class EntryKind(IntEnum):
+    """Bản chất của bút toán — thứ quyết định báo cáo nào được đọc nó (LD-17).
+
+    Vì sao phải có (review 5B, H1): công thức B02 đọc **phát sinh thô** của
+    511/632/642…, mà bút toán kết chuyển cuối kỳ cũng đổ vào đúng những phát
+    sinh đó (Nợ 511 / Có 911). Không phân biệt được hai loại thì trên một năm
+    đã kết chuyển, 9/10 chỉ tiêu B02 sai — và không có trạng thái nào của dữ
+    liệu cứu được, vì năm muốn cân bảng cân đối thì bắt buộc đã kết chuyển.
+    Công báo định nghĩa các chỉ tiêu này theo *phát sinh đối ứng 911*, tức
+    ngầm giả định người đọc phân biệt được — cột này là chỗ ghi sự phân biệt đó.
+
+    **IntEnum chứ không bool**: cuối kỳ còn nhiều loại bút toán khác cũng phải
+    tách khỏi phát sinh nghiệp vụ (đánh giá lại tỷ giá, phân bổ, điều chỉnh kỳ
+    13 của 10a). Một cột bool sẽ phải migrate lần nữa trên **bảng phát sinh** —
+    đúng thứ đắt nhất để migrate sau khi có dữ liệu thật.
+
+    Ai đọc gì:
+
+    * **Bảng cân đối TK, bảng cân đối kế toán (B01)** đọc **mọi** loại — kết
+      chuyển là thứ làm 421 đúng, bỏ nó ra là bảng không cân.
+    * **Báo cáo kết quả kinh doanh (B02)** đọc **`NGHIEP_VU`** — xem docstring
+      `reporting/statements/balance_source.py`.
+    * **Lưu chuyển tiền tệ (B03, 10a)** sẽ đọc **chính** `KET_CHUYEN` cùng
+      chiều đối ứng.
+    """
+
+    NGHIEP_VU = 0
+    """Phát sinh nghiệp vụ thường — mặc định của mọi chứng từ."""
+
+    KET_CHUYEN = 1
+    """Bút toán kết chuyển cuối kỳ (doanh thu/chi phí → 911 → 421)."""
+
+
 class Voucher(DatasetBase, Audited, RowVersioned):
     """Header của một chứng từ, mọi loại, mọi phân hệ.
 
@@ -88,6 +121,10 @@ class Voucher(DatasetBase, Audited, RowVersioned):
         CheckConstraint(
             f"status BETWEEN {VoucherStatus.DA_CAT} AND {VoucherStatus.DA_HUY}",
             name="status_known",
+        ),
+        CheckConstraint(
+            f"entry_kind BETWEEN {EntryKind.NGHIEP_VU} AND {EntryKind.KET_CHUYEN}",
+            name="entry_kind_known",
         ),
         CheckConstraint("exchange_rate > 0", name="exchange_rate_positive"),
         # Cùng lập luận `lock_stamp_complete` của kỳ kế toán: "đã ghi sổ nhưng
@@ -133,6 +170,12 @@ class Voucher(DatasetBase, Audited, RowVersioned):
 
     description: Mapped[str | None] = mapped_column(String(DESCRIPTION_MAX_LENGTH), nullable=True)
     status: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+
+    entry_kind: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=EntryKind.NGHIEP_VU, server_default="0"
+    )
+    """Bản chất bút toán (LD-17) — **nguồn sự thật**, `gl_postings.entry_kind`
+    là bản sao denormalize để báo cáo không phải join header."""
 
     cashflow_activity: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     """Hoạt động dòng tiền cho báo cáo LCTT (FR-GLE-044) — phase 10a đọc."""

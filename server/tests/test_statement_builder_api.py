@@ -48,8 +48,9 @@ from ket.modules.general_ledger.journal.service import (
     JOURNAL_NUMBERING_RULE,
     JournalVoucherService,
 )
+from ket.posting.documents.models import EntryKind, Voucher
 from ket.posting.documents.service import VoucherDraft, VoucherService
-from ket.posting.engine.models import Ledger
+from ket.posting.engine.models import GlPosting, Ledger
 from ket.posting.engine.requests import PostingLine, PostingRequest
 from ket.posting.engine.service import PostingService
 from ket.posting.opening_balances.models import OpeningBalance
@@ -208,6 +209,7 @@ def _post_journal(
     posting_date: date,
     lines: tuple[tuple[str, int, int], ...],
     post: bool = True,
+    entry_kind: int = EntryKind.NGHIEP_VU,
 ) -> None:
     """Một chứng từ GLE nhiều dòng: `(mã TK, nợ, có)` — ghi sổ cả hai sổ."""
     service = JournalVoucherService(session)
@@ -219,6 +221,7 @@ def _post_journal(
             currency_code=VND,
             exchange_rate=Decimal(1),
             description="chứng từ test statement",
+            entry_kind=entry_kind,
             lines=tuple(
                 JournalLineIn(
                     account_id=context.accounts[account],
@@ -314,10 +317,12 @@ def _seed_books(session: Session, context: PostingContext) -> None:
     # Kết chuyển thủ công (chưa có engine kết chuyển — 10a): sổ tài chính khép
     # 511/642 về 911 rồi 421. Sổ quản trị nhận cùng bút toán (journal nhân bản)
     # nên lệch 50k ở 642 — đúng bản chất "hai sổ độc lập", không kiểm cân ở đây.
+    # `entry_kind=KET_CHUYEN` (LD-17): B02 loại nó khỏi phát sinh, B01 vẫn đọc.
     _post_journal(
         session,
         context,
         posting_date=MAR_31,
+        entry_kind=EntryKind.KET_CHUYEN,
         lines=(
             ("511", 500_000, 0),
             ("911", 0, 500_000),
@@ -411,21 +416,24 @@ class TestStatementBuilder:
             assert values["10"] == Decimal("500000.00")
             assert values["26"] == Decimal("200000.00")
             assert values["60"] == Decimal("300000.00")
-            # Cột "Năm trước" của layout phát sinh CHƯA lập được ở v1 (H1
-            # review 5B): builder trả None, không phải 0.
+            # Dataset test chưa có năm tài chính trước → không có cột so sánh.
+            # `None` = "chưa có năm trước", khác hẳn "có mà bằng 0".
             assert all(row.comparative is None for row in result.rows)
             return None
 
         run(work)
 
-    def test_income_statement_after_closing_reads_raw_turnover_including_closing_entries(
+    def test_income_statement_after_closing_excludes_closing_entries(
         self, run: Runner, books: PostingContext
     ) -> None:
-        """GHIM hành vi đã biết (H1 review 5B): xem B02 tại kỳ SAU bút toán kết
-        chuyển thủ công thì phát sinh thô nhiễm chính bút toán kết chuyển —
-        Mã 02 (DR_PS 511) nuốt trọn kết chuyển 511→911, Mã 10/60 về 0. Đây là
-        giới hạn ngữ nghĩa đã ghi ở `note` chỉ tiêu 01/02 và docstring builder;
-        10a mang cờ loại-trừ-kết-chuyển thì test này PHẢI đổi kỳ vọng."""
+        """Lát 4F (LD-17) — đây là test đã ĐỔI KỲ VỌNG so với 5B.
+
+        5B ghim hành vi sai đã biết: xem B02 tại kỳ SAU bút toán kết chuyển thì
+        Mã 02 nuốt trọn kết chuyển 511→911 (500k) và Mã 10/60 về 0. Có
+        `entry_kind`, nguồn số lọc bút toán kết chuyển ra khỏi phát sinh nên
+        con số ở kỳ 3 phải **giống hệt** kỳ 2 (không phát sinh nghiệp vụ nào
+        thêm giữa hai kỳ ngoài khoản chi 50k chỉ-sổ-tài-chính ở 10/3).
+        """
         context = books
 
         def work(session: Session) -> object:
@@ -438,11 +446,57 @@ class TestStatementBuilder:
             )
             values = _values(result.rows)
             assert values["01"] == Decimal("500000.00")
-            assert values["02"] == Decimal(
-                "500000.00"
-            )  # = bút toán kết chuyển, KHÔNG phải giảm trừ
-            assert values["10"] == Decimal("0")
-            assert values["60"] == Decimal("0")
+            assert values["02"] == Decimal("0"), "bút toán kết chuyển không phải giảm trừ doanh thu"
+            assert values["10"] == Decimal("500000.00")
+            # 200k (20/2, cả hai sổ) + 50k (10/3, chỉ sổ tài chính) = 250k;
+            # phần 642 bị kết chuyển sang 911 KHÔNG được trừ ra khỏi chi phí.
+            assert values["26"] == Decimal("250000.00")
+            assert values["60"] == Decimal("250000.00")
+            return None
+
+        run(work)
+
+    def test_entry_kind_flows_from_voucher_to_postings(
+        self, run: Runner, books: PostingContext
+    ) -> None:
+        """LD-17: `gl_postings.entry_kind` là bản sao của header — sai lệch ở
+        đây là báo cáo đọc nhầm loại bút toán mà không có cách nào phát hiện."""
+        context = books
+
+        def work(session: Session) -> object:
+            pairs = session.execute(
+                select(Voucher.entry_kind, GlPosting.entry_kind)
+                .join(GlPosting, GlPosting.voucher_id == Voucher.id)
+                .where(Voucher.branch_id == context.branch_id)
+            ).all()
+            assert pairs, "phải có dòng sổ để so"
+            assert all(header == line for header, line in pairs)
+            # Và bút toán kết chuyển 31/3 thật sự mang cờ, không phải mọi dòng đều 0.
+            assert any(line == EntryKind.KET_CHUYEN for _, line in pairs)
+            return None
+
+        run(work)
+
+    def test_balance_sheet_includes_closing_entries(
+        self, run: Runner, books: PostingContext
+    ) -> None:
+        """Bảng cân đối đọc **mọi** loại bút toán: kết chuyển là thứ đưa lãi
+        vào 421, lọc nó ra thì [440] mất đúng phần lợi nhuận và bảng không cân.
+        Đây là bất biến canh việc `builder` truyền đúng `closing_in_turnover`."""
+        context = books
+
+        def work(session: Session) -> object:
+            result = build_statement(
+                session,
+                layout_code="TEST-B01",
+                period_id=_period_id(session, context, 3),
+                ledger=Ledger.FINANCIAL,
+                branch_id=context.branch_id,
+            )
+            values = _values(result.rows)
+            # 400 = CR(411) - BAL(421); 421 dư Có 250k nhờ chính bút toán kết chuyển.
+            assert values["400"] == Decimal("1250000.00")
+            assert values["440"] == values["100"]
             return None
 
         run(work)

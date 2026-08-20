@@ -217,6 +217,10 @@ class PostingService:
                     "branch_id": voucher.branch_id,
                     "posting_date": voucher.posting_date,
                     "period_id": voucher.period_id,
+                    # Sao chép từ header (LD-17) — cùng nhóm denormalize với ba
+                    # cột ngay trên. Đây là đường ghi DUY NHẤT vào `gl_postings`
+                    # (luật phụ thuộc #3) nên hai bên không thể lệch nhau.
+                    "entry_kind": voucher.entry_kind,
                     "account_id": line.source.account_id,
                     "corresponding_account_id": line.source.corresponding_account_id,
                     "currency_code": line.source.currency,

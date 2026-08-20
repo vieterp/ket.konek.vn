@@ -37,16 +37,15 @@ class StatementRowValueResponse(BaseModel):
     hide_when_zero: bool
     value: Decimal
     comparative: Decimal | None
-    """`null` = cột so sánh chưa lập được (layout phát sinh — "Năm trước" cần
-    loại bút toán kết chuyển, chờ 10a). Client hiện "—", KHÔNG hiện 0."""
+    """`null` = không có gì để so (layout phát sinh, dataset chưa có năm tài
+    chính trước). Client hiện "—", KHÔNG hiện 0."""
 
 
 class StatementPreviewResponse(BaseModel):
     """Một BCTC đã lập cho `(layout, kỳ, sổ[, chi nhánh])`.
 
     Cột so sánh (`comparative`) là "Số đầu năm" với báo cáo tình hình tài
-    chính; với báo cáo phát sinh nó là `null` ở v1 — xem bất biến H1 trong
-    `reporting/statements/builder.py`.
+    chính, "Năm trước" với báo cáo phát sinh (bỏ bút toán kết chuyển — LD-17).
     """
 
     layout_code: str

@@ -72,6 +72,7 @@ class GlPosting(DatasetBase):
         CheckConstraint(
             f"ledger IN ({Ledger.FINANCIAL}, {Ledger.MANAGEMENT})", name="ledger_known"
         ),
+        CheckConstraint("entry_kind BETWEEN 0 AND 1", name="entry_kind_known"),
         Index("uq_gl_postings_line", "voucher_id", "ledger", "line_no", unique=True),
         Index("ix_gl_postings_acc_period", "ledger", "account_id", "period_id", "branch_id"),
         Index(
@@ -83,6 +84,20 @@ class GlPosting(DatasetBase):
             postgresql_where=text("partner_id IS NOT NULL"),
         ),
         Index("ix_gl_postings_date", "ledger", "posting_date"),
+        # Index MỘT PHẦN, chỉ phủ bút toán không phải nghiệp vụ (LD-17). Bút
+        # toán kết chuyển là thiểu số tuyệt đối (vài chục dòng mỗi kỳ so với
+        # hàng chục nghìn dòng nghiệp vụ) nên index đầy đủ sẽ gần bằng cả bảng
+        # mà không giúp gì; chiều mà báo cáo B02 dùng (`entry_kind = 0`) đã
+        # được phục vụ bởi các index theo `(ledger, posting_date)` sẵn có. Cái
+        # này dành cho chiều ngược lại: 10a đọc RIÊNG bút toán kết chuyển để
+        # lập lưu chuyển tiền tệ.
+        Index(
+            "ix_gl_postings_entry_kind_income",
+            "ledger",
+            "period_id",
+            "entry_kind",
+            postgresql_where=text("entry_kind <> 0"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -102,6 +117,15 @@ class GlPosting(DatasetBase):
     branch_id: Mapped[int] = mapped_column(Integer, nullable=False)
     posting_date: Mapped[date] = mapped_column(Date, nullable=False)
     period_id: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    entry_kind: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
+    """Bản chất bút toán, **sao chép từ `vouchers.entry_kind` lúc ghi sổ** (LD-17).
+
+    Denormalize vì cùng lý do `branch_id`/`posting_date`/`period_id` đã
+    denormalize: mọi báo cáo quét bảng này theo lô lớn, và một join sang header
+    cho mỗi lượt quét là cái giá phải trả mãi mãi để tránh một cột SMALLINT.
+    Nguồn sự thật vẫn là header — `PostingService` là đường ghi duy nhất nên
+    hai bên không thể lệch (test `test_entry_kind_flows_from_voucher_to_postings`)."""
 
     account_id: Mapped[int] = mapped_column(
         ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False

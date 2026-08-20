@@ -24,7 +24,7 @@ from ket.kernel.identifiers import uuid7
 from ket.kernel.numbering.service import NumberingRule, NumberingService
 from ket.kernel.periods.models import AccountingPeriod
 from ket.kernel.periods.service import PeriodService
-from ket.posting.documents.models import Voucher, VoucherStatus
+from ket.posting.documents.models import EntryKind, Voucher, VoucherStatus
 from ket.posting.documents.state_machine import VoucherAction, transition
 
 
@@ -40,6 +40,10 @@ class VoucherDraft:
     exchange_rate: Decimal
     description: str | None = None
     cashflow_activity: int | None = None
+    entry_kind: int = EntryKind.NGHIEP_VU
+    """Bản chất bút toán (LD-17). Mặc định `NGHIEP_VU` — module nghiệp vụ
+    thường không cần biết cột này tồn tại; chỉ engine kết chuyển cuối kỳ (10a)
+    và màn hình chứng từ nghiệp vụ khác (`GLE`) mới khai khác đi."""
 
 
 class VoucherService:
@@ -77,6 +81,7 @@ class VoucherService:
             exchange_rate=draft.exchange_rate,
             description=draft.description,
             cashflow_activity=draft.cashflow_activity,
+            entry_kind=draft.entry_kind,
             status=VoucherStatus.DA_CAT.value,
             created_by=user_id,
         )

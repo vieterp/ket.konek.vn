@@ -116,8 +116,13 @@ def _is_stale(
     return bool(session.scalar(select(exists(dirty_from))))
 
 
-AmountRow = tuple[int, Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]
-"""`(account_id, dư đầu N/C, phát sinh N/C, dư cuối N/C)` — trước khi gắn tên TK."""
+AmountRow = tuple[str, Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]
+"""`(số hiệu TK, dư đầu N/C, phát sinh N/C, dư cuối N/C)` — trước khi gắn tên TK.
+
+Trục gộp là **số hiệu**, không phải `account_id` (quyết định 2026-08-20): TK
+thuộc gói cấu hình nên cùng một "112" ở hai gói là hai `id`; gộp theo id tách
+đôi một tài khoản ngay khi dataset đổi gói, mà BCTC lại gộp theo `code` — hai
+báo cáo sẽ lệch nhau đúng ở chỗ khó truy nhất."""
 
 
 def _amounts_from_snapshot(
@@ -131,7 +136,7 @@ def _amounts_from_snapshot(
     closing_net = func.sum(AccountBalance.closing_debit - AccountBalance.closing_credit)
     statement = (
         select(
-            AccountBalance.account_id,
+            ChartOfAccount.code,
             func.greatest(opening_net, 0),
             func.greatest(-opening_net, 0),
             func.sum(AccountBalance.period_debit),
@@ -139,8 +144,9 @@ def _amounts_from_snapshot(
             func.greatest(closing_net, 0),
             func.greatest(-closing_net, 0),
         )
+        .join(ChartOfAccount, ChartOfAccount.id == AccountBalance.account_id)
         .where(AccountBalance.period_id == period_id, AccountBalance.ledger == ledger)
-        .group_by(AccountBalance.account_id)
+        .group_by(ChartOfAccount.code)
         .having(
             ~(
                 (opening_net == 0)
@@ -180,24 +186,32 @@ def _amounts_direct(
 
 
 def _attach_accounts(session: Session, amounts: list[AmountRow]) -> tuple[TrialBalanceRow, ...]:
-    """Gắn số hiệu + tên TK và xếp theo số hiệu — thứ tự người đọc sổ mong."""
+    """Gắn tên + `id` TK theo số hiệu, xếp theo số hiệu — thứ tự người đọc sổ mong.
+
+    Một số hiệu có thể ứng với nhiều hàng `chart_of_accounts` (mỗi gói cấu hình
+    một hàng) — lấy hàng của gói **mới nhất** làm đại diện cho tên và `id`:
+    dòng số đã gộp theo số hiệu, còn `account_id` trả về chỉ để client mở
+    drill-down, nên bản ghi mới nhất là lựa chọn ít gây bất ngờ nhất.
+    """
     if not amounts:
         return ()
-    account_ids = [row[0] for row in amounts]
+    codes = [row[0] for row in amounts]
     accounts = {
-        account.id: account
+        account.code: account
         for account in session.execute(
-            select(ChartOfAccount).where(ChartOfAccount.id.in_(account_ids))
+            select(ChartOfAccount)
+            .where(ChartOfAccount.code.in_(codes))
+            .order_by(ChartOfAccount.package_id)
         ).scalars()
     }
     rows = []
-    for account_id, ob_d, ob_c, p_d, p_c, cl_d, cl_c in amounts:
-        account = accounts.get(account_id)
+    for account_code, ob_d, ob_c, p_d, p_c, cl_d, cl_c in amounts:
+        account = accounts.get(account_code)
         if account is None:  # pragma: no cover - FK bảo đảm
-            raise RuntimeError(f"Dòng số dư trỏ vào tài khoản không tồn tại: {account_id}")
+            raise RuntimeError(f"Dòng số dư trỏ vào tài khoản không tồn tại: {account_code}")
         rows.append(
             TrialBalanceRow(
-                account_id=account_id,
+                account_id=account.id,
                 account_code=account.code,
                 account_name=account.name,
                 opening_debit=ob_d or ZERO,

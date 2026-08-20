@@ -17,7 +17,14 @@
 -- 12 sẽ phá tương đương ngày↔kỳ, khi đó file này phải đổi sang lọc theo
 -- period_id.
 --
--- Tham số: :ledger, :fiscal_year_id, :year_start, :range_end, :branch_id
+-- **Lọc bút toán kết chuyển (LD-17)**: `:closing_in_turnover` = false thì CTE
+-- `movement` bỏ dòng `entry_kind <> 0`. Chỉ áp cho PHÁT SINH, không áp cho số
+-- dư: bút toán kết chuyển là thứ làm 421 đúng, bỏ nó khỏi số dư thì bảng cân
+-- đối không cân. Layout `income` gọi với false (B02 đo phát sinh nghiệp vụ),
+-- layout `balance_sheet` gọi với true.
+--
+-- Tham số: :ledger, :fiscal_year_id, :year_start, :range_end, :branch_id,
+--          :closing_in_turnover
 WITH opening AS (
     SELECT account_id, currency_code, SUM(debit) - SUM(credit) AS net
     FROM opening_balances
@@ -35,6 +42,7 @@ movement AS (
       AND (CAST(:branch_id AS INTEGER) IS NULL OR branch_id = :branch_id)
       AND posting_date >= :year_start
       AND posting_date <= :range_end
+      AND (CAST(:closing_in_turnover AS BOOLEAN) OR entry_kind = 0)
     GROUP BY account_id, currency_code
 ),
 merged AS (

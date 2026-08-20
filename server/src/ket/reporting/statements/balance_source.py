@@ -51,12 +51,20 @@ def load_fiscal_year_amounts(
     year_start: date,
     range_end: date,
     branch_id: int | None,
+    closing_in_turnover: bool,
 ) -> tuple[ColumnAmounts, ColumnAmounts]:
     """`(cột instant cuối khoảng, cột instant đầu năm)` của một năm tài chính.
 
     Cột thứ nhất mang cả phát sinh lũy kế `year_start..range_end` — các layout
     `income`/`cashflow` đọc phát sinh từ đúng cột này (một năm = một lượt quét,
     cột "Năm trước" là một lượt gọi thứ hai trên năm trước).
+
+    `closing_in_turnover=False` bỏ bút toán kết chuyển khỏi **phát sinh** (LD-17)
+    — chỉ đúng cho layout đo phát sinh nghiệp vụ (B02). Số dư thì **luôn** gồm
+    kết chuyển, nên gọi với `False` xong đọc `balance_*` sẽ ra số vô nghĩa: bảng
+    cân đối phải gọi `True`. Bất biến này do `builder` giữ (nó chọn theo
+    `statement_kind`), và test `test_balance_sheet_includes_closing_entries`
+    canh cho nó không trôi.
     """
     rows = session.execute(
         text(STATEMENT_BALANCES_SQL),
@@ -66,6 +74,7 @@ def load_fiscal_year_amounts(
             "year_start": year_start,
             "range_end": range_end,
             "branch_id": branch_id,
+            "closing_in_turnover": closing_in_turnover,
         },
     ).all()
 
