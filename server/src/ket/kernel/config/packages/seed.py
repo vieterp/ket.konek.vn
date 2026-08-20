@@ -35,6 +35,7 @@ from sqlalchemy import Connection, insert, select, update
 from ket.kernel.config.accounts_models import ChartOfAccount, ClosingAccountPair, DefaultAccount
 from ket.kernel.config.accounts_models import ConfigPackage as ConfigPackageModel
 from ket.kernel.config.packages.loader import LoadedPackage, load_builtin_package
+from ket.kernel.config.statements.models import StatementLayout, StatementRow
 from ket.kernel.master_data.tree_path import ROOT_LEVEL, child_path, level_of
 from ket.kernel.persistence.seeding import bind_seed_schema
 
@@ -161,30 +162,98 @@ def _insert_closing_pairs(connection: Connection, package_id: int, loaded: Loade
     )
 
 
+def _insert_statements(connection: Connection, package_id: int, loaded: LoadedPackage) -> None:
+    for layout in loaded.statements:
+        layout_id = connection.execute(
+            insert(StatementLayout)
+            .values(
+                package_id=package_id,
+                code=layout.code,
+                name=layout.name,
+                name_en=layout.name_en,
+                statement_kind=layout.statement_kind,
+            )
+            .returning(StatementLayout.id)
+        ).scalar_one()
+        connection.execute(
+            insert(StatementRow),
+            [
+                {
+                    "layout_id": layout_id,
+                    "row_code": row.row_code,
+                    "label": row.label,
+                    "label_en": row.label_en,
+                    "note_ref": row.note_ref,
+                    "formula": row.formula,
+                    "indent_level": row.indent_level,
+                    "display_order": row.display_order,
+                    "is_bold": row.is_bold,
+                    "hide_when_zero": row.hide_when_zero,
+                    "note": row.note,
+                }
+                for row in layout.rows
+            ],
+        )
+
+
+def _ensure_statements_backfilled(
+    connection: Connection, package_id: int, loaded: LoadedPackage
+) -> bool:
+    """Gieo layout BCTC cho gói builtin **đã tồn tại từ trước lát 5B** nhưng
+    chưa có layout nào. Không mâu thuẫn với luật "gói `code` đã tồn tại thì bỏ
+    qua toàn bộ": luật đó chặn **ghi đè** nội dung một gói có thể đã kích hoạt;
+    ở đây chỉ **thêm vào chỗ trống** — một dataset cấp giữa migration 0010 và
+    0011 có gói TT99 nhưng bảng `statement_layouts` rỗng, và không thao tác
+    người dùng nào tự lấp được chỗ trống đó. Gói đã có ≥1 layout thì không đụng
+    (nâng cấp layout thật sự = gói mới, đúng doctrine)."""
+    has_layouts = connection.scalar(
+        select(StatementLayout.id).where(StatementLayout.package_id == package_id).limit(1)
+    )
+    if has_layouts is not None or not loaded.statements:
+        return False
+    _insert_statements(connection, package_id, loaded)
+    logger.info(
+        "config_package.seed_statements_backfilled",
+        package_code=loaded.manifest.code,
+        layouts=len(loaded.statements),
+    )
+    return True
+
+
 def _seed_one(connection: Connection, slug: str) -> bool:
     """Gieo một gói dựng sẵn. Trả `True` nếu vừa thêm mới."""
     loaded = load_builtin_package(slug)
     manifest = loaded.manifest
 
-    existing_version = connection.scalar(
-        select(ConfigPackageModel.version).where(ConfigPackageModel.code == manifest.code)
-    )
-    if existing_version is not None:
+    existing = connection.execute(
+        select(ConfigPackageModel.id, ConfigPackageModel.version).where(
+            ConfigPackageModel.code == manifest.code
+        )
+    ).first()
+    if existing is not None:
+        existing_id, existing_version = existing
         if existing_version != manifest.version:
             # Chỉ ghi log — xem docstring đầu tệp về lý do đường gieo mầm không
-            # tự nâng cấp nội dung một gói `code` đã tồn tại.
+            # tự nâng cấp nội dung một gói `code` đã tồn tại. KHÔNG backfill
+            # layout khi version lệch (review 5B, M-1): công thức trong
+            # `statements.json` được loader kiểm dải TK theo accounts.csv
+            # CÙNG version trên đĩa — gắn chúng vào hệ TK version cũ trong DB
+            # là đi vòng qua chính lượt kiểm đó.
             logger.warning(
                 "config_package.seed_version_mismatch",
                 package_code=manifest.code,
                 seeded_version=existing_version,
                 data_version=manifest.version,
             )
+            return False
+        _ensure_statements_backfilled(connection, existing_id, loaded)
         return False
 
     package_id = _insert_package(connection, loaded)
     _insert_accounts(connection, package_id, loaded)
     _insert_default_accounts(connection, package_id, loaded)
     _insert_closing_pairs(connection, package_id, loaded)
+    _insert_statements(connection, package_id, loaded)
     return True
 
 

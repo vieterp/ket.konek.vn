@@ -68,6 +68,7 @@ from ket.api.routers.opening_balances import router as opening_balances_router
 from ket.api.routers.partners import router as partner_bank_accounts_router
 from ket.api.routers.period_lock import router as period_lock_router
 from ket.api.routers.setup import router as setup_router
+from ket.api.routers.statements import router as statements_router
 from ket.api.routers.system import router as system_router
 from ket.api.routers.system_settings import router as settings_router
 from ket.api.routers.updates import router as updates_router
@@ -277,6 +278,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Lát 5A — máy móc quanh gói cấu hình pháp lý (TT99/TT133): liệt kê, xem
     # cây TK của một gói, kích hoạt, nhập gói `.zip` đã ký (RT-07).
     app.include_router(config_packages_router)
+    # Lát 5B — BCTC từ layout công thức (FR-GLE-043): danh sách mẫu + xem trước.
+    app.include_router(statements_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

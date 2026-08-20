@@ -1382,3 +1382,26 @@ class ConfigPackageArchiveInvalidError(DomainError):
     """
 
     error_code: ClassVar[str] = "config.package_archive_invalid"
+
+
+class StatementFormulaInvalidError(DomainError):
+    """Công thức chỉ tiêu BCTC không hợp lệ (FR-GLE-043): sai grammar, tham
+    chiếu chỉ tiêu không tồn tại, hoặc các chỉ tiêu tham chiếu vòng nhau.
+
+    Ném ở parser/evaluator (`kernel/config/statements/formula/`); loader gói
+    cấu hình bọc thêm ngữ cảnh (layout nào, chỉ tiêu nào) thành
+    `ConfigPackageDataInvalidError` để người biên soạn gói sửa đúng dòng.
+    """
+
+    error_code: ClassVar[str] = "config.statement_formula_invalid"
+
+
+class StatementLayoutNotFoundError(DomainError):
+    """Gói cấu hình đang hiệu lực không có mẫu BCTC mang mã này.
+
+    404 chứ không 422: mã layout nằm trên đường dẫn URL — sai mã là "tài nguyên
+    không tồn tại", cùng khuôn `ConfigPackageIdUnknownError`.
+    """
+
+    error_code: ClassVar[str] = "config.statement_layout_unknown"
+    http_status: ClassVar[int] = 404

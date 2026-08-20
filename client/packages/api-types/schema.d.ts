@@ -5604,6 +5604,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/statements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Statement Layouts
+         * @description Mọi mẫu BCTC của gói cấu hình hiệu lực cho kỳ đã chọn.
+         *
+         *     Nhận `period_id` chứ không nhận mã gói: gói nào hiệu lực là chuyện của
+         *     `resolve_package` (chế độ kế toán của năm + ngày cuối kỳ), client không
+         *     được chọn tay để khỏi xem nhầm bộ mẫu của chế độ khác (FR-NFR-070).
+         */
+        get: operations["get_statement_layouts_api_v1_statements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/statements/{layout_code}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Statement
+         * @description Lập một BCTC và trả dạng lưới để client xem trước (FR-GLE-043).
+         *
+         *     Đổi `ledger` cho hai bộ số độc lập trên cùng mẫu (BR-RPT-04); bỏ trống
+         *     `branch_id` là BCTC gộp mọi chi nhánh trong phạm vi người gọi thấy.
+         */
+        get: operations["preview_statement_api_v1_statements__layout_code__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/access": {
         parameters: {
             query?: never;
@@ -9471,6 +9518,79 @@ export interface components {
             source: "setting" | "fiscal_year";
             /** Title */
             title: string;
+            /** Value */
+            value: string;
+        };
+        /** StatementLayoutListResponse */
+        StatementLayoutListResponse: {
+            /** Layouts */
+            layouts: components["schemas"]["StatementLayoutSummaryResponse"][];
+            /** Package Code */
+            package_code: string;
+        };
+        /**
+         * StatementLayoutSummaryResponse
+         * @description Một mẫu BCTC trong gói cấu hình đang hiệu lực.
+         */
+        StatementLayoutSummaryResponse: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Statement Kind */
+            statement_kind: string;
+        };
+        /**
+         * StatementPreviewResponse
+         * @description Một BCTC đã lập cho `(layout, kỳ, sổ[, chi nhánh])`.
+         *
+         *     Cột so sánh (`comparative`) là "Số đầu năm" với báo cáo tình hình tài
+         *     chính; với báo cáo phát sinh nó là `null` ở v1 — xem bất biến H1 trong
+         *     `reporting/statements/builder.py`.
+         */
+        StatementPreviewResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Layout Code */
+            layout_code: string;
+            /** Ledger */
+            ledger: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Package Code */
+            package_code: string;
+            /** Period Id */
+            period_id: number;
+            /** Rows */
+            rows: components["schemas"]["StatementRowValueResponse"][];
+            /** Statement Kind */
+            statement_kind: string;
+        };
+        /**
+         * StatementRowValueResponse
+         * @description Một chỉ tiêu đã tính — giá trị cột chính + cột so sánh.
+         */
+        StatementRowValueResponse: {
+            /** Comparative */
+            comparative: string | null;
+            /** Hide When Zero */
+            hide_when_zero: boolean;
+            /** Indent Level */
+            indent_level: number;
+            /** Is Bold */
+            is_bold: boolean;
+            /** Label */
+            label: string;
+            /** Label En */
+            label_en: string | null;
+            /** Note Ref */
+            note_ref: string | null;
+            /** Row Code */
+            row_code: string;
             /** Value */
             value: string;
         };
@@ -18957,6 +19077,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsGroupsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_statement_layouts_api_v1_statements_get: {
+        parameters: {
+            query: {
+                period_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementLayoutListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    preview_statement_api_v1_statements__layout_code__preview_get: {
+        parameters: {
+            query: {
+                period_id: number;
+                ledger?: number;
+                branch_id?: number | null;
+            };
+            header?: never;
+            path: {
+                layout_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatementPreviewResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
