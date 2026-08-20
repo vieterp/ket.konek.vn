@@ -125,7 +125,7 @@ def build_statement(
         year_start=year.start_date,
         range_end=period.end_date,
         branch_id=branch_id,
-        closing_in_turnover=is_balance_sheet,
+        operating_turnover_only=not is_balance_sheet,
     )
 
     values = evaluate_rows(layout_rows.formulas, closing_column)
@@ -134,7 +134,13 @@ def build_statement(
             layout_rows.formulas, opening_column
         )
     else:
-        prior = _prior_year_column(session, current_year=year, ledger=ledger, branch_id=branch_id)
+        prior = _prior_year_column(
+            session,
+            current_year=year,
+            current_period=period,
+            ledger=ledger,
+            branch_id=branch_id,
+        )
         comparative_values = None if prior is None else evaluate_rows(layout_rows.formulas, prior)
 
     return StatementResult(
@@ -179,11 +185,25 @@ def _resolve_context(
 
 
 def _prior_year_column(
-    session: Session, *, current_year: FiscalYear, ledger: int, branch_id: int | None
+    session: Session,
+    *,
+    current_year: FiscalYear,
+    current_period: AccountingPeriod,
+    ledger: int,
+    branch_id: int | None,
 ) -> ColumnAmounts | None:
-    """Cột "Năm trước" của layout phát sinh: trọn năm tài chính liền trước,
-    **đã bỏ bút toán kết chuyển** (LD-17). `None` = dataset chưa có năm trước,
-    khác hẳn "có năm trước và mọi chỉ tiêu bằng 0".
+    """Cột "Năm trước" của layout phát sinh: năm tài chính liền trước, cắt tới
+    **kỳ tương ứng**, đã bỏ bút toán kết chuyển (LD-17).
+
+    **Cắt theo kỳ, không lấy trọn năm** (sửa H2 review 4F): báo cáo quý I phải
+    so với quý I năm trước, không so với cả năm trước — bản đầu lấy
+    `prior.end_date` nên một khoản chi tháng 4 năm ngoái hiện ra trong cột so
+    sánh của báo cáo quý I. Chỉ báo cáo cả năm mới so trọn năm, và khi đó "kỳ
+    tương ứng" chính là kỳ cuối năm nên cùng một phép tính.
+
+    `None` (khác hẳn "toàn số 0") khi: chưa có năm trước, hoặc năm trước không
+    có kỳ mang cùng `period_no` — không bịa ra một mốc cắt khác để lấy bằng
+    được một con số.
 
     Không ràng năm trước phải cùng chế độ kế toán: số đọc theo **số hiệu TK**
     của dòng phát sinh năm đó, nên năm chuyển chế độ vẫn ra số so sánh đúng tới
@@ -197,14 +217,22 @@ def _prior_year_column(
     ).scalar_one_or_none()
     if prior is None:
         return None
+    prior_period_end = session.scalar(
+        select(AccountingPeriod.end_date).where(
+            AccountingPeriod.fiscal_year_id == prior.id,
+            AccountingPeriod.period_no == current_period.period_no,
+        )
+    )
+    if prior_period_end is None:
+        return None
     turnover_column, _ = load_fiscal_year_amounts(
         session,
         ledger=ledger,
         fiscal_year_id=prior.id,
         year_start=prior.start_date,
-        range_end=prior.end_date,
+        range_end=prior_period_end,
         branch_id=branch_id,
-        closing_in_turnover=False,
+        operating_turnover_only=True,
     )
     return turnover_column
 

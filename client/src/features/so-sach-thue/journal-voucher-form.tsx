@@ -138,6 +138,7 @@ function VoucherFormBody({
       ? ''
       : String(voucher.cashflow_activity),
   )
+  const [entryKind, setEntryKind] = useState(() => String(voucher?.entry_kind ?? 0))
   const [rows, setRows] = useState<LineRow[]>(() => [emptyLineRow()])
   const [error, setError] = useState<string | null>(null)
   const [violations, setViolations] = useState<readonly Violation[]>([])
@@ -263,6 +264,9 @@ function VoucherFormBody({
       currency_code: currencyCode.trim() === '' ? 'VND' : currencyCode.trim(),
       exchange_rate: exchangeRate.trim() === '' ? '1' : exchangeRate.trim(),
       description: description.trim(),
+      // LUÔN gửi: PUT thay trọn bộ thân chứng từ, nên bỏ trường này là âm thầm
+      // đặt lại cờ về "nghiệp vụ" mỗi lần người dùng sửa (review 4F, H4).
+      entry_kind: Number.parseInt(entryKind, 10) || 0,
       lines: resolved.lines,
     }
     if (cashflowActivity.trim() !== '') {
@@ -290,7 +294,10 @@ function VoucherFormBody({
     (documentDate !== postingDate ||
       currencyCode !== 'VND' ||
       exchangeRate !== '1' ||
-      cashflowActivity !== '')
+      cashflowActivity !== '' ||
+      // Chứng từ kết chuyển phải mở sẵn khối "Mở rộng": người sửa cần thấy cờ
+      // đang bật, nếu không họ sẽ không hiểu vì sao nó vắng trên báo cáo KQKD.
+      entryKind !== '0')
 
   return (
     <div className="flex flex-col gap-4">
@@ -317,6 +324,8 @@ function VoucherFormBody({
         onExchangeRateChange={setExchangeRate}
         cashflowActivity={cashflowActivity}
         onCashflowActivityChange={setCashflowActivity}
+        entryKind={entryKind}
+        onEntryKindChange={setEntryKind}
         defaultAdvancedOpen={hasAdvancedValues}
       />
 

@@ -10,7 +10,7 @@
 
 import type { ReactElement } from 'react'
 
-import { AdvancedSection, TextField } from '@/design-system/components'
+import { AdvancedSection, SelectField, TextField } from '@/design-system/components'
 import { useI18n } from '@/lib/i18n'
 
 export interface JournalVoucherHeaderFieldsProps {
@@ -26,6 +26,8 @@ export interface JournalVoucherHeaderFieldsProps {
   readonly onExchangeRateChange: (value: string) => void
   readonly cashflowActivity: string
   readonly onCashflowActivityChange: (value: string) => void
+  readonly entryKind: string
+  readonly onEntryKindChange: (value: string) => void
   /** Mở sẵn khối "Mở rộng" khi form sửa đã có giá trị khác mặc định. */
   readonly defaultAdvancedOpen: boolean
 }
@@ -43,6 +45,8 @@ export function JournalVoucherHeaderFields({
   onExchangeRateChange,
   cashflowActivity,
   onCashflowActivityChange,
+  entryKind,
+  onEntryKindChange,
   defaultAdvancedOpen,
 }: JournalVoucherHeaderFieldsProps): ReactElement {
   const { t } = useI18n()
@@ -100,6 +104,20 @@ export function JournalVoucherHeaderFields({
             value={cashflowActivity}
             onChange={(event) => {
               onCashflowActivityChange(event.target.value)
+            }}
+          />
+          {/* Bản chất bút toán (LD-17): kết chuyển bị loại khỏi phát sinh của
+              báo cáo kết quả kinh doanh. Đây là màn hình duy nhất khai được cờ
+              cho tới khi 10a có engine kết chuyển tự động. */}
+          <SelectField
+            label={t('gl.form.entryKind')}
+            value={entryKind}
+            options={[
+              { value: '0', label: t('gl.form.entryKind.operating') },
+              { value: '1', label: t('gl.form.entryKind.closing') },
+            ]}
+            onChange={(event) => {
+              onEntryKindChange(event.target.value)
             }}
           />
         </div>

@@ -24,6 +24,7 @@ from sqlalchemy import exists, func, select, text
 from sqlalchemy.orm import Session
 
 from ket.kernel.config.accounts_models import ChartOfAccount
+from ket.kernel.config.accounts_provider import resolve_package
 from ket.kernel.errors import PeriodNotFoundError
 from ket.kernel.periods.models import AccountingPeriod, FiscalYear
 from ket.posting.balances.models import AccountBalance, BalanceRecalcQueue
@@ -90,7 +91,10 @@ def trial_balance(
         amounts = _amounts_from_snapshot(
             session, ledger=ledger, period_id=period_id, branch_id=branch_id
         )
-    return TrialBalanceResult(rows=_attach_accounts(session, amounts), stale=stale)
+    package = resolve_package(session, scheme=year.accounting_scheme, on_date=period.end_date)
+    return TrialBalanceResult(
+        rows=_attach_accounts(session, amounts, package_id=package.id), stale=stale
+    )
 
 
 def _is_stale(
@@ -185,23 +189,34 @@ def _amounts_direct(
     return [(row[0], row[1], row[2], row[3], row[4], row[5], row[6]) for row in rows]
 
 
-def _attach_accounts(session: Session, amounts: list[AmountRow]) -> tuple[TrialBalanceRow, ...]:
+def _attach_accounts(
+    session: Session, amounts: list[AmountRow], *, package_id: int
+) -> tuple[TrialBalanceRow, ...]:
     """Gắn tên + `id` TK theo số hiệu, xếp theo số hiệu — thứ tự người đọc sổ mong.
 
-    Một số hiệu có thể ứng với nhiều hàng `chart_of_accounts` (mỗi gói cấu hình
-    một hàng) — lấy hàng của gói **mới nhất** làm đại diện cho tên và `id`:
-    dòng số đã gộp theo số hiệu, còn `account_id` trả về chỉ để client mở
-    drill-down, nên bản ghi mới nhất là lựa chọn ít gây bất ngờ nhất.
+    Một số hiệu ứng với **nhiều** hàng `chart_of_accounts`: mọi dữ liệu kế toán
+    đều được gieo CẢ HAI gói dựng sẵn (`ensure_builtin_packages`), và 83 mã tồn
+    tại ở cả TT99 lẫn TT133 — 14 mã trong đó **khác tên**. Vì thế đại diện phải
+    lấy theo **gói đang hiệu lực của kỳ**, không phải "gói mới nhất" (sửa H1
+    review 4F: `order_by(package_id)` + ghi đè dict luôn cho ra TT133, nên doanh
+    nghiệp TT99 đọc tên TT133 và `account_id` trả về không phải id mà
+    `gl_postings` trỏ tới → drill-down `/ledger/postings?account_id=` mở ra rỗng).
+
+    TK chỉ tồn tại ở gói khác (dữ liệu của gói cũ sau khi đổi gói) không có đại
+    diện trong gói hiện hành — vẫn phải hiện dòng số, nên lùi về bất kỳ hàng
+    nào cùng mã và lấy tên ở đó.
     """
     if not amounts:
         return ()
     codes = [row[0] for row in amounts]
+    # Gói hiệu lực ghi đè sau cùng nên nó thắng; hàng của gói khác chỉ làm nền
+    # cho những mã không có trong gói hiệu lực.
     accounts = {
         account.code: account
         for account in session.execute(
             select(ChartOfAccount)
             .where(ChartOfAccount.code.in_(codes))
-            .order_by(ChartOfAccount.package_id)
+            .order_by((ChartOfAccount.package_id == package_id).asc())
         ).scalars()
     }
     rows = []
