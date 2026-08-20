@@ -15,6 +15,7 @@
 <body class="{{ 'page-landscape' if orientation == 'landscape' else 'page-portrait' }}">
   {% if show_title %}
   <div class="report-unit">
+    {% if logo_url %}<img class="unit-logo" src="{{ logo_url }}" alt="">{% endif %}
     <div class="unit-name">{{ unit.name }}</div>
     {% if unit.address %}<div>{{ unit.address }}</div>{% endif %}
     {% if unit.tax_code %}<div>MST: {{ unit.tax_code }}</div>{% endif %}

@@ -2,8 +2,9 @@
 
 Tách hai pha có chủ đích:
 
-* **Pha chữ** (`_presentation_rows` + `formats.py`): mọi giá trị thành chuỗi
-  TRƯỚC khi vào template — template chỉ đổ khuôn, autoescape lo phần còn lại.
+* **Pha chữ** (`presentation.py` + `formats.py`, dùng chung với preview JSON
+  của lát 5D): mọi giá trị thành chuỗi TRƯỚC khi vào template — template chỉ
+  đổ khuôn, autoescape lo phần còn lại.
 * **Pha giấy** (WeasyPrint): nhận HTML + `print_base.css` (tokens Konek) +
   font nhúng qua `asset_url_fetcher` — PDF giống nhau trên Windows/macOS
   (font đi trong server, không mượn của hệ điều hành).
@@ -16,136 +17,38 @@ kèm lý do).
 from __future__ import annotations
 
 import io
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator
 from datetime import date
-from decimal import Decimal
-from typing import TypedDict
 
 from pypdf import PdfReader, PdfWriter
 from weasyprint import CSS, HTML
 from weasyprint.text.fonts import FontConfiguration
 
-from ket.kernel.config.reports.spec import ColumnSpec, ColumnType, LayoutSpec
-from ket.kernel.errors import ReportDatasetInvalidError
+from ket.kernel.config.reports.spec import LayoutSpec
 from ket.reporting.engine.grouping import (
     DataRow,
     DisplayRow,
-    GrandTotal,
     GroupFooter,
     GroupHeader,
 )
-from ket.reporting.rendering import formats
 from ket.reporting.rendering.environment import (
-    asset_url_fetcher,
     builtin_template_source,
     create_print_environment,
+    make_asset_fetcher,
     print_base_css,
 )
 from ket.reporting.rendering.header import UnitInfo, signature_date_line
+from ket.reporting.rendering.options import (
+    DEFAULT_FONT_SIZE_PT,
+    DEFAULT_RENDER_OPTIONS,
+    RenderOptions,
+)
+from ket.reporting.rendering.presentation import presentation_rows
+
+LOGO_ASSET_NAME = "logo"
+"""Tên tài nguyên theo-lượt của logo trong fetcher (`asset:logo`)."""
 
 _TEMPLATE_NAME = "report_table.html.j2"
-
-
-class _Cell(TypedDict):
-    text: str
-    css: str
-
-
-def _column_css(column: ColumnSpec) -> str:
-    css = f"cell-{column.type}"
-    if column.align is not None:
-        css += f" cell-{column.align}"
-    return css
-
-
-def _format_cell(column: ColumnSpec, value: object) -> str:
-    if column.type in (ColumnType.MONEY, ColumnType.QUANTITY):
-        amount = _as_amount(column, value)
-        if column.type == ColumnType.MONEY:
-            return formats.format_money(amount, blank_zero=True)
-        return formats.format_quantity(amount)
-    if column.type == ColumnType.DATE:
-        if value is not None and not isinstance(value, date):
-            raise ReportDatasetInvalidError(
-                f"Cột {column.key!r} khai kiểu date, dataset trả {type(value).__name__}",
-                column_key=column.key,
-            )
-        return formats.format_date(value)
-    return formats.format_text(value)
-
-
-def _as_amount(column: ColumnSpec, value: object) -> Decimal | None:
-    if value is None or isinstance(value, Decimal):
-        return value
-    if isinstance(value, int):
-        return Decimal(value)
-    raise ReportDatasetInvalidError(
-        f"Cột {column.key!r} khai kiểu số, dataset trả {type(value).__name__}",
-        column_key=column.key,
-    )
-
-
-def _total_cells(
-    columns: tuple[ColumnSpec, ...],
-    first_total_index: int,
-    label: str,
-    totals: Mapping[str, Decimal],
-) -> list[_Cell]:
-    cells: list[_Cell] = [{"text": label, "css": "cell-left"}]
-    for column in columns[first_total_index:]:
-        if column.key in totals:
-            cells.append(
-                {
-                    "text": formats.format_money(totals[column.key], blank_zero=False),
-                    "css": _column_css(column),
-                }
-            )
-        else:
-            cells.append({"text": "", "css": _column_css(column)})
-    return cells
-
-
-class _PresentationRow(TypedDict, total=False):
-    kind: str
-    heading: str
-    cells: list[_Cell]
-    label_span: int
-
-
-def _presentation_rows(
-    display_rows: Iterator[DisplayRow], *, layout_spec: LayoutSpec
-) -> Iterator[_PresentationRow]:
-    columns = layout_spec.columns
-    total_keys = frozenset(layout_spec.totals)
-    first_total_index = next(
-        (index for index, column in enumerate(columns) if column.key in total_keys),
-        len(columns),
-    )
-    for row in display_rows:
-        if isinstance(row, GroupHeader):
-            yield {"kind": "group_header", "heading": row.heading}
-        elif isinstance(row, DataRow):
-            yield {
-                "kind": "data",
-                "cells": [
-                    {"text": _format_cell(column, value), "css": _column_css(column)}
-                    for column, value in zip(columns, row.cells, strict=True)
-                ],
-            }
-        elif isinstance(row, GroupFooter):
-            yield {
-                "kind": "group_footer",
-                "label_span": first_total_index,
-                "cells": _total_cells(
-                    columns, first_total_index, f"Cộng {row.heading}", row.totals
-                ),
-            }
-        elif isinstance(row, GrandTotal):
-            yield {
-                "kind": "grand_total",
-                "label_span": first_total_index,
-                "cells": _total_cells(columns, first_total_index, "Tổng cộng", row.totals),
-            }
 
 
 CHUNK_DATA_ROWS = 1500
@@ -163,6 +66,7 @@ def render_pdf(
     layout_spec: LayoutSpec,
     display_rows: Iterator[DisplayRow],
     signature_date: date,
+    options: RenderOptions = DEFAULT_RENDER_OPTIONS,
 ) -> bytes:
     """Một báo cáo dạng bảng/nhóm → PDF hoàn chỉnh (tiêu đề, tham số, chữ ký).
 
@@ -177,7 +81,20 @@ def render_pdf(
     environment = create_print_environment()
     template = environment.from_string(builtin_template_source(_TEMPLATE_NAME))
     font_config = FontConfiguration()
-    base_css = CSS(string=print_base_css(), url_fetcher=asset_url_fetcher, font_config=font_config)
+    fetcher = make_asset_fetcher(
+        {LOGO_ASSET_NAME: (options.logo.content, options.logo.media_type)}
+        if options.logo is not None
+        else None
+    )
+    base_css = CSS(string=print_base_css(), url_fetcher=fetcher, font_config=font_config)
+    override_css: CSS | None = None
+    if options.font_size_pt != DEFAULT_FONT_SIZE_PT:
+        # FR-RPT-010: cỡ chữ thân bản in theo cấu hình — một override nhỏ đè
+        # lên `print_base.css`, họ font giữ nguyên token thương hiệu.
+        override_css = CSS(
+            string=f"body {{ font-size: {int(options.font_size_pt)}pt }}",
+            font_config=font_config,
+        )
 
     chunks = _chunk_display_rows(display_rows, layout_spec=layout_spec)
     first_chunk = next(chunks)
@@ -195,13 +112,20 @@ def render_pdf(
             param_lines=param_lines,
             orientation=layout_spec.page.orientation,
             columns=layout_spec.columns,
-            display_rows=_presentation_rows(iter(rows), layout_spec=layout_spec),
+            display_rows=presentation_rows(
+                iter(rows),
+                layout_spec=layout_spec,
+                quantity_decimals=options.quantity_decimals,
+            ),
             signature_date_line=signature_date_line(signature_date),
             show_title=is_first,
             show_signature=is_last,
             continued=not is_first,
+            logo_url=f"asset:{LOGO_ASSET_NAME}" if options.logo is not None else None,
         )
         stylesheets = [base_css]
+        if override_css is not None:
+            stylesheets.append(override_css)
         if not (is_first and is_last):
             stylesheets.append(
                 CSS(
@@ -212,7 +136,7 @@ def render_pdf(
                     font_config=font_config,
                 )
             )
-        document = HTML(string=html_text, url_fetcher=asset_url_fetcher, base_url="asset:")
+        document = HTML(string=html_text, url_fetcher=fetcher, base_url="asset:")
         output = document.write_pdf(stylesheets=stylesheets, font_config=font_config)
         if not isinstance(output, bytes):  # pragma: no cover - hợp đồng weasyprint
             raise TypeError("weasyprint.write_pdf không trả bytes")

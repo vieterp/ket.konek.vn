@@ -32,6 +32,7 @@ from ket.kernel.config.reports.spec import (
     parse_param_set_spec,
 )
 from ket.kernel.errors import ReportDatasetInvalidError, ReportSpecInvalidError
+from ket.kernel.periods.models import AccountingScheme
 
 _DATA_ROOT: Final = resources.files("ket.kernel.config.reports").joinpath("data")
 
@@ -79,6 +80,13 @@ class DefinitionEntry(_ManifestModel):
     layout_code: str
     param_set_code: str
     ledger_scope: str = LedgerScope.BOTH
+
+    package_scheme: str | None = None
+    """`TT99`/`TT133` — báo cáo theo mẫu thông tư thuộc gói cấu hình builtin
+    cùng scheme (`report_definitions.package_id` gán lúc gieo); `None` = không
+    phụ thuộc chế độ kế toán. Kiểm giá trị ở `load_builtin_reports` bằng chính
+    `AccountingScheme` để mã mới của một thông tư tương lai không lọt qua dưới
+    dạng chuỗi gõ nhầm."""
 
 
 class ReportManifest(_ManifestModel):
@@ -171,7 +179,14 @@ def _assert_definitions_wired(
     builtin là bộ tự đủ, không dựa vào dữ liệu đã có sẵn trong một DB nào đó."""
     datasets = {d.code: d for d in manifest.datasets}
     layouts = {layout.code for layout in manifest.layouts}
+    known_schemes = frozenset(member.value for member in AccountingScheme)
     for definition in manifest.definitions:
+        if definition.package_scheme is not None and definition.package_scheme not in known_schemes:
+            raise ReportSpecInvalidError(
+                f"Báo cáo {definition.code!r} mang package_scheme lạ: "
+                f"{definition.package_scheme!r}",
+                report_code=definition.code,
+            )
         if definition.ledger_scope not in LedgerScope.ALL:
             raise ReportSpecInvalidError(
                 f"Báo cáo {definition.code!r} mang ledger_scope lạ: {definition.ledger_scope!r}",

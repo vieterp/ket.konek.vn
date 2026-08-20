@@ -288,7 +288,7 @@ class TestReportsApi:
         *,
         output_format: str = "xlsx",
         params: dict[str, object] | None = None,
-        code: str = "SO-CAI",
+        code: str = "S03b-DN",
     ) -> bytes:
         response = client.post(
             f"/api/v1/reports/{code}/render",
@@ -330,9 +330,14 @@ class TestReportsApi:
         listing = client.get("/api/v1/reports", headers=headers)
         assert listing.status_code == 200
         codes = {item["code"] for item in listing.json()["reports"]}
-        assert "SO-CAI" in codes
+        # 8 báo cáo bộ sổ theo mã mẫu thông tư (5D); mã trung lập cũ đã bị
+        # migration 0014 thay thế.
+        assert {"S03a-DN", "S03b-DN", "S38-DN", "S06-DN"} <= codes
+        assert "SO-CAI" not in codes
+        # H2 (review 5D): dataset TT99 không phục vụ mã mẫu TT133.
+        assert not codes.intersection({"S03a-DNN", "S03b-DNN", "S19-DNN", "F01-DNN"})
 
-        params = client.get("/api/v1/reports/SO-CAI/params", headers=headers)
+        params = client.get("/api/v1/reports/S03b-DN/params", headers=headers)
         assert params.status_code == 200
         body = params.json()
         assert body["ledger_scope"] == "both"
@@ -361,7 +366,7 @@ class TestReportsApi:
             context.branch_id,
         )
         response = client.post(
-            "/api/v1/reports/SO-CAI/render",
+            "/api/v1/reports/S03b-DN/render",
             json={"format": "xlsx", "params": RANGE},
             headers=headers,
         )
@@ -393,7 +398,7 @@ class TestReportsApi:
             {**RANGE, "branch_ids": []},
         ):
             response = client.post(
-                "/api/v1/reports/SO-CAI/render",
+                "/api/v1/reports/S03b-DN/render",
                 json={"format": "xlsx", "params": params},
                 headers=headers,
             )
@@ -675,6 +680,15 @@ class TestBuiltinSeed:
         scope = posting_scope(report_dataset, context, user_id=ACTOR_ID)
         with unit_of_work(session_factory, scope) as session:
             codes = set(session.scalars(select(ReportDefinition.code)))
-            assert "SO-CAI" in codes
+            assert {
+                "S03a-DN",
+                "S03b-DN",
+                "S38-DN",
+                "S06-DN",
+                "S03a-DNN",
+                "S03b-DNN",
+                "S19-DNN",
+                "F01-DNN",
+            } <= codes
             dataset = session.get(ReportDataset, "gl_ledger")
             assert dataset is not None and dataset.is_builtin

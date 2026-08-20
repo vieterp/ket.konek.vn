@@ -102,6 +102,9 @@ def test_the_exemption_list_is_exactly_what_was_reviewed() -> None:
             "/api/v1/system/users/{user_id}/roles",
             "/api/v1/system/users/{user_id}/branches",
             "/api/v1/jobs",
+            # Lát 5D: in chứng từ — in lần 2 là sự kiện thật mà FR-RPT-011 đếm
+            # (`copy_no` + cảnh báo), khử trùng lặp sẽ nói dối số lần in.
+            "/api/v1/vouchers/{voucher_id}/print",
         }
     )
     # Cơ chế thứ ba, thêm ở lát 3C-1. Ghim nó ở đây vì chính docstring bên trên

@@ -41,6 +41,18 @@ loại chứng từ hay mã chi nhánh, nên khóa phân tách ngược lại đ
 đoán — và hai phạm vi khác nhau không bao giờ ghép ra cùng một chuỗi."""
 
 
+def _has_year_token(text: str) -> bool:
+    return "{YYYY}" in text or "{YY}" in text
+
+
+def _expand_year_tokens(text: str, *, on_date: date) -> str:
+    """`{YYYY}`/`{YY}` → năm dương lịch của chu kỳ (docstring `ResetRule.YEARLY`
+    giải thích vì sao là năm dương lịch, không phải niên độ)."""
+    return text.replace("{YYYY}", f"{on_date.year:04d}").replace(
+        "{YY}", f"{on_date.year % 100:02d}"
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class NumberingRule:
     """Quy tắc đánh số của một loại chứng từ (FR-SYS-063).
@@ -49,6 +61,12 @@ class NumberingRule:
     định nghĩa loại chứng từ, mà định nghĩa đó là dữ liệu cấu hình của gói
     TT99/TT133 (phase 5). Nhận từ ngoài vào giữ cho `kernel.numbering` không
     phải biết loại chứng từ nào tồn tại — đúng luật phụ thuộc #5.
+
+    `prefix`/`suffix` nhận token năm `{YYYY}`/`{YY}` (lát 5D, trả nợ 4D): dãy
+    reset theo năm mà số KHÔNG mang năm sẽ cấp lại `GLE00001` vào tháng 1 năm
+    sau và chết ở `uq_vouchers_type_branch_no` (duy nhất theo loại+chi nhánh+số,
+    không có chiều năm). Token bung lúc TẠO DÒNG BỘ ĐẾM của chu kỳ (xem
+    `_define`) — mỗi chu kỳ một dòng, định dạng đóng băng cùng dòng đó.
     """
 
     document_type: str
@@ -58,6 +76,16 @@ class NumberingRule:
     allow_gaps: bool = True
     reset_rule: ResetRule = ResetRule.YEARLY
     per_branch: bool = True
+
+    def __post_init__(self) -> None:
+        # Token năm trong một dãy KHÔNG reset theo năm là định dạng nói dối:
+        # số "GLE26-00123" cấp năm 2027 vì dãy đóng băng năm lúc tạo. Chặn ở
+        # chỗ khai quy tắc — nơi duy nhất sửa được.
+        if self.reset_rule is not ResetRule.YEARLY and _has_year_token(self.prefix + self.suffix):
+            raise ValueError(
+                "Token {YYYY}/{YY} chỉ dùng được với reset_rule YEARLY "
+                f"(quy tắc của {self.document_type} đang là {self.reset_rule.value})"
+            )
 
     def scope_key(self, *, branch_id: int | None, on_date: date) -> str:
         """Khóa phạm vi của dãy số áp dụng cho chứng từ này.
@@ -99,7 +127,9 @@ class NumberingService:
         `allocate_by_scope_key`.
         """
         scope_key = rule.scope_key(branch_id=branch_id, on_date=on_date)
-        sequence = self._lock_sequence(scope_key) or self._define_or_relock(rule, scope_key)
+        sequence = self._lock_sequence(scope_key) or self._define_or_relock(
+            rule, scope_key, on_date=on_date
+        )
         return self._issue(sequence, document_id=document_id)
 
     def allocate_by_scope_key(self, scope_key: str, *, document_id: UUID) -> str:
@@ -121,7 +151,9 @@ class NumberingService:
         self, rule: NumberingRule, *, branch_id: int | None, on_date: date
     ) -> NumberSequence:
         """Khai trước dãy số cho một chu kỳ — dùng khi gieo dữ liệu và khi cấu hình."""
-        return self._define(rule, scope_key=rule.scope_key(branch_id=branch_id, on_date=on_date))
+        return self._define(
+            rule, scope_key=rule.scope_key(branch_id=branch_id, on_date=on_date), on_date=on_date
+        )
 
     def peek(self, scope_key: str) -> int | None:
         """Giá trị kế tiếp **không** khóa dòng — chỉ để hiển thị.
@@ -156,7 +188,9 @@ class NumberingService:
         self._session.flush()
         return number
 
-    def _define_or_relock(self, rule: NumberingRule, scope_key: str) -> NumberSequence:
+    def _define_or_relock(
+        self, rule: NumberingRule, scope_key: str, *, on_date: date
+    ) -> NumberSequence:
         """Tạo dòng bộ đếm cho chu kỳ mới, chịu được hai người cùng tạo.
 
         Cuộc đua này có thật và xảy ra vào đúng lúc đông người nhất: sáng ngày
@@ -173,7 +207,7 @@ class NumberingService:
         """
         try:
             with self._session.begin_nested():
-                return self._define(rule, scope_key=scope_key)
+                return self._define(rule, scope_key=scope_key, on_date=on_date)
         except IntegrityError:
             sequence = self._lock_sequence(scope_key)
             if sequence is None:
@@ -198,12 +232,14 @@ class NumberingService:
             .first()
         )
 
-    def _define(self, rule: NumberingRule, *, scope_key: str) -> NumberSequence:
+    def _define(self, rule: NumberingRule, *, scope_key: str, on_date: date) -> NumberSequence:
+        # Token năm bung Ở ĐÂY — định dạng đóng băng cùng dòng bộ đếm của chu
+        # kỳ, đúng nguyên tắc "định dạng đọc từ dòng bộ đếm" của `_issue`.
         sequence = NumberSequence(
             scope_key=scope_key,
             document_type=rule.document_type,
-            prefix=rule.prefix,
-            suffix=rule.suffix,
+            prefix=_expand_year_tokens(rule.prefix, on_date=on_date),
+            suffix=_expand_year_tokens(rule.suffix, on_date=on_date),
             padding=rule.padding,
             allow_gaps=rule.allow_gaps,
             reset_rule=rule.reset_rule.value,

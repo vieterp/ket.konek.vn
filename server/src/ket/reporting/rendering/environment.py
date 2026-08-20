@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from importlib import resources
 from typing import Final
 
@@ -60,16 +61,38 @@ def builtin_template_source(name: str) -> str:
     return _TEMPLATES_ROOT.joinpath(name).read_text("utf-8")
 
 
-def asset_url_fetcher(url: str) -> URLFetcherResponse:
-    """`url_fetcher` cho WeasyPrint — chỉ phục vụ `asset:<tên-đã-đăng-ký>`."""
-    if not url.startswith(ASSET_SCHEME):
-        raise ValueError(f"Tài nguyên ngoài allowlist bị từ chối: {url!r}")
-    name = url[len(ASSET_SCHEME) :].lstrip("/")
-    if name not in _ALLOWED_ASSETS:
-        raise ValueError(f"Tài nguyên `asset:` chưa đăng ký: {name!r}")
-    payload = _ASSETS_ROOT.joinpath(name).read_bytes()
-    suffix = name[name.rfind(".") :]
-    return URLFetcherResponse(url, body=payload, headers={"content-type": _MIME_BY_SUFFIX[suffix]})
+def make_asset_fetcher(
+    extra: Mapping[str, tuple[bytes, str]] | None = None,
+) -> Callable[[str], URLFetcherResponse]:
+    """`url_fetcher` cho WeasyPrint — chỉ phục vụ `asset:<tên-đã-đăng-ký>`.
+
+    `extra` là tài nguyên THEO-LƯỢT-RENDER đã đọc sẵn vào RAM (logo đơn vị,
+    FR-RPT-010): tên → `(nội dung, content-type)`. Vẫn là allowlist đóng —
+    chỉ những tên người GỌI render đăng ký tường minh, không có đường nào từ
+    template thêm tên vào; mọi URL ngoài hai danh sách từ chối như cũ.
+    """
+    extra_assets = dict(extra) if extra else {}
+
+    def fetch(url: str) -> URLFetcherResponse:
+        if not url.startswith(ASSET_SCHEME):
+            raise ValueError(f"Tài nguyên ngoài allowlist bị từ chối: {url!r}")
+        name = url[len(ASSET_SCHEME) :].lstrip("/")
+        if name in extra_assets:
+            payload, media_type = extra_assets[name]
+            return URLFetcherResponse(url, body=payload, headers={"content-type": media_type})
+        if name not in _ALLOWED_ASSETS:
+            raise ValueError(f"Tài nguyên `asset:` chưa đăng ký: {name!r}")
+        payload = _ASSETS_ROOT.joinpath(name).read_bytes()
+        suffix = name[name.rfind(".") :]
+        return URLFetcherResponse(
+            url, body=payload, headers={"content-type": _MIME_BY_SUFFIX[suffix]}
+        )
+
+    return fetch
+
+
+asset_url_fetcher: Final = make_asset_fetcher()
+"""Fetcher không tài nguyên theo-lượt — đường dùng của CSS/spike/test sẵn có."""
 
 
 def print_base_css() -> str:

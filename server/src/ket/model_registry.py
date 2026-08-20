@@ -27,6 +27,7 @@ from ket.kernel.auditing import control_log as control_audit_models
 from ket.kernel.auditing import models as auditing_models
 from ket.kernel.bank_import import profile_models as bank_import_models
 from ket.kernel.config import accounts_models
+from ket.kernel.config.printing import models as print_template_models
 from ket.kernel.config.reports import models as report_models
 from ket.kernel.config.statements import models as statement_models
 from ket.kernel.currency import models as currency_models
@@ -60,6 +61,7 @@ from ket.posting.opening_balances import models as opening_balance_models
 # (cùng cơ chế `posting.periods`).
 from ket.reporting import engine as report_permission_registration
 from ket.reporting import statements as statement_permission_registration
+from ket.reporting.printing import models as print_log_models
 
 __all__ = [
     "ControlBase",
@@ -86,6 +88,8 @@ __all__ = [
     "opening_balance_models",
     "period_models",
     "periods_registration",
+    "print_log_models",
+    "print_template_models",
     "report_models",
     "report_permission_registration",
     "security_models",

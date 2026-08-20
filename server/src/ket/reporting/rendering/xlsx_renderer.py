@@ -32,14 +32,23 @@ from ket.reporting.engine.grouping import (
     GroupHeader,
 )
 from ket.reporting.rendering.header import UnitInfo
+from ket.reporting.rendering.options import DEFAULT_RENDER_OPTIONS, RenderOptions
 
 _MONEY_FORMAT = "#,##0"
 """VND không phần lẻ theo quy ước sổ sách; định dạng số theo cấu hình người
 dùng (FR-RPT-012) vào ở 5D cùng nhóm cấu hình font/logo — giá trị ô vẫn giữ
 nguyên phần lẻ, chỉ hiển thị bị làm tròn."""
 
-_QUANTITY_FORMAT = "#,##0.00"
 _DATE_FORMAT = "dd/mm/yyyy"
+
+
+def _quantity_format(decimals: int) -> str:
+    """`num_format` cột số lượng theo cấu hình FR-RPT-012 — giá trị ô giữ
+    nguyên phần lẻ, chỉ hiển thị đổi."""
+    if decimals <= 0:
+        return "#,##0"
+    return "#,##0." + "0" * decimals
+
 
 _COLUMN_CHARS_NUMERATOR = 7
 _COLUMN_CHARS_DENOMINATOR = 5
@@ -48,7 +57,7 @@ nguyên vì ADR-015 cấm literal `float` trong `src/ket`, kể cả ngoài mi�
 
 
 class _Styles:
-    def __init__(self, workbook: xlsxwriter.Workbook) -> None:
+    def __init__(self, workbook: xlsxwriter.Workbook, *, quantity_decimals: int) -> None:
         self.title = workbook.add_format({"bold": True, "font_size": 14, "font_color": "#1B365D"})
         self.unit_name = workbook.add_format({"bold": True})
         self.param = workbook.add_format({"italic": True, "font_color": "#475569"})
@@ -70,7 +79,9 @@ class _Styles:
             {**base_cell, "num_format": _DATE_FORMAT, "align": "center"}
         )
         self.money = workbook.add_format({**base_cell, "num_format": _MONEY_FORMAT})
-        self.quantity = workbook.add_format({**base_cell, "num_format": _QUANTITY_FORMAT})
+        self.quantity = workbook.add_format(
+            {**base_cell, "num_format": _quantity_format(quantity_decimals)}
+        )
         self.group_header = workbook.add_format(
             {**base_cell, "bold": True, "bg_color": "#EEF2F7", "font_color": "#1B365D"}
         )
@@ -96,6 +107,7 @@ def render_xlsx(
     param_lines: tuple[str, ...],
     layout_spec: LayoutSpec,
     display_rows: Iterator[DisplayRow],
+    options: RenderOptions = DEFAULT_RENDER_OPTIONS,
 ) -> bytes:
     """Một báo cáo dạng bảng/nhóm → tệp .xlsx (một sheet, tiêu đề + bảng)."""
     buffer = io.BytesIO()
@@ -104,7 +116,7 @@ def render_xlsx(
         {"constant_memory": True, "in_memory": False, "default_date_format": _DATE_FORMAT},
     )
     try:
-        styles = _Styles(workbook)
+        styles = _Styles(workbook, quantity_decimals=options.quantity_decimals)
         worksheet = workbook.add_worksheet("Báo cáo")
         columns = layout_spec.columns
         _set_column_widths(worksheet, columns)

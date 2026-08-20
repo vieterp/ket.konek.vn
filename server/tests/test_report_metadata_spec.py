@@ -160,10 +160,33 @@ class TestBuiltinManifest:
     def test_builtin_reports_load_and_are_self_contained(self) -> None:
         loaded = load_builtin_reports()
         codes = {d.code for d in loaded.manifest.definitions}
-        assert "SO-CAI" in codes
+        # 8 báo cáo bộ sổ theo đúng mã mẫu thông tư (5D — đóng câu hỏi mở #1
+        # của 5C: mã trung lập `SO-CAI` thay bằng `S03b-DN`).
+        assert {
+            "S03a-DN",
+            "S03b-DN",
+            "S38-DN",
+            "S06-DN",
+            "S03a-DNN",
+            "S03b-DNN",
+            "S19-DNN",
+            "F01-DNN",
+        } <= codes
+        assert "SO-CAI" not in codes
         for entry in loaded.manifest.datasets:
             placeholders = sql_placeholders(loaded.sql_by_dataset[entry.code])
             assert placeholders <= frozenset(entry.allowed_params)
+
+    def test_builtin_dataset_count_stays_under_phase_cap(self) -> None:
+        """Trần ≤5 dataset cho 10 báo cáo đầu (phase-05 §Chiến lược quy mô)."""
+        loaded = load_builtin_reports()
+        assert len(loaded.manifest.datasets) <= 5
+
+    def test_scheme_bound_definitions_declare_known_scheme(self) -> None:
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        assert by_code["S03b-DN"].package_scheme == "TT99"
+        assert by_code["F01-DNN"].package_scheme == "TT133"
 
     def test_builtin_extra_params_are_not_standard(self) -> None:
         loaded = load_builtin_reports()

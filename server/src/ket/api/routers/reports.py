@@ -22,17 +22,33 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response
 
-from ket.api.dependencies import AuthorizedRequest, SessionFactory, require_permission
+from ket.api.dependencies import (
+    AppSettings,
+    AuthorizedRequest,
+    SessionFactory,
+    require_permission,
+)
+from ket.api.render_options import build_render_options
 from ket.api.routers.reports_schemas import (
+    PreviewCellResponse,
+    PreviewColumnResponse,
+    PreviewRowResponse,
     ReportListResponse,
     ReportParamFieldResponse,
     ReportParamsResponse,
+    ReportPreviewRequest,
+    ReportPreviewResponse,
     ReportRenderRequest,
     ReportSummaryResponse,
 )
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.reporting.engine import REPORT_EXPORT, REPORT_VIEW
-from ket.reporting.engine.engine import list_definitions, render_report, resolve_definition
+from ket.reporting.engine.engine import (
+    list_definitions,
+    preview_report,
+    render_report,
+    resolve_definition,
+)
 
 router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
 
@@ -86,6 +102,53 @@ def get_report_params(
         )
 
 
+@router.post("/{code}/preview", response_model=ReportPreviewResponse)
+def preview(
+    authorized: ReportViewer,
+    factory: SessionFactory,
+    settings: AppSettings,
+    code: str,
+    body: ReportPreviewRequest,
+) -> ReportPreviewResponse:
+    """Xem trước dạng lưới (bước 14, FR-RPT-001) — quyền `view`, không cần
+    `export`: xem một báo cáo trên màn hình và mang được tệp ra ngoài là hai ô
+    khác nhau trong ma trận phân quyền. Ô đã định dạng sẵn phía server bằng
+    chính pha chữ của bản in; lưới cắt ở trần `PREVIEW_MAX_ROWS` (cờ
+    `truncated`) — đường lấy đủ là XLSX."""
+    with unit_of_work(factory, authorized.scope) as session:
+        options = build_render_options(
+            session,
+            settings=settings,
+            dataset_schema=authorized.scope.dataset_schema,
+            user_id=authorized.scope.user_id,
+            include_logo=False,
+        )
+        result = preview_report(session, code=code, raw_params=body.params, options=options)
+        return ReportPreviewResponse(
+            code=result.code,
+            name=result.name,
+            param_lines=list(result.param_lines),
+            columns=[
+                PreviewColumnResponse.model_validate(column, from_attributes=True)
+                for column in result.layout_spec.columns
+            ],
+            rows=[
+                PreviewRowResponse(
+                    kind=row["kind"],
+                    heading=row.get("heading"),
+                    label_span=row.get("label_span"),
+                    cells=(
+                        [PreviewCellResponse(**cell) for cell in row["cells"]]
+                        if "cells" in row
+                        else None
+                    ),
+                )
+                for row in result.rows
+            ],
+            truncated=result.truncated,
+        )
+
+
 @router.post(
     "/{code}/render",
     # `Response` chứ không `StreamingResponse` — cùng lý do `routers/exports.py`:
@@ -107,17 +170,25 @@ def get_report_params(
 def render(
     authorized: ReportExporter,
     factory: SessionFactory,
+    settings: AppSettings,
     code: str,
     body: ReportRenderRequest,
 ) -> Response:
     """Kết xuất một báo cáo (FR-RPT-006). Số liệu chạy trong phạm vi RLS của
     người gọi; `branch_ids` chỉ thu hẹp thêm (BR-RPT-04/05)."""
     with unit_of_work(factory, authorized.scope) as session:
+        options = build_render_options(
+            session,
+            settings=settings,
+            dataset_schema=authorized.scope.dataset_schema,
+            user_id=authorized.scope.user_id,
+        )
         rendered = render_report(
             session,
             code=code,
             output_format=body.format,
             raw_params=body.params,
+            options=options,
             # Ngày lập trên khối chữ ký — theo giờ ĐỊA PHƯƠNG của server (bản
             # in tại Việt Nam ghi ngày Việt Nam, không lùi một ngày lúc sáng sớm).
             today=datetime.now(UTC).astimezone().date(),

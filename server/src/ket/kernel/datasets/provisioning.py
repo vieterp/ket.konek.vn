@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ket.kernel.config.packages.seed import ensure_builtin_packages
+from ket.kernel.config.printing.seed import ensure_builtin_print_templates
 from ket.kernel.config.reports.seed import ensure_builtin_reports
 from ket.kernel.datasets.models import Dataset
 from ket.kernel.datasets.naming import (
@@ -240,6 +241,10 @@ def provision_dataset(
         # engine trên schema vừa migrate, nên nó phải đứng sau khi mọi bảng
         # gốc (gl_postings, vouchers, chart_of_accounts) đã có mặt.
         ensure_builtin_reports(connection, schema)
+        # Mẫu in chứng từ builtin (FR-RPT-008) — sau gói cấu hình vì mẫu theo
+        # thông tư (tương lai) sẽ gắn `package_id`; idempotent theo từng dòng
+        # nên chạy lại sau `0014` (nơi cũng gieo) là vô hại.
+        ensure_builtin_print_templates(connection, schema)
 
     try:
         with Session(owner_engine) as session, session.begin():

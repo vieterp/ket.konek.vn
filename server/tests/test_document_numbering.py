@@ -218,3 +218,28 @@ def test_the_ledger_refuses_a_duplicate_number_for_the_same_scope(
         with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
             session.add(AllocatedNumber(scope_key=scope_key, number=number, document_id=uuid4()))
             session.flush()
+
+
+def test_a_year_token_puts_the_year_into_the_number_so_cycles_never_collide(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
+) -> None:
+    """Trả nợ 4D (lát 5D): dãy YEARLY với `{YY}` trong tiền tố — hai năm cùng
+    quay về 1 nhưng số khác nhau, nên `uq_vouchers_type_branch_no` (không có
+    chiều năm) không bao giờ bị đụng."""
+    rule = NumberingRule(
+        document_type="gl.journal.token",
+        prefix="GLE{YY}-",
+        # Suffix cũng bung token (review 5D, L1) — cùng chu kỳ với prefix.
+        suffix="/{YYYY}",
+        reset_rule=ResetRule.YEARLY,
+    )
+    with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
+        service = NumberingService(session)
+        first_2026 = service.allocate(
+            rule, branch_id=61, on_date=date(2026, 12, 31), document_id=uuid4()
+        )
+        first_2027 = service.allocate(
+            rule, branch_id=61, on_date=date(2027, 1, 1), document_id=uuid4()
+        )
+    assert first_2026 == "GLE26-00001/2026"
+    assert first_2027 == "GLE27-00001/2027"

@@ -175,3 +175,26 @@ td.cell-left {
   margin-top: 6mm;
   font-size: 9pt;
 }
+
+/* Kiểm soát in chứng từ (FR-RPT-011, lát 5D) */
+.print-watermark {
+  position: fixed;
+  top: 40%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  transform: rotate(-24deg);
+  font-size: 28pt;
+  font-weight: 700;
+  color: rgba(27, 54, 93, 0.14);
+  letter-spacing: 2pt;
+}
+.print-copy-note {
+  color: #b45309;
+  font-weight: 600;
+}
+.unit-logo {
+  max-height: 14mm;
+  max-width: 40mm;
+  margin-bottom: 2mm;
+}

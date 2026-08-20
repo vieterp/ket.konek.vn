@@ -36,18 +36,19 @@ from ket.posting.contracts import (
 )
 
 JOURNAL_NUMBERING_RULE = NumberingRule(
-    document_type=JOURNAL_DOCUMENT_TYPE, prefix="GLE", reset_rule=ResetRule.NEVER
+    document_type=JOURNAL_DOCUMENT_TYPE, prefix="GLE{YY}-", reset_rule=ResetRule.YEARLY
 )
-"""Quy tắc đánh số mặc định. Từ phase 5 quy tắc là dữ liệu của gói cấu hình
-(FR-SYS-063) và sẽ được tra thay vì hằng này — chữ ký `create` đã nhận rule
-từ ngoài nên chỗ đổi khu trú ở đây.
+"""Quy tắc đánh số mặc định — `GLE26-00001`, quay về 1 mỗi năm dương lịch.
 
-`NEVER` chứ không `YEARLY` (phát hiện ở 4D khi test chạy nhiều niên độ):
-`uq_vouchers_type_branch_no` duy nhất theo (loại, chi nhánh, số) **không có
-chiều năm**, nên một dãy reset hằng năm sẽ cấp lại `GLE00001` vào tháng 1 năm
-sau và chứng từ đầu tiên của năm mới chết bằng lỗi trùng khóa. Đánh số lại
-theo năm quay lại ở phase 5, khi định dạng số (do gói cấu hình quyết) mang
-được thành phần năm — còn một dãy chạy suốt thì không bao giờ đụng ràng buộc."""
+Trả nợ 4D ở lát 5D: 4D phải hạ về `NEVER` vì dãy reset năm sẽ cấp lại
+`GLE00001` vào tháng 1 năm sau và chết ở `uq_vouchers_type_branch_no` (không
+có chiều năm). Nay token `{YY}` đưa năm vào CHÍNH số chứng từ (bung lúc tạo
+dòng bộ đếm của chu kỳ — `kernel.numbering.service._define`), nên hai năm
+không bao giờ ghép ra cùng một số và ràng buộc cũ giữ nguyên.
+
+Vẫn là hằng mã nguồn: quy tắc đánh số thành dữ liệu cấu hình (FR-SYS-063) đi
+cùng định nghĩa loại chứng từ của gói khi phase 6 nhân ra phiếu thu/chi —
+chữ ký `create` đã nhận rule từ ngoài nên chỗ đổi khu trú ở đây."""
 
 
 class JournalVoucherService:
