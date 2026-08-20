@@ -16,7 +16,7 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 
 ---
 
-## 1b. Trạng thái hiện thực hóa (2026-08-19)
+## 1b. Trạng thái hiện thực hóa (2026-08-20)
 
 | Thành phần | Trạng thái |
 | --- | --- |
@@ -26,6 +26,8 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | Migration `0003` — 15 bảng danh mục + 2 bảng chiều phân tích | ✅ chạy thật (3B-1) |
 | Migration `0004` — Hai danh mục mới: `partners` (14 cột) + `employees` (9 cột) + bảng con `partner_bank_accounts` | ✅ chạy thật (3B-2) |
 | Migration `0005` — Danh mục vật tư `items` (4 cột riêng: `nature`, `base_unit_id`, `warehouse_id`, `description`) + hai bảng con: `item_units` (quy đổi **phẳng** về đơn vị chính) + `item_variants` (mã quy cách — trục khóa của bảng tồn kho phase 8); `NUMERIC(20,6)` cho số lượng + tỷ lệ | ✅ chạy thật (3B-3) |
+| Migration `0011` — `statement_layouts` + `statement_rows` (layout BCTC + dòng chỉ tiêu, khóa `(package_id, code)`/`(layout_id, row_code)`, không RLS, gói cấu hình chứ không per-dữ-liệu) | ✅ chạy thật (5B) |
+| **Formula engine & statement builder (lát 5B)** — `ket.kernel.config.statements` (grammar 7 hàm, evaluator tô-pô, account range), `ket.reporting.statements` (builder lấy `opening_balances`+`gl_postings` — KHÔNG snapshot, API `/api/v1/statements` + `/api/v1/statements/{layout_code}/preview`, quyền `reporting.statement.view`, layout giải quyết qua `resolve_package(scheme, cuối_kỳ)`) | ✅ chạy thật (5B) |
 | RLS cô lập chi nhánh theo GUC `ket.branch_ids` | ✅ chạy thật (trên `audit_log`, `jobs`, `attachments`). **Danh mục cố ý KHÔNG bật RLS** — `branch_id IS NULL` = dùng chung toàn công ty (FR-SYS-018), mà policy chi nhánh sẽ giấu đúng những dòng đó; lọc theo chi nhánh nằm ở `MasterDataService._visible_to` + tầng HTTP (H39) |
 | Nhật ký bất biến ghi cùng transaction | ✅ chạy thật |
 | `ket.kernel.money` — Decimal, ROUND_HALF_UP | ✅ chạy thật |
@@ -483,6 +485,8 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | `audit_log` | Nhật ký bất biến (người, hành động, giá trị trước–sau) | 2 | `ket_owner` |
 | `attachments` | Metadata tệp đính kèm (`entity_type`+`entity_id`, `content_hash`, `branch_id`, `detached_at`). Nội dung nằm ngoài DB | 2 | `kernel` |
 | `config_packages` | Gói cấu hình pháp lý (TT99/TT133, hiệu lực từ…) | 5 | `kernel` |
+| `statement_layouts` | Layout BCTC metadata (mã layout, BCTC loại, chiều dài cột) — **không RLS, cấu hình toàn dataset như 0009/0010** | 5 | `kernel` |
+| `statement_rows` | Dòng chỉ tiêu BCTC (chỉ tiêu, công thức 7 hàm, ghi chú quyết định) — **không RLS** | 5 | `kernel` |
 | `report_definitions` | Báo cáo metadata (layout, tham số, query) | 5 | `reporting` |
 | `number_sequences` | Bộ đếm đánh số chứng từ (`scope_key` gói cả chi nhánh + chu kỳ reset) | 2 (bảng), 3 (cấp số) | `kernel` |
 | `allocated_numbers` | Sổ cấp số: số nào đã cấp cho chứng từ nào. Chỉ ghi cho dãy **liên tục** (hóa đơn) — `UNIQUE (scope_key, number)` là hàng rào cuối nếu một đường ghi ở phase sau quên đi qua dịch vụ (RT-10) | 3 | `kernel` |

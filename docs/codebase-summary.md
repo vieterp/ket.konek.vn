@@ -1,6 +1,8 @@
 # Tóm tắt mã nguồn — Konek Két
 
-**Cập nhật:** 2026-08-18 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); phase 3 xong lát 3A + 3B-1 + 3B-2 + 3B-3 (registry + 20 danh mục + 2 bảng con vật tư + chiều phân tích + gộp bản ghi + ba cơ chế chung).
+**Cập nhật:** 2026-08-20 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); **phase 3 xong**; **phase 4 xong** (posting engine, sổ cái hai sổ, số dư ban đầu, khóa kỳ, toàn vẹn); phase 5 xong lát 5A (gói cấu hình TT99/TT133) + 5B (formula engine + layout BCTC + statement builder).
+
+> ⚠️ **Nợ tài liệu:** mục 1–2 và 5 dưới đây mới được cập nhật tới lát 5B ở những chỗ 5B chạm vào; **phần mô tả chi tiết phase 4 và lát 5A chưa được viết lại** (tài liệu này đứng ở mốc 2026-08-18 trước đó). Cần một lượt refresh riêng.
 
 Tài liệu này mô tả **thứ đang có thật trong repo**. Kiến trúc đích của cả v1
 nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó chưa dựng.
@@ -9,15 +11,16 @@ nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó ch�
 
 ## 1. Đang có gì
 
-`server/src/ket` ≈ **5.400 dòng Python**, tất cả là **hạ tầng**: định tuyến dữ
-liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính. **Chưa có một
-nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, không báo cáo.
+`server/src/ket` ≈ **40.700 dòng Python**: **hạ tầng** (định tuyến dữ
+liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **posting engine + sổ cái hai sổ** (phase 4), **gói cấu hình TT99/TT133** (5A), **formula engine & statement builder** (5B). **Chưa có** các module nghiệp vụ (quỹ/ngân hàng/mua/bán/kho/lương/thuế — phase 6–9).
 
 | Có thật | Chưa có |
 | --- | --- |
-| Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | Bảng chứng từ / `gl_postings` / số dư |
-| **RBAC tới cấp `{module}.{chứng từ}.{hành vi}`** + `require_permission`, **định tuyến dataset theo header `X-Dataset`**, phạm vi chi nhánh cho RLS | Bảng chứng từ / `gl_postings` / số dư |
-| **Idempotency cùng transaction** (giành khóa → làm việc → điền kết quả), **khóa lạc quan `row_version`**, **tùy chọn hai cấp**, **hạn mức request** | Bảng chứng từ / `gl_postings` / số dư |
+| Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | Module quỹ / ngân hàng (phase 6) |
+| **RBAC tới cấp `{module}.{chứng từ}.{hành vi}`** + `require_permission`, **định tuyến dataset theo header `X-Dataset`**, phạm vi chi nhánh cho RLS | Mua / bán / công nợ / HĐĐT (phase 7) |
+| **Idempotency cùng transaction** (giành khóa → làm việc → điền kết quả), **khóa lạc quan `row_version`**, **tùy chọn hai cấp**, **hạn mức request** | Kho / CCDC / TSCĐ (phase 8), thuế / lương / giá thành (phase 9) |
+| **Formula engine** (lát 5B) — `ket.kernel.config.statements.formula`: parser (lexer + đệ quy xuống), account range (khớp tiền tố), evaluator (tô-pô) cho 7 hàm (`DR`/`CR`/`BAL`/`DR_PS`/`CR_PS`/`DR_NET`/`CR_NET`) | B03/LCTT (hoãn 10a — cần phát sinh đối ứng) |
+| **Statement builder** (lát 5B) — `ket.reporting.statements`: lấy số từ `opening_balances` + `gl_postings` (**không** snapshot), lập BCTC theo layout, API + quyền `reporting.statement.view` | Report engine chung + renderer PDF/XLSX (5C–5D) |
 | **Sổ đăng ký danh mục** — `CatalogRegistry` + `CatalogSpec` (slug, model, extra_fields, flags, references); **router sinh tự động từ registry** — 7 thao tác/danh mục (GET danh sách/một, POST/PUT/DELETE/chuyển nhánh, gộp bản ghi), 190 operation tổng; phạm vi chi nhánh trong cấu trúc; `CatalogFlag` (bộ lọc `?flag=` theo cột boolean); `CatalogReference` (kiểm khóa ngoại sang danh mục khác từ DB lúc chạy) | — |
 | **Ba cơ chế chung** — `merge_hooks` (số nhiều, từ chối/chuẩn bị gộp bản ghi), `extra_update_fields` (trường chốt một lần), `update_guard` (luật liên-trường ở đường sửa) | Lát 3B-3: người dùng thứ nhất là vật tư, bảng con đơn vị quy đổi + mã quy cách |
 | **20 danh mục** — 15 danh mục lát 3B-1 + 2 chiều lõi lát 3A + `partners`/`employees` lát 3B-2 + `items` lát 3B-3: `projects`, `project_types`, `contracts`, `warehouses`, `units_of_measure`, `asset_types`, `tool_types`, `payment_terms`, `banks`, `timekeeping_symbols`, `document_types`, `invoice_forms`, `pit_tables`, `excise_tax_tables`, `resource_tax_tables`, `partners`, `employees`, `cost_objects`, `expense_items`, `items` | Dòng 4–6 của SRS §1–2 hoãn tới phase 5/7/9 |
@@ -55,6 +58,8 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | `kernel/datasets/` | `naming` (trần 60→56 ký tự), `models` (schema điều khiển), **`bootstrap` (`ensure_control_schema`, `ensure_dataset_roles`, `ensure_cluster`), `provisioning` (`assert_dataset_role_administrable`)**, `service` | Tạo/định tuyến dữ liệu kế toán |
 | `kernel/idempotency/` | `models` + **`service` (`execute_once`: giành khóa → làm việc → điền kết quả, tất cả trong một transaction)** | Thêm endpoint POST đổi trạng thái |
 | `kernel/config/` | **`catalog` (danh mục khóa tùy chọn, đóng), `settings_service` (phân giải user → system → mặc định)** | Thêm một tùy chọn cấu hình |
+| `kernel/config/statements/` | **`formula/` (parser + account_range + evaluator), `models` (`StatementLayout`, `StatementRow`), fail-closed loader cho gói cấu hình** — grammar 7 hàm, kiểm công thức + rowref + chu trình + TK khớp | Thêm hàm công thức, kiểm schema layout mới |
+| `reporting/statements/` | **`builder.py` (builder BCTC từ `opening_balances`+`gl_postings`), `balance_source.py` (SQL trực tiếp, không snapshot), `models`, API `/api/v1/statements`** | Thêm cột layout, loại báo cáo mới |
 | `kernel/persistence/versioning.py` | **Mixin `RowVersioned` + `require_row_version`** — khóa lạc quan hai lớp | Bảng người dùng sửa qua form |
 | `kernel/jobs/` | `models` (bảng `jobs`, `ResumeSemantics`, `JobStatus`), **`registry` (loại job + quyền + semantics), `queue` (giành job), `reaper` (dọn mồ côi), `builtin` (ba loại job mẫu)** | Thêm loại job mới, chạm job metadata |
 | `kernel/numbering/` | `models` (`number_sequences` + sổ cấp số `allocated_numbers`, `ResetRule`), **`service` (`NumberingRule` + `NumberingService`: `FOR UPDATE` trong transaction của người gọi, nên rollback trả lại số)** | Cấp số chứng từ, đổi quy tắc đánh số |
@@ -71,7 +76,8 @@ nghiệp vụ kế toán nào** — không chứng từ, không sổ cái, khôn
 | `api/routers/dimensions` | **API `/api/v1/dimensions`** — đọc chiều + cây giá trị, khai chiều mới, thêm giá trị (chưa có sửa/xóa; UI người dùng cuối hoãn v1.1 theo RT-20) | Chiều mở rộng, giá trị mới |
 | `api/routers/jobs` | **API `/api/v1/jobs/{types,list,detail,cancel}`** + schema request/response | Thêm loại job, đổi hợp đồng |
 | `worker/` | **`__main__.py` (điểm vào `python -m ket.worker`), `runner` (vòng lặp), `progress` (tiến độ + hủy), `contracts`** | Đổi cơ chế giành/chạy job |
-| `modules/*`, `posting/`, `reporting/` | Chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase sau | — |
+| `posting/` | **Phase 4 (chưa mô tả chi tiết ở tài liệu này)** — `engine/` (`gl_postings`, validator, `PostingService`), `documents/`, `balances/` (snapshot + recalc + bảng cân đối), `opening_balances/`, `periods/` (khóa kỳ), `integrity/` | Ghi sổ, số dư, khóa kỳ |
+| `modules/*` | `general_ledger/journal/` đã có (phase 4); còn lại chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase 6–9 | — |
 
 ### Ngoài server
 
@@ -203,7 +209,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 
 ---
 
-## 5. Bộ test (**922 case**: 541 cần PostgreSQL 16, 381 không) — lát 3B-1 tăng 145 test; lát 3B-2 tăng 104 test; lát 3B-3 tăng 49 test
+## 5. Bộ test (**1.522 case**: 886 cần PostgreSQL 16, 636 không) — lát 3B-1 tăng 145 test; lát 3B-2 tăng 104 test; lát 3B-3 tăng 49 test; lát 5B tăng ~57 test (formula + loader + builder API)
 
 | Tệp | Chứng minh điều gì |
 | --- | --- |
@@ -245,8 +251,11 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_master_data_api.py` (db) | **Lát 3B-1**: CRUD danh mục cây thuần + danh mục có cột riêng; validator liên-trường; phạm vi chi nhánh (404 không phải 403); quyền từng danh mục; chuyển nhánh; idempotency; khóa lạc quan |
 | `test_analysis_dimensions.py` (db) | **Lát 3B-1**: gieo mầm + chạy lại; mã quyền tới bảng permissions; cây giá trị; duy nhất trong chiều; `subtree_of` không rò sang chiều khác; cha khác chiều bị từ chối; nguồn `master` trỏ slug có thật |
 | `test_item_catalog_api.py` (db) | **Lát 3B-3**: 47 test cho vật tư — CRUD danh mục cây, bảng con đơn vị quy đổi + mã quy cách (8 endpoint), phạm vi chi nhánh, quyền, chuyển nhánh, khóa lạc quan, idempotency; gộp bản ghi từ chối khi đơn vị chính khác (H71) hoặc bản ghi là nhóm (H74); luật liên-trường qua `update_guard` (H75); nhóm bị cấm `nature`/`base_unit_id` (H76) |
+| `test_statement_formula.py` (non-db) | **Lát 5B**: grammar parser, account range prefix-match, evaluator tô-pô, chu trình/rowref không hợp lệ, payload kiểu `eval`/SSTI bị từ chối |
+| `test_statement_layout_loader.py` (non-db) | **Lát 5B**: fail-closed loader — sai công thức, rowref, chu trình, TK không khớp accounts.csv; golden test B01/B02 khớp mẫu đúng thứ tự; chỉ tiêu ngoại lệ không cộng dương; layout income cấm hàm số dư |
+| `test_statement_builder_api.py` (db) | **Lát 5B**: dataset riêng `bctc5b` — statement builder lấy `opening_balances`+`gl_postings`, cột so sánh (N/A khi chưa lập), test BR-GLE-04/BR-RPT-01/BR-RPT-04; API `/api/v1/statements` + `/api/v1/statements/{layout_code}/preview` + quyền + 403/404 |
 
-Tổng **922 test** (541 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
+Tổng **1.522 test** (886 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
 
 ---
 
