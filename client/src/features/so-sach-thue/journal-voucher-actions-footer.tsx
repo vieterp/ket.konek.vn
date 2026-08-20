@@ -12,10 +12,13 @@ import type { ReactElement } from 'react'
 import { Button } from '@/design-system/components'
 import { useI18n } from '@/lib/i18n'
 
+import { PrintVoucherButton } from './print-voucher-button'
 import { VOUCHER_STATUS_DRAFT, VOUCHER_STATUS_POSTED } from './voucher-status'
 
 export interface JournalVoucherActionsFooterProps {
   readonly voucherStatus: number | null
+  /** `null` khi chứng từ chưa lưu — nút In chỉ có nghĩa với chứng từ đã lưu. */
+  readonly voucherId: string | null
   readonly readOnly: boolean
   readonly busy: boolean
   readonly confirmDelete: boolean
@@ -28,6 +31,7 @@ export interface JournalVoucherActionsFooterProps {
 
 export function JournalVoucherActionsFooter({
   voucherStatus,
+  voucherId,
   readOnly,
   busy,
   confirmDelete,
@@ -57,6 +61,12 @@ export function JournalVoucherActionsFooter({
           <Button variant="ghost" disabled={busy} onClick={onDelete}>
             {confirmDelete ? t('gl.form.deleteConfirm') : t('gl.form.delete')}
           </Button>
+        )}
+        {/* Nút In tự chứa (mutation + cảnh báo in lại nằm trong nó) — ngoại lệ
+            có chủ đích so với quy ước "footer không tự gọi mutation": in không
+            đổi trạng thái chứng từ nên không đụng state busy/lỗi của form. */}
+        {voucherId !== null && (
+          <PrintVoucherButton voucherId={voucherId} disabled={busy} />
         )}
       </div>
       <div className="flex gap-2">

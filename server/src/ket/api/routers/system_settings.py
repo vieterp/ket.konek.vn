@@ -20,17 +20,28 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 
-from ket.api.dependencies import AuthorizedRequest, SessionFactory, require_permission
+from ket.api.dependencies import AppSettings, AuthorizedRequest, SessionFactory, require_permission
 from ket.api.routers.system_settings_schemas import (
+    ReportLogoResponse,
     SettingListResponse,
     SettingResponse,
     SettingUpdateRequest,
 )
+from ket.kernel.attachments import storage
 from ket.kernel.config import settings_service
-from ket.kernel.config.catalog import CATALOG, SettingScope
+from ket.kernel.config.catalog import (
+    CATALOG,
+    REPORT_LOGO_HASH_KEY,
+    REPORT_LOGO_MEDIA_KEY,
+    SettingScope,
+)
 from ket.kernel.config.settings_service import EffectiveSetting
+from ket.kernel.errors import (
+    AttachmentStorageNotConfiguredError,
+    SettingValueInvalidError,
+)
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import SYSTEM_MODULE, Action, permission_code
 
@@ -99,3 +110,74 @@ def update_setting(
             expected_row_version=payload.row_version,
         )
         return _response(value)
+
+
+@router.post("/logo", response_model=ReportLogoResponse)
+def upload_report_logo(
+    authorized: SettingReader,
+    factory: SessionFactory,
+    settings: AppSettings,
+    file: Annotated[UploadFile, File()],
+) -> ReportLogoResponse:
+    """Nút một-bước gán logo báo cáo (FR-RPT-010, lát 5E).
+
+    Trước lát này, gán logo là hai việc tay: tải tệp lên kho rồi dán
+    `content_hash` vào `report.logo_content_hash` — đường mà không kế toán nào
+    tự đi được. Ở đây gộp lại: ghi blob vào kho content-addressed (KHÔNG tạo
+    dòng `attachments` — logo là nhận diện đơn vị mọi chi nhánh cùng thấy, còn
+    bảng attachments nằm sau RLS chi nhánh, xem quyết định 5D) rồi ghi cả hai
+    khóa settings trong một transaction.
+
+    Quyền `system.setting.edit` — đúng quyền của việc nó làm (đổi hai khóa cấp
+    hệ thống). Không đòi idempotency key: gửi lại cùng tệp ghi lại cùng hash và
+    cùng giá trị — không có trạng thái nào bị nhân đôi.
+    """
+    authorized.access.require(SETTING_EDIT)
+    definition = CATALOG[REPORT_LOGO_MEDIA_KEY]
+    media_type = file.content_type or ""
+    if definition.choices is not None and media_type not in definition.choices:
+        raise SettingValueInvalidError(
+            "Kiểu tệp logo không được hỗ trợ",
+            key=REPORT_LOGO_MEDIA_KEY,
+            allowed=", ".join(sorted(definition.choices)),
+            value=media_type or None,
+        )
+    if settings.attachments_dir is None:
+        raise AttachmentStorageNotConfiguredError(
+            "Bản cài chưa cấu hình thư mục tệp đính kèm (KET_ATTACHMENTS_DIR)"
+        )
+    # Ghi blob TRƯỚC khi mở transaction — cùng lý do với upload_attachment:
+    # hash chỉ biết được sau khi đọc hết tệp.
+    stored = storage.store_stream(
+        settings.attachments_dir,
+        authorized.scope.dataset_schema,
+        file.file,
+        max_bytes=settings.attachment_max_bytes,
+    )
+    with unit_of_work(factory, authorized.scope) as session:
+        for key, raw_value in (
+            (REPORT_LOGO_HASH_KEY, stored.content_hash),
+            (REPORT_LOGO_MEDIA_KEY, media_type),
+        ):
+            current = next(
+                item
+                for item in settings_service.effective_settings(
+                    session, user_id=authorized.scope.user_id
+                )
+                if item.key == key
+            )
+            settings_service.set_setting(
+                session,
+                key=key,
+                scope=SettingScope.SYSTEM,
+                user_id=authorized.scope.user_id,
+                raw_value=raw_value,
+                # Phiên bản đọc trong CÙNG transaction với lệnh ghi: nút
+                # một-bước không có màn hình nào cầm sẵn row_version để gửi.
+                expected_row_version=current.system_row_version,
+            )
+    return ReportLogoResponse(
+        content_hash=stored.content_hash,
+        media_type=media_type,
+        byte_size=stored.byte_size,
+    )

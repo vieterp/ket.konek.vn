@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
@@ -56,6 +57,18 @@ class ReportRenderRequest(BaseModel):
 
     format: Literal["pdf", "xlsx"]
     params: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+class ReportRenderAcceptedResponse(BaseModel):
+    """Thân `202` của `POST /reports/{code}/render` — báo cáo vượt ngưỡng
+    chuyển-job (bước 19), đã xếp vào hàng đợi thay vì render trong request.
+
+    Client theo dõi qua `GET /api/v1/jobs/{job_id}` (tiến độ + nút Hủy) rồi tải
+    tệp ở `GET /reports/render-jobs/{job_id}/file` khi job `done`.
+    """
+
+    job_id: UUID
+    estimated_rows: int
 
 
 class ReportPreviewRequest(BaseModel):

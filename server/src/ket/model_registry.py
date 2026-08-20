@@ -58,8 +58,10 @@ from ket.posting.opening_balances import models as opening_balance_models
 
 # Không có model — import để đăng ký mã quyền `reporting.statement.view` /
 # `reporting.report.*` trước khi `provision_dataset` gieo bảng `permissions`
-# (cùng cơ chế `posting.periods`).
+# (cùng cơ chế `posting.periods`). `render_job` đăng ký loại job
+# `reporting.report.render` — thiếu nó worker nhận job mà không biết chạy.
 from ket.reporting import engine as report_permission_registration
+from ket.reporting import render_job as report_render_job_registration
 from ket.reporting import statements as statement_permission_registration
 from ket.reporting.printing import models as print_log_models
 
@@ -92,6 +94,7 @@ __all__ = [
     "print_template_models",
     "report_models",
     "report_permission_registration",
+    "report_render_job_registration",
     "security_models",
     "statement_models",
     "statement_permission_registration",

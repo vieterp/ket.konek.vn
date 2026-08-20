@@ -105,6 +105,10 @@ def test_the_exemption_list_is_exactly_what_was_reviewed() -> None:
             # Lát 5D: in chứng từ — in lần 2 là sự kiện thật mà FR-RPT-011 đếm
             # (`copy_no` + cảnh báo), khử trùng lặp sẽ nói dối số lần in.
             "/api/v1/vouchers/{voucher_id}/print",
+            # Lát 5E: nút một-bước gán logo — gửi lại cùng tệp ghi lại cùng
+            # hash và cùng hai giá trị settings; kho blob content-addressed
+            # khử trùng theo nội dung nên không có gì bị nhân đôi.
+            "/api/v1/system/settings/logo",
         }
     )
     # Cơ chế thứ ba, thêm ở lát 3C-1. Ghim nó ở đây vì chính docstring bên trên

@@ -901,6 +901,20 @@
         "title": "Body_upload_attachment_api_v1_attachments_post",
         "type": "object"
       },
+      "Body_upload_report_logo_api_v1_system_settings_logo_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_report_logo_api_v1_system_settings_logo_post",
+        "type": "object"
+      },
       "Body_validate_import_api_v1_master_asset_types_import_validate_post": {
         "properties": {
           "file": {
@@ -9046,6 +9060,30 @@
         "title": "ReportListResponse",
         "type": "object"
       },
+      "ReportLogoResponse": {
+        "description": "Kết quả nút một-bước gán logo báo cáo (FR-RPT-010, lát 5E).",
+        "properties": {
+          "byte_size": {
+            "title": "Byte Size",
+            "type": "integer"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_hash",
+          "media_type",
+          "byte_size"
+        ],
+        "title": "ReportLogoResponse",
+        "type": "object"
+      },
       "ReportParamFieldResponse": {
         "description": "Một ô nhập NGOÀI bộ chuẩn — client dựng form từ danh sách này.\n\nBộ chuẩn (`from_date`, `to_date`, `branch_ids`, `ledger`) là hợp đồng cố\nđịnh FR-RPT-002, client dựng sẵn, không lặp lại ở đây.",
         "properties": {
@@ -9190,6 +9228,26 @@
           "truncated"
         ],
         "title": "ReportPreviewResponse",
+        "type": "object"
+      },
+      "ReportRenderAcceptedResponse": {
+        "description": "Thân `202` của `POST /reports/{code}/render` — báo cáo vượt ngưỡng\nchuyển-job (bước 19), đã xếp vào hàng đợi thay vì render trong request.\n\nClient theo dõi qua `GET /api/v1/jobs/{job_id}` (tiến độ + nút Hủy) rồi tải\ntệp ở `GET /reports/render-jobs/{job_id}/file` khi job `done`.",
+        "properties": {
+          "estimated_rows": {
+            "title": "Estimated Rows",
+            "type": "integer"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "estimated_rows"
+        ],
+        "title": "ReportRenderAcceptedResponse",
         "type": "object"
       },
       "ReportRenderRequest": {
@@ -24419,6 +24477,53 @@
         ]
       }
     },
+    "/api/v1/reports/render-jobs/{job_id}/file": {
+      "get": {
+        "description": "Tải tệp của một job `reporting.report.render` đã xong (bước 19).\n\nChỉ **người yêu cầu** tải được (404 cho người khác, kể cả người thấy dòng\njob qua RLS chi nhánh): thân job chạy dưới TOÀN BỘ chi nhánh hiện hành của\nngười yêu cầu (`JobBranchScope.REQUESTER_BRANCHES`, vá C1 review 5E), nên\ntệp có thể mang số liệu RỘNG hơn phạm vi của một người cùng chi nhánh —\ndòng job nhìn thấy được không có nghĩa tệp đọc được.",
+        "operationId": "download_render_job_file_api_v1_reports_render_jobs__job_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {},
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp kết quả của job render đã `done`"
+          },
+          "404": {
+            "description": "Không có job render này trong phạm vi người gọi"
+          },
+          "409": {
+            "description": "Job chưa xong (đang chạy / đã hỏng / đã hủy)"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Download Render Job File",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
     "/api/v1/reports/{code}/params": {
       "get": {
         "description": "Tham số NGOÀI bộ chuẩn của một báo cáo — client dựng form từ đây\n(FR-RPT-002; bộ chuẩn là hợp đồng cố định, xem `reports_schemas`).",
@@ -24517,7 +24622,7 @@
     },
     "/api/v1/reports/{code}/render": {
       "post": {
-        "description": "Kết xuất một báo cáo (FR-RPT-006). Số liệu chạy trong phạm vi RLS của\nngười gọi; `branch_ids` chỉ thu hẹp thêm (BR-RPT-04/05).",
+        "description": "Kết xuất một báo cáo (FR-RPT-006). Số liệu chạy trong phạm vi RLS của\nngười gọi; `branch_ids` chỉ thu hẹp thêm (BR-RPT-04/05).\n\nTrước khi render, đếm số dòng bằng CHÍNH câu SQL đã bọc phạm vi: vượt\nngưỡng (`report.{pdf,xlsx}_job_threshold_rows`) thì trả `202` + job nền\nthay vì giữ request nhiều giây (FR-NFR-041/042/044, giải M2 review 5C —\nrender đồng bộ giữ transaction + RAM suốt lượt chạy).",
         "operationId": "render_api_v1_reports__code__render_post",
         "parameters": [
           {
@@ -24547,6 +24652,16 @@
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
             },
             "description": "Tệp báo cáo theo `format` đã chọn"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportRenderAcceptedResponse"
+                }
+              }
+            },
+            "description": "Báo cáo vượt ngưỡng chuyển-job (bước 19) — đã xếp job nền; theo dõi qua `/api/v1/jobs/{job_id}`, tải tệp ở `/api/v1/reports/render-jobs/{job_id}/file`"
           },
           "404": {
             "description": "Không có báo cáo mang mã này"
@@ -25034,6 +25149,48 @@
           }
         },
         "summary": "List Settings",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/v1/system/settings/logo": {
+      "post": {
+        "description": "Nút một-bước gán logo báo cáo (FR-RPT-010, lát 5E).\n\nTrước lát này, gán logo là hai việc tay: tải tệp lên kho rồi dán\n`content_hash` vào `report.logo_content_hash` — đường mà không kế toán nào\ntự đi được. Ở đây gộp lại: ghi blob vào kho content-addressed (KHÔNG tạo\ndòng `attachments` — logo là nhận diện đơn vị mọi chi nhánh cùng thấy, còn\nbảng attachments nằm sau RLS chi nhánh, xem quyết định 5D) rồi ghi cả hai\nkhóa settings trong một transaction.\n\nQuyền `system.setting.edit` — đúng quyền của việc nó làm (đổi hai khóa cấp\nhệ thống). Không đòi idempotency key: gửi lại cùng tệp ghi lại cùng hash và\ncùng giá trị — không có trạng thái nào bị nhân đôi.",
+        "operationId": "upload_report_logo_api_v1_system_settings_logo_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_report_logo_api_v1_system_settings_logo_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportLogoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Upload Report Logo",
         "tags": [
           "system"
         ]

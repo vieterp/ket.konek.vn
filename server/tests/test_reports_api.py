@@ -44,7 +44,9 @@ from ket.kernel.config.reports.models import (
     ReportParamSet,
 )
 from ket.kernel.config.reports.seed import ensure_builtin_reports
+from ket.kernel.config.reports.spec import parse_layout_spec
 from ket.kernel.datasets.provisioning import DatasetRef, drop_dataset_schema, provision_dataset
+from ket.kernel.errors import ReportDatasetNotExecutableError
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.main import create_app
 from ket.modules.general_ledger.journal.schemas import JournalLineIn, JournalVoucherIn
@@ -57,6 +59,7 @@ from ket.posting.engine.models import Ledger
 from ket.posting.engine.requests import PostingLine, PostingRequest
 from ket.posting.engine.service import PostingService
 from ket.reporting.engine import REPORT_EXPORT, REPORT_VIEW
+from ket.reporting.engine.executor import count_dataset_rows, execute_dataset
 from ket.settings import Settings
 from posting_support import PostingContext, posting_scope, seed_posting_context
 
@@ -661,6 +664,27 @@ class TestReportsApi:
         # thống chưa cho phép chạy dataset này (L2).
         assert response.status_code == 409, response.text
         assert response.json()["error_code"] == "report.dataset_not_executable"
+
+        def probe_gate_on_each_path(session: Session) -> None:
+            # M-2 review 5E: cổng RT-07 phải đứng trên TỪNG đường chạm SQL của
+            # dataset — cả COUNT (ngưỡng chuyển-job) lẫn execute. Kiểm thẳng
+            # từng hàm vì qua API hai cổng che nhau: gỡ một cổng mà endpoint
+            # vẫn 409 nhờ cổng kia — đột biến sống sót không ai thấy.
+            dataset_row = session.get(ReportDataset, "ngoai_5c")
+            layout = session.get(ReportLayout, "ngoai-5c")
+            assert dataset_row is not None and layout is not None
+            spec = parse_layout_spec(layout.spec, layout_code="ngoai-5c")
+            binds: dict[str, object] = {"branch_ids": None, "ledger": 0}
+            with pytest.raises(ReportDatasetNotExecutableError):
+                count_dataset_rows(session, dataset=dataset_row, layout_spec=spec, binds=binds)
+            with pytest.raises(ReportDatasetNotExecutableError):
+                next(
+                    iter(
+                        execute_dataset(session, dataset=dataset_row, layout_spec=spec, binds=binds)
+                    )
+                )
+
+        run(probe_gate_on_each_path)
 
 
 class TestBuiltinSeed:

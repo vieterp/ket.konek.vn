@@ -24,7 +24,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ket.kernel.config.reports.models import ReportDataset
-from ket.kernel.config.reports.scope import assert_placeholders_allowed, compose_scoped_query
+from ket.kernel.config.reports.scope import (
+    assert_placeholders_allowed,
+    compose_count_query,
+    compose_scoped_query,
+)
 from ket.kernel.config.reports.spec import LayoutSpec
 from ket.kernel.errors import ReportDatasetNotExecutableError
 
@@ -44,14 +48,7 @@ def execute_dataset(
     tra cột theo `key` của layout — dataset thêm cột mới không xô lệch báo cáo
     đang chạy.
     """
-    if not dataset.is_builtin:
-        # RT-07: SQL từ gói nhập ngoài phải chạy bằng role read-only RLS-bound.
-        # Role đó đến ở 5D — từ chối rõ ràng thay vì chạy nhầm quyền runtime.
-        raise ReportDatasetNotExecutableError(
-            "Dataset từ gói nhập ngoài chưa chạy được ở bản này",
-            dataset_code=dataset.code,
-        )
-    assert_placeholders_allowed(dataset)
+    _require_executable(dataset)
     statement = text(compose_scoped_query(dataset, layout_spec)).execution_options(
         yield_per=FETCH_BATCH_SIZE
     )
@@ -61,3 +58,37 @@ def execute_dataset(
         # hai; kết quả `text()` chỉ có khóa chuỗi — cast thay vì copy từng dòng
         # sang dict (50k dòng Sổ Cái không cần 50k dict trung gian).
         yield cast("Mapping[str, object]", row._mapping)
+
+
+def count_dataset_rows(
+    session: Session,
+    *,
+    dataset: ReportDataset,
+    layout_spec: LayoutSpec,
+    binds: Mapping[str, object],
+) -> int:
+    """Số dòng mà dataset sẽ trả với đúng bộ bind này — cho ngưỡng chuyển-job.
+
+    Đếm bằng `COUNT(*)` bọc quanh CHÍNH câu lệnh đã qua `compose_scoped_query`:
+    ước lượng và lượt chạy thật không được phép khác nhau về phạm vi (một câu
+    đếm tự chế thiếu lớp bọc branch/ledger sẽ đếm cả dòng mà RLS lọc mất, và
+    ngưỡng chuyển-job sẽ quyết định trên một con số không ai render). ORDER BY
+    thừa trong subquery là giá chấp nhận được — PostgreSQL bỏ sort khi kế hoạch
+    không cần, và một lượt đếm chỉ chạy khi người dùng sắp render thứ nặng hơn
+    nó nhiều lần.
+    """
+    _require_executable(dataset)
+    statement = text(compose_count_query(dataset, layout_spec))
+    return int(session.execute(statement, dict(binds)).scalar_one())
+
+
+def _require_executable(dataset: ReportDataset) -> None:
+    if not dataset.is_builtin:
+        # RT-07: SQL từ gói nhập ngoài phải chạy bằng role read-only RLS-bound.
+        # Role đó chưa có (quyết định 5D: đi cùng lát đường-nhập-dataset-ngoài)
+        # — từ chối rõ ràng thay vì chạy nhầm quyền runtime.
+        raise ReportDatasetNotExecutableError(
+            "Dataset từ gói nhập ngoài chưa chạy được ở bản này",
+            dataset_code=dataset.code,
+        )
+    assert_placeholders_allowed(dataset)

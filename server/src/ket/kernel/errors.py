@@ -1440,6 +1440,18 @@ class ReportParamsInvalidError(DomainError):
     error_code: ClassVar[str] = "report.params_invalid"
 
 
+class ReportRenderNotReadyError(DomainError):
+    """Tác vụ kết xuất chưa có tệp để tải: đang chạy, đã hỏng, hoặc đã hủy.
+
+    `409` chứ không `404`: job TỒN TẠI và người gọi thấy nó — thiếu là *trạng
+    thái*, không phải *tài nguyên*. Client đọc `job_status` trong details để
+    phân biệt "chờ thêm" với "đã hỏng, đừng chờ nữa".
+    """
+
+    error_code: ClassVar[str] = "report.render_not_ready"
+    http_status: ClassVar[int] = 409
+
+
 class ReportDatasetNotExecutableError(DomainError):
     """Dataset không-builtin chưa chạy được: role read-only RLS-bound cho SQL
     từ gói nhập ngoài (RT-07) đi cùng lát dựng ĐƯỜNG NHẬP dataset ngoài (quyết

@@ -74,6 +74,11 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         # để ĐẾM (`copy_no` + cảnh báo), không phải một lần gửi lại cần khử.
         # Một khóa idempotency ở đây sẽ trả bản PDF cũ và nói dối số lần in.
         "/api/v1/vouchers/{voucher_id}/print",
+        # Nút một-bước gán logo (lát 5E, FR-RPT-010): gửi lại cùng tệp ghi lại
+        # cùng content_hash và cùng hai giá trị settings — bản thân thao tác
+        # idempotent theo nội dung, không có bản ghi nào bị nhân đôi (kho blob
+        # content-addressed khử trùng theo hash).
+        "/api/v1/system/settings/logo",
     }
 )
 """Miễn trừ theo **đúng một đường dẫn**, cho thao tác tự nó đã idempotent.

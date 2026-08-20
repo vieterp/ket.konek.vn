@@ -8,7 +8,7 @@ chèn dữ liệu, không sửa tệp này (tiêu chí phase-05: thêm báo cáo
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import date
 from typing import assert_never
@@ -33,7 +33,7 @@ from ket.kernel.datasets.models import Dataset
 from ket.kernel.errors import ReportNotFoundError
 from ket.kernel.excel.template import XLSX_MEDIA_TYPE
 from ket.kernel.security.models import Branch
-from ket.reporting.engine.executor import execute_dataset
+from ket.reporting.engine.executor import count_dataset_rows, execute_dataset
 from ket.reporting.engine.grouping import group_rows
 from ket.reporting.engine.params import BoundParams, Format, validate_params
 from ket.reporting.rendering.header import load_unit_info
@@ -132,6 +132,27 @@ def resolve_definition(session: Session, *, code: str) -> tuple[ReportDefinition
     return resolved.definition, resolved.param_set_spec
 
 
+def estimate_report_rows(session: Session, *, code: str, raw_params: Mapping[str, object]) -> int:
+    """Số dòng dữ liệu của một lượt render với đúng bộ tham số này (lát 5E).
+
+    Cho ngưỡng chuyển-job (bước 19): tham số đi qua CHÍNH bộ kiểm của render —
+    một bộ tham số không render được thì cũng không ước lượng được, lỗi 422 nổ
+    ở lượt ước lượng thay vì sau khi job đã nằm trong hàng đợi.
+    """
+    resolved = _resolve(session, code=code)
+    bound = validate_params(
+        raw_params,
+        spec=resolved.param_set_spec,
+        ledger_scope=resolved.definition.ledger_scope,
+    )
+    return count_dataset_rows(
+        session,
+        dataset=resolved.dataset,
+        layout_spec=resolved.layout_spec,
+        binds=bound.sql_binds(resolved.dataset.allowed_params),
+    )
+
+
 def render_report(
     session: Session,
     *,
@@ -140,8 +161,15 @@ def render_report(
     raw_params: Mapping[str, object],
     today: date,
     options: RenderOptions = DEFAULT_RENDER_OPTIONS,
+    row_hook: Callable[[int], None] | None = None,
 ) -> RenderedReport:
-    """Một lượt kết xuất trọn vẹn: kiểm tham số → chạy SQL → nhóm → PDF/XLSX."""
+    """Một lượt kết xuất trọn vẹn: kiểm tham số → chạy SQL → nhóm → PDF/XLSX.
+
+    `row_hook` (lát 5E) được gọi với số thứ tự của TỪNG dòng dữ liệu ngay khi
+    dòng đó rời khỏi cursor — job render nền dùng nó để báo tiến độ và kiểm cờ
+    hủy ở ranh giới lô. Hook ném ngoại lệ (vd `JobCancelled`) thì cả pipeline
+    streaming dừng theo — render là phép đọc, không có trạng thái dở dang để lo.
+    """
     resolved = _resolve(session, code=code)
     bound = validate_params(
         raw_params,
@@ -149,12 +177,14 @@ def render_report(
         ledger_scope=resolved.definition.ledger_scope,
     )
     param_lines = _param_lines_with_branches(session, bound)
-    rows = execute_dataset(
+    rows: Iterator[Mapping[str, object]] = execute_dataset(
         session,
         dataset=resolved.dataset,
         layout_spec=resolved.layout_spec,
         binds=bound.sql_binds(resolved.dataset.allowed_params),
     )
+    if row_hook is not None:
+        rows = _with_row_hook(rows, row_hook)
     display_rows = group_rows(rows, layout_spec=resolved.layout_spec)
     unit = load_unit_info(session)
     title = resolved.definition.name
@@ -236,6 +266,14 @@ def preview_report(
         rows=tuple(collected),
         truncated=truncated,
     )
+
+
+def _with_row_hook(
+    rows: Iterator[Mapping[str, object]], hook: Callable[[int], None]
+) -> Iterator[Mapping[str, object]]:
+    for index, row in enumerate(rows, start=1):
+        hook(index)
+        yield row
 
 
 def _resolve(session: Session, *, code: str) -> _ResolvedReport:

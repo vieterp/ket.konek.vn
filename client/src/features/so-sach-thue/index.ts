@@ -14,3 +14,4 @@
 export { VoucherListPage } from './voucher-list-page'
 export { JournalVoucherForm } from './journal-voucher-form'
 export { TrialBalancePage } from './trial-balance-page'
+export { ReportCatalogPage } from './report-catalog-page'

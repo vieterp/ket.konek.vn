@@ -67,6 +67,20 @@ def compose_scoped_query(dataset: ReportDataset, layout_spec: LayoutSpec) -> str
     return f"SELECT scoped.* FROM (\n{dataset.sql_text}\n) AS scoped{where_clause}{order_clause}"  # noqa: S608 — sql_text là metadata do quản trị/gói kiểm soát, giá trị bind riêng; identifier đã ràng regex ở trên
 
 
+def compose_count_query(dataset: ReportDataset, layout_spec: LayoutSpec) -> str:
+    """`COUNT(*)` bọc quanh CHÍNH câu của `compose_scoped_query` — cho ngưỡng
+    chuyển-job (lát 5E).
+
+    Bọc câu đã ghép thay vì tự dựng câu đếm riêng: ước lượng phải đếm đúng
+    những dòng mà lượt render thật sẽ thấy (cùng lớp bọc branch/ledger, cùng
+    RLS); ORDER BY thừa trong subquery là giá chấp nhận được — PostgreSQL bỏ
+    sort khi kế hoạch không cần nó.
+    """
+    return (
+        f"SELECT COUNT(*) FROM (\n{compose_scoped_query(dataset, layout_spec)}\n) AS dataset_rows"  # noqa: S608 — cùng hạng tin cậy với compose_scoped_query ngay trên
+    )
+
+
 def assert_placeholders_allowed(dataset: ReportDataset) -> None:
     """`sql_text` chỉ được dùng placeholder trong `allowed_params` (fail-closed).
 

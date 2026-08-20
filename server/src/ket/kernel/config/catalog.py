@@ -140,6 +140,8 @@ QUANTITY_DECIMALS_KEY: Final[str] = "format.quantity_decimals"
 REPORT_FONT_SIZE_KEY: Final[str] = "report.font_size_pt"
 REPORT_LOGO_HASH_KEY: Final[str] = "report.logo_content_hash"
 REPORT_LOGO_MEDIA_KEY: Final[str] = "report.logo_media_type"
+REPORT_PDF_JOB_THRESHOLD_KEY: Final[str] = "report.pdf_job_threshold_rows"
+REPORT_XLSX_JOB_THRESHOLD_KEY: Final[str] = "report.xlsx_job_threshold_rows"
 
 CATALOG: Final[dict[str, SettingDefinition]] = {
     definition.key: definition
@@ -245,6 +247,36 @@ CATALOG: Final[dict[str, SettingDefinition]] = {
             scopes=frozenset({SettingScope.SYSTEM}),
             description="Kiểu nội dung của tệp logo",
             choices=frozenset({"image/png", "image/jpeg", "image/svg+xml"}),
+        ),
+        SettingDefinition(
+            key=REPORT_PDF_JOB_THRESHOLD_KEY,
+            value_type=ValueType.INTEGER,
+            default="2000",
+            # Bước 19 (FR-NFR-041/042/044): render PDF vượt ngưỡng dòng này thì
+            # đi job nền thay vì giữ request HTTP. Mặc định 2.000 hạ từ phác
+            # thảo 20.000 của 5C — spike S2 đo ~3.000 dòng đã ≈ 10s (đúng mốc
+            # FR-NFR-041), và ngưỡng phải chừa dư địa cho máy đích yếu hơn máy
+            # đo. Chỉnh được vì tốc độ máy chủ mỗi bản cài mỗi khác.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Số dòng mà từ đó kết xuất PDF chuyển sang chạy nền",
+            # Sàn 1 chứ không phải một con số "hợp lý": ép mọi lượt render đi
+            # job là một lựa chọn vận hành chính đáng (máy chủ yếu, giờ cao
+            # điểm), và test công tắc cũng cần hạ được ngưỡng xuống đáy.
+            minimum=1,
+            maximum=1_000_000,
+        ),
+        SettingDefinition(
+            key=REPORT_XLSX_JOB_THRESHOLD_KEY,
+            value_type=ValueType.INTEGER,
+            default="100000",
+            # XLSX nhanh hơn PDF hai bậc (S2: 50.000 dòng ≈ 1,1s, constant
+            # memory) nên ngưỡng cao hơn hẳn; tồn tại để báo cáo 200.000+ dòng
+            # (FR-RPT-015) vẫn có đường chạy nền hủy được thay vì một request
+            # treo nhiều giây.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Số dòng mà từ đó kết xuất XLSX chuyển sang chạy nền",
+            minimum=1,
+            maximum=5_000_000,
         ),
         SettingDefinition(
             key=SAVE_ALSO_POSTS_KEY,

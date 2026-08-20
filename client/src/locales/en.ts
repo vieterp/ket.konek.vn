@@ -507,6 +507,42 @@ export const en: Record<TranslationKey, string> = {
   'error.dimension.value_source_mismatch': 'The dimension value does not match its source catalog.',
   'error.opening.carry_forward_exists':
     'The target year already has opening balances. Click "Overwrite and carry forward again" to replace them with the source year\'s closing figures.',
+
+  'reports.nav.title': 'Reports & Books',
+  'reports.catalog.title': 'Reports & Books',
+  'reports.catalog.loading': 'Loading report catalog…',
+  'reports.catalog.pickOne': 'Pick a report from the list on the left to preview or export.',
+  'reports.params.fromDate': 'From date',
+  'reports.params.toDate': 'To date',
+  'reports.params.ledger': 'Ledger',
+  'reports.params.ledgerFinancial': 'Financial',
+  'reports.params.ledgerManagement': 'Management',
+  'reports.action.preview': 'Preview',
+  'reports.action.exportPdf': 'Export PDF',
+  'reports.action.exportXlsx': 'Export Excel',
+  'reports.preview.truncated':
+    'Preview is truncated at 2,000 rows — export Excel for the full data.',
+  'reports.job.running': 'Large report running in the background: {progress}%',
+  'reports.job.done': 'The report is ready.',
+  'reports.job.failed': 'Background render failed.',
+  'reports.job.cancelled': 'Render cancelled.',
+  'reports.job.cancel': 'Cancel',
+  'reports.job.download': 'Download file',
+
+  'gl.print.button': 'Print',
+  'gl.print.reprintWarning': 'Reprint #{copy} — every print is recorded in the print log.',
+
+  'setup.logo.title': 'Report logo',
+  'setup.logo.present': 'A logo is set — printouts and reports will carry it.',
+  'setup.logo.absent': 'No logo on printouts yet.',
+  'setup.logo.saved': 'Logo saved.',
+  'setup.logo.choose': 'Choose logo file…',
+  'setup.logo.replace': 'Replace logo…',
+  'setup.logo.uploading': 'Uploading…',
+
+  'error.report.not_found': 'No report with this code exists in the active accounting scheme.',
+  'error.report.render_not_ready': 'The render task has no file yet — wait for it to finish or check its status.',
+  'error.report.params_invalid': 'Report parameters are invalid — check the date range and inputs.',
   'error.opening.carry_forward_target_missing':
     'There is no following fiscal year to receive the balances — create the new year on the fiscal year screen first.',
   'error.transport.unexpected_response': 'The server replied with something unreadable.',

@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.config.accounts_models import BalanceNature, ChartOfAccount, ConfigPackage
+from ket.kernel.config.accounts_provider import resolve_package
 from ket.kernel.currency.models import Currency, ExchangeRate, RateType
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.organization.service import BranchService
@@ -38,6 +39,15 @@ FISCAL_YEAR_CODE = "2026"
 FISCAL_YEAR_START = date(2026, 1, 1)
 
 PACKAGE_CODE = "TT99-TEST"
+"""Mã gói test lịch sử — giữ tên cho scheme mặc định; xem `_package_code`."""
+
+
+def _package_code(scheme: AccountingScheme) -> str:
+    # Mỗi scheme một mã gói: `test_scheme_switch` (bước 20 phase-05) dựng dataset
+    # TT133 bằng CÙNG khung seed này, và một gói mang scheme sai sẽ thắng
+    # `resolve_package` của dataset đó.
+    return PACKAGE_CODE if scheme is AccountingScheme.TT99 else f"{scheme.value}-TEST"
+
 
 USD_RATE = Decimal("25000")
 
@@ -80,14 +90,14 @@ def _ensure_currencies(session: Session) -> None:
     session.flush()
 
 
-def _ensure_fiscal_year(session: Session) -> int:
+def _ensure_fiscal_year(session: Session, scheme: AccountingScheme) -> int:
     existing = session.scalar(select(FiscalYear.id).where(FiscalYear.code == FISCAL_YEAR_CODE))
     if existing is not None:
         return existing
     year = PeriodService(session).create_fiscal_year(
         code=FISCAL_YEAR_CODE,
         start_date=FISCAL_YEAR_START,
-        accounting_scheme=AccountingScheme.TT99,
+        accounting_scheme=scheme,
         base_currency="VND",
         inventory_valuation_method=InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING,
         vat_method=VatMethod.DEDUCTION,
@@ -107,13 +117,16 @@ _ACCOUNT_SPECS: tuple[tuple[str, str, int, bool, list[str] | None, str | None], 
 )
 
 
-def _ensure_package_and_accounts(session: Session) -> tuple[int, dict[str, int]]:
-    package_id = session.scalar(select(ConfigPackage.id).where(ConfigPackage.code == PACKAGE_CODE))
+def _ensure_package_and_accounts(
+    session: Session, scheme: AccountingScheme
+) -> tuple[int, dict[str, int]]:
+    code = _package_code(scheme)
+    package_id = session.scalar(select(ConfigPackage.id).where(ConfigPackage.code == code))
     if package_id is None:
         package = ConfigPackage(
-            code=PACKAGE_CODE,
-            name="Gói TT99 cho test",
-            scheme=AccountingScheme.TT99.value,
+            code=code,
+            name=f"Gói {scheme.value} cho test",
+            scheme=scheme.value,
             # CÙNG ngày hiệu lực với gói TT99 dựng sẵn thật (`TT99-2025`,
             # 2026-01-01 — gieo tự động lúc cấp dữ liệu kế toán): số dư ban đầu
             # ghi đúng ngày đầu năm tài chính, nên gói test phải phủ được ngày
@@ -161,16 +174,64 @@ def _ensure_package_and_accounts(session: Session) -> tuple[int, dict[str, int]]
 
 
 def seed_posting_context(
-    session_factory: sessionmaker[Session], dataset: DatasetRef
+    session_factory: sessionmaker[Session],
+    dataset: DatasetRef,
+    *,
+    scheme: AccountingScheme = AccountingScheme.TT99,
 ) -> PostingContext:
-    """Dựng đủ bối cảnh ghi sổ trong dataset đã cho, với một chi nhánh mới."""
+    """Dựng đủ bối cảnh ghi sổ trong dataset đã cho, với một chi nhánh mới.
+
+    `scheme` phải khớp scheme của dataset (bước 20 phase-05 dùng TT133): năm
+    tài chính và gói test cùng mang scheme đó thì `resolve_package` mới trỏ về
+    đúng bộ TK tối giản mà `context.accounts` cầm id.
+    """
     branch_code = f"PB{uuid4().hex[:6].upper()}"
     with unit_of_work(session_factory, _seed_scope(dataset)) as session:
         branch = BranchService(session).create(code=branch_code, name=f"Chi nhánh {branch_code}")
         branch_id = branch.id
         _ensure_currencies(session)
-        fiscal_year_id = _ensure_fiscal_year(session)
-        package_id, accounts = _ensure_package_and_accounts(session)
+        fiscal_year_id = _ensure_fiscal_year(session, scheme)
+        package_id, accounts = _ensure_package_and_accounts(session, scheme)
+    return PostingContext(
+        branch_id=branch_id,
+        branch_code=branch_code,
+        fiscal_year_id=fiscal_year_id,
+        package_id=package_id,
+        accounts=accounts,
+    )
+
+
+def seed_posting_context_on_builtin(
+    session_factory: sessionmaker[Session],
+    dataset: DatasetRef,
+    *,
+    scheme: AccountingScheme,
+    account_codes: tuple[str, ...],
+) -> PostingContext:
+    """Bối cảnh ghi sổ dùng **gói builtin** của scheme thay vì gói test tối giản.
+
+    Cho `test_scheme_switch` (bước 20 phase-05): bài kiểm phải chứng minh hệ TK
+    + layout BCTC + bộ sổ ĐÓNG GÓI của từng thông tư phục vụ đúng, nên không
+    được che builtin bằng một gói test kích hoạt sau. Không tạo gói nào ở đây —
+    `resolve_package` trỏ về chính gói gieo lúc provision.
+    """
+    branch_code = f"PB{uuid4().hex[:6].upper()}"
+    with unit_of_work(session_factory, _seed_scope(dataset)) as session:
+        branch = BranchService(session).create(code=branch_code, name=f"Chi nhánh {branch_code}")
+        branch_id = branch.id
+        _ensure_currencies(session)
+        fiscal_year_id = _ensure_fiscal_year(session, scheme)
+        package = resolve_package(session, scheme=scheme.value, on_date=FISCAL_YEAR_START)
+        rows = session.execute(
+            select(ChartOfAccount.code, ChartOfAccount.id).where(
+                ChartOfAccount.package_id == package.id,
+                ChartOfAccount.code.in_(account_codes),
+            )
+        ).all()
+        accounts = dict(rows)
+        missing = set(account_codes) - set(accounts)
+        assert not missing, f"gói builtin {package.code} thiếu TK: {sorted(missing)}"
+        package_id = package.id
     return PostingContext(
         branch_id=branch_id,
         branch_code=branch_code,

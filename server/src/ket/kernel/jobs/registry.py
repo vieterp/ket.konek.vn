@@ -37,6 +37,27 @@ from ket.kernel.persistence.types import AuditValues
 from ket.kernel.security.rls import validate_identifier
 
 
+class JobBranchScope(StrEnum):
+    """Phạm vi chi nhánh mà THÂN job chạy dưới (review 5E, C1).
+
+    `ACTING_BRANCH` là mặc định và đúng cho job **ghi** theo chi nhánh (nhập
+    liệu, recalc): phạm vi = đúng chi nhánh ghi trên dòng job — chi nhánh đang
+    thao tác của người bấm nút.
+
+    `REQUESTER_BRANCHES` cho job **đọc xuyên chi nhánh** — render báo cáo là
+    loại đầu tiên. Request HTTP chạy dưới TOÀN BỘ chi nhánh được gán của người
+    gọi (RLS), nên thân job phải chạy dưới cùng phạm vi đó, nếu không tệp kết
+    quả khác hẳn bản render đồng bộ cùng tham số (probe C1: user 2 chi nhánh
+    không gửi X-Branch → ước lượng 4 dòng, tệp 0 dòng). Worker phân giải danh
+    sách chi nhánh **hiện hành** của `requested_by` ngay lúc chạy — quyền bị
+    rút giữa enqueue và chạy thì tự hẹp theo, không có snapshot nào rộng hơn
+    quyền thật.
+    """
+
+    ACTING_BRANCH = "acting-branch"
+    REQUESTER_BRANCHES = "requester-branches"
+
+
 class JobPrivilege(StrEnum):
     """Kết nối mà thân job cần.
 
@@ -157,6 +178,7 @@ class JobType[ParamsT: BaseModel]:
     params_model: type[ParamsT]
     handler: Callable[[JobContext, ParamsT], JobResult]
     privilege: JobPrivilege = JobPrivilege.DATASET
+    branch_scope: JobBranchScope = JobBranchScope.ACTING_BRANCH
     description: str = ""
 
     direct_enqueue: bool = True
