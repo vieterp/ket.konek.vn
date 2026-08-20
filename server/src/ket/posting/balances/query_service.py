@@ -24,6 +24,7 @@ from sqlalchemy import exists, func, select, text
 from sqlalchemy.orm import Session
 
 from ket.kernel.config.accounts_models import ChartOfAccount
+from ket.kernel.config.accounts_provider import resolve_package
 from ket.kernel.errors import PeriodNotFoundError
 from ket.kernel.periods.models import AccountingPeriod, FiscalYear
 from ket.posting.balances.models import AccountBalance, BalanceRecalcQueue
@@ -90,7 +91,10 @@ def trial_balance(
         amounts = _amounts_from_snapshot(
             session, ledger=ledger, period_id=period_id, branch_id=branch_id
         )
-    return TrialBalanceResult(rows=_attach_accounts(session, amounts), stale=stale)
+    package = resolve_package(session, scheme=year.accounting_scheme, on_date=period.end_date)
+    return TrialBalanceResult(
+        rows=_attach_accounts(session, amounts, package_id=package.id), stale=stale
+    )
 
 
 def _is_stale(
@@ -116,8 +120,13 @@ def _is_stale(
     return bool(session.scalar(select(exists(dirty_from))))
 
 
-AmountRow = tuple[int, Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]
-"""`(account_id, dư đầu N/C, phát sinh N/C, dư cuối N/C)` — trước khi gắn tên TK."""
+AmountRow = tuple[str, Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]
+"""`(số hiệu TK, dư đầu N/C, phát sinh N/C, dư cuối N/C)` — trước khi gắn tên TK.
+
+Trục gộp là **số hiệu**, không phải `account_id` (quyết định 2026-08-20): TK
+thuộc gói cấu hình nên cùng một "112" ở hai gói là hai `id`; gộp theo id tách
+đôi một tài khoản ngay khi dataset đổi gói, mà BCTC lại gộp theo `code` — hai
+báo cáo sẽ lệch nhau đúng ở chỗ khó truy nhất."""
 
 
 def _amounts_from_snapshot(
@@ -131,7 +140,7 @@ def _amounts_from_snapshot(
     closing_net = func.sum(AccountBalance.closing_debit - AccountBalance.closing_credit)
     statement = (
         select(
-            AccountBalance.account_id,
+            ChartOfAccount.code,
             func.greatest(opening_net, 0),
             func.greatest(-opening_net, 0),
             func.sum(AccountBalance.period_debit),
@@ -139,8 +148,9 @@ def _amounts_from_snapshot(
             func.greatest(closing_net, 0),
             func.greatest(-closing_net, 0),
         )
+        .join(ChartOfAccount, ChartOfAccount.id == AccountBalance.account_id)
         .where(AccountBalance.period_id == period_id, AccountBalance.ledger == ledger)
-        .group_by(AccountBalance.account_id)
+        .group_by(ChartOfAccount.code)
         .having(
             ~(
                 (opening_net == 0)
@@ -179,25 +189,47 @@ def _amounts_direct(
     return [(row[0], row[1], row[2], row[3], row[4], row[5], row[6]) for row in rows]
 
 
-def _attach_accounts(session: Session, amounts: list[AmountRow]) -> tuple[TrialBalanceRow, ...]:
-    """Gắn số hiệu + tên TK và xếp theo số hiệu — thứ tự người đọc sổ mong."""
+def _attach_accounts(
+    session: Session, amounts: list[AmountRow], *, package_id: int
+) -> tuple[TrialBalanceRow, ...]:
+    """Gắn tên + `id` TK theo số hiệu, xếp theo số hiệu — thứ tự người đọc sổ mong.
+
+    Một số hiệu ứng với **nhiều** hàng `chart_of_accounts`: mọi dữ liệu kế toán
+    đều được gieo CẢ HAI gói dựng sẵn (`ensure_builtin_packages`), và 83 mã tồn
+    tại ở cả TT99 lẫn TT133 — 14 mã trong đó **khác tên**. Vì thế đại diện phải
+    lấy theo **gói đang hiệu lực của kỳ**, không phải "gói mới nhất" (sửa H1
+    review 4F: `order_by(package_id)` + ghi đè dict luôn cho ra TT133, nên doanh
+    nghiệp TT99 đọc tên TT133 và `account_id` trả về không phải id mà
+    `gl_postings` trỏ tới → drill-down `/ledger/postings?account_id=` mở ra rỗng).
+
+    TK chỉ tồn tại ở gói khác (dữ liệu của gói cũ sau khi đổi gói) không có đại
+    diện trong gói hiện hành — vẫn phải hiện dòng số, nên lùi về bất kỳ hàng
+    nào cùng mã và lấy tên ở đó.
+    """
     if not amounts:
         return ()
-    account_ids = [row[0] for row in amounts]
+    codes = [row[0] for row in amounts]
+    # Gói hiệu lực ghi đè sau cùng nên nó thắng; hàng của gói khác chỉ làm nền
+    # cho những mã không có trong gói hiệu lực.
     accounts = {
-        account.id: account
+        account.code: account
         for account in session.execute(
-            select(ChartOfAccount).where(ChartOfAccount.id.in_(account_ids))
+            select(ChartOfAccount)
+            .where(ChartOfAccount.code.in_(codes))
+            # Thứ tự phụ cho nhánh fallback (mã không có trong gói hiệu lực):
+            # gói id lớn hơn = mới hơn thắng — deterministic, không phụ thuộc
+            # thứ tự trả hàng của planner (review 4F lượt 2, L).
+            .order_by((ChartOfAccount.package_id == package_id).asc(), ChartOfAccount.package_id)
         ).scalars()
     }
     rows = []
-    for account_id, ob_d, ob_c, p_d, p_c, cl_d, cl_c in amounts:
-        account = accounts.get(account_id)
+    for account_code, ob_d, ob_c, p_d, p_c, cl_d, cl_c in amounts:
+        account = accounts.get(account_code)
         if account is None:  # pragma: no cover - FK bảo đảm
-            raise RuntimeError(f"Dòng số dư trỏ vào tài khoản không tồn tại: {account_id}")
+            raise RuntimeError(f"Dòng số dư trỏ vào tài khoản không tồn tại: {account_code}")
         rows.append(
             TrialBalanceRow(
-                account_id=account_id,
+                account_id=account.id,
                 account_code=account.code,
                 account_name=account.name,
                 opening_debit=ob_d or ZERO,

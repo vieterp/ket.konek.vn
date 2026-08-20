@@ -8090,6 +8090,11 @@ export interface components {
              */
             document_date: string;
             /**
+             * Entry Kind
+             * @default 0
+             */
+            entry_kind: number;
+            /**
              * Exchange Rate
              * @default 1
              */
@@ -8126,6 +8131,8 @@ export interface components {
             document_date: string;
             /** Document Type */
             document_type: string;
+            /** Entry Kind */
+            entry_kind: number;
             /** Exchange Rate */
             exchange_rate: string;
             /**
@@ -8174,6 +8181,11 @@ export interface components {
              * Format: date
              */
             document_date: string;
+            /**
+             * Entry Kind
+             * @default 0
+             */
+            entry_kind: number;
             /**
              * Exchange Rate
              * @default 1
@@ -9547,8 +9559,7 @@ export interface components {
          * @description Một BCTC đã lập cho `(layout, kỳ, sổ[, chi nhánh])`.
          *
          *     Cột so sánh (`comparative`) là "Số đầu năm" với báo cáo tình hình tài
-         *     chính; với báo cáo phát sinh nó là `null` ở v1 — xem bất biến H1 trong
-         *     `reporting/statements/builder.py`.
+         *     chính, "Năm trước" với báo cáo phát sinh (bỏ bút toán kết chuyển — LD-17).
          */
         StatementPreviewResponse: {
             /** Branch Id */

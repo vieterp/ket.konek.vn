@@ -117,6 +117,9 @@ describe('form chứng từ nghiệp vụ khác', () => {
     expect(init.headers).toHaveProperty(IDEMPOTENCY_HEADER)
     const body = parseJsonBody(init)
     expect(body.description).toBe('Chi phí văn phòng')
+    // Cờ bản chất bút toán (LD-17) phải LUÔN có mặt — PUT/POST thiếu nó là
+    // server nhận mặc định và mỗi lần sửa âm thầm reset cờ (review 4F, H4/N1).
+    expect(body.entry_kind).toBe(0)
     expect(Array.isArray(body.lines)).toBe(true)
     expect((body.lines as Record<string, unknown>[])[0]).toMatchObject({ account_id: 1, debit_fc: '1000000' })
 
@@ -158,5 +161,79 @@ describe('form chứng từ nghiệp vụ khác', () => {
     expect(
       screen.getByText('Dòng 1: Chứng từ không cân: nợ 1.000.000, có 0.'),
     ).toBeInTheDocument()
+  })
+
+  it('sửa chứng từ kết chuyển: PUT giữ nguyên entry_kind, không âm thầm reset', async () => {
+    const voucherId = 'aaaaaaaa-0000-0000-0000-000000000009'
+    const closingVoucher = {
+      id: voucherId,
+      document_type: 'gl_journal',
+      voucher_no: 'GLE00009',
+      branch_id: 1,
+      document_date: '2026-03-31',
+      posting_date: '2026-03-31',
+      period_id: 3,
+      currency_code: 'VND',
+      exchange_rate: '1',
+      description: 'Kết chuyển cuối quý',
+      status: 1,
+      row_version: 1,
+      created_at: '2026-03-31T00:00:00Z',
+      created_by: 1,
+      posted_at: null,
+      posted_by: null,
+      cashflow_activity: null,
+      entry_kind: 1,
+      lines: [
+        {
+          id: 'bbbbbbbb-0000-0000-0000-000000000001',
+          line_no: 1,
+          account_id: 1,
+          corresponding_account_id: null,
+          currency_code: 'VND',
+          exchange_rate: '1',
+          debit_fc: '1000000',
+          credit_fc: '0',
+          partner_id: null,
+          partner_kind: null,
+          cost_object_id: null,
+          project_id: null,
+          order_id: null,
+          contract_id: null,
+          expense_item_id: null,
+          item_id: null,
+          warehouse_id: null,
+          extended_dimensions: null,
+          description: null,
+        },
+      ],
+    }
+    const fetchMock = mockServer({
+      ...baseRoutes(),
+      '/accounts': ACCOUNTS_ROUTE,
+      ...dimensionCatalogRoutes(),
+      [`/gl/journal-vouchers/${voucherId}`]: { status: 200, body: closingVoucher },
+    })
+    const user = userEvent.setup()
+
+    renderFeatureAt(`/so-sach-thue/chung-tu/${voucherId}`)
+
+    // Form sửa chứng từ kết chuyển phải mở sẵn khối "Mở rộng" và hiện đúng cờ.
+    const kindSelect = await screen.findByLabelText('Bản chất bút toán')
+    expect((kindSelect as HTMLSelectElement).value).toBe('1')
+
+    await user.click(screen.getByRole('button', { name: 'Cất' }))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        (entry) =>
+          String(entry[0]).endsWith(`/gl/journal-vouchers/${voucherId}`) &&
+          (entry[1] as RequestInit | undefined)?.method === 'PUT',
+      )
+      expect(call).toBeDefined()
+      const body = parseJsonBody(call?.[1] as RequestInit)
+      expect(body.entry_kind).toBe(1)
+      expect(body.row_version).toBe(1)
+    })
   })
 })

@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ket.kernel.currency.models import CURRENCY_CODE_LENGTH, RATE_PRECISION
 from ket.kernel.money import RATE_SCALE_DEFAULT
-from ket.posting.contracts import AMOUNT_PRECISION, AMOUNT_SCALE, PartnerKind
+from ket.posting.contracts import AMOUNT_PRECISION, AMOUNT_SCALE, EntryKind, PartnerKind
 
 _ZERO = Decimal(0)
 
@@ -101,6 +101,11 @@ class JournalVoucherIn(BaseModel):
     )
     description: str | None = Field(default=None, max_length=1000)
     cashflow_activity: int | None = None
+    entry_kind: int = Field(default=EntryKind.NGHIEP_VU, ge=0, le=int(EntryKind.KET_CHUYEN))
+    """Bản chất bút toán (LD-17). Chứng từ nghiệp vụ khác (`GLE`) là nơi kế
+    toán ghi **kết chuyển thủ công** trước khi có engine kết chuyển (10a), nên
+    đây là màn hình đầu tiên cần khai cờ này — B02 lọc theo nó."""
+
     lines: tuple[JournalLineIn, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -155,6 +160,7 @@ class JournalVoucherOut(BaseModel):
     description: str | None
     status: int
     cashflow_activity: int | None
+    entry_kind: int
     created_at: datetime
     created_by: int
     posted_at: datetime | None

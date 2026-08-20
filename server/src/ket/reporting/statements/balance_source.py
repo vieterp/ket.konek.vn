@@ -51,12 +51,20 @@ def load_fiscal_year_amounts(
     year_start: date,
     range_end: date,
     branch_id: int | None,
+    operating_turnover_only: bool,
 ) -> tuple[ColumnAmounts, ColumnAmounts]:
     """`(cột instant cuối khoảng, cột instant đầu năm)` của một năm tài chính.
 
     Cột thứ nhất mang cả phát sinh lũy kế `year_start..range_end` — các layout
     `income`/`cashflow` đọc phát sinh từ đúng cột này (một năm = một lượt quét,
     cột "Năm trước" là một lượt gọi thứ hai trên năm trước).
+
+    `operating_turnover_only=True` cho `turnover_*` chỉ mang phát sinh **nghiệp
+    vụ** (bỏ bút toán kết chuyển — LD-17); B02 đo bộ này. **Số dư (`balance_*`)
+    luôn suy từ TOÀN BỘ bút toán bất kể cờ này** — bút toán kết chuyển là thứ
+    làm 421 đúng — nên không có tổ hợp tham số nào cho ra số dư sai (sửa H3
+    review 4F: bản đầu lọc thẳng trong SQL nên layout phát sinh lỡ dùng
+    `DR`/`CR`/`BAL` sẽ nhận số dư thiếu kết chuyển).
     """
     rows = session.execute(
         text(STATEMENT_BALANCES_SQL),
@@ -71,16 +79,26 @@ def load_fiscal_year_amounts(
 
     closing_column: ColumnAmounts = {}
     opening_column: ColumnAmounts = {}
-    for account_code, opening_net, turnover_debit, turnover_credit in rows:
+    for (
+        account_code,
+        opening_net,
+        turnover_debit,
+        turnover_credit,
+        operating_debit,
+        operating_credit,
+    ) in rows:
         opening = opening_net or ZERO
-        debit = turnover_debit or ZERO
-        credit = turnover_credit or ZERO
-        closing_debit, closing_credit = _split(opening + debit - credit)
+        all_debit = turnover_debit or ZERO
+        all_credit = turnover_credit or ZERO
+        # Số dư: LUÔN từ toàn bộ bút toán.
+        closing_debit, closing_credit = _split(opening + all_debit - all_credit)
+        shown_debit = (operating_debit or ZERO) if operating_turnover_only else all_debit
+        shown_credit = (operating_credit or ZERO) if operating_turnover_only else all_credit
         closing_column[account_code] = AccountAmounts(
             balance_debit=closing_debit,
             balance_credit=closing_credit,
-            turnover_debit=debit,
-            turnover_credit=credit,
+            turnover_debit=shown_debit,
+            turnover_credit=shown_credit,
         )
         opening_debit, opening_credit = _split(opening)
         opening_column[account_code] = AccountAmounts(

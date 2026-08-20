@@ -12,7 +12,7 @@ commit (FR-NFR-003).
 
 from __future__ import annotations
 
-from ket.posting.documents.models import Voucher, VoucherStatus
+from ket.posting.documents.models import EntryKind, Voucher, VoucherStatus
 from ket.posting.documents.registry import (
     REGISTRY as POSTING_DOCUMENT_REGISTRY,
 )
@@ -34,6 +34,7 @@ __all__ = [
     "AMOUNT_PRECISION",
     "AMOUNT_SCALE",
     "POSTING_DOCUMENT_REGISTRY",
+    "EntryKind",
     "ExtendedDimensionValue",
     "Ledger",
     "PartnerKind",

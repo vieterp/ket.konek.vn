@@ -71,6 +71,7 @@ class JournalVoucherService:
                 exchange_rate=payload.exchange_rate,
                 description=payload.description,
                 cashflow_activity=payload.cashflow_activity,
+                entry_kind=payload.entry_kind,
             ),
             rule=JOURNAL_NUMBERING_RULE,
             user_id=user_id,
@@ -121,6 +122,11 @@ class JournalVoucherService:
         voucher.exchange_rate = payload.exchange_rate
         voucher.description = payload.description
         voucher.cashflow_activity = payload.cashflow_activity
+        # Sửa được vì chứng từ phải ở trạng thái Đã cất mới vào tới đây
+        # (`ensure_editable`) — chưa có dòng `gl_postings` nào mang bản sao cờ,
+        # nên không có gì để lệch. Đổi cờ trên chứng từ ĐÃ ghi sổ thì phải bỏ
+        # ghi sổ trước, đúng đường của mọi sửa đổi khác.
+        voucher.entry_kind = payload.entry_kind
 
         for line in self._lines_of(voucher.id):
             self._session.delete(line)

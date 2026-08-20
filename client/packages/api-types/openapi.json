@@ -5565,6 +5565,13 @@
             "title": "Document Date",
             "type": "string"
           },
+          "entry_kind": {
+            "default": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Entry Kind",
+            "type": "integer"
+          },
           "exchange_rate": {
             "anyOf": [
               {
@@ -5652,6 +5659,10 @@
             "title": "Document Type",
             "type": "string"
           },
+          "entry_kind": {
+            "title": "Entry Kind",
+            "type": "integer"
+          },
           "exchange_rate": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Exchange Rate",
@@ -5728,6 +5739,7 @@
           "description",
           "status",
           "cashflow_activity",
+          "entry_kind",
           "created_at",
           "created_by",
           "posted_at",
@@ -5778,6 +5790,13 @@
             "format": "date",
             "title": "Document Date",
             "type": "string"
+          },
+          "entry_kind": {
+            "default": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Entry Kind",
+            "type": "integer"
           },
           "exchange_rate": {
             "anyOf": [
@@ -9352,7 +9371,7 @@
         "type": "object"
       },
       "StatementPreviewResponse": {
-        "description": "Một BCTC đã lập cho `(layout, kỳ, sổ[, chi nhánh])`.\n\nCột so sánh (`comparative`) là \"Số đầu năm\" với báo cáo tình hình tài\nchính; với báo cáo phát sinh nó là `null` ở v1 — xem bất biến H1 trong\n`reporting/statements/builder.py`.",
+        "description": "Một BCTC đã lập cho `(layout, kỳ, sổ[, chi nhánh])`.\n\nCột so sánh (`comparative`) là \"Số đầu năm\" với báo cáo tình hình tài\nchính, \"Năm trước\" với báo cáo phát sinh (bỏ bút toán kết chuyển — LD-17).",
         "properties": {
           "branch_id": {
             "anyOf": [
