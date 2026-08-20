@@ -1405,3 +1405,47 @@ class StatementLayoutNotFoundError(DomainError):
 
     error_code: ClassVar[str] = "config.statement_layout_unknown"
     http_status: ClassVar[int] = 404
+
+
+class ReportSpecInvalidError(DomainError):
+    """`spec` của layout/bộ tham số báo cáo sai hình dạng (FR-RPT-001).
+
+    Ném ở `kernel/config/reports/spec.py` — ranh giới duy nhất đọc JSONB thô.
+    Nổ lúc gieo/nhập (fail-closed) hoặc lúc render nếu dữ liệu bị sửa tay trong
+    DB; không bao giờ thành `KeyError` giữa một lượt kết xuất.
+    """
+
+    error_code: ClassVar[str] = "report.spec_invalid"
+
+
+class ReportDatasetInvalidError(DomainError):
+    """`sql_text` của dataset báo cáo vi phạm hợp đồng: placeholder ngoài
+    `allowed_params`, hoặc thiếu cột mà lớp bọc phạm vi cần (`branch_id`/`ledger`)."""
+
+    error_code: ClassVar[str] = "report.dataset_invalid"
+
+
+class ReportNotFoundError(DomainError):
+    """Không có báo cáo mang mã này. 404 — mã nằm trên URL, cùng khuôn
+    `StatementLayoutNotFoundError`."""
+
+    error_code: ClassVar[str] = "report.not_found"
+    http_status: ClassVar[int] = 404
+
+
+class ReportParamsInvalidError(DomainError):
+    """Tham số render không qua được bộ kiểm sinh từ `param_set.spec`
+    (FR-RPT-002): thiếu tham số bắt buộc, sai kiểu, hoặc tham số lạ."""
+
+    error_code: ClassVar[str] = "report.params_invalid"
+
+
+class ReportDatasetNotExecutableError(DomainError):
+    """Dataset không-builtin chưa chạy được: role read-only RLS-bound cho SQL
+    từ gói nhập ngoài (RT-07) đến ở lát 5D — từ chối fail-closed thay vì chạy
+    SQL không tin cậy bằng quyền runtime đầy đủ."""
+
+    error_code: ClassVar[str] = "report.dataset_not_executable"
+    http_status: ClassVar[int] = 409
+    """409 chứ không 422: tham số người dùng không sai — trạng thái HỆ THỐNG
+    (chưa có role read-only) chưa cho phép chạy dataset này (review 5C, L2)."""

@@ -206,6 +206,24 @@ jobs:
       - name: Đồng bộ phụ thuộc
         run: uv sync --python ${{ env.PYTHON_VERSION }}
 
+      # WeasyPrint gọi Pango/GObject qua DLL hệ thống — runner Windows không có
+      # sẵn (Linux/macOS thì có). Cài bằng MSYS2 (có sẵn tại C:\msys64) theo
+      # đúng hướng dẫn Windows của WeasyPrint, rồi trỏ nó tới thư mục DLL qua
+      # WEASYPRINT_DLL_DIRECTORIES. Thiếu bước này mọi test render PDF chết
+      # ngay lúc import với "cannot load library 'libgobject-2.0-0'".
+      - name: Cài Pango cho WeasyPrint (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm --needed mingw-w64-x86_64-pango
+          "WEASYPRINT_DLL_DIRECTORIES=C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # Cùng lý do cho macOS (chỉ chạy lúc merge): runner không có sẵn Pango,
+      # máy dev thì có qua Homebrew nên khác biệt này chỉ lộ ra trên CI.
+      - name: Cài Pango cho WeasyPrint (macOS)
+        if: runner.os == 'macOS'
+        run: brew install pango
+
       # Nhóm `db` có job riêng (cần service container, chỉ chạy trên Linux).
       # Loại trừ tường minh chứ không để nó tự bỏ qua: một bộ test "xanh vì
       # không kết nối được DB" là tín hiệu tệ hơn không có tín hiệu.

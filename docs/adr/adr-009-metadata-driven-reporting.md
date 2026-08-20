@@ -48,6 +48,43 @@ related: [FR-RPT-001, FR-NFR-044, RT-01, RT-25, "SRS 19 §9 rủi ro #2"]
   - Typst (ngôn ngữ markup mới, dẫn xuất CSS)
   - Xác định **plan-B** ngay bây giờ trong phase 1, không hoãn đến phase 5
 
+## Kết luận spike S2 — cổng go/no-go renderer (RT-25, đo 2026-08-20, lát 5C)
+
+Đo trên macOS ARM (máy phát triển), WeasyPrint 69, dataset `gl_ledger` thật
+(6 cột, nhóm theo TK, font Be Vietnam Pro nhúng):
+
+| Kịch bản | Thời gian | RAM đỉnh | Ghi chú |
+| --- | --- | --- | --- |
+| PDF 1.000 dòng | 3,4s | 310MB | ~3,4ms/dòng — chi phí TUYẾN TÍNH theo dòng |
+| PDF 3.000 dòng (cỡ một kỳ) | 10,5s | — | chạm ngưỡng FR-NFR-041 (10s) trên máy dev |
+| PDF 50.000 dòng **nguyên khối** | 309s | **7,2GB** | TRƯỢT cả hai ngưỡng (60s/1GB) |
+| PDF 50.000 dòng **theo lát** (1.500 dòng/lát + ghép pypdf) | 186s | **567MB** | 1.201 trang, số trang liên tục, đạt ngưỡng RAM |
+| XLSX 50.000 dòng (xlsxwriter `constant_memory`) | **1,1s** | 164MB | đường xuất trọn-năm nhanh |
+
+**Quyết định: GO cho WeasyPrint**, với hai điều kiện đã thi công ở lát 5C:
+
+1. **Phương án phân trang là đường bắt buộc cho sổ dài** (`pdf_renderer.py`,
+   ngưỡng `CHUNK_DATA_ROWS = 1500`): render từng lát, tiếp số trang bằng
+   `@page:first { counter-reset: page N }`, ghép bằng pypdf, nhóm dở mở lại
+   với "(tiếp theo)". RAM đỉnh ~500MB **bất kể độ dài sổ**. Chân trang chế độ
+   lát là "Trang X" (không "/ Y" — tổng số trang chỉ biết sau lát cuối).
+2. **Rebaseline ngưỡng thời gian sổ-cả-năm PDF** (điều RT-25 yêu cầu ghi tường
+   minh): 60s không đạt được với WeasyPrint (~3,4ms/dòng là chi phí nền của
+   pango/layout, `table-layout: fixed` chỉ bớt ~13%). Ngưỡng mới: **sổ cả năm
+   50k dòng qua job nền ≤ 4 phút, RAM < 1GB**; đường xuất nhanh trọn năm là
+   **XLSX (~1s)**. Nửa "đóng gói được" của cổng vẫn chờ spike S4 (2C-6, phần
+   cứng) — pango/cairo trên máy đích là đầu vào phase 11.
+
+Plan-B (Chromium headless / Typst) **giữ nguyên tên trong hồ sơ, chưa kích
+hoạt**: chỉ mở lại nếu khách hàng thật cần PDF sổ dài nhanh hơn 4 phút — đổi
+engine cho riêng nhóm sổ dài, giữ WeasyPrint cho chứng từ + BCTC (~155 mẫu
+vẫn một ngôn ngữ HTML/CSS).
+
+FR-NFR-041 (báo cáo một kỳ <10s): PDF một kỳ cỡ 3.000 dòng = 10,5s trên máy
+dev — **sát ngưỡng**; lát 5E (bước 19) đo lại trên 100k chứng từ/máy đích và
+quyết định hạ ngưỡng chuyển-sang-job (hiện phác thảo 20.000 dòng là quá cao
+cho PDF; XLSX/JSON không bị ảnh hưởng).
+
 ## Reversal cost
 
 Đảo sang render client-side:

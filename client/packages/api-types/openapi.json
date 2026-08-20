@@ -5840,6 +5840,7 @@
         "title": "JournalVoucherUpdate",
         "type": "object"
       },
+      "JsonValue": {},
       "LedgerPostingListResponse": {
         "description": "Một trang phát sinh + tổng số dòng khớp bộ lọc.",
         "properties": {
@@ -8832,6 +8833,182 @@
           "is_active"
         ],
         "title": "ProjectsUpdateRequest",
+        "type": "object"
+      },
+      "ReportListResponse": {
+        "properties": {
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/ReportSummaryResponse"
+            },
+            "title": "Reports",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reports"
+        ],
+        "title": "ReportListResponse",
+        "type": "object"
+      },
+      "ReportParamFieldResponse": {
+        "description": "Một ô nhập NGOÀI bộ chuẩn — client dựng form từ danh sách này.\n\nBộ chuẩn (`from_date`, `to_date`, `branch_ids`, `ledger`) là hợp đồng cố\nđịnh FR-RPT-002, client dựng sẵn, không lặp lại ở đây.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "date",
+              "int",
+              "text",
+              "bool",
+              "decimal"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "label_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label En"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "label",
+          "label_en",
+          "required"
+        ],
+        "title": "ReportParamFieldResponse",
+        "type": "object"
+      },
+      "ReportParamsResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "ledger_scope": {
+            "enum": [
+              "both",
+              "financial",
+              "management"
+            ],
+            "title": "Ledger Scope",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "params": {
+            "items": {
+              "$ref": "#/components/schemas/ReportParamFieldResponse"
+            },
+            "title": "Params",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "ledger_scope",
+          "params"
+        ],
+        "title": "ReportParamsResponse",
+        "type": "object"
+      },
+      "ReportRenderRequest": {
+        "description": "Thân `POST /reports/{code}/render`.\n\n`params` là JSON tự do Ở RANH GIỚI — engine kiểm bằng model Pydantic sinh\nđộng từ `param_set.spec` (FR-RPT-002) rồi mới cho đi tiếp dưới dạng có kiểu\n(`BoundParams`), đúng tinh thần LD-13: dict thô không đi QUA ranh giới\nmodule, nó dừng ở bộ kiểm.",
+        "properties": {
+          "format": {
+            "enum": [
+              "pdf",
+              "xlsx"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "required": [
+          "format"
+        ],
+        "title": "ReportRenderRequest",
+        "type": "object"
+      },
+      "ReportSummaryResponse": {
+        "description": "Một dòng trong danh mục báo cáo (màn *Sổ sách & Thuế*).",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "ledger_scope": {
+            "enum": [
+              "both",
+              "financial",
+              "management"
+            ],
+            "title": "Ledger Scope",
+            "type": "string"
+          },
+          "module": {
+            "title": "Module",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "name_en",
+          "category",
+          "module",
+          "ledger_scope"
+        ],
+        "title": "ReportSummaryResponse",
         "type": "object"
       },
       "ResourceTaxTablesCreateRequest": {
@@ -23844,6 +24021,173 @@
         "summary": "Unlock Period",
         "tags": [
           "periods"
+        ]
+      }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "description": "Danh mục báo cáo đã đăng ký trong dữ liệu kế toán này (FR-RPT-001).",
+        "operationId": "get_reports_api_v1_reports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 50,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "module",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 50,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Module"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Reports",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/{code}/params": {
+      "get": {
+        "description": "Tham số NGOÀI bộ chuẩn của một báo cáo — client dựng form từ đây\n(FR-RPT-002; bộ chuẩn là hợp đồng cố định, xem `reports_schemas`).",
+        "operationId": "get_report_params_api_v1_reports__code__params_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportParamsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Report Params",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/{code}/render": {
+      "post": {
+        "description": "Kết xuất một báo cáo (FR-RPT-006). Số liệu chạy trong phạm vi RLS của\nngười gọi; `branch_ids` chỉ thu hẹp thêm (BR-RPT-04/05).",
+        "operationId": "render_api_v1_reports__code__render_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportRenderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {},
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp báo cáo theo `format` đã chọn"
+          },
+          "404": {
+            "description": "Không có báo cáo mang mã này"
+          },
+          "422": {
+            "description": "Tham số không hợp lệ (FR-RPT-002)"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Render",
+        "tags": [
+          "reports"
         ]
       }
     },

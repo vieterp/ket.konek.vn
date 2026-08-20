@@ -1,0 +1,82 @@
+{#- Mẫu HTML dùng chung cho báo cáo dạng bảng/nhóm (lát 5C).
+
+    Chạy trong `SandboxedEnvironment` với autoescape (RT-01) — mọi giá trị ô đã
+    được `formats.py` đổi thành CHUỖI trước khi vào template; template chỉ đổ
+    khuôn, không tính toán, không định dạng số.
+
+    `display_rows` là iterator streaming — template duyệt đúng một lượt.
+-#}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+</head>
+<body class="{{ 'page-landscape' if orientation == 'landscape' else 'page-portrait' }}">
+  {% if show_title %}
+  <div class="report-unit">
+    <div class="unit-name">{{ unit.name }}</div>
+    {% if unit.address %}<div>{{ unit.address }}</div>{% endif %}
+    {% if unit.tax_code %}<div>MST: {{ unit.tax_code }}</div>{% endif %}
+  </div>
+
+  <h1 class="report-title">{{ title }}</h1>
+  <div class="report-params">
+    {% for line in param_lines %}<p>{{ line }}</p>{% endfor %}
+  </div>
+  {% elif continued %}
+  <div class="report-continued">{{ title }} (tiếp theo)</div>
+  {% endif %}
+
+  <table class="report-table">
+    <colgroup>
+      {% for column in columns %}<col{% if column.width %} style="width: {{ column.width }}%"{% endif %}>{% endfor %}
+    </colgroup>
+    <thead>
+      <tr>
+        {% for column in columns %}<th class="cell-{{ column.type }}">{{ column.label }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in display_rows %}
+      {% if row.kind == 'group_header' %}
+      <tr class="group-header"><td colspan="{{ columns | length }}">{{ row.heading }}</td></tr>
+      {% elif row.kind == 'data' %}
+      <tr>
+        {% for cell in row.cells %}<td class="{{ cell.css }}">{{ cell.text }}</td>{% endfor %}
+      </tr>
+      {% elif row.kind == 'group_footer' %}
+      <tr class="group-footer">
+        {% for cell in row.cells %}<td class="{{ cell.css }}"{% if loop.first %} colspan="{{ row.label_span }}"{% endif %}>{{ cell.text }}</td>{% endfor %}
+      </tr>
+      {% elif row.kind == 'grand_total' %}
+      <tr class="grand-total">
+        {% for cell in row.cells %}<td class="{{ cell.css }}"{% if loop.first %} colspan="{{ row.label_span }}"{% endif %}>{{ cell.text }}</td>{% endfor %}
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if show_signature %}
+  <div class="signature-date">{{ signature_date_line }}</div>
+  <div class="signature-block">
+    <div class="signature">
+      <div class="role">Người lập biểu</div>
+      <div class="note">(Ký, họ tên)</div>
+      <div class="gap"></div>
+    </div>
+    <div class="signature">
+      <div class="role">Kế toán trưởng</div>
+      <div class="note">(Ký, họ tên)</div>
+      <div class="gap"></div>
+    </div>
+    <div class="signature">
+      <div class="role">Giám đốc</div>
+      <div class="note">(Ký, họ tên, đóng dấu)</div>
+      <div class="gap"></div>
+    </div>
+  </div>
+  {% endif %}
+</body>
+</html>

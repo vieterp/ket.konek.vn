@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ket.kernel.config.packages.seed import ensure_builtin_packages
+from ket.kernel.config.reports.seed import ensure_builtin_reports
 from ket.kernel.datasets.models import Dataset
 from ket.kernel.datasets.naming import (
     role_name_for_schema,
@@ -234,6 +235,11 @@ def provision_dataset(
         # hoặc sai hợp đồng — fail-closed có chủ đích, không tạo dataset dở dang
         # với hệ TK rỗng mà không ai phát hiện ra cho tới lần ghi sổ đầu tiên.
         ensure_builtin_packages(connection, schema)
+        # Sau gói cấu hình, cùng transaction: metadata báo cáo builtin
+        # (FR-RPT-001) — probe `LIMIT 0` trong seed chạy chính câu SQL của
+        # engine trên schema vừa migrate, nên nó phải đứng sau khi mọi bảng
+        # gốc (gl_postings, vouchers, chart_of_accounts) đã có mặt.
+        ensure_builtin_reports(connection, schema)
 
     try:
         with Session(owner_engine) as session, session.begin():
