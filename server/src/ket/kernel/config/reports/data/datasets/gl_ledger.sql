@@ -22,6 +22,7 @@ SELECT
     coa.name                               AS account_name,
     p.posting_date,
     v.voucher_no,
+    v.document_date,
     v.document_type,
     COALESCE(p.description, v.description) AS description,
     corr.code                              AS corresponding_account,

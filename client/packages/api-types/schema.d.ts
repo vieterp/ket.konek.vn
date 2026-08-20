@@ -5579,6 +5579,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/print-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Print Templates
+         * @description Mẫu in đã đăng ký — hộp chọn mẫu của nút In.
+         *
+         *     Không nêu `document_type` thì trả mẫu của những loại người gọi in được —
+         *     cùng luật danh-sách-trộn-không-vòng-qua-phân-quyền với `list_vouchers`.
+         */
+        get: operations["list_print_templates_api_v1_print_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports": {
         parameters: {
             query?: never;
@@ -5614,6 +5637,30 @@ export interface paths {
         get: operations["get_report_params_api_v1_reports__code__params_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{code}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview
+         * @description Xem trước dạng lưới (bước 14, FR-RPT-001) — quyền `view`, không cần
+         *     `export`: xem một báo cáo trên màn hình và mang được tệp ra ngoài là hai ô
+         *     khác nhau trong ma trận phân quyền. Ô đã định dạng sẵn phía server bằng
+         *     chính pha chữ của bản in; lưới cắt ở trần `PREVIEW_MAX_ROWS` (cờ
+         *     `truncated`) — đường lấy đủ là XLSX.
+         */
+        post: operations["preview_api_v1_reports__code__preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6117,6 +6164,29 @@ export interface paths {
          * @description Bỏ ghi sổ — chứng từ về Đã cất, dòng sổ bị xóa (không phải bút toán đảo).
          */
         post: operations["unpost_voucher_api_v1_vouchers__voucher_id__actions_unpost_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vouchers/{voucher_id}/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Print Voucher
+         * @description In một chứng từ theo mẫu (FR-RPT-008): sandbox + allowlist (RT-01),
+         *     chứng từ chưa ghi sổ mang dấu BẢN NHÁP, mỗi lần in một dòng `print_log`
+         *     (FR-RPT-011). Khóa dòng chứng từ (`FOR UPDATE`) nên `copy_no` nối tiếp
+         *     nhau kể cả khi hai người cùng bấm In.
+         */
+        post: operations["print_voucher_api_v1_vouchers__voucher_id__print_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9206,6 +9276,72 @@ export interface components {
             /** Row Version */
             row_version: number;
         };
+        /** PreviewCellResponse */
+        PreviewCellResponse: {
+            /** Css */
+            css: string;
+            /** Text */
+            text: string;
+        };
+        /**
+         * PreviewColumnResponse
+         * @description Một cột của lưới xem trước — đủ để client dựng header + căn lề.
+         */
+        PreviewColumnResponse: {
+            /** Align */
+            align: ("left" | "center" | "right") | null;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Label En */
+            label_en: string | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "text" | "date" | "money" | "quantity";
+            /** Width */
+            width: number | null;
+        };
+        /**
+         * PreviewRowResponse
+         * @description Một dòng trình bày: dữ liệu, tiêu đề nhóm, tổng nhóm hay tổng cộng.
+         */
+        PreviewRowResponse: {
+            /** Cells */
+            cells?: components["schemas"]["PreviewCellResponse"][] | null;
+            /** Heading */
+            heading?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "data" | "group_header" | "group_footer" | "grand_total";
+            /** Label Span */
+            label_span?: number | null;
+        };
+        /** PrintTemplateListResponse */
+        PrintTemplateListResponse: {
+            /** Templates */
+            templates: components["schemas"]["PrintTemplateSummaryResponse"][];
+        };
+        /**
+         * PrintTemplateSummaryResponse
+         * @description Một mẫu in trong hộp chọn của nút In.
+         */
+        PrintTemplateSummaryResponse: {
+            /** Code */
+            code: string;
+            /** Document Type */
+            document_type: string;
+            /** Is Builtin */
+            is_builtin: boolean;
+            /** Is Default */
+            is_default: boolean;
+            /** Name */
+            name: string;
+        };
         /**
          * ProblemDetails
          * @description Thân lỗi RFC 7807 — **hợp đồng công khai** với client.
@@ -9443,6 +9579,36 @@ export interface components {
             name: string;
             /** Params */
             params: components["schemas"]["ReportParamFieldResponse"][];
+        };
+        /**
+         * ReportPreviewRequest
+         * @description Thân `POST /reports/{code}/preview` — cùng hợp đồng `params` với render.
+         */
+        ReportPreviewRequest: {
+            /** Params */
+            params?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
+        /**
+         * ReportPreviewResponse
+         * @description Bản xem trước dạng lưới (bước 14 phase-05) — ô đã định dạng sẵn phía
+         *     server bằng CHÍNH pha chữ của bản in (BR-RPT-02 ở tầng trình bày); client
+         *     chỉ vẽ, không tính.
+         */
+        ReportPreviewResponse: {
+            /** Code */
+            code: string;
+            /** Columns */
+            columns: components["schemas"]["PreviewColumnResponse"][];
+            /** Name */
+            name: string;
+            /** Param Lines */
+            param_lines: string[];
+            /** Rows */
+            rows: components["schemas"]["PreviewRowResponse"][];
+            /** Truncated */
+            truncated: boolean;
         };
         /**
          * ReportRenderRequest
@@ -10094,6 +10260,14 @@ export interface components {
             page_size: number;
             /** Total */
             total: number;
+        };
+        /**
+         * VoucherPrintRequest
+         * @description Thân `POST /vouchers/{id}/print` — bỏ trống `template_code` = mẫu mặc định.
+         */
+        VoucherPrintRequest: {
+            /** Template Code */
+            template_code?: string | null;
         };
         /**
          * VoucherResponse
@@ -19217,6 +19391,37 @@ export interface operations {
             };
         };
     };
+    list_print_templates_api_v1_print_templates_get: {
+        parameters: {
+            query?: {
+                document_type?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrintTemplateListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_reports_api_v1_reports_get: {
         parameters: {
             query?: {
@@ -19267,6 +19472,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReportParamsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    preview_api_v1_reports__code__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportPreviewResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -19983,6 +20223,55 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["VoucherResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    print_voucher_api_v1_vouchers__voucher_id__print_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoucherPrintRequest"];
+            };
+        };
+        responses: {
+            /** @description PDF bản in; `X-Print-Copy-No` = lần in thứ mấy, `X-Print-Reprint: true` từ lần thứ hai (FR-RPT-011) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description Không có chứng từ / mẫu in */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Chứng từ ở trạng thái không in được */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {

@@ -134,6 +134,13 @@ LOCALE_KEY: Final[str] = "ui.locale"
 GRID_ENTER_KEY: Final[str] = "ui.grid_enter_moves_to_next_row"
 SAVE_ALSO_POSTS_KEY: Final[str] = "posting.save_also_posts"
 
+PRINT_ALLOW_DRAFT_KEY: Final[str] = "print.allow_draft_vouchers"
+PRINT_ALLOW_LOCKED_KEY: Final[str] = "print.allow_locked_vouchers"
+QUANTITY_DECIMALS_KEY: Final[str] = "format.quantity_decimals"
+REPORT_FONT_SIZE_KEY: Final[str] = "report.font_size_pt"
+REPORT_LOGO_HASH_KEY: Final[str] = "report.logo_content_hash"
+REPORT_LOGO_MEDIA_KEY: Final[str] = "report.logo_media_type"
+
 CATALOG: Final[dict[str, SettingDefinition]] = {
     definition.key: definition
     for definition in (
@@ -172,6 +179,72 @@ CATALOG: Final[dict[str, SettingDefinition]] = {
             # chậm một nửa số người nhập liệu.
             scopes=frozenset({SettingScope.SYSTEM, SettingScope.USER}),
             description="Phím Enter chuyển xuống dòng kế trong lưới nhập liệu",
+        ),
+        SettingDefinition(
+            key=PRINT_ALLOW_DRAFT_KEY,
+            value_type=ValueType.BOOLEAN,
+            default=TRUE_LITERAL,
+            # FR-RPT-011: cho/không cho in chứng từ CHƯA ghi sổ. Mặc định cho
+            # phép — bản in mang dấu BẢN NHÁP (watermark) nên không giả được
+            # chứng từ thật; đơn vị muốn quy trình chặt hơn thì tắt.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Cho phép in chứng từ chưa ghi sổ (bản in mang dấu BẢN NHÁP)",
+        ),
+        SettingDefinition(
+            key=PRINT_ALLOW_LOCKED_KEY,
+            value_type=ValueType.BOOLEAN,
+            default=TRUE_LITERAL,
+            # FR-RPT-011: cho/không cho in chứng từ thuộc kỳ ĐÃ khóa. Mặc định
+            # cho phép — chứng từ kỳ khóa là bất động, in lại phục vụ lưu trữ/
+            # thanh tra là nhu cầu thật; tắt dành cho đơn vị coi mọi bản in
+            # sau khóa sổ là bản phải xin phép.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Cho phép in chứng từ thuộc kỳ đã khóa sổ",
+        ),
+        SettingDefinition(
+            key=QUANTITY_DECIMALS_KEY,
+            value_type=ValueType.INTEGER,
+            default="2",
+            # FR-RPT-012: định dạng số riêng cho từng loại. v1 khai loại đầu
+            # tiên có cột hiển thị (số lượng); đơn giá/tỷ giá/tỷ lệ vào cùng
+            # dataset đầu tiên dùng chúng (phase 6–8) — cùng doctrine trì hoãn
+            # với `STANDARD_PARAMS` (currency/org_unit_ids).
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Số chữ số thập phân hiển thị cho cột số lượng trên báo cáo",
+            minimum=0,
+            maximum=6,
+        ),
+        SettingDefinition(
+            key=REPORT_FONT_SIZE_KEY,
+            value_type=ValueType.INTEGER,
+            default="9",
+            # FR-RPT-010: cấu hình font trên bản in. Họ font là token thương
+            # hiệu (Be Vietnam Pro, nhúng trong server để PDF giống nhau mọi
+            # máy — quyết định 5C) nên thứ cấu hình được là CỠ chữ.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Cỡ chữ thân bản in PDF (pt)",
+            minimum=8,
+            maximum=12,
+        ),
+        SettingDefinition(
+            key=REPORT_LOGO_HASH_KEY,
+            value_type=ValueType.STRING,
+            default="",
+            # FR-RPT-010: logo trên báo cáo/chứng từ. Giá trị = `content_hash`
+            # của một tệp đã tải lên kho đính kèm (content-addressed) — đọc
+            # thẳng từ đĩa lúc render, KHÔNG qua bảng `attachments`: logo là
+            # nhận diện của đơn vị, mọi chi nhánh cùng thấy, còn bảng
+            # attachments nằm sau RLS chi nhánh. Rỗng = không logo.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="content_hash (SHA-256) của tệp logo in trên báo cáo; rỗng = không logo",
+        ),
+        SettingDefinition(
+            key=REPORT_LOGO_MEDIA_KEY,
+            value_type=ValueType.STRING,
+            default="image/png",
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Kiểu nội dung của tệp logo",
+            choices=frozenset({"image/png", "image/jpeg", "image/svg+xml"}),
         ),
         SettingDefinition(
             key=SAVE_ALSO_POSTS_KEY,

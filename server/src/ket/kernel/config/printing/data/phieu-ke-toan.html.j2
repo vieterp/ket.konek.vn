@@ -1,0 +1,78 @@
+{#- Phiếu kế toán — mẫu in builtin cho chứng từ nghiệp vụ khác (GLE).
+
+    Chạy trong `SandboxedEnvironment` autoescape (RT-01); mọi giá trị trong
+    context đã là CHUỖI định dạng sẵn (formats.py) — mẫu chỉ đổ khuôn.
+    Dùng chung class với report_table (print_base.css, tokens Konek).
+-#}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>{{ title }} {{ voucher_no }}</title>
+</head>
+<body class="page-portrait">
+  {% if draft %}<div class="print-watermark">BẢN NHÁP — CHƯA GHI SỔ</div>{% endif %}
+  <div class="report-unit">
+    {% if logo_url %}<img class="unit-logo" src="{{ logo_url }}" alt="">{% endif %}
+    <div class="unit-name">{{ unit.name }}</div>
+    {% if unit.address %}<div>{{ unit.address }}</div>{% endif %}
+    {% if unit.tax_code %}<div>MST: {{ unit.tax_code }}</div>{% endif %}
+  </div>
+
+  <h1 class="report-title">{{ title }}</h1>
+  <div class="report-params">
+    <p>Số: {{ voucher_no }} — Ngày chứng từ: {{ document_date }} — Ngày hạch toán: {{ posting_date }}</p>
+    {% if description %}<p>Diễn giải: {{ description }}</p>{% endif %}
+    {% if copy_line %}<p class="print-copy-note">{{ copy_line }}</p>{% endif %}
+  </div>
+
+  <table class="report-table">
+    <colgroup>
+      <col style="width: 6%">
+      <col style="width: 12%">
+      <col>
+      <col style="width: 16%">
+      <col style="width: 16%">
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="cell-text">STT</th>
+        <th class="cell-text">Tài khoản</th>
+        <th class="cell-text">Diễn giải</th>
+        <th class="cell-money">Nợ</th>
+        <th class="cell-money">Có</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+      <tr>
+        <td class="cell-text cell-center">{{ line.line_no }}</td>
+        <td class="cell-text cell-center">{{ line.account_code }}</td>
+        <td class="cell-text">{{ line.description }}</td>
+        <td class="cell-money">{{ line.debit }}</td>
+        <td class="cell-money">{{ line.credit }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="grand-total">
+        <td class="cell-left" colspan="3">Cộng</td>
+        <td class="cell-money">{{ total_debit }}</td>
+        <td class="cell-money">{{ total_credit }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="signature-date">{{ signature_date_line }}</div>
+  <div class="signature-block">
+    <div class="signature">
+      <div class="role">Người lập</div>
+      <div class="note">(Ký, họ tên)</div>
+      <div class="gap"></div>
+    </div>
+    <div class="signature">
+      <div class="role">Kế toán trưởng</div>
+      <div class="note">(Ký, họ tên)</div>
+      <div class="gap"></div>
+    </div>
+  </div>
+</body>
+</html>

@@ -25,8 +25,9 @@ from decimal import Decimal
 from typing import Final
 
 import structlog
-from sqlalchemy import Connection, insert, select, text
+from sqlalchemy import Connection, delete, insert, select, text, update
 
+from ket.kernel.config.accounts_models import ConfigPackage
 from ket.kernel.config.reports.loader import LoadedReports, load_builtin_reports
 from ket.kernel.config.reports.models import (
     ReportDataset,
@@ -65,6 +66,58 @@ def ensure_builtin_reports(connection: Connection, schema: str) -> int:
     if added:
         logger.info("reports.builtin_seeded", schema=schema, rows_added=added)
     return added
+
+
+def refresh_builtin_reports(connection: Connection, schema: str) -> None:
+    """Đưa metadata báo cáo BUILTIN của một schema đã có dữ liệu về đúng nội
+    dung đóng gói của bản phát hành hiện tại — đường dành cho migration.
+
+    Khác `ensure_builtin_reports` (chỉ lấp chỗ trống, không bao giờ ghi đè):
+    hàm này **thay** nội dung dòng builtin — dùng đúng một lần ở `0014`, khi
+    chưa có bản cài phát hành nào nên "người dùng đã sửa layout builtin" chưa
+    phải một trạng thái cần bảo toàn. Sau bản phát hành đầu tiên, nâng cấp nội
+    dung builtin phải quay về doctrine mã-mới-cho-nội-dung-mới của
+    `ensure_builtin_reports` (docstring đầu tệp) — KHÔNG gọi lại hàm này trong
+    một migration tương lai.
+
+    Thứ tự: xóa definition builtin (không gì tham chiếu definition) → cập nhật
+    dataset/layout/param set builtin còn tồn tại về nội dung đóng gói → gieo
+    lại phần thiếu (kèm probe `LIMIT 0`). Dòng KHÔNG-builtin (đăng ký lúc chạy)
+    giữ nguyên.
+    """
+    bind_seed_schema(connection, schema)
+    loaded = load_builtin_reports()
+    connection.execute(delete(ReportDefinition).where(ReportDefinition.is_builtin.is_(True)))
+    for entry in loaded.manifest.datasets:
+        connection.execute(
+            update(ReportDataset)
+            .where(ReportDataset.code == entry.code, ReportDataset.is_builtin.is_(True))
+            .values(
+                sql_text=loaded.sql_by_dataset[entry.code],
+                allowed_params=list(entry.allowed_params),
+                supports_branch=entry.supports_branch,
+                supports_ledger=entry.supports_ledger,
+                description=entry.description,
+            )
+        )
+    for layout in loaded.manifest.layouts:
+        connection.execute(
+            update(ReportLayout)
+            .where(ReportLayout.code == layout.code, ReportLayout.is_builtin.is_(True))
+            .values(kind=layout.kind, spec=layout.spec)
+        )
+    # `report_param_sets` không có cột `is_builtin` (khác dataset/layout): mã
+    # trong manifest là danh tính — UPDATE theo đúng mã builtin không chạm được
+    # dòng người dùng đăng ký (mã khác). Người dùng đặt trùng một mã builtin
+    # thì bị chính seed coi là dòng builtin — đó là lý do mã builtin thuộc
+    # không-gian-tên của manifest, không phải của người dùng.
+    for param_set in loaded.manifest.param_sets:
+        connection.execute(
+            update(ReportParamSet)
+            .where(ReportParamSet.code == param_set.code)
+            .values(spec=param_set.spec)
+        )
+    ensure_builtin_reports(connection, schema)
 
 
 def _seed_datasets(connection: Connection, loaded: LoadedReports) -> int:
@@ -130,9 +183,22 @@ def _seed_layouts(connection: Connection, loaded: LoadedReports) -> int:
 
 def _seed_definitions(connection: Connection, loaded: LoadedReports) -> int:
     existing = set(connection.execute(select(ReportDefinition.code)).scalars())
+    package_ids = _builtin_package_ids(connection)
     added = 0
     for entry in loaded.manifest.definitions:
         if entry.code in existing:
+            continue
+        if entry.package_scheme is not None and entry.package_scheme not in package_ids:
+            # Gói builtin của scheme chưa được gieo — xảy ra đúng một trường
+            # hợp: migration gọi seed này trên schema đang provision (packages
+            # gieo SAU chuỗi migration). Bỏ qua chứ không lỗi: lượt gọi trong
+            # `provision_dataset` chạy sau `ensure_builtin_packages` sẽ lấp
+            # đúng những dòng này.
+            logger.info(
+                "reports.definition_deferred_missing_package",
+                code=entry.code,
+                scheme=entry.package_scheme,
+            )
             continue
         connection.execute(
             insert(ReportDefinition).values(
@@ -146,11 +212,31 @@ def _seed_definitions(connection: Connection, loaded: LoadedReports) -> int:
                 param_set_code=entry.param_set_code,
                 ledger_scope=entry.ledger_scope,
                 is_builtin=True,
-                package_id=None,
+                package_id=(
+                    package_ids[entry.package_scheme] if entry.package_scheme is not None else None
+                ),
             )
         )
         added += 1
     return added
+
+
+def _builtin_package_ids(connection: Connection) -> dict[str, int]:
+    """`scheme` → id gói cấu hình **builtin** của scheme đó.
+
+    Neo vào gói builtin chứ không gói "đã kích hoạt": mã mẫu (`S03a-DN`) thuộc
+    về THÔNG TƯ, không thuộc phiên bản gói nào đang chạy — một dataset kích
+    hoạt gói TT99 nhập ngoài vẫn in Sổ Nhật ký chung theo đúng mẫu S03a-DN.
+    Mỗi scheme có đúng một gói builtin (`ensure_builtin_packages` gieo theo
+    `code` cố định); nếu về sau một scheme có nhiều gói builtin theo ngày hiệu
+    lực, dòng mới nhất thắng — cùng phép xếp với `resolve_package`.
+    """
+    rows = connection.execute(
+        select(ConfigPackage.scheme, ConfigPackage.id)
+        .where(ConfigPackage.is_builtin.is_(True))
+        .order_by(ConfigPackage.effective_from, ConfigPackage.id)
+    ).all()
+    return {row.scheme: row.id for row in rows}
 
 
 def _probe_definitions(connection: Connection, loaded: LoadedReports) -> None:

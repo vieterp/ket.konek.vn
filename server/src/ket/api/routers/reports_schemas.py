@@ -56,3 +56,50 @@ class ReportRenderRequest(BaseModel):
 
     format: Literal["pdf", "xlsx"]
     params: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+class ReportPreviewRequest(BaseModel):
+    """Thân `POST /reports/{code}/preview` — cùng hợp đồng `params` với render."""
+
+    params: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+class PreviewColumnResponse(BaseModel):
+    """Một cột của lưới xem trước — đủ để client dựng header + căn lề."""
+
+    key: str
+    label: str
+    label_en: str | None
+    type: Literal["text", "date", "money", "quantity"]
+    align: Literal["left", "center", "right"] | None
+    width: int | None
+
+
+class PreviewCellResponse(BaseModel):
+    text: str
+    css: str
+    """Lớp CSS trình bày (`cell-money cell-right`…) — cùng bộ lớp với bản in
+    PDF, để lưới xem trước và tờ giấy căn lề giống nhau."""
+
+
+class PreviewRowResponse(BaseModel):
+    """Một dòng trình bày: dữ liệu, tiêu đề nhóm, tổng nhóm hay tổng cộng."""
+
+    kind: Literal["data", "group_header", "group_footer", "grand_total"]
+    heading: str | None = None
+    label_span: int | None = None
+    cells: list[PreviewCellResponse] | None = None
+
+
+class ReportPreviewResponse(BaseModel):
+    """Bản xem trước dạng lưới (bước 14 phase-05) — ô đã định dạng sẵn phía
+    server bằng CHÍNH pha chữ của bản in (BR-RPT-02 ở tầng trình bày); client
+    chỉ vẽ, không tính."""
+
+    code: str
+    name: str
+    param_lines: list[str]
+    columns: list[PreviewColumnResponse]
+    rows: list[PreviewRowResponse]
+    truncated: bool
+    """`true` = lưới bị cắt ở trần xem trước — xuất XLSX/PDF để lấy đủ."""

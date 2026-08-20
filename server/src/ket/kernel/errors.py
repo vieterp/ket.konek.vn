@@ -1442,10 +1442,28 @@ class ReportParamsInvalidError(DomainError):
 
 class ReportDatasetNotExecutableError(DomainError):
     """Dataset không-builtin chưa chạy được: role read-only RLS-bound cho SQL
-    từ gói nhập ngoài (RT-07) đến ở lát 5D — từ chối fail-closed thay vì chạy
-    SQL không tin cậy bằng quyền runtime đầy đủ."""
+    từ gói nhập ngoài (RT-07) đi cùng lát dựng ĐƯỜNG NHẬP dataset ngoài (quyết
+    định 5D: chưa có đường nhập nào tạo được dataset không-builtin, nên một cơ
+    chế quyền chưa có người dùng thật là rủi ro chứ không phải phòng thủ) — từ
+    chối fail-closed thay vì chạy SQL không tin cậy bằng quyền runtime đầy đủ."""
 
     error_code: ClassVar[str] = "report.dataset_not_executable"
     http_status: ClassVar[int] = 409
     """409 chứ không 422: tham số người dùng không sai — trạng thái HỆ THỐNG
     (chưa có role read-only) chưa cho phép chạy dataset này (review 5C, L2)."""
+
+
+class PrintTemplateNotFoundError(DomainError):
+    """Không có mẫu in cho loại chứng từ này (FR-RPT-008): mã mẫu lạ, hoặc
+    loại chứng từ chưa có mẫu mặc định."""
+
+    error_code: ClassVar[str] = "print.template_not_found"
+    http_status: ClassVar[int] = 404
+
+
+class PrintNotAllowedError(DomainError):
+    """Chứng từ ở trạng thái không in được (FR-RPT-011) — hiện chỉ một trường
+    hợp: Đã hủy. Chứng từ chưa ghi sổ VẪN in được nhưng mang dấu BẢN NHÁP."""
+
+    error_code: ClassVar[str] = "print.not_allowed"
+    http_status: ClassVar[int] = 409

@@ -8294,6 +8294,201 @@
         "title": "PitTablesUpdateRequest",
         "type": "object"
       },
+      "PreviewCellResponse": {
+        "properties": {
+          "css": {
+            "title": "Css",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "css"
+        ],
+        "title": "PreviewCellResponse",
+        "type": "object"
+      },
+      "PreviewColumnResponse": {
+        "description": "Một cột của lưới xem trước — đủ để client dựng header + căn lề.",
+        "properties": {
+          "align": {
+            "anyOf": [
+              {
+                "enum": [
+                  "left",
+                  "center",
+                  "right"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Align"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "label_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label En"
+          },
+          "type": {
+            "enum": [
+              "text",
+              "date",
+              "money",
+              "quantity"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "label_en",
+          "type",
+          "align",
+          "width"
+        ],
+        "title": "PreviewColumnResponse",
+        "type": "object"
+      },
+      "PreviewRowResponse": {
+        "description": "Một dòng trình bày: dữ liệu, tiêu đề nhóm, tổng nhóm hay tổng cộng.",
+        "properties": {
+          "cells": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PreviewCellResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cells"
+          },
+          "heading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heading"
+          },
+          "kind": {
+            "enum": [
+              "data",
+              "group_header",
+              "group_footer",
+              "grand_total"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label_span": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Span"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "PreviewRowResponse",
+        "type": "object"
+      },
+      "PrintTemplateListResponse": {
+        "properties": {
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/PrintTemplateSummaryResponse"
+            },
+            "title": "Templates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "templates"
+        ],
+        "title": "PrintTemplateListResponse",
+        "type": "object"
+      },
+      "PrintTemplateSummaryResponse": {
+        "description": "Một mẫu in trong hộp chọn của nút In.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "is_builtin": {
+            "title": "Is Builtin",
+            "type": "boolean"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_type",
+          "code",
+          "name",
+          "is_default",
+          "is_builtin"
+        ],
+        "title": "PrintTemplateSummaryResponse",
+        "type": "object"
+      },
       "ProblemDetails": {
         "additionalProperties": true,
         "description": "Thân lỗi RFC 7807 — **hợp đồng công khai** với client.\n\nKhai thành model (dù handler vẫn dựng `dict` để mang thêm trường tùy lớp\nlỗi) vì đúng một lý do: nó phải có mặt trong đặc tả OpenAPI, và từ đó có mặt\ntrong type sinh cho client (bước 14). Không khai thì client bắt lỗi bằng\n`any` — tức là phần *hay xảy ra nhất* của một API lại là phần duy nhất không\ncó kiểu.\n\n`model_config` cho phép trường thừa: mỗi lớp lỗi được khai thêm trường riêng\nqua `problem_extra()` (`latest` của xung đột phiên bản, `errors` của lỗi\nkiểm dữ liệu). Chúng là phần **mở rộng** của hợp đồng, không phải phần vi\nphạm nó.",
@@ -8933,6 +9128,68 @@
           "params"
         ],
         "title": "ReportParamsResponse",
+        "type": "object"
+      },
+      "ReportPreviewRequest": {
+        "description": "Thân `POST /reports/{code}/preview` — cùng hợp đồng `params` với render.",
+        "properties": {
+          "params": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "title": "ReportPreviewRequest",
+        "type": "object"
+      },
+      "ReportPreviewResponse": {
+        "description": "Bản xem trước dạng lưới (bước 14 phase-05) — ô đã định dạng sẵn phía\nserver bằng CHÍNH pha chữ của bản in (BR-RPT-02 ở tầng trình bày); client\nchỉ vẽ, không tính.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewColumnResponse"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "param_lines": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Param Lines",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewRowResponse"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "param_lines",
+          "columns",
+          "rows",
+          "truncated"
+        ],
+        "title": "ReportPreviewResponse",
         "type": "object"
       },
       "ReportRenderRequest": {
@@ -10611,6 +10868,25 @@
           "page_size"
         ],
         "title": "VoucherListResponse",
+        "type": "object"
+      },
+      "VoucherPrintRequest": {
+        "description": "Thân `POST /vouchers/{id}/print` — bỏ trống `template_code` = mẫu mặc định.",
+        "properties": {
+          "template_code": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Code"
+          }
+        },
+        "title": "VoucherPrintRequest",
         "type": "object"
       },
       "VoucherResponse": {
@@ -24024,6 +24300,57 @@
         ]
       }
     },
+    "/api/v1/print-templates": {
+      "get": {
+        "description": "Mẫu in đã đăng ký — hộp chọn mẫu của nút In.\n\nKhông nêu `document_type` thì trả mẫu của những loại người gọi in được —\ncùng luật danh-sách-trộn-không-vòng-qua-phân-quyền với `list_vouchers`.",
+        "operationId": "list_print_templates_api_v1_print_templates_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "document_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrintTemplateListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Print Templates",
+        "tags": [
+          "printing"
+        ]
+      }
+    },
     "/api/v1/reports": {
       "get": {
         "description": "Danh mục báo cáo đã đăng ký trong dữ liệu kế toán này (FR-RPT-001).",
@@ -24130,6 +24457,59 @@
           }
         },
         "summary": "Get Report Params",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/{code}/preview": {
+      "post": {
+        "description": "Xem trước dạng lưới (bước 14, FR-RPT-001) — quyền `view`, không cần\n`export`: xem một báo cáo trên màn hình và mang được tệp ra ngoài là hai ô\nkhác nhau trong ma trận phân quyền. Ô đã định dạng sẵn phía server bằng\nchính pha chữ của bản in; lưới cắt ở trần `PREVIEW_MAX_ROWS` (cờ\n`truncated`) — đường lấy đủ là XLSX.",
+        "operationId": "preview_api_v1_reports__code__preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Preview",
         "tags": [
           "reports"
         ]
@@ -25197,6 +25577,62 @@
         "summary": "Unpost Voucher",
         "tags": [
           "vouchers"
+        ]
+      }
+    },
+    "/api/v1/vouchers/{voucher_id}/print": {
+      "post": {
+        "description": "In một chứng từ theo mẫu (FR-RPT-008): sandbox + allowlist (RT-01),\nchứng từ chưa ghi sổ mang dấu BẢN NHÁP, mỗi lần in một dòng `print_log`\n(FR-RPT-011). Khóa dòng chứng từ (`FOR UPDATE`) nên `copy_no` nối tiếp\nnhau kể cả khi hai người cùng bấm In.",
+        "operationId": "print_voucher_api_v1_vouchers__voucher_id__print_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoucherPrintRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {}
+            },
+            "description": "PDF bản in; `X-Print-Copy-No` = lần in thứ mấy, `X-Print-Reprint: true` từ lần thứ hai (FR-RPT-011)"
+          },
+          "404": {
+            "description": "Không có chứng từ / mẫu in"
+          },
+          "409": {
+            "description": "Chứng từ ở trạng thái không in được"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Print Voucher",
+        "tags": [
+          "printing"
         ]
       }
     },

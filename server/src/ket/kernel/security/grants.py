@@ -29,7 +29,7 @@ from ket.kernel.auditing.models import AUDIT_TABLE_NAME
 from ket.kernel.datasets.naming import validate_grantable_schema
 from ket.kernel.security.rls import validate_identifier
 
-APPEND_ONLY_TABLES: Final[frozenset[str]] = frozenset({AUDIT_TABLE_NAME})
+APPEND_ONLY_TABLES: Final[frozenset[str]] = frozenset({AUDIT_TABLE_NAME, "print_log"})
 """Bảng **chỉ được thêm** trong schema dataset — nguồn sự thật DUY NHẤT.
 
 Hai đường cấp quyền phải đọc cùng danh sách này: migration (cấp lúc tạo bảng) và

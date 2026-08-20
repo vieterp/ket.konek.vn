@@ -69,6 +69,11 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         "/api/v1/system/users/{user_id}/branches",
         # Xếp một job vào hàng đợi (lát 2B-2b) — FR-NFR-004 miễn trừ tường minh.
         "/api/v1/jobs",
+        # In chứng từ (lát 5D, FR-RPT-011): thứ duy nhất nó ghi là một dòng
+        # `print_log` — và in lần 2 là một SỰ KIỆN THẬT mà FR-RPT-011 sinh ra
+        # để ĐẾM (`copy_no` + cảnh báo), không phải một lần gửi lại cần khử.
+        # Một khóa idempotency ở đây sẽ trả bản PDF cũ và nói dối số lần in.
+        "/api/v1/vouchers/{voucher_id}/print",
     }
 )
 """Miễn trừ theo **đúng một đường dẫn**, cho thao tác tự nó đã idempotent.

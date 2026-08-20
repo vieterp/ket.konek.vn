@@ -1,5 +1,5 @@
 {
-  "__doc__": "Báo cáo dựng sẵn không phụ thuộc chế độ kế toán. Lát 5C gieo một báo cáo (Sổ Cái) để chứng minh engine end-to-end + chạy spike S2; 5D đăng ký 8–10 báo cáo đầu và đổi mã theo mẫu thông tư khi có print_templates. `sql_file` trỏ vào `datasets/`.",
+  "__doc__": "Báo cáo dựng sẵn. 4 dataset phủ 8 báo cáo bộ sổ đầu tiên (trần ≤5 dataset cho 10 báo cáo — phase-05 §Chiến lược quy mô). Mã definition = đúng mã mẫu thông tư (quyết định 5D, đóng câu hỏi mở #1 của 5C): TT99 Phụ lục III đối chiếu Công báo 1575+1576 (S03a/S03b/S38/S06-DN); TT133 Phụ lục 4 đối chiếu toàn văn thông tư (S03a/S03b/S19-DNN, F01-DNN Điều 83) — chờ kế toán trưởng duyệt cùng gói TT133. `package_scheme` gắn definition vào gói cấu hình builtin cùng scheme lúc gieo. Layout dùng chung giữa hai thông tư khi biểu mẫu trùng cột; nhãn cột dùng chữ 'kỳ' thay 'tháng/năm' vì bộ tham số là khoảng ngày tự do (Điều 12 k2 TT99 cho phép, ghi trong Quy chế hạch toán kèm phần mềm).",
   "datasets": [
     {
       "code": "gl_ledger",
@@ -7,7 +7,31 @@
       "allowed_params": ["from_date", "to_date", "ledger", "branch_ids", "account_code"],
       "supports_branch": true,
       "supports_ledger": true,
-      "description": "Dòng phát sinh chi tiết theo tài khoản (Sổ Cái, sổ chi tiết TK)"
+      "description": "Dòng phát sinh chi tiết theo tài khoản (Sổ Cái S03b)"
+    },
+    {
+      "code": "gl_journal",
+      "sql_file": "gl_journal.sql",
+      "allowed_params": ["from_date", "to_date", "ledger", "branch_ids"],
+      "supports_branch": false,
+      "supports_ledger": true,
+      "description": "Dòng phát sinh theo trình tự thời gian, STT liên tục (Sổ Nhật ký chung S03a)"
+    },
+    {
+      "code": "gl_detail",
+      "sql_file": "gl_detail.sql",
+      "allowed_params": ["from_date", "to_date", "ledger", "branch_ids", "account_code"],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Sổ chi tiết tài khoản: dư đầu kỳ + phát sinh + số dư lũy kế sau từng dòng (S38/S19)"
+    },
+    {
+      "code": "trial_balance",
+      "sql_file": "trial_balance.sql",
+      "allowed_params": ["from_date", "to_date", "ledger", "branch_ids"],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Bảng cân đối số phát sinh: dư đầu/phát sinh/dư cuối tách hai bên theo tài khoản (S06/F01)"
     }
   ],
   "param_sets": [
@@ -24,7 +48,23 @@
           }
         ]
       }
-    }
+    },
+    { "code": "gl_journal_params", "spec": { "params": [] } },
+    {
+      "code": "gl_detail_params",
+      "spec": {
+        "params": [
+          {
+            "name": "account_code",
+            "kind": "text",
+            "label": "Tài khoản",
+            "label_en": "Account",
+            "required": false
+          }
+        ]
+      }
+    },
+    { "code": "trial_balance_params", "spec": { "params": [] } }
   ],
   "layouts": [
     {
@@ -32,33 +72,187 @@
       "kind": "grouped",
       "spec": {
         "columns": [
-          { "key": "posting_date", "label": "Ngày ghi sổ", "label_en": "Posting date", "type": "date", "width": 10 },
-          { "key": "voucher_no", "label": "Số chứng từ", "label_en": "Voucher no.", "type": "text", "width": 12 },
+          { "key": "posting_date", "label": "Ngày ghi sổ", "label_en": "Posting date", "type": "date", "width": 9 },
+          { "key": "voucher_no", "label": "Số chứng từ", "label_en": "Voucher no.", "type": "text", "width": 11 },
+          { "key": "document_date", "label": "Ngày chứng từ", "label_en": "Document date", "type": "date", "width": 9 },
           { "key": "description", "label": "Diễn giải", "label_en": "Description", "type": "text" },
           { "key": "corresponding_account", "label": "TK đối ứng", "label_en": "Corresp. acct", "type": "text", "align": "center", "width": 9 },
-          { "key": "debit", "label": "Nợ", "label_en": "Debit", "type": "money", "width": 14 },
-          { "key": "credit", "label": "Có", "label_en": "Credit", "type": "money", "width": 14 }
+          { "key": "debit", "label": "Nợ", "label_en": "Debit", "type": "money", "width": 13 },
+          { "key": "credit", "label": "Có", "label_en": "Credit", "type": "money", "width": 13 }
         ],
         "group_by": [
           { "key": "account_code", "heading_keys": ["account_code", "account_name"] }
         ],
         "totals": ["debit", "credit"],
-        "sort": ["account_code", "posting_date", "voucher_no", "line_no"],
+        "sort": ["account_code", "posting_date", "voucher_no", "branch_id", "line_no"],
         "page": { "orientation": "portrait" }
+      }
+    },
+    {
+      "code": "gl-journal",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          { "key": "stt", "label": "STT dòng", "label_en": "Line no.", "type": "text", "align": "center", "width": 6 },
+          { "key": "posting_date", "label": "Ngày ghi sổ", "label_en": "Posting date", "type": "date", "width": 9 },
+          { "key": "voucher_no", "label": "Số chứng từ", "label_en": "Voucher no.", "type": "text", "width": 11 },
+          { "key": "document_date", "label": "Ngày chứng từ", "label_en": "Document date", "type": "date", "width": 9 },
+          { "key": "description", "label": "Diễn giải", "label_en": "Description", "type": "text" },
+          { "key": "account_code", "label": "Số hiệu TK", "label_en": "Account", "type": "text", "align": "center", "width": 8 },
+          { "key": "debit", "label": "Nợ", "label_en": "Debit", "type": "money", "width": 13 },
+          { "key": "credit", "label": "Có", "label_en": "Credit", "type": "money", "width": 13 }
+        ],
+        "totals": ["debit", "credit"],
+        "sort": ["stt"],
+        "page": { "orientation": "portrait" }
+      }
+    },
+    {
+      "code": "gl-detail",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          { "key": "posting_date", "label": "Ngày ghi sổ", "label_en": "Posting date", "type": "date", "width": 8 },
+          { "key": "voucher_no", "label": "Số chứng từ", "label_en": "Voucher no.", "type": "text", "width": 10 },
+          { "key": "document_date", "label": "Ngày chứng từ", "label_en": "Document date", "type": "date", "width": 8 },
+          { "key": "description", "label": "Diễn giải", "label_en": "Description", "type": "text" },
+          { "key": "corresponding_account", "label": "TK đối ứng", "label_en": "Corresp. acct", "type": "text", "align": "center", "width": 7 },
+          { "key": "debit", "label": "PS Nợ", "label_en": "Debit", "type": "money", "width": 11 },
+          { "key": "credit", "label": "PS Có", "label_en": "Credit", "type": "money", "width": 11 },
+          { "key": "balance_debit", "label": "Dư Nợ", "label_en": "Bal. debit", "type": "money", "width": 11 },
+          { "key": "balance_credit", "label": "Dư Có", "label_en": "Bal. credit", "type": "money", "width": 11 }
+        ],
+        "group_by": [
+          { "key": "account_code", "heading_keys": ["account_code", "account_name"] }
+        ],
+        "totals": ["debit", "credit"],
+        "sort": ["account_code", "sort_seq", "rn"],
+        "page": { "orientation": "landscape" }
+      }
+    },
+    {
+      "code": "trial-balance",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          { "key": "account_code", "label": "Số hiệu TK", "label_en": "Account", "type": "text", "align": "center", "width": 8 },
+          { "key": "account_name", "label": "Tên tài khoản", "label_en": "Account name", "type": "text" },
+          { "key": "opening_debit", "label": "Dư đầu kỳ Nợ", "label_en": "Opening debit", "type": "money", "width": 11 },
+          { "key": "opening_credit", "label": "Dư đầu kỳ Có", "label_en": "Opening credit", "type": "money", "width": 11 },
+          { "key": "period_debit", "label": "PS trong kỳ Nợ", "label_en": "Period debit", "type": "money", "width": 11 },
+          { "key": "period_credit", "label": "PS trong kỳ Có", "label_en": "Period credit", "type": "money", "width": 11 },
+          { "key": "closing_debit", "label": "Dư cuối kỳ Nợ", "label_en": "Closing debit", "type": "money", "width": 11 },
+          { "key": "closing_credit", "label": "Dư cuối kỳ Có", "label_en": "Closing credit", "type": "money", "width": 11 }
+        ],
+        "totals": [
+          "opening_debit",
+          "opening_credit",
+          "period_debit",
+          "period_credit",
+          "closing_debit",
+          "closing_credit"
+        ],
+        "sort": ["account_code"],
+        "page": { "orientation": "landscape" }
       }
     }
   ],
   "definitions": [
     {
-      "code": "SO-CAI",
-      "name": "Sổ Cái (theo tài khoản)",
-      "name_en": "General Ledger",
+      "code": "S03a-DN",
+      "name": "Sổ Nhật ký chung (Mẫu số S03a-DN)",
+      "name_en": "General Journal (S03a-DN)",
+      "category": "so-ke-toan",
+      "module": "general_ledger",
+      "dataset_code": "gl_journal",
+      "layout_code": "gl-journal",
+      "param_set_code": "gl_journal_params",
+      "ledger_scope": "both",
+      "package_scheme": "TT99"
+    },
+    {
+      "code": "S03b-DN",
+      "name": "Sổ Cái — hình thức Nhật ký chung (Mẫu số S03b-DN)",
+      "name_en": "General Ledger (S03b-DN)",
       "category": "so-ke-toan",
       "module": "general_ledger",
       "dataset_code": "gl_ledger",
       "layout_code": "gl-ledger",
       "param_set_code": "gl_ledger_params",
-      "ledger_scope": "both"
+      "ledger_scope": "both",
+      "package_scheme": "TT99"
+    },
+    {
+      "code": "S38-DN",
+      "name": "Sổ chi tiết các tài khoản (Mẫu số S38-DN)",
+      "name_en": "Account detail ledger (S38-DN)",
+      "category": "so-ke-toan",
+      "module": "general_ledger",
+      "dataset_code": "gl_detail",
+      "layout_code": "gl-detail",
+      "param_set_code": "gl_detail_params",
+      "ledger_scope": "both",
+      "package_scheme": "TT99"
+    },
+    {
+      "code": "S06-DN",
+      "name": "Bảng cân đối số phát sinh (Mẫu số S06-DN)",
+      "name_en": "Trial balance (S06-DN)",
+      "category": "so-ke-toan",
+      "module": "general_ledger",
+      "dataset_code": "trial_balance",
+      "layout_code": "trial-balance",
+      "param_set_code": "trial_balance_params",
+      "ledger_scope": "both",
+      "package_scheme": "TT99"
+    },
+    {
+      "code": "S03a-DNN",
+      "name": "Sổ Nhật ký chung (Mẫu số S03a-DNN)",
+      "name_en": "General Journal (S03a-DNN)",
+      "category": "so-ke-toan",
+      "module": "general_ledger",
+      "dataset_code": "gl_journal",
+      "layout_code": "gl-journal",
+      "param_set_code": "gl_journal_params",
+      "ledger_scope": "both",
+      "package_scheme": "TT133"
+    },
+    {
+      "code": "S03b-DNN",
+      "name": "Sổ Cái — hình thức Nhật ký chung (Mẫu số S03b-DNN)",
+      "name_en": "General Ledger (S03b-DNN)",
+      "category": "so-ke-toan",
+      "module": "general_ledger",
+      "dataset_code": "gl_ledger",
+      "layout_code": "gl-ledger",
+      "param_set_code": "gl_ledger_params",
+      "ledger_scope": "both",
+      "package_scheme": "TT133"
+    },
+    {
+      "code": "S19-DNN",
+      "name": "Sổ chi tiết các tài khoản (Mẫu số S19-DNN)",
+      "name_en": "Account detail ledger (S19-DNN)",
+      "category": "so-ke-toan",
+      "module": "general_ledger",
+      "dataset_code": "gl_detail",
+      "layout_code": "gl-detail",
+      "param_set_code": "gl_detail_params",
+      "ledger_scope": "both",
+      "package_scheme": "TT133"
+    },
+    {
+      "code": "F01-DNN",
+      "name": "Bảng cân đối tài khoản (Mẫu số F01-DNN)",
+      "name_en": "Trial balance (F01-DNN)",
+      "category": "bao-cao-tai-chinh",
+      "module": "general_ledger",
+      "dataset_code": "trial_balance",
+      "layout_code": "trial-balance",
+      "param_set_code": "trial_balance_params",
+      "ledger_scope": "both",
+      "package_scheme": "TT133"
     }
   ]
 }

@@ -634,8 +634,12 @@ def test_voucher_numbers_are_sequential_per_branch(run: Runner, context: Posting
         service = JournalVoucherService(session)
         first = service.create(_payload(context), user_id=ACTOR_ID)
         second = service.create(_payload(context), user_id=ACTOR_ID)
-        first_no = int(first.voucher_no.removeprefix("GLE"))
-        second_no = int(second.voucher_no.removeprefix("GLE"))
+        # Định dạng 5D: `GLE{YY}-#####` — năm nằm trong số nên dãy reset theo
+        # năm không đụng `uq_vouchers_type_branch_no` (trả nợ 4D).
+        prefix = f"GLE{first.posting_date.year % 100:02d}-"
+        assert first.voucher_no.startswith(prefix)
+        first_no = int(first.voucher_no.removeprefix(prefix))
+        second_no = int(second.voucher_no.removeprefix(prefix))
         assert second_no == first_no + 1
 
     run(work)
