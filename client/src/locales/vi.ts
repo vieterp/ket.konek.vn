@@ -131,6 +131,7 @@ export const vi = {
   'catalog.title.toolTypes': 'Loại công cụ dụng cụ',
   'catalog.title.paymentTerms': 'Điều khoản thanh toán',
   'catalog.title.banks': 'Ngân hàng',
+  'catalog.title.companyBankAccounts': 'Tài khoản ngân hàng doanh nghiệp',
   'catalog.title.documentTypes': 'Loại chứng từ',
   'catalog.title.invoiceForms': 'Mẫu số hóa đơn',
   'catalog.title.timekeepingSymbols': 'Ký hiệu chấm công',
@@ -194,6 +195,8 @@ export const vi = {
   'catalog.field.discountPercent': 'Tỷ lệ chiết khấu (%)',
   'catalog.field.shortName': 'Tên viết tắt',
   'catalog.field.swiftCode': 'Mã SWIFT',
+  'catalog.field.currencyCode': 'Tiền tệ',
+  'catalog.field.bankBranchName': 'Chi nhánh ngân hàng',
 
   'catalog.itemNature.goods': 'Hàng hóa',
   'catalog.itemNature.finishedGoods': 'Thành phẩm',
