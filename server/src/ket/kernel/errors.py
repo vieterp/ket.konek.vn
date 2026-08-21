@@ -1526,3 +1526,30 @@ class OpeningBalanceSettledError(DomainError):
 
     error_code: ClassVar[str] = "opening_balance.settled"
     http_status: ClassVar[int] = 409
+
+
+class TreasurerModuleDisabledError(DomainError):
+    """Phân hệ thủ quỹ đang tắt (FR-WHK-021) — hành động Ghi sổ quỹ thủ công
+    không có nghĩa: phiếu vào thẳng sổ quỹ ngay lúc ghi sổ kế toán.
+
+    409 cùng lập luận `OpeningBalanceSettledError`: yêu cầu không sai, trạng
+    thái (tham số phân hệ) không cho phép — và bật lại được ở Thiết lập.
+    """
+
+    error_code: ClassVar[str] = "treasurer.module_disabled"
+    http_status: ClassVar[int] = 409
+
+
+class TreasurerVoucherStateError(DomainError):
+    """Phiếu không ở trạng thái ghi sổ quỹ được: chưa ghi sổ kế toán
+    (BR-WHK-01 — sổ quỹ chỉ nhận phiếu đã vào sổ kế toán) hoặc đã lên sổ quỹ
+    rồi (UNIQUE một phiếu một dòng sổ quỹ)."""
+
+    error_code: ClassVar[str] = "treasurer.voucher_state"
+    http_status: ClassVar[int] = 409
+
+
+class TreasurerBookDateInvalidError(DomainError):
+    """Ngày ghi sổ quỹ tùy chọn nhỏ hơn ngày hạch toán trên chứng từ (BR-WHK-05)."""
+
+    error_code: ClassVar[str] = "treasurer.book_date_invalid"

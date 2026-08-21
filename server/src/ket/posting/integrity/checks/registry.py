@@ -1,4 +1,5 @@
-"""Danh mục 7 phép kiểm toàn vẹn của phase 4 (FR-NFR-007, FR-GLE-032/033).
+"""Danh mục các phép kiểm toàn vẹn (FR-NFR-007, FR-GLE-032/033) — 7 của
+phase 4 + đối chiếu sổ quỹ thủ quỹ của phase 6 (BR-WHK-03).
 
 Mỗi phép kiểm là MỘT tệp `.sql` độc lập trả về danh sách dòng chênh lệch —
 không UPDATE, không tự sửa (chữ của phase file: "chỉ chỉ ra"). Registry là
@@ -77,6 +78,11 @@ CHECKS: Final[tuple[IntegrityCheck, ...]] = (
         code="usage_counter_accurate",
         title="Bộ đếm sử dụng danh mục khớp tham chiếu thực tế",
         rule="BR-SYS-02",
+    ),
+    IntegrityCheck(
+        code="treasurer_book_matches_ledger",
+        title="Sổ quỹ thủ quỹ khớp sổ kế toán TK tiền mặt",
+        rule="BR-WHK-03",
     ),
 )
 

@@ -21,6 +21,11 @@ Năm Protocol, ai cài — ai gọi:
   không import module kho; module `inventory` (phase 8) cài.
 * `CommitmentProvider` — "đã hứa giao" cho cột **Có thể bán** = tồn − đã hứa
   (U7, phase 8); module `sales` cài từ đơn hàng.
+* `TreasurerCashBook` / `TreasurerVoucherSource` (lát 6C) — cặp hai chiều giữa
+  `cash_book` (chủ trạng thái thủ quỹ trên thân phiếu) và `warehousing` (chủ
+  bảng sổ quỹ): hàng đợi thủ quỹ đọc phiếu chờ qua source, còn đường
+  "phân hệ tắt thì ghi thẳng sổ quỹ" (FR-WHK-021) ghi qua cash-book Protocol.
+  Phase 8 lặp lại đúng khuôn này cho thủ kho (nguồn phiếu nhập/xuất).
 
 **KHÔNG** khai `InventoryValuation` — RT-18 xóa vì không có consumer thật.
 
@@ -248,6 +253,87 @@ class CommitmentProvider(Protocol):
         ...
 
 
+# ------------------------------------------------------------- thủ quỹ (WHK)
+
+
+class TreasurerBookEntry(BaseModel):
+    """Một dòng sổ quỹ sắp ghi — hình dạng chung giữa nguồn phiếu và sổ.
+
+    `receipt_amount`/`payment_amount` là **VND quy đổi** (sổ quỹ đối chiếu với
+    số dư TK 111 trên sổ kế toán — BR-WHK-03 — nên phải cùng đơn vị với sổ
+    cái); đúng một bên > 0, bên kia bằng 0 (CHECK `exactly_one_side` của bảng).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    voucher_id: UUID
+    branch_id: int
+    cash_account_id: int
+    book_date: date
+    receipt_amount: Decimal
+    payment_amount: Decimal
+    posted_by: int
+
+
+class TreasurerPendingVoucher(BaseModel):
+    """Một phiếu chờ thủ quỹ ghi sổ quỹ — hàng đợi FR-WHK-001."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    voucher_id: UUID
+    voucher_no: str
+    document_type: str
+    branch_id: int
+    posting_date: date
+    cash_account_id: int
+    is_receipt: bool
+    amount: Decimal
+    """VND quy đổi — số thủ quỹ sẽ thu/chi thật."""
+
+    payer_receiver_name: str | None = None
+    description: str | None = None
+
+
+class TreasurerCashBook(Protocol):
+    """Sổ quỹ của thủ quỹ (bảng `treasurer_cash_book`, module `warehousing`).
+
+    Người gọi phía `cash_book`: khi phân hệ thủ quỹ **tắt** (FR-WHK-021) phiếu
+    ghi sổ kế toán xong phải vào thẳng sổ quỹ — mà bảng sổ quỹ thuộc module
+    khác, nên đi qua Protocol này thay vì import chéo (luật phụ thuộc #1).
+    """
+
+    def record(self, session: Session, entry: TreasurerBookEntry) -> None:
+        """Ghi một dòng sổ quỹ — trùng `voucher_id` phải ném, không ghi đôi."""
+        ...
+
+    def erase(self, session: Session, *, voucher_id: UUID) -> None:
+        """Gỡ dòng sổ quỹ của một phiếu (khi bỏ ghi sổ kế toán) — không có
+        dòng nào thì thôi, phiếu chưa từng lên sổ quỹ là trạng thái hợp lệ."""
+        ...
+
+
+class TreasurerVoucherSource(Protocol):
+    """Nguồn phiếu cho hàng đợi thủ quỹ — module `cash_book` cài.
+
+    Chiều ngược của `TreasurerCashBook`: hàng đợi và hành động Ghi sổ quỹ nằm ở
+    `warehousing` (SRS 17), nhưng trạng thái thủ quỹ (`treasurer_status`) sống
+    trên thân phiếu của `cash_book` — nguồn chịu trách nhiệm kiểm và lật trạng
+    thái, sổ chịu trách nhiệm ghi dòng.
+    """
+
+    def pending(self, session: Session) -> Sequence[TreasurerPendingVoucher]:
+        """Phiếu đã ghi sổ kế toán, chờ thủ quỹ (`treasurer_status` = chờ)."""
+        ...
+
+    def book(
+        self, session: Session, *, voucher_id: UUID, book_date: date | None, user_id: int
+    ) -> TreasurerBookEntry:
+        """Kiểm (đã ghi sổ, đang chờ, BR-WHK-05) + lật trạng thái đã-ghi-sổ-quỹ,
+        trả dữ liệu dòng sổ quỹ để bên sổ ghi. `book_date=None` = theo ngày hạch
+        toán trên chứng từ (FR-WHK-003)."""
+        ...
+
+
 # ---------------------------------------------------------------- registry
 
 
@@ -266,6 +352,8 @@ class CrossModuleProviders:
         self._commitment: list[CommitmentProvider] = []
         self._inventory: InventoryPosting | None = None
         self._settlement_sources: dict[SettlementTargetKind, SettlementTargetSource] = {}
+        self._treasurer_cash_book: TreasurerCashBook | None = None
+        self._treasurer_voucher_source: TreasurerVoucherSource | None = None
 
     def register_receivable(self, provider: ReceivableProvider) -> None:
         self._receivable.append(provider)
@@ -291,6 +379,18 @@ class CrossModuleProviders:
             )
         self._settlement_sources[kind] = source
 
+    def register_treasurer_cash_book(self, implementation: TreasurerCashBook) -> None:
+        if self._treasurer_cash_book is not None:
+            raise ValueError("TreasurerCashBook đã có bản cài — chỉ module warehousing ghi sổ quỹ")
+        self._treasurer_cash_book = implementation
+
+    def register_treasurer_voucher_source(self, source: TreasurerVoucherSource) -> None:
+        if self._treasurer_voucher_source is not None:
+            raise ValueError(
+                "TreasurerVoucherSource đã có bản cài — trạng thái thủ quỹ sống một chỗ"
+            )
+        self._treasurer_voucher_source = source
+
     def receivable_providers(self) -> tuple[ReceivableProvider, ...]:
         return tuple(self._receivable)
 
@@ -309,6 +409,15 @@ class CrossModuleProviders:
         """`None` = loại đích chưa có chủ (hóa đơn bán/mua trước phase 7) —
         nơi gọi từ chối dòng đối trừ trỏ vào loại đó, không đoán hộ."""
         return self._settlement_sources.get(kind)
+
+    def treasurer_cash_book(self) -> TreasurerCashBook | None:
+        """`None` = không có module sổ quỹ trong tiến trình — phiếu vẫn ghi sổ
+        kế toán được, chỉ không có sổ quỹ song song."""
+        return self._treasurer_cash_book
+
+    def treasurer_voucher_source(self) -> TreasurerVoucherSource | None:
+        """`None` = không có nguồn phiếu — hàng đợi thủ quỹ rỗng chứ không lỗi."""
+        return self._treasurer_voucher_source
 
 
 PROVIDERS: Final[CrossModuleProviders] = CrossModuleProviders()

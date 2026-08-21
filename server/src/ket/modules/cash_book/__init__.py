@@ -70,14 +70,20 @@ def _build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest
 
 def _after_post(session: Session, voucher_id: UUID, user_id: int) -> None:
     from ket.modules.cash_book.settlement_service import apply_settlements
+    from ket.modules.cash_book.treasurer_source import sync_after_post
 
     apply_settlements(session, voucher_id=voucher_id)
+    # Thủ quỹ (lát 6C): xếp hàng đợi, hoặc phân hệ tắt thì vào thẳng sổ quỹ
+    # (FR-WHK-021) — cùng transaction với ghi sổ kế toán.
+    sync_after_post(session, voucher_id, user_id)
 
 
 def _after_unpost(session: Session, voucher_id: UUID, user_id: int) -> None:
     from ket.modules.cash_book.settlement_service import revert_settlements
+    from ket.modules.cash_book.treasurer_source import clear_after_unpost
 
     revert_settlements(session, voucher_id=voucher_id)
+    clear_after_unpost(session, voucher_id, user_id)
 
 
 def _before_delete(session: Session, voucher_id: UUID, user_id: int) -> None:
@@ -104,3 +110,15 @@ for _code, _permission_name, _title in (
     )
 
 GUARD_REGISTRY.register(CashBalanceGuard())
+
+
+def _register_treasurer_source() -> None:
+    """Nguồn phiếu cho hàng đợi thủ quỹ (lát 6C) — import cục bộ cùng lối
+    `_build_posting_request`: đăng ký lúc nạp gói, thân nạp khi cần."""
+    from ket.kernel.protocols import PROVIDERS
+    from ket.modules.cash_book.treasurer_source import CashTreasurerVoucherSource
+
+    PROVIDERS.register_treasurer_voucher_source(CashTreasurerVoucherSource())
+
+
+_register_treasurer_source()

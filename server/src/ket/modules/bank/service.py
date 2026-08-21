@@ -1,19 +1,23 @@
-"""Dịch vụ phiếu thu/chi tiền mặt (FR-QUY-001..013) — module nghiệp vụ đầu tiên.
+"""Dịch vụ chứng từ tiền gửi (FR-BNK-001..007) — SRS 04, lát 6C.
 
-Cùng khuôn `JournalVoucherService` (phase-04): mọi hàm nhận `Session` đang mở,
+Cùng khuôn `CashVoucherService` (lát 6B): mọi hàm nhận `Session` đang mở,
 không tự commit; Cất-đồng-thời-ghi-sổ (FR-SYS-061) là một transaction thật.
-Khác GLE ba điểm nghiệp vụ:
+Khác phiếu quỹ bốn điểm nghiệp vụ:
 
-* **Nghiệp vụ định khoản** (FR-SYS-025): `operation_code` phải thuộc danh sách
-  của gói hiệu lực cho loại chứng từ; nghiệp vụ đòi đối tác thì phiếu phải có
-  đối tác đúng loại.
-* **Đối trừ công nợ** (`docs/srs/03` §4): định giá lúc cất
-  (`settlement_service.price_settlements`), cộng/gỡ số đã trả lúc ghi/bỏ ghi
-  sổ — hai hook sau cũng được đăng ký vào `POSTING_DOCUMENT_REGISTRY` để đường
-  hành động chung đi qua cùng một mã.
-* **Bộ đếm tham chiếu danh mục** (BR-SYS-02, nợ 6A): đối tác trên phiếu và
-  trên dòng nhích `master_data_usage` trong cùng transaction; nguồn đếm đối
-  chiếu khai ở `posting/integrity/checks/usage_counter_accurate.sql`.
+* **Bốn loại chứng từ** trên một thân (`docs/srs/04` §2): báo có (BC), ủy
+  nhiệm chi (UNC), séc (SEC), chuyển tiền nội bộ (CTNB) — mỗi loại một dãy số
+  riêng và một mã quyền riêng.
+* **TK ngân hàng cụ thể** (FR-BNK-002): chứng từ gắn danh mục
+  `company_bank_accounts`; **tiền tệ chứng từ phải khớp tiền tệ tài khoản**
+  (tài khoản không khai tiền tệ = đồng hạch toán) — một chứng từ USD trên tài
+  khoản VND là nhầm tài khoản, không phải nghiệp vụ ngoại tệ.
+* **Chuyển tiền nội bộ** (FR-BNK-005): không nghiệp vụ, bắt buộc TK đích cùng
+  tiền tệ; dòng định khoản 112↔112 do client điền từ purpose `bank`, cặp bút
+  toán gắn đủ hai tài khoản ngân hàng trên thân (nguồn + đích) để sổ tiền gửi
+  từng tài khoản đọc được cả hai chiều. Chuyển **khác tiền tệ** hoặc **khác
+  chi nhánh** (qua 136/336) ngoài phạm vi lát này — từ chối có thông điệp.
+* **Bộ đếm tham chiếu** (BR-SYS-02) đếm thêm `company_bank_accounts` (nợ 6A):
+  tài khoản ngân hàng đang có chứng từ không xóa được khỏi danh mục.
 """
 
 from __future__ import annotations
@@ -33,6 +37,10 @@ from ket.kernel.errors import (
     PostingViolation,
     VoucherBranchImmutableError,
 )
+from ket.kernel.master_data.models.company_bank_account import (
+    COMPANY_BANK_ACCOUNT_TABLE_NAME,
+    CompanyBankAccount,
+)
 from ket.kernel.master_data.models.employee import EMPLOYEE_TABLE_NAME
 from ket.kernel.master_data.models.partner import PARTNER_TABLE_NAME
 from ket.kernel.master_data.usage import record_use
@@ -41,50 +49,62 @@ from ket.kernel.numbering.models import ResetRule
 from ket.kernel.numbering.service import NumberingRule
 from ket.kernel.periods.service import fiscal_year_covering
 from ket.kernel.persistence.versioning import require_row_version
-from ket.modules.cash_book.models import (
-    CashSettlement,
-    CashVoucher,
-    CashVoucherKind,
-    CashVoucherLine,
+from ket.modules.bank.models import (
+    BankSettlement,
+    BankVoucher,
+    BankVoucherKind,
+    BankVoucherLine,
 )
-from ket.modules.cash_book.posting_mapper import build_posting_request
-from ket.modules.cash_book.schemas import CashVoucherIn
-from ket.modules.cash_book.settlement_service import (
-    PricedSettlement,
+from ket.modules.bank.posting_mapper import build_posting_request
+from ket.modules.bank.schemas import BankVoucherIn
+from ket.modules.bank.settlement_service import (
     apply_settlements,
     price_settlements,
     revert_settlements,
 )
-from ket.modules.cash_book.treasurer_source import clear_after_unpost, sync_after_post
 from ket.posting.contracts import (
     PostingService,
     Voucher,
     VoucherDraft,
     VoucherService,
 )
+from ket.posting.settlements import PricedSettlement
 
-RECEIPT_DOCUMENT_TYPE = "PT"
-PAYMENT_DOCUMENT_TYPE = "PC"
+CREDIT_ADVICE_DOCUMENT_TYPE = "BC"
+PAYMENT_ORDER_DOCUMENT_TYPE = "UNC"
+CHEQUE_DOCUMENT_TYPE = "SEC"
+INTERNAL_TRANSFER_DOCUMENT_TYPE = "CTNB"
 
 DOCUMENT_TYPE_BY_KIND = {
-    CashVoucherKind.RECEIPT: RECEIPT_DOCUMENT_TYPE,
-    CashVoucherKind.PAYMENT: PAYMENT_DOCUMENT_TYPE,
+    BankVoucherKind.CREDIT_ADVICE: CREDIT_ADVICE_DOCUMENT_TYPE,
+    BankVoucherKind.PAYMENT_ORDER: PAYMENT_ORDER_DOCUMENT_TYPE,
+    BankVoucherKind.CHEQUE: CHEQUE_DOCUMENT_TYPE,
+    BankVoucherKind.INTERNAL_TRANSFER: INTERNAL_TRANSFER_DOCUMENT_TYPE,
 }
 
 NUMBERING_RULE_BY_KIND = {
-    CashVoucherKind.RECEIPT: NumberingRule(
-        document_type=RECEIPT_DOCUMENT_TYPE, prefix="PT{YY}-", reset_rule=ResetRule.YEARLY
-    ),
-    CashVoucherKind.PAYMENT: NumberingRule(
-        document_type=PAYMENT_DOCUMENT_TYPE, prefix="PC{YY}-", reset_rule=ResetRule.YEARLY
-    ),
+    kind: NumberingRule(
+        document_type=document_type, prefix=f"{document_type}{{YY}}-", reset_rule=ResetRule.YEARLY
+    )
+    for kind, document_type in DOCUMENT_TYPE_BY_KIND.items()
 }
-"""`PT26-00001`/`PC26-00001`, quay về 1 mỗi năm — cùng khuôn `{YY}` của GLE
-(năm nằm trong chính số nên không đụng `uq_vouchers_type_branch_no`)."""
+"""`BC26-00001`/`UNC26-00001`/… — cùng khuôn `{YY}` của PT/PC (năm nằm trong
+chính số nên không đụng `uq_vouchers_type_branch_no`)."""
 
-OPERATION_UNKNOWN_CODE = "cash.operation_unknown"
-OPERATION_PARTNER_REQUIRED_CODE = "cash.operation_partner_required"
-KIND_IMMUTABLE_CODE = "cash.kind_immutable"
+MONEY_IN_BY_KIND = {
+    BankVoucherKind.CREDIT_ADVICE: True,
+    BankVoucherKind.PAYMENT_ORDER: False,
+    BankVoucherKind.CHEQUE: False,
+}
+"""Chiều tiền cho chênh lệch tỷ giá thu/trả (FR-SYS-066) — chuyển nội bộ không
+có mặt: không chạm công nợ nên không có đối trừ, không có chênh lệch."""
+
+OPERATION_UNKNOWN_CODE = "bank.operation_unknown"
+OPERATION_PARTNER_REQUIRED_CODE = "bank.operation_partner_required"
+KIND_IMMUTABLE_CODE = "bank.kind_immutable"
+ACCOUNT_UNKNOWN_CODE = "bank.account_unknown"
+ACCOUNT_CURRENCY_MISMATCH_CODE = "bank.account_currency_mismatch"
+TRANSFER_CURRENCY_MISMATCH_CODE = "bank.transfer_currency_mismatch"
 
 _USAGE_TABLE_BY_PARTNER_KIND = {
     PartnerKind.CUSTOMER: PARTNER_TABLE_NAME,
@@ -93,8 +113,8 @@ _USAGE_TABLE_BY_PARTNER_KIND = {
 }
 
 
-class CashVoucherService:
-    """CRUD + ghi sổ phiếu thu/chi, trong transaction người gọi."""
+class BankVoucherService:
+    """CRUD + ghi sổ chứng từ tiền gửi, trong transaction người gọi."""
 
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -102,15 +122,15 @@ class CashVoucherService:
         self._posting = PostingService(session)
 
     def create(
-        self, payload: CashVoucherIn, *, user_id: int, acknowledged_warnings: bool = False
+        self, payload: BankVoucherIn, *, user_id: int, acknowledged_warnings: bool = False
     ) -> Voucher:
-        """Cất; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction —
-        `acknowledged_warnings` đi tiếp vào lượt ghi sổ đó (nợ 6A)."""
+        """Cất; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction."""
         kind = payload.kind
         scale = self._money_scale(user_id)
+        self._verify_bank_accounts(payload)
         self._verify_operation(payload)
         self._verify_client_amounts(payload, scale=scale)
-        priced = price_settlements(self._session, payload, scale=scale)
+        priced = self._price_settlements(payload, scale=scale)
 
         voucher = self._vouchers.create(
             VoucherDraft(
@@ -127,17 +147,22 @@ class CashVoucherService:
             user_id=user_id,
         )
         self._session.add(
-            CashVoucher(
+            BankVoucher(
                 id=voucher.id,
                 kind=kind,
                 operation_code=payload.operation_code,
-                cash_account_id=payload.cash_account_id,
+                bank_account_id=payload.bank_account_id,
+                counter_bank_account_id=payload.counter_bank_account_id,
                 partner_id=payload.partner_id,
                 partner_kind=(
                     payload.partner_kind.value if payload.partner_kind is not None else None
                 ),
-                payer_receiver_name=payload.payer_receiver_name,
-                attachment_count=payload.attachment_count,
+                beneficiary_name=payload.beneficiary_name,
+                beneficiary_account_no=payload.beneficiary_account_no,
+                beneficiary_bank_name=payload.beneficiary_bank_name,
+                cheque_no=payload.cheque_no,
+                cheque_date=payload.cheque_date,
+                reference_no=payload.reference_no,
             )
         )
         self._write_lines(voucher.id, payload)
@@ -151,15 +176,15 @@ class CashVoucherService:
     def update(
         self,
         voucher_id: UUID,
-        payload: CashVoucherIn,
+        payload: BankVoucherIn,
         *,
         expected_row_version: int,
         user_id: int,
     ) -> Voucher:
-        """Sửa phiếu Đã cất: thay trọn bộ dòng + đối trừ (cùng khuôn GLE).
+        """Sửa chứng từ Đã cất: thay trọn bộ dòng + đối trừ (cùng khuôn PT/PC).
 
-        Chi nhánh và LOẠI phiếu bất biến: số chứng từ thuộc dãy của
-        (loại, chi nhánh) — đổi PT thành PC là đổi dãy số, phải xóa lập lại.
+        Chi nhánh và LOẠI chứng từ bất biến: số chứng từ thuộc dãy của
+        (loại, chi nhánh) — đổi BC thành UNC là đổi dãy số, phải xóa lập lại.
         """
         voucher = self._vouchers.require(voucher_id)
         self._vouchers.ensure_editable(voucher)
@@ -178,11 +203,11 @@ class CashVoucherService:
             )
         if payload.kind != body.kind:
             raise PostingValidationError(
-                "Phiếu đã cất không đổi được loại thu/chi — xóa rồi lập phiếu mới",
+                "Chứng từ đã cất không đổi được loại — xóa rồi lập chứng từ mới",
                 violations=[
                     PostingViolation(
                         KIND_IMMUTABLE_CODE,
-                        "Số chứng từ thuộc dãy của loại phiếu — đổi loại là đổi dãy số",
+                        "Số chứng từ thuộc dãy của loại chứng từ — đổi loại là đổi dãy số",
                         current_kind=body.kind,
                         requested_kind=payload.kind,
                     )
@@ -190,9 +215,10 @@ class CashVoucherService:
             )
 
         scale = self._money_scale(user_id)
+        self._verify_bank_accounts(payload)
         self._verify_operation(payload)
         self._verify_client_amounts(payload, scale=scale)
-        priced = price_settlements(self._session, payload, scale=scale)
+        priced = self._price_settlements(payload, scale=scale)
 
         usage_before = self._usage_of_stored(body)
 
@@ -205,11 +231,16 @@ class CashVoucherService:
         voucher.cashflow_activity = payload.cashflow_activity
 
         body.operation_code = payload.operation_code
-        body.cash_account_id = payload.cash_account_id
+        body.bank_account_id = payload.bank_account_id
+        body.counter_bank_account_id = payload.counter_bank_account_id
         body.partner_id = payload.partner_id
         body.partner_kind = payload.partner_kind.value if payload.partner_kind is not None else None
-        body.payer_receiver_name = payload.payer_receiver_name
-        body.attachment_count = payload.attachment_count
+        body.beneficiary_name = payload.beneficiary_name
+        body.beneficiary_account_no = payload.beneficiary_account_no
+        body.beneficiary_bank_name = payload.beneficiary_bank_name
+        body.cheque_no = payload.cheque_no
+        body.cheque_date = payload.cheque_date
+        body.reference_no = payload.reference_no
 
         for line in self._lines_of(voucher_id):
             self._session.delete(line)
@@ -227,46 +258,37 @@ class CashVoucherService:
     def post(
         self, voucher_id: UUID, *, user_id: int, acknowledged_warnings: bool = False
     ) -> Voucher:
-        """Ghi sổ + cộng số đã trả vào các đích đối trừ, một transaction.
-
-        Cùng mã với hook `after_post` trong registry — đường module và đường
-        hành động chung không được cho hai kết quả khác nhau.
-        """
+        """Ghi sổ + cộng số đã trả vào các đích đối trừ, một transaction —
+        cùng mã với hook `after_post` trong registry."""
         voucher = self._posting.post(
             build_posting_request(self._session, voucher_id),
             user_id=user_id,
             acknowledged_warnings=acknowledged_warnings,
         )
         apply_settlements(self._session, voucher_id=voucher_id)
-        sync_after_post(self._session, voucher_id, user_id)
         return voucher
 
     def unpost(self, voucher_id: UUID, *, user_id: int) -> Voucher:
         voucher = self._posting.unpost(voucher_id, user_id=user_id)
         revert_settlements(self._session, voucher_id=voucher_id)
-        clear_after_unpost(self._session, voucher_id, user_id)
         return voucher
 
     def delete(self, voucher_id: UUID) -> None:
-        """Xóa phiếu Đã cất — trả bộ đếm tham chiếu rồi để CASCADE dọn bảng con.
-
-        Trả bộ đếm TRƯỚC vì sau `DELETE` không còn dòng nào để đếm; nếu phép
-        xóa bị máy trạng thái từ chối thì cả hai cùng rollback.
-        """
-        body = self._session.get(CashVoucher, voucher_id)
+        """Xóa chứng từ Đã cất — trả bộ đếm tham chiếu rồi để CASCADE dọn bảng con."""
+        body = self._session.get(BankVoucher, voucher_id)
         if body is not None:
             self.release_usage(voucher_id)
         self._vouchers.delete(voucher_id)
 
     def release_usage(self, voucher_id: UUID) -> None:
-        """Trừ bộ đếm tham chiếu của một phiếu sắp bị xóa — hook `before_delete`."""
+        """Trừ bộ đếm tham chiếu của một chứng từ sắp bị xóa — hook `before_delete`."""
         body = self._require_body(voucher_id)
         counters = self._usage_of_stored(body)
         self._apply_usage(Counter({key: -count for key, count in counters.items()}))
 
     def get(
         self, voucher_id: UUID
-    ) -> tuple[Voucher, CashVoucher, list[CashVoucherLine], list[CashSettlement]]:
+    ) -> tuple[Voucher, BankVoucher, list[BankVoucherLine], list[BankSettlement]]:
         voucher = self._vouchers.require(voucher_id)
         return (
             voucher,
@@ -277,45 +299,45 @@ class CashVoucherService:
 
     # ------------------------------------------------------------- nội bộ
 
-    def _require_body(self, voucher_id: UUID) -> CashVoucher:
-        body = self._session.get(CashVoucher, voucher_id)
+    def _require_body(self, voucher_id: UUID) -> BankVoucher:
+        body = self._session.get(BankVoucher, voucher_id)
         if body is None:
             raise PostingValidationError(
-                "Chứng từ này không phải phiếu thu/chi tiền mặt",
+                "Chứng từ này không phải chứng từ tiền gửi",
                 violations=[
                     PostingViolation(
-                        "cash.body_missing",
-                        "Header tồn tại nhưng không có thân phiếu thu/chi",
+                        "bank.body_missing",
+                        "Header tồn tại nhưng không có thân chứng từ tiền gửi",
                         voucher_id=str(voucher_id),
                     )
                 ],
             )
         return body
 
-    def _lines_of(self, voucher_id: UUID) -> list[CashVoucherLine]:
+    def _lines_of(self, voucher_id: UUID) -> list[BankVoucherLine]:
         return list(
             self._session.execute(
-                select(CashVoucherLine)
-                .where(CashVoucherLine.voucher_id == voucher_id)
-                .order_by(CashVoucherLine.line_no)
+                select(BankVoucherLine)
+                .where(BankVoucherLine.voucher_id == voucher_id)
+                .order_by(BankVoucherLine.line_no)
             )
             .scalars()
             .all()
         )
 
-    def _stored_settlements(self, voucher_id: UUID) -> list[CashSettlement]:
+    def _stored_settlements(self, voucher_id: UUID) -> list[BankSettlement]:
         return list(
             self._session.execute(
-                select(CashSettlement).where(CashSettlement.voucher_id == voucher_id)
+                select(BankSettlement).where(BankSettlement.voucher_id == voucher_id)
             )
             .scalars()
             .all()
         )
 
-    def _write_lines(self, voucher_id: UUID, payload: CashVoucherIn) -> None:
+    def _write_lines(self, voucher_id: UUID, payload: BankVoucherIn) -> None:
         for index, line in enumerate(payload.lines, start=1):
             self._session.add(
-                CashVoucherLine(
+                BankVoucherLine(
                     voucher_id=voucher_id,
                     line_no=index,
                     description=line.description,
@@ -343,7 +365,7 @@ class CashVoucherService:
     def _write_settlements(self, voucher_id: UUID, priced: list[PricedSettlement]) -> None:
         for row in priced:
             self._session.add(
-                CashSettlement(
+                BankSettlement(
                     voucher_id=voucher_id,
                     target_kind=row.target_kind.value,
                     target_id=row.target_id,
@@ -354,13 +376,74 @@ class CashVoucherService:
             )
         self._session.flush()
 
-    def _verify_operation(self, payload: CashVoucherIn) -> None:
-        """FR-SYS-025: nghiệp vụ phải thuộc gói hiệu lực; nghiệp vụ đòi đối tác
-        thì phiếu phải mang đối tác đúng loại."""
+    def _price_settlements(self, payload: BankVoucherIn, *, scale: int) -> list[PricedSettlement]:
+        return price_settlements(self._session, payload, scale=scale)
+
+    def _verify_bank_accounts(self, payload: BankVoucherIn) -> None:
+        """FR-BNK-002 + tiền tệ: chứng từ phải khớp tiền tệ của tài khoản; chuyển
+        nội bộ đòi hai tài khoản cùng tiền tệ (chéo tiền tệ ngoài phạm vi v1)."""
+        violations: list[PostingViolation] = []
+        base = self._base_currency(payload)
+        source = self._require_bank_account(payload.bank_account_id, violations)
+        if source is not None:
+            source_currency = source.currency_code or base
+            if source_currency != payload.currency_code:
+                violations.append(
+                    PostingViolation(
+                        ACCOUNT_CURRENCY_MISMATCH_CODE,
+                        "Loại tiền của chứng từ khác loại tiền của tài khoản ngân hàng",
+                        bank_account_id=payload.bank_account_id,
+                        account_currency=source_currency,
+                        voucher_currency=payload.currency_code,
+                    )
+                )
+        if payload.counter_bank_account_id is not None:
+            counter = self._require_bank_account(payload.counter_bank_account_id, violations)
+            if source is not None and counter is not None:
+                source_currency = source.currency_code or base
+                counter_currency = counter.currency_code or base
+                if source_currency != counter_currency:
+                    violations.append(
+                        PostingViolation(
+                            TRANSFER_CURRENCY_MISMATCH_CODE,
+                            "Chuyển tiền nội bộ giữa hai tài khoản khác loại tiền chưa "
+                            "hỗ trợ — hạch toán qua hai chứng từ mua/bán ngoại tệ",
+                            source_currency=source_currency,
+                            counter_currency=counter_currency,
+                        )
+                    )
+        if violations:
+            raise PostingValidationError(
+                "Tài khoản ngân hàng trên chứng từ chưa hợp lệ", violations=violations
+            )
+
+    def _require_bank_account(
+        self, account_id: int, violations: list[PostingViolation]
+    ) -> CompanyBankAccount | None:
+        account = self._session.get(CompanyBankAccount, account_id)
+        if account is None:
+            violations.append(
+                PostingViolation(
+                    ACCOUNT_UNKNOWN_CODE,
+                    "Tài khoản ngân hàng không có trong danh mục",
+                    bank_account_id=account_id,
+                )
+            )
+        return account
+
+    def _base_currency(self, payload: BankVoucherIn) -> str:
+        year = fiscal_year_covering(self._session, payload.posting_date)
+        # Không có năm tài chính thì `VoucherService.create` sẽ từ chối vì không
+        # tra được kỳ — trước đó tài khoản không khai tiền tệ coi như VND.
+        return year.base_currency if year is not None else "VND"
+
+    def _verify_operation(self, payload: BankVoucherIn) -> None:
+        """FR-SYS-025 cho BC/UNC/SEC; chuyển nội bộ không có nghiệp vụ (schema
+        đã chặn `operation_code` cho loại này)."""
+        if payload.kind == BankVoucherKind.INTERNAL_TRANSFER or payload.operation_code is None:
+            return
         year = fiscal_year_covering(self._session, payload.posting_date)
         if year is None:
-            # Không có năm tài chính thì `VoucherService.create` sẽ từ chối vì
-            # không tra được kỳ — thông điệp bên đó đúng chỗ hơn.
             return
         resolved = operations_for(
             self._session,
@@ -387,7 +470,7 @@ class CashVoucherService:
         self._verify_operation_partner(payload, operation)
 
     def _verify_operation_partner(
-        self, payload: CashVoucherIn, operation: AutoPostingOperation
+        self, payload: BankVoucherIn, operation: AutoPostingOperation
     ) -> None:
         if not operation.requires_partner:
             return
@@ -397,7 +480,7 @@ class CashVoucherService:
                 violations=[
                     PostingViolation(
                         OPERATION_PARTNER_REQUIRED_CODE,
-                        "Chọn đối tác cho phiếu trước khi cất",
+                        "Chọn đối tác cho chứng từ trước khi cất",
                         operation_code=payload.operation_code,
                     )
                 ],
@@ -420,7 +503,7 @@ class CashVoucherService:
                 ],
             )
 
-    def _verify_client_amounts(self, payload: CashVoucherIn, *, scale: int) -> None:
+    def _verify_client_amounts(self, payload: BankVoucherIn, *, scale: int) -> None:
         """Validator #9 (phase-04): số quy đổi client gửi phải khớp `round_money`."""
         violations: list[PostingViolation] = []
         for index, line in enumerate(payload.lines, start=1):
@@ -439,7 +522,7 @@ class CashVoucherService:
                 )
         if violations:
             raise PostingValidationError(
-                "Số quy đổi trên phiếu không khớp luật làm tròn của hệ thống",
+                "Số quy đổi trên chứng từ không khớp luật làm tròn của hệ thống",
                 violations=violations,
             )
 
@@ -451,8 +534,11 @@ class CashVoucherService:
 
     # ----------------------------------------------- bộ đếm tham chiếu danh mục
 
-    def _usage_of(self, payload: CashVoucherIn) -> Counter[tuple[str, int]]:
+    def _usage_of(self, payload: BankVoucherIn) -> Counter[tuple[str, int]]:
         counters: Counter[tuple[str, int]] = Counter()
+        counters[(COMPANY_BANK_ACCOUNT_TABLE_NAME, payload.bank_account_id)] += 1
+        if payload.counter_bank_account_id is not None:
+            counters[(COMPANY_BANK_ACCOUNT_TABLE_NAME, payload.counter_bank_account_id)] += 1
         if payload.partner_id is not None and payload.partner_kind is not None:
             counters[(_USAGE_TABLE_BY_PARTNER_KIND[payload.partner_kind], payload.partner_id)] += 1
         for line in payload.lines:
@@ -460,8 +546,11 @@ class CashVoucherService:
                 counters[(_USAGE_TABLE_BY_PARTNER_KIND[line.partner_kind], line.partner_id)] += 1
         return counters
 
-    def _usage_of_stored(self, body: CashVoucher) -> Counter[tuple[str, int]]:
+    def _usage_of_stored(self, body: BankVoucher) -> Counter[tuple[str, int]]:
         counters: Counter[tuple[str, int]] = Counter()
+        counters[(COMPANY_BANK_ACCOUNT_TABLE_NAME, body.bank_account_id)] += 1
+        if body.counter_bank_account_id is not None:
+            counters[(COMPANY_BANK_ACCOUNT_TABLE_NAME, body.counter_bank_account_id)] += 1
         if body.partner_id is not None and body.partner_kind is not None:
             table = _USAGE_TABLE_BY_PARTNER_KIND[PartnerKind(body.partner_kind)]
             counters[(table, body.partner_id)] += 1

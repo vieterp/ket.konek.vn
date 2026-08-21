@@ -10,13 +10,15 @@
 -- * `cash_book` (lát 6B): đối tác trên phiếu thu/chi (header + từng dòng).
 --   `partner_kind` 0/1 → `partners`, 2 → `employees` — cùng ánh xạ
 --   `_USAGE_TABLE_BY_PARTNER_KIND` của `modules/cash_book/service.py`.
+-- * `bank` (lát 6C): đối tác trên chứng từ tiền gửi (header + dòng) cùng ánh
+--   xạ trên, VÀ tài khoản ngân hàng doanh nghiệp (`company_bank_accounts`) —
+--   TK nguồn của mọi chứng từ + TK đích của chuyển nội bộ (nợ 6A).
 --
 -- FULL JOIN hai phía: bộ đếm có mà không ai tham chiếu → lệch; tham chiếu có
 -- mà bộ đếm thiếu/khác → lệch. Đường ghi nào quên `record_use` lộ ra ở đây.
-WITH counted AS (
+WITH partner_refs AS (
     SELECT CASE WHEN partner_kind = 2 THEN 'employees' ELSE 'partners' END AS entity_type,
-           partner_id AS entity_id,
-           COUNT(*)   AS references_seen
+           partner_id AS entity_id
     FROM (
         SELECT partner_kind, partner_id
         FROM cash_vouchers
@@ -25,7 +27,32 @@ WITH counted AS (
         SELECT partner_kind, partner_id
         FROM cash_voucher_lines
         WHERE partner_id IS NOT NULL
+        UNION ALL
+        SELECT partner_kind, partner_id
+        FROM bank_vouchers
+        WHERE partner_id IS NOT NULL
+        UNION ALL
+        SELECT partner_kind, partner_id
+        FROM bank_voucher_lines
+        WHERE partner_id IS NOT NULL
     ) refs
+),
+bank_account_refs AS (
+    SELECT 'company_bank_accounts' AS entity_type, account_id AS entity_id
+    FROM (
+        SELECT bank_account_id AS account_id FROM bank_vouchers
+        UNION ALL
+        SELECT counter_bank_account_id FROM bank_vouchers
+        WHERE counter_bank_account_id IS NOT NULL
+    ) refs
+),
+counted AS (
+    SELECT entity_type, entity_id, COUNT(*) AS references_seen
+    FROM (
+        SELECT entity_type, entity_id FROM partner_refs
+        UNION ALL
+        SELECT entity_type, entity_id FROM bank_account_refs
+    ) all_refs
     GROUP BY 1, 2
 )
 SELECT COALESCE(u.entity_type, c.entity_type) AS entity_type,
