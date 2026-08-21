@@ -240,7 +240,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30 chứ không 20: một lượt KHỎE của bộ 1762 test đo được 17m22s trên
+    # runner GH (local 12m37s) — trần 20 chỉ chừa 13% dư địa, runner chậm một
+    # nhịp là job bị hủy trong khi test không sai. faulthandler_timeout=300
+    # (pyproject) đã canh chiều ngược lại: test treo thật sẽ tự in stack trace
+    # vào log trước khi trần này chạm.
+    timeout-minutes: 30
     # Chỉ job này được ghi vào PR (bình luận độ phủ). Quyền cấp ở mức job chứ
     # không ở mức workflow: các job còn lại — gồm cả job dựng Rust kéo về hàng
     # trăm crate — không có lý do gì cần quyền ghi.
