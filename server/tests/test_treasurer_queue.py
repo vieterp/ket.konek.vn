@@ -19,11 +19,11 @@ test khác không thấy trạng thái lạ.
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from cash_book_support import seed_cash_book_package_data
@@ -31,16 +31,16 @@ from ket.kernel.config.catalog import TREASURER_ENABLED_KEY
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.errors import (
     TreasurerBookDateInvalidError,
-    TreasurerModuleDisabledError,
     TreasurerVoucherStateError,
 )
-from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security.models import Setting
 from ket.modules.cash_book.models import CashVoucher, CashVoucherKind, TreasurerStatus
 from ket.modules.cash_book.schemas import CashVoucherIn, CashVoucherLineIn
 from ket.modules.cash_book.service import CashVoucherService
 from ket.modules.warehousing.treasurer.models import TreasurerCashBookEntry
 from ket.modules.warehousing.treasurer.queue_service import book_vouchers, pending_queue
+from ket.posting.integrity.checks.registry import check_of
 from posting_support import PostingContext, posting_scope, seed_posting_context
 
 pytestmark = pytest.mark.db
@@ -269,21 +269,14 @@ def test_custom_book_date_must_not_precede_posting_date(
     run(work)
 
 
-def test_booking_requires_enabled_module_and_posted_voucher(
+def test_booking_rejects_drafts_and_duplicates_but_survives_module_toggle_off(
     run: Runner, context: PostingContext, accounts: dict[str, int]
 ) -> None:
     def work(session: Session) -> object:
         try:
-            _set_treasurer_enabled(session, False)
+            _set_treasurer_enabled(session, True)
             service = CashVoucherService(session)
             draft = service.create(_receipt(context, accounts), user_id=ACTOR_ID)
-
-            with pytest.raises(TreasurerModuleDisabledError):
-                book_vouchers(
-                    session, voucher_ids=(draft.id,), book_date=None, user_id=TREASURER_ID
-                )
-
-            _set_treasurer_enabled(session, True)
             # Phiếu Đã cất (chưa ghi sổ kế toán) không vào sổ quỹ được (BR-WHK-01).
             with pytest.raises(TreasurerVoucherStateError):
                 book_vouchers(
@@ -297,6 +290,170 @@ def test_booking_requires_enabled_module_and_posted_voucher(
                     book_date=None,
                     user_id=TREASURER_ID,
                 )
+            with pytest.raises(TreasurerVoucherStateError):
+                book_vouchers(session, voucher_ids=(), book_date=None, user_id=TREASURER_ID)
+
+            # Review 6C M-1: phiếu treo trạng thái chờ vì phân hệ bị TẮT giữa
+            # chừng vẫn ghi sổ quỹ được — nếu không, sổ quỹ thiếu vĩnh viễn.
+            leftover = service.create(_receipt(context, accounts), user_id=ACTOR_ID)
+            service.post(leftover.id, user_id=ACTOR_ID)
+            _set_treasurer_enabled(session, False)
+            entries = book_vouchers(
+                session, voucher_ids=(leftover.id,), book_date=None, user_id=TREASURER_ID
+            )
+            assert len(entries) == 1
+            assert _book_entry_of(session, leftover.id) is not None
+        finally:
+            _set_treasurer_enabled(session, False)
+        return None
+
+    run(work)
+
+
+def test_net_zero_voucher_never_enters_the_queue(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Review 6C H-2: phiếu không đồng nào chạm TK quỹ của thân phiếu (định
+    khoản tự do) không được nằm trong hàng đợi — nó không bao giờ ghi được và
+    đầu độc cả lô all-or-nothing."""
+
+    def work(session: Session) -> object:
+        try:
+            _set_treasurer_enabled(session, True)
+            service = CashVoucherService(session)
+            payload = _receipt(context, accounts).model_copy(
+                update={
+                    "lines": (
+                        CashVoucherLineIn(
+                            debit_account_id=accounts["1381"],
+                            credit_account_id=accounts["3381"],
+                            amount_fc=Decimal(50_000),
+                        ),
+                    )
+                }
+            )
+            voucher = service.create(payload, user_id=ACTOR_ID)
+            service.post(voucher.id, user_id=ACTOR_ID)
+
+            body = session.get(CashVoucher, voucher.id)
+            assert body is not None
+            assert body.treasurer_status == TreasurerStatus.NOT_APPLICABLE
+            assert voucher.id not in {row.voucher_id for row in pending_queue(session)}
+            assert _book_entry_of(session, voucher.id) is None
+        finally:
+            _set_treasurer_enabled(session, False)
+        return None
+
+    run(work)
+
+
+def test_out_of_scope_voucher_is_a_state_error_not_a_500(
+    run: Runner,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Review 6C H-1: thủ quỹ scope chi nhánh khác book một phiếu ngoài phạm vi
+    — header ẩn dưới RLS phải thành lỗi nghiệp vụ CÙNG thông điệp với "không
+    phải phiếu quỹ" (chống oracle), không phải RuntimeError 500; và không được
+    cầm khóa trên hàng của chi nhánh khác trước khi nổ."""
+    voucher_id_holder: list[object] = []
+
+    def prepare(session: Session) -> object:
+        try:
+            _set_treasurer_enabled(session, True)
+            service = CashVoucherService(session)
+            voucher = service.create(_receipt(context, accounts), user_id=ACTOR_ID)
+            service.post(voucher.id, user_id=ACTOR_ID)
+            voucher_id_holder.append(voucher.id)
+        finally:
+            _set_treasurer_enabled(session, False)
+        return None
+
+    run(prepare)
+
+    foreign_scope = RequestScope(
+        dataset_schema=dataset_alpha.schema_name,
+        user_id=TREASURER_ID,
+        branch_ids=(context.branch_id + 987_654,),
+        acting_branch_id=context.branch_id + 987_654,
+    )
+    with unit_of_work(session_factory, foreign_scope) as session:
+        with pytest.raises(TreasurerVoucherStateError):
+            book_vouchers(
+                session,
+                voucher_ids=(voucher_id_holder[0],),  # type: ignore[arg-type]
+                book_date=None,
+                user_id=TREASURER_ID,
+            )
+
+
+def test_integrity_check_flags_tampered_treasurer_book(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Review 6C M-2: thực thi `treasurer_book_matches_ledger` thật — im lặng
+    trên dữ liệu lành, bắt từng trạng thái không-bao-giờ-hợp-lệ, và trả về im
+    lặng sau khi khôi phục (dataset dùng chung phải sạch khi test kết thúc)."""
+
+    def rows_for_branch(session: Session) -> list[object]:
+        sql = check_of("treasurer_book_matches_ledger").sql()
+        return list(session.execute(text(sql), {"branch_id": context.branch_id}).all())
+
+    def work(session: Session) -> object:
+        try:
+            _set_treasurer_enabled(session, True)
+            service = CashVoucherService(session)
+            voucher = service.create(_receipt(context, accounts), user_id=ACTOR_ID)
+            service.post(voucher.id, user_id=ACTOR_ID)
+            book_vouchers(session, voucher_ids=(voucher.id,), book_date=None, user_id=TREASURER_ID)
+            assert rows_for_branch(session) == []
+
+            # Tamper 1: dòng sổ quỹ lệch số với sổ kế toán.
+            entry = _book_entry_of(session, voucher.id)
+            assert entry is not None
+            original = entry.receipt_amount
+            entry.receipt_amount = original + Decimal(1)
+            session.flush()
+            flagged = rows_for_branch(session)
+            assert any(str(row[0]) == str(voucher.id) for row in flagged)
+            entry.receipt_amount = original
+            session.flush()
+
+            # Tamper 2: phiếu mang trạng thái BOOKED nhưng dòng sổ quỹ biến mất.
+            session.delete(entry)
+            session.flush()
+            flagged = rows_for_branch(session)
+            assert any(str(row[0]) == str(voucher.id) for row in flagged)
+
+            # Khôi phục: trả phiếu về trạng thái chờ (dòng đã xóa) — hàng đợi
+            # thấy lại phiếu, check im lặng (BR-WHK-01: chờ là hợp lệ).
+            body = session.get(CashVoucher, voucher.id)
+            assert body is not None
+            body.treasurer_status = TreasurerStatus.PENDING
+            body.treasurer_book_date = None
+            body.treasurer_posted_at = None
+            body.treasurer_posted_by = None
+            session.flush()
+            assert rows_for_branch(session) == []
+
+            # Tamper 3: dòng sổ quỹ tồn tại khi phiếu còn trạng thái chờ.
+            book_vouchers(session, voucher_ids=(voucher.id,), book_date=None, user_id=TREASURER_ID)
+            body.treasurer_status = TreasurerStatus.PENDING
+            body.treasurer_book_date = None
+            body.treasurer_posted_at = None
+            body.treasurer_posted_by = None
+            session.flush()
+            flagged = rows_for_branch(session)
+            assert any(str(row[0]) == str(voucher.id) for row in flagged)
+
+            # Khôi phục trạng thái nhất quán cuối cùng: phiếu đã ghi sổ quỹ.
+            body.treasurer_status = TreasurerStatus.BOOKED
+            body.treasurer_book_date = JAN_10
+            body.treasurer_posted_by = TREASURER_ID
+            body.treasurer_posted_at = datetime.now(UTC)
+            session.flush()
+            assert rows_for_branch(session) == []
         finally:
             _set_treasurer_enabled(session, False)
         return None

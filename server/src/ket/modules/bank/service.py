@@ -91,14 +91,6 @@ NUMBERING_RULE_BY_KIND = {
 """`BC26-00001`/`UNC26-00001`/… — cùng khuôn `{YY}` của PT/PC (năm nằm trong
 chính số nên không đụng `uq_vouchers_type_branch_no`)."""
 
-MONEY_IN_BY_KIND = {
-    BankVoucherKind.CREDIT_ADVICE: True,
-    BankVoucherKind.PAYMENT_ORDER: False,
-    BankVoucherKind.CHEQUE: False,
-}
-"""Chiều tiền cho chênh lệch tỷ giá thu/trả (FR-SYS-066) — chuyển nội bộ không
-có mặt: không chạm công nợ nên không có đối trừ, không có chênh lệch."""
-
 OPERATION_UNKNOWN_CODE = "bank.operation_unknown"
 OPERATION_PARTNER_REQUIRED_CODE = "bank.operation_partner_required"
 KIND_IMMUTABLE_CODE = "bank.kind_immutable"

@@ -111,26 +111,35 @@ def _book_entry(
 
 def sync_after_post(session: Session, voucher_id: UUID, user_id: int) -> None:
     """Sau khi phiếu ghi sổ kế toán: xếp hàng đợi thủ quỹ, hoặc — phân hệ tắt
-    (FR-WHK-021) — vào thẳng sổ quỹ theo ngày hạch toán, cùng transaction."""
+    (FR-WHK-021) — vào thẳng sổ quỹ theo ngày hạch toán, cùng transaction.
+
+    Phiếu **net-0** (không đồng nào chạm TK quỹ của thân phiếu — định khoản tự
+    do) đặt "không áp dụng" ở CẢ hai chế độ: không có tiền thật để thủ quỹ
+    thu/chi thì không có gì để ghi sổ quỹ, và một phiếu như vậy nằm trong hàng
+    đợi là một phiếu không bao giờ ghi được — nó đầu độc cả lô ghi-sổ-hàng-loạt
+    all-or-nothing (review 6C, H-2).
+    """
     body = session.get(CashVoucher, voucher_id)
     if body is None:  # pragma: no cover - hook chỉ chạy cho PT/PC
         raise RuntimeError(f"Phiếu thu/chi {voucher_id} thiếu thân")
+    voucher = session.get(Voucher, voucher_id)
+    if voucher is None:  # pragma: no cover - hook chạy ngay sau post cùng scope
+        raise RuntimeError(f"Phiếu thu/chi {voucher_id} thiếu header")
+    entry = _book_entry(session, voucher, body, book_date=voucher.posting_date, user_id=user_id)
+    if entry is None:
+        body.treasurer_status = TreasurerStatus.NOT_APPLICABLE
+        return
     if treasurer_enabled(session, user_id=user_id):
         body.treasurer_status = TreasurerStatus.PENDING
         return
-    voucher = session.get(Voucher, voucher_id)
-    if voucher is None:  # pragma: no cover - FK một-một bảo đảm
-        raise RuntimeError(f"Phiếu thu/chi {voucher_id} thiếu header")
     body.treasurer_status = TreasurerStatus.NOT_APPLICABLE
     book = PROVIDERS.treasurer_cash_book()
     if book is None:
         # Tiến trình không nạp module sổ quỹ (test kernel thuần) — không có
         # sổ để ghi, trạng thái "không áp dụng" vẫn đúng.
         return
-    entry = _book_entry(session, voucher, body, book_date=voucher.posting_date, user_id=user_id)
-    if entry is not None:
-        book.record(session, entry)
-        session.flush()
+    book.record(session, entry)
+    session.flush()
 
 
 def clear_after_unpost(session: Session, voucher_id: UUID, user_id: int) -> None:
@@ -185,6 +194,17 @@ class CashTreasurerVoucherSource:
     def book(
         self, session: Session, *, voucher_id: UUID, book_date: date | None, user_id: int
     ) -> TreasurerBookEntry:
+        # Đọc HEADER trước — `vouchers` có RLS chi nhánh còn `cash_vouchers`
+        # (bảng con, 0015) thì không: khóa thân trước là cầm `FOR UPDATE` trên
+        # hàng của chi nhánh ngoài phạm vi rồi mới nổ (review 6C, H-1). Header
+        # ẩn dưới RLS và "không phải phiếu quỹ" trả CÙNG một thông điệp — không
+        # để lộ chứng từ ngoài phạm vi có tồn tại hay không.
+        voucher = session.get(Voucher, voucher_id)
+        if voucher is None:
+            raise TreasurerVoucherStateError(
+                "Chứng từ này không phải phiếu thu/chi tiền mặt trong phạm vi của bạn",
+                voucher_id=str(voucher_id),
+            )
         body = session.execute(
             select(CashVoucher).where(CashVoucher.id == voucher_id).with_for_update()
         ).scalar_one_or_none()
@@ -193,11 +213,14 @@ class CashTreasurerVoucherSource:
         # bảng sổ quỹ là lưới cuối, không phải thông điệp lỗi.
         if body is None:
             raise TreasurerVoucherStateError(
-                "Chứng từ này không phải phiếu thu/chi tiền mặt", voucher_id=str(voucher_id)
+                "Chứng từ này không phải phiếu thu/chi tiền mặt trong phạm vi của bạn",
+                voucher_id=str(voucher_id),
             )
-        voucher = session.get(Voucher, voucher_id)
-        if voucher is None:  # pragma: no cover - FK một-một bảo đảm
-            raise RuntimeError(f"Phiếu thu/chi {voucher_id} thiếu header")
+        # Header được đọc TRƯỚC khi cầm khóa thân — một lượt bỏ-ghi-sổ đồng thời
+        # có thể đã commit trong lúc ta chờ khóa (nó cũng UPDATE thân phiếu nên
+        # ta chờ nó). Đọc lại header sau khóa để kiểm trạng thái trên dữ liệu
+        # đã commit, không phải bản chụp cũ trong identity map.
+        session.refresh(voucher)
         if voucher.status != VoucherStatus.DA_GHI_SO:
             raise TreasurerVoucherStateError(
                 "Phiếu chưa ghi sổ kế toán — sổ quỹ chỉ nhận phiếu đã vào sổ (BR-WHK-01)",

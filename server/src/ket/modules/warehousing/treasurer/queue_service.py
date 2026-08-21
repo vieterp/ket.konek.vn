@@ -22,9 +22,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ket.kernel.config.catalog import TREASURER_ENABLED_KEY
-from ket.kernel.config.settings_service import value_of
-from ket.kernel.errors import TreasurerModuleDisabledError, TreasurerVoucherStateError
+from ket.kernel.errors import TreasurerVoucherStateError
 from ket.kernel.protocols import (
     PROVIDERS,
     TreasurerBookEntry,
@@ -32,14 +30,6 @@ from ket.kernel.protocols import (
 )
 from ket.modules.warehousing.treasurer.book import TreasurerCashBookImpl
 from ket.modules.warehousing.treasurer.models import TreasurerCashBookEntry
-
-
-def _require_enabled(session: Session, *, user_id: int) -> None:
-    if value_of(session, key=TREASURER_ENABLED_KEY, user_id=user_id) is not True:
-        raise TreasurerModuleDisabledError(
-            "Phân hệ thủ quỹ đang tắt — phiếu vào thẳng sổ quỹ lúc ghi sổ kế toán "
-            "(bật lại ở Thiết lập nếu đơn vị có thủ quỹ riêng)"
-        )
 
 
 def pending_queue(session: Session) -> Sequence[TreasurerPendingVoucher]:
@@ -65,8 +55,14 @@ def book_vouchers(
 
     `book_date=None` = theo ngày hạch toán trên từng chứng từ; một ngày cụ thể
     áp cho cả lô và phải ≥ ngày hạch toán của TỪNG phiếu (BR-WHK-05, nguồn kiểm).
+
+    **Không đòi phân hệ bật** (review 6C, M-1): tắt `treasurer.enabled` giữa
+    chừng để lại phiếu treo trạng thái chờ; hàng đợi cho thấy chúng thì phải
+    ghi nốt được, nếu không sổ quỹ thiếu vĩnh viễn các phiếu đó. Phiếu ghi sổ
+    kế toán SAU khi tắt tự vào sổ quỹ (FR-WHK-021) nên hàng đợi tự cạn — cổng
+    "phân hệ tắt" tự nhiên là hàng-đợi-rỗng, không cần một cổng cấu hình chặn
+    thao tác dọn dẹp hợp lệ.
     """
-    _require_enabled(session, user_id=user_id)
     if not voucher_ids:
         raise TreasurerVoucherStateError("Chưa chọn phiếu nào để ghi sổ quỹ")
     if len(set(voucher_ids)) != len(voucher_ids):
@@ -77,12 +73,15 @@ def book_vouchers(
     if source is None:  # pragma: no cover - model_registry luôn nạp cash_book
         raise RuntimeError("Không có TreasurerVoucherSource trong tiến trình")
     book = TreasurerCashBookImpl()
-    entries: list[TreasurerBookEntry] = []
-    for voucher_id in voucher_ids:
+    entries_by_id: dict[UUID, TreasurerBookEntry] = {}
+    # Khóa theo thứ tự ỔN ĐỊNH (sort id) chứ không theo thứ tự người gọi đưa:
+    # hai lô đồng thời chọn chồng nhau theo hai thứ tự ngược nhau là deadlock
+    # 40P01 → 500 (review 6C, LOW-4).
+    for voucher_id in sorted(voucher_ids):
         entry = source.book(session, voucher_id=voucher_id, book_date=book_date, user_id=user_id)
         book.record(session, entry)
-        entries.append(entry)
-    return entries
+        entries_by_id[voucher_id] = entry
+    return [entries_by_id[voucher_id] for voucher_id in voucher_ids]
 
 
 def cash_book_rows(

@@ -408,6 +408,86 @@ def test_delete_returns_usage_counters(
     run(work)
 
 
+def test_update_moves_usage_counters_and_matches_the_integrity_check(
+    run: Runner,
+    context: PostingContext,
+    accounts: dict[str, int],
+    vnd_account: int,
+) -> None:
+    """Review 6C M-3: sửa chứng từ đổi TK ngân hàng phải trừ counter cũ, cộng
+    counter mới (không đếm trùng), và nhánh bank của `usage_counter_accurate`
+    phải cân — chạy trọn câu SQL check, 0 dòng lệch cho các entity của test."""
+
+    def work(session: Session) -> object:
+        from sqlalchemy import text
+
+        from ket.kernel.master_data.models.company_bank_account import CompanyBankAccount
+        from ket.posting.integrity.checks.registry import check_of
+
+        source = session.get(CompanyBankAccount, vnd_account)
+        assert source is not None
+        other_row = session.scalar(
+            select(CompanyBankAccount).where(CompanyBankAccount.code == "0014-BANK-VND-3")
+        )
+        if other_row is None:
+            other_row = CompanyBankAccount(
+                code="0014-BANK-VND-3",
+                name="TK ngân hàng thứ ba",
+                path="0.",
+                bank_id=source.bank_id,
+            )
+            session.add(other_row)
+            session.flush()
+            other_row.path = f"{other_row.id}."
+            session.flush()
+        other = other_row.id
+
+        service = BankVoucherService(session)
+        before_old = usage_count_of(
+            session, entity_type=COMPANY_BANK_ACCOUNT_TABLE_NAME, entity_id=vnd_account
+        )
+        before_new = usage_count_of(
+            session, entity_type=COMPANY_BANK_ACCOUNT_TABLE_NAME, entity_id=other
+        )
+        voucher = service.create(_credit_advice(context, accounts, vnd_account), user_id=ACTOR_ID)
+        assert (
+            usage_count_of(
+                session, entity_type=COMPANY_BANK_ACCOUNT_TABLE_NAME, entity_id=vnd_account
+            )
+            == before_old + 1
+        )
+
+        moved = _credit_advice(context, accounts, other)
+        service.update(
+            voucher.id, moved, expected_row_version=voucher.row_version, user_id=ACTOR_ID
+        )
+        assert (
+            usage_count_of(
+                session, entity_type=COMPANY_BANK_ACCOUNT_TABLE_NAME, entity_id=vnd_account
+            )
+            == before_old
+        )
+        assert (
+            usage_count_of(session, entity_type=COMPANY_BANK_ACCOUNT_TABLE_NAME, entity_id=other)
+            == before_new + 1
+        )
+
+        # Nguồn đối chiếu phải ĐỒNG Ý với bộ đếm — mất nhánh bank trong câu SQL
+        # (mutation M15) hay đếm trùng khi sửa (M8) đều lộ ra ở đây.
+        sql = check_of("usage_counter_accurate").sql()
+        mismatches = session.execute(text(sql), {"branch_id": context.branch_id}).all()
+        flagged = {
+            (row.entity_type, row.entity_id)
+            for row in mismatches
+            if row.entity_type == COMPANY_BANK_ACCOUNT_TABLE_NAME
+            and row.entity_id in (vnd_account, other)
+        }
+        assert flagged == set()
+        return None
+
+    run(work)
+
+
 def test_schema_rejects_malformed_transfer_and_cheque_combinations() -> None:
     base: dict[str, object] = {
         "bank_account_id": 1,
