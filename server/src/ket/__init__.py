@@ -11,4 +11,4 @@ __all__ = ["__version__"]
 
 # Version của app server. Bắt tay client↔server so version schema riêng
 # (LD-05 / ADR-003) — không dùng chuỗi này.
-__version__ = "0.17.0"
+__version__ = "0.18.0"

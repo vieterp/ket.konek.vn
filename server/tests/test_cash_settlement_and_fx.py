@@ -507,6 +507,58 @@ def test_partial_settlements_with_odd_rate_never_overflow_the_vnd_check(
     run(work)
 
 
+def test_final_settlement_drains_the_vnd_leftover_when_rate_rounds_down(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    run: Runner,
+) -> None:
+    """Hướng NGƯỢC của ca odd-rate (review 6C, LOW-2 — mutation thay luật
+    lát-cuối bằng `min()` thuần từng sống): hóa đơn 3 USD @25.000,004 (amount =
+    75.000,01 VND); ba lát ×1 USD làm tròn riêng chỉ 3 × 25.000,00 = 75.000,00
+    — `min()` thuần để 0,01 VND treo mãi (`remaining > 0` khi
+    `remaining_fc = 0`, không ai đối trừ được nữa). Lát CUỐI phải vét trọn số
+    VND còn treo."""
+    odd_rate = Decimal("25000.004")
+    invoice_id = seed_open_invoice(
+        session_factory,
+        dataset_alpha,
+        context,
+        partner_id=CUSTOMER,
+        currency_code="USD",
+        exchange_rate=odd_rate,
+        amount_fc=Decimal(3),
+        invoice_no="HD-ODD-RATE-DOWN",
+    )
+
+    def work(session: Session) -> object:
+        service = CashVoucherService(session)
+        for _ in range(3):
+            voucher = service.create(
+                _voucher(
+                    context,
+                    accounts,
+                    kind=CashVoucherKind.RECEIPT,
+                    amount_fc=Decimal(1),
+                    settlements=(_settle(invoice_id, Decimal(1)),),
+                    currency="USD",
+                    rate=odd_rate,
+                ),
+                user_id=ACTOR_ID,
+            )
+            service.post(voucher.id, user_id=ACTOR_ID)
+
+        invoice = session.get(OpeningBalanceInvoice, invoice_id)
+        assert invoice is not None
+        assert invoice.paid_amount_fc == Decimal(3)
+        # Vét trọn: không còn một xu VND treo sau khi nguyên tệ về 0.
+        assert invoice.paid_amount == invoice.amount
+        return None
+
+    run(work)
+
+
 def test_apply_refuses_a_vnd_overflow_as_a_domain_error(
     session_factory: sessionmaker[Session],
     dataset_alpha: DatasetRef,

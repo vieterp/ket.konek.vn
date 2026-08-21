@@ -98,7 +98,7 @@ def _totals_by_check(
     return {check.code: run_check(session, check, branch_id=branch_id).total for check in checks}
 
 
-def test_registry_has_exactly_the_seven_phase4_checks() -> None:
+def test_registry_has_exactly_the_declared_checks() -> None:
     assert tuple(check.code for check in CHECKS) == (
         "ledger_balanced",
         "trial_balance_balanced",
@@ -107,6 +107,7 @@ def test_registry_has_exactly_the_seven_phase4_checks() -> None:
         "opening_balance_balanced",
         "opening_detail_matches_control",
         "usage_counter_accurate",
+        "treasurer_book_matches_ledger",
     )
     with pytest.raises(IntegrityCheckUnknownError):
         check_of("khong_ton_tai")

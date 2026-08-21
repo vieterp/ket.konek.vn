@@ -38,3 +38,14 @@ UNC,nop-bao-hiem,Nộp bảo hiểm,insurance,bank,0,,8
 UNC,tra-tien-vay,Trả các khoản vay,borrowings,bank,0,,9
 UNC,rut-tgnh-nhap-quy,Rút tiền gửi về nhập quỹ,cash,bank,0,,10
 UNC,chi-khac,Chi khác,,bank,0,,11
+SEC,tra-truoc-ncc,Trả trước tiền hàng cho nhà cung cấp,ap_trade,bank,1,1,1
+SEC,tra-no-ncc,Trả nợ nhà cung cấp,ap_trade,bank,1,1,2
+SEC,tam-ung-nhan-vien,Tạm ứng cho nhân viên,employee_advance,bank,1,2,3
+SEC,tra-luong,Trả lương,payroll,bank,0,,4
+SEC,nop-thue-nhap-khau,Nộp thuế hàng nhập khẩu,import_tax,bank,0,,5
+SEC,nop-thue-khac,Nộp các loại thuế khác,,bank,0,,6
+SEC,nop-thue-tndn,Nộp thuế TNDN tạm tính,cit,bank,0,,7
+SEC,nop-bao-hiem,Nộp bảo hiểm,insurance,bank,0,,8
+SEC,tra-tien-vay,Trả các khoản vay,borrowings,bank,0,,9
+SEC,rut-tgnh-nhap-quy,Rút tiền gửi về nhập quỹ,cash,bank,0,,10
+SEC,chi-khac,Chi khác,,bank,0,,11

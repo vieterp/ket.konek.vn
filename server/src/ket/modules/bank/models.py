@@ -26,6 +26,7 @@ from sqlalchemy import (
     Numeric,
     SmallInteger,
     String,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -37,6 +38,7 @@ from ket.kernel.contracts import PartnerKind
 from ket.kernel.identifiers import uuid7
 from ket.kernel.master_data.models.employee import BANK_ACCOUNT_MAX_LENGTH
 from ket.kernel.persistence.base import DatasetBase
+from ket.kernel.protocols import SettlementTargetKind
 from ket.posting.contracts import AMOUNT_PRECISION, AMOUNT_SCALE
 
 DESCRIPTION_MAX_LENGTH = 500
@@ -209,6 +211,55 @@ class BankVoucherLine(DatasetBase, Audited):
     warehouse_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     extended_dimensions: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
+
+
+class BankSettlement(DatasetBase, Audited):
+    """Một dòng đối trừ công nợ của chứng từ tiền gửi (FR-BNK-007, FR-SYS-066).
+
+    Cùng hình dạng `cash_settlements` (lát 6B) — cơ chế đối trừ dùng chung ở
+    `ket.posting.settlements`, nhưng bảng riêng để FK `voucher_id` trỏ đúng
+    bảng thân của module mình (cùng lập luận `bank_voucher_lines`).
+    """
+
+    __tablename__ = "bank_settlements"
+    __table_args__ = (
+        CheckConstraint(
+            f"target_kind BETWEEN {SettlementTargetKind.SALES_INVOICE} "
+            f"AND {SettlementTargetKind.OPENING_BALANCE}",
+            name="target_kind_known",
+        ),
+        CheckConstraint("amount_fc > 0", name="amount_fc_positive"),
+        CheckConstraint("amount > 0", name="amount_positive"),
+        # Một chứng từ không đối trừ hai lần vào cùng một chứng từ công nợ —
+        # hai dòng như vậy chỉ có thể là bấm nhầm, và gộp chúng là việc của form.
+        UniqueConstraint(
+            "voucher_id", "target_kind", "target_id", name="uq_bank_settlements_voucher_target"
+        ),
+        Index("ix_bank_settlements_target", "target_kind", "target_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
+    voucher_id: Mapped[UUID] = mapped_column(
+        ForeignKey("bank_vouchers.id", ondelete="CASCADE"), nullable=False
+    )
+    target_kind: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    target_id: Mapped[UUID] = mapped_column(nullable=False)
+
+    amount_fc: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False
+    )
+    """Số đối trừ theo **nguyên tệ của hóa đơn** — người dùng nhập cột "Số thu"."""
+
+    amount: Mapped[Decimal] = mapped_column(Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False)
+    """Số VND theo tỷ giá của **chứng từ** (tỷ giá lúc thanh toán)."""
+
+    fx_diff: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE),
+        nullable=False,
+        default=Decimal(0),
+        server_default=text("0"),
+    )
+    """Chênh lệch tỷ giá thu/trả tiền — `amount` − VND theo tỷ giá ghi nhận nợ."""
 
 
 class BankStatement(DatasetBase, Audited):

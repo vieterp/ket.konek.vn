@@ -1526,3 +1526,18 @@ class OpeningBalanceSettledError(DomainError):
 
     error_code: ClassVar[str] = "opening_balance.settled"
     http_status: ClassVar[int] = 409
+
+
+class TreasurerVoucherStateError(DomainError):
+    """Phiếu không ở trạng thái ghi sổ quỹ được: chưa ghi sổ kế toán
+    (BR-WHK-01 — sổ quỹ chỉ nhận phiếu đã vào sổ kế toán) hoặc đã lên sổ quỹ
+    rồi (UNIQUE một phiếu một dòng sổ quỹ)."""
+
+    error_code: ClassVar[str] = "treasurer.voucher_state"
+    http_status: ClassVar[int] = 409
+
+
+class TreasurerBookDateInvalidError(DomainError):
+    """Ngày ghi sổ quỹ tùy chọn nhỏ hơn ngày hạch toán trên chứng từ (BR-WHK-05)."""
+
+    error_code: ClassVar[str] = "treasurer.book_date_invalid"

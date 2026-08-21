@@ -1,8 +1,8 @@
 # Tóm tắt mã nguồn — Konek Két
 
-**Cập nhật:** 2026-08-21 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); **phase 3 xong**; **phase 4 xong** (posting engine, sổ cái hai sổ, số dư ban đầu, khóa kỳ, toàn vẹn); phase 5 xong lát 5A–5E (gói cấu hình, formula engine, statement builder, report engine metadata-driven, render job nền); **phase 6A xong** (protocol liên-module, guards, auto-posting, danh mục TK ngân hàng); **phase 6B xong** (module quỹ tiền mặt hoàn chỉnh).
+**Cập nhật:** 2026-08-21 (lát 6C) · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); **phase 3 xong**; **phase 4 xong** (posting engine, sổ cái hai sổ, số dư ban đầu, khóa kỳ, toàn vẹn); phase 5 xong lát 5A–5E (gói cấu hình, formula engine, statement builder, report engine metadata-driven, render job nền); **phase 6A xong** (protocol liên-module, guards, auto-posting, danh mục TK ngân hàng); **phase 6B xong** (module quỹ tiền mặt hoàn chỉnh); **phase 6C xong** (thủ quỹ hàng đợi + sổ quỹ, module ngân hàng BC/UNC/SEC/CTNB, engine đối trừ dùng chung `posting/settlements`).
 
-> ⚠️ **Nợ tài liệu:** mục 1–2 mới được cập nhật tới lát 6B; **phần mô tả chi tiết phase 4, 5A, 5C–5E chưa được viết lại** (tài liệu này đứng ở mốc 2026-08-18 trước đó). Cần một lượt refresh riêng.
+> ⚠️ **Nợ tài liệu:** mục 1–2 mới được cập nhật tới lát 6C; **phần mô tả chi tiết phase 4, 5A, 5C–5E chưa được viết lại** (tài liệu này đứng ở mốc 2026-08-18 trước đó). Cần một lượt refresh riêng.
 
 Tài liệu này mô tả **thứ đang có thật trong repo**. Kiến trúc đích của cả v1
 nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó chưa dựng.
@@ -12,7 +12,7 @@ nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó ch�
 ## 1. Đang có gì
 
 `server/src/ket` ≈ **50.400 dòng Python**: **hạ tầng** (định tuyến dữ
-liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **posting engine + sổ cái hai sổ** (phase 4), **gói cấu hình TT99/TT133** (5A), **formula engine & statement builder** (5B), **report engine metadata-driven** (5C–5D), **render job nền** (5E), **protocol liên-module RT-18 + guards + auto-posting** (6A), **module quỹ tiền mặt (cash_book) hoàn chỉnh** (6B). **Chưa có** module ngân hàng/mua/bán/kho/lương/thuế (phase 6–9 còn lại).
+liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **posting engine + sổ cái hai sổ** (phase 4), **gói cấu hình TT99/TT133** (5A), **formula engine & statement builder** (5B), **report engine metadata-driven** (5C–5D), **render job nền** (5E), **protocol liên-module RT-18 + guards + auto-posting** (6A), **module quỹ tiền mặt (cash_book) hoàn chỉnh** (6B), **module ngân hàng (bank) + thủ quỹ (warehousing/treasurer) server** (6C). **Chưa có** sao kê/đối chiếu ngân hàng (6D), BFF + báo cáo + UI dòng tiền (6E–6F), module mua/bán/kho/lương/thuế (phase 7–9).
 
 | Có thật | Chưa có |
 | --- | --- |
@@ -88,7 +88,10 @@ liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **
 | `posting/` | **Phase 4–6B** — `engine/` (`gl_postings`, validator, `PostingService`, `guards.py` PostingGuard), `documents/` (hook `after_post`/`after_unpost`/`before_delete` trên registry), `balances/` (snapshot + recalc + bảng cân đối), `opening_balances/` (`settlement_source.py` SettlementTargetSource protocol), `periods/` (khóa kỳ), `integrity/` | Ghi sổ, số dư, khóa kỳ |
 | `reporting/` | **Phase 5C–5E** — `engine/` (metadata `report_definitions`, param động, executor, grouping), `rendering/` (PDF WeasyPrint + XLSX openpyxl, sandbox Jinja2), `statements/` (builder BCTC, balance_source), `printing/` (print_log, templates Jinja2), `render_job.py` (job nền, branch_scope, threshold), API `/api/v1/reports` | Báo cáo, render nền, BCTC |
 | `modules/cash_book/` | **Phase 6B** — `service.py` (PT/PC, định khoản), `settlement_service.py` (đối trừ công nợ + FX 515/635), `posting_mapper.py` (Nợ/Có → 2 dòng), `guards.py` (CashBalanceGuard soi số dư thấp nhất), `count_sheet_service.py` (kiểm kê FR-QUY-030/031), `balance_service.py`, `models.py`, `schemas.py` | Ghi sổ quỹ, đối trừ công nợ |
-| `modules/*` | `cash_book/` (6B); `general_ledger/journal/` (phase 4); còn lại chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase 6–9 | — |
+| `modules/bank/` | **Phase 6C** — `service.py` (BC/UNC/SEC/CTNB, tiền tệ khớp TK ngân hàng, chuyển nội bộ cùng tiền tệ), `settlement_service.py` (vỏ mỏng trên `posting/settlements`), `posting_mapper.py` (money-side theo tiền tố 111/112), `models.py` (+`bank_settlements` 0018), `schemas.py`; router `/api/v1/bank/*` | Chứng từ tiền gửi, đối trừ công nợ |
+| `modules/warehousing/treasurer/` | **Phase 6C** — `book.py` (bản cài `TreasurerCashBook`), `queue_service.py` (hàng đợi + ghi sổ hàng loạt 1 transaction, BR-WHK-05); cùng `cash_book/treasurer_source.py` (nguồn phiếu + sync sau post/unpost, FR-WHK-021) và cặp Protocol trong `kernel/protocols.py`; setting `treasurer.enabled` (mặc định tắt); router `/api/v1/treasurer/*` | Sổ quỹ thủ quỹ hai sổ song song |
+| `posting/settlements.py` | **Phase 6C** — engine đối trừ + chênh lệch tỷ giá thu/trả (FR-SYS-066) dùng chung cho quỹ và ngân hàng (`money_in: bool`); integrity check thứ 8 `treasurer_book_matches_ledger` (BR-WHK-03) | Đối trừ công nợ mọi chứng từ tiền |
+| `modules/*` | `cash_book/` (6B–6C); `bank/`, `warehousing/treasurer/` (6C); `general_ledger/journal/` (phase 4); còn lại chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase 7–9 | — |
 
 ### Ngoài server
 

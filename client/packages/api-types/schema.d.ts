@@ -295,6 +295,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bank/open-invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Open Invoices
+         * @description Picker đối trừ cho chứng từ tiền gửi (FR-BNK-007) — cùng hợp đồng và
+         *     cùng luật chiều↔loại-đối-tác với `/cash-book/open-invoices` (review 6B H-1),
+         *     nhưng cổng quyền theo loại chứng từ tiền gửi: phải thu đòi quyền xem báo
+         *     có, phải trả đòi quyền xem ủy nhiệm chi HOẶC séc (hai loại cùng lập được
+         *     từ danh sách này).
+         */
+        get: operations["list_open_invoices_api_v1_bank_open_invoices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Bank Voucher
+         * @description Cất chứng từ tiền gửi; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.
+         *
+         *     `acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm đó (FR-SYS-062
+         *     mức "Cảnh báo" — ví dụ chi vượt số dư TK ngân hàng); mức "Chặn" không mở được.
+         */
+        post: operations["create_bank_voucher_api_v1_bank_vouchers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/vouchers/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Bank Voucher */
+        get: operations["get_bank_voucher_api_v1_bank_vouchers__voucher_id__get"];
+        /**
+         * Update Bank Voucher
+         * @description Sửa chứng từ Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).
+         */
+        put: operations["update_bank_voucher_api_v1_bank_vouchers__voucher_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cash-book/count-sheets": {
         parameters: {
             query?: never;
@@ -6739,6 +6807,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/treasurer/cash-book": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Treasurer Cash Book
+         * @description Sổ quỹ tiền mặt của thủ quỹ (FR-WHK-005) — dòng theo ngày ghi sổ.
+         */
+        get: operations["treasurer_cash_book_api_v1_treasurer_cash_book_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treasurer/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Treasurer Queue
+         * @description Phiếu thu/chi đã ghi sổ kế toán, chờ thủ quỹ (FR-WHK-001) — RLS lọc chi
+         *     nhánh trước khi mã này chạy.
+         */
+        get: operations["treasurer_queue_api_v1_treasurer_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treasurer/queue/actions/book": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Book Queue Vouchers
+         * @description Ghi sổ quỹ hàng loạt (FR-WHK-002/003) — cả lô một transaction, phiếu đầu
+         *     tiên vi phạm (BR-WHK-05, trạng thái) làm cả lượt dừng có thông điệp.
+         */
+        post: operations["book_queue_vouchers_api_v1_treasurer_queue_actions_book_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vouchers": {
         parameters: {
             query?: never;
@@ -7192,6 +7322,342 @@ export interface components {
             items: components["schemas"]["AutoPostingOperationResponse"][];
             /** Package Id */
             package_id: number;
+        };
+        /** BankExtendedDimensionIn */
+        BankExtendedDimensionIn: {
+            /** Dimension Id */
+            dimension_id: number;
+            /** Value Id */
+            value_id: number;
+        };
+        /**
+         * BankSettlementIn
+         * @description Một dòng đối trừ — chỉ nhận `amount_fc`, VND và chênh lệch tỷ giá do
+         *     server tính (cùng luật `CashSettlementIn`).
+         */
+        BankSettlementIn: {
+            /** Amount Fc */
+            amount_fc: number | string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            target_kind: components["schemas"]["SettlementTargetKind"];
+        };
+        /** BankSettlementOut */
+        BankSettlementOut: {
+            /** Amount */
+            amount: string;
+            /** Amount Fc */
+            amount_fc: string;
+            /** Fx Diff */
+            fx_diff: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /** Target Kind */
+            target_kind: number;
+        };
+        /**
+         * BankVoucherIn
+         * @description Thân chứng từ tiền gửi cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).
+         */
+        BankVoucherIn: {
+            /** Bank Account Id */
+            bank_account_id: number;
+            /** Beneficiary Account No */
+            beneficiary_account_no?: string | null;
+            /** Beneficiary Bank Name */
+            beneficiary_bank_name?: string | null;
+            /** Beneficiary Name */
+            beneficiary_name?: string | null;
+            /** Branch Id */
+            branch_id: number;
+            /** Cashflow Activity */
+            cashflow_activity?: number | null;
+            /** Cheque Date */
+            cheque_date?: string | null;
+            /** Cheque No */
+            cheque_no?: string | null;
+            /** Counter Bank Account Id */
+            counter_bank_account_id?: number | null;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Kind */
+            kind: number;
+            /** Lines */
+            lines: components["schemas"]["BankVoucherLineIn"][];
+            /** Operation Code */
+            operation_code?: string | null;
+            /** Partner Id */
+            partner_id?: number | null;
+            partner_kind?: components["schemas"]["PartnerKind"] | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Reference No */
+            reference_no?: string | null;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["BankSettlementIn"][];
+        };
+        /**
+         * BankVoucherLineIn
+         * @description Một dòng định khoản: cặp Nợ/Có + số tiền nguyên tệ — cùng luật dòng
+         *     phiếu quỹ (hai bên bỏ trống được ở bản nháp, mapper chặn lúc ghi sổ).
+         */
+        BankVoucherLineIn: {
+            /** Amount */
+            amount?: number | string | null;
+            /** Amount Fc */
+            amount_fc: number | string;
+            /** Contract Id */
+            contract_id?: number | null;
+            /** Cost Object Id */
+            cost_object_id?: number | null;
+            /** Credit Account Id */
+            credit_account_id?: number | null;
+            /** Debit Account Id */
+            debit_account_id?: number | null;
+            /** Description */
+            description?: string | null;
+            /** Expense Item Id */
+            expense_item_id?: number | null;
+            /**
+             * Extended
+             * @default []
+             */
+            extended: components["schemas"]["BankExtendedDimensionIn"][];
+            /** Item Id */
+            item_id?: number | null;
+            /** Order Id */
+            order_id?: number | null;
+            /** Partner Id */
+            partner_id?: number | null;
+            partner_kind?: components["schemas"]["PartnerKind"] | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Warehouse Id */
+            warehouse_id?: number | null;
+        };
+        /** BankVoucherLineOut */
+        BankVoucherLineOut: {
+            /** Amount Fc */
+            amount_fc: string;
+            /** Contract Id */
+            contract_id: number | null;
+            /** Cost Object Id */
+            cost_object_id: number | null;
+            /** Credit Account Id */
+            credit_account_id: number | null;
+            /** Debit Account Id */
+            debit_account_id: number | null;
+            /** Description */
+            description: string | null;
+            /** Expense Item Id */
+            expense_item_id: number | null;
+            /** Extended Dimensions */
+            extended_dimensions: {
+                [key: string]: number;
+            } | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Item Id */
+            item_id: number | null;
+            /** Line No */
+            line_no: number;
+            /** Order Id */
+            order_id: number | null;
+            /** Partner Id */
+            partner_id: number | null;
+            /** Partner Kind */
+            partner_kind: number | null;
+            /** Project Id */
+            project_id: number | null;
+            /** Warehouse Id */
+            warehouse_id: number | null;
+        };
+        /**
+         * BankVoucherOut
+         * @description Header chứng từ + thân tiền gửi — client cần cả hai để vẽ lại form.
+         */
+        BankVoucherOut: {
+            /**
+             * Bank Account Id
+             * @default 0
+             */
+            bank_account_id: number;
+            /** Beneficiary Account No */
+            beneficiary_account_no?: string | null;
+            /** Beneficiary Bank Name */
+            beneficiary_bank_name?: string | null;
+            /** Beneficiary Name */
+            beneficiary_name?: string | null;
+            /** Branch Id */
+            branch_id: number;
+            /** Cashflow Activity */
+            cashflow_activity: number | null;
+            /** Cheque Date */
+            cheque_date?: string | null;
+            /** Cheque No */
+            cheque_no?: string | null;
+            /** Counter Bank Account Id */
+            counter_bank_account_id?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Document Type */
+            document_type: string;
+            /** Entry Kind */
+            entry_kind: number;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @default 0
+             */
+            kind: number;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["BankVoucherLineOut"][];
+            /** Operation Code */
+            operation_code?: string | null;
+            /** Partner Id */
+            partner_id?: number | null;
+            /** Partner Kind */
+            partner_kind?: number | null;
+            /** Period Id */
+            period_id: number;
+            /** Posted At */
+            posted_at: string | null;
+            /** Posted By */
+            posted_by: number | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Reference No */
+            reference_no?: string | null;
+            /** Row Version */
+            row_version: number;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["BankSettlementOut"][];
+            /** Status */
+            status: number;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /**
+         * BankVoucherUpdate
+         * @description PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).
+         */
+        BankVoucherUpdate: {
+            /** Bank Account Id */
+            bank_account_id: number;
+            /** Beneficiary Account No */
+            beneficiary_account_no?: string | null;
+            /** Beneficiary Bank Name */
+            beneficiary_bank_name?: string | null;
+            /** Beneficiary Name */
+            beneficiary_name?: string | null;
+            /** Branch Id */
+            branch_id: number;
+            /** Cashflow Activity */
+            cashflow_activity?: number | null;
+            /** Cheque Date */
+            cheque_date?: string | null;
+            /** Cheque No */
+            cheque_no?: string | null;
+            /** Counter Bank Account Id */
+            counter_bank_account_id?: number | null;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Kind */
+            kind: number;
+            /** Lines */
+            lines: components["schemas"]["BankVoucherLineIn"][];
+            /** Operation Code */
+            operation_code?: string | null;
+            /** Partner Id */
+            partner_id?: number | null;
+            partner_kind?: components["schemas"]["PartnerKind"] | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Reference No */
+            reference_no?: string | null;
+            /** Row Version */
+            row_version: number;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["BankSettlementIn"][];
         };
         /**
          * BanksCreateRequest
@@ -11433,6 +11899,110 @@ export interface components {
             provisioning_uri: string;
         };
         /**
+         * TreasurerBookRequest
+         * @description Ghi sổ quỹ hàng loạt (FR-WHK-002/003): chọn ngày theo chứng từ hoặc một
+         *     ngày tùy chọn áp cho cả lô (BR-WHK-05 kiểm với TỪNG phiếu).
+         */
+        TreasurerBookRequest: {
+            /** Book Date */
+            book_date?: string | null;
+            /**
+             * Book Date Mode
+             * @default posting_date
+             * @enum {string}
+             */
+            book_date_mode: "posting_date" | "custom";
+            /** Voucher Ids */
+            voucher_ids: string[];
+        };
+        /**
+         * TreasurerBookResponse
+         * @description Kết quả ghi sổ hàng loạt — chỉ đếm: cả lô là MỘT transaction nên "đã ghi
+         *     N phiếu" là toàn bộ thông tin; chi tiết dòng nằm ở sổ quỹ (client tải lại
+         *     hàng đợi + sổ sau thao tác). Giữ mỏng còn vì tham chiếu idempotency chỉ
+         *     chứa được một khóa ngắn, không chứa được danh sách phiếu.
+         */
+        TreasurerBookResponse: {
+            /** Booked Count */
+            booked_count: number;
+        };
+        /** TreasurerCashBookResponse */
+        TreasurerCashBookResponse: {
+            /** Items */
+            items: components["schemas"]["TreasurerCashBookRowOut"][];
+        };
+        /**
+         * TreasurerCashBookRowOut
+         * @description Một dòng sổ quỹ tiền mặt của thủ quỹ (FR-WHK-005).
+         */
+        TreasurerCashBookRowOut: {
+            /**
+             * Book Date
+             * Format: date
+             */
+            book_date: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Cash Account Id */
+            cash_account_id: number;
+            /** Id */
+            id: number;
+            /** Payment Amount */
+            payment_amount: string;
+            /**
+             * Posted At
+             * Format: date-time
+             */
+            posted_at: string;
+            /** Posted By */
+            posted_by: number;
+            /** Receipt Amount */
+            receipt_amount: string;
+            /**
+             * Voucher Id
+             * Format: uuid
+             */
+            voucher_id: string;
+        };
+        /**
+         * TreasurerQueueItem
+         * @description Một phiếu chờ ghi sổ quỹ — chép phẳng từ `kernel.protocols
+         *     .TreasurerPendingVoucher` (hợp đồng API tách khỏi hợp đồng nội bộ).
+         */
+        TreasurerQueueItem: {
+            /** Amount */
+            amount: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Cash Account Id */
+            cash_account_id: number;
+            /** Description */
+            description: string | null;
+            /** Document Type */
+            document_type: string;
+            /** Is Receipt */
+            is_receipt: boolean;
+            /** Payer Receiver Name */
+            payer_receiver_name: string | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /**
+             * Voucher Id
+             * Format: uuid
+             */
+            voucher_id: string;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /** TreasurerQueueResponse */
+        TreasurerQueueResponse: {
+            /** Items */
+            items: components["schemas"]["TreasurerQueueItem"][];
+        };
+        /**
          * TrialBalanceResponse
          * @description Bảng cân đối tài khoản của một (kỳ, sổ).
          *
@@ -12136,6 +12706,142 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutoPostingOperationsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_open_invoices_api_v1_bank_open_invoices_get: {
+        parameters: {
+            query: {
+                side: "receivable" | "payable";
+                partner_kind: number;
+                partner_id: number;
+                branch_id: number;
+                as_of: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenInvoicesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_bank_voucher_api_v1_bank_vouchers_post: {
+        parameters: {
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BankVoucherIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_bank_voucher_api_v1_bank_vouchers__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_bank_voucher_api_v1_bank_vouchers__voucher_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BankVoucherUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankVoucherOut"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -22218,6 +22924,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GrantResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    treasurer_cash_book_api_v1_treasurer_cash_book_get: {
+        parameters: {
+            query?: {
+                cash_account_id?: number | null;
+                from_date?: string | null;
+                to_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreasurerCashBookResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    treasurer_queue_api_v1_treasurer_queue_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreasurerQueueResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    book_queue_vouchers_api_v1_treasurer_queue_actions_book_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TreasurerBookRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreasurerBookResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

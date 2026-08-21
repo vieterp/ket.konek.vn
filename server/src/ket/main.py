@@ -53,6 +53,7 @@ from ket.api.routers.attachments import ATTACHMENTS_PREFIX
 from ket.api.routers.attachments import router as attachments_router
 from ket.api.routers.auth import router as auth_router
 from ket.api.routers.auto_posting import router as auto_posting_router
+from ket.api.routers.bank import router as bank_router
 from ket.api.routers.cash_book import router as cash_book_router
 from ket.api.routers.config_packages import CONFIG_PACKAGES_PREFIX
 from ket.api.routers.config_packages import router as config_packages_router
@@ -75,6 +76,7 @@ from ket.api.routers.setup import router as setup_router
 from ket.api.routers.statements import router as statements_router
 from ket.api.routers.system import router as system_router
 from ket.api.routers.system_settings import router as settings_router
+from ket.api.routers.treasurer import router as treasurer_router
 from ket.api.routers.updates import router as updates_router
 from ket.api.routers.vouchers import router as vouchers_router
 from ket.kernel.config.packages.importer import MAX_ARCHIVE_BYTES as IMPORTER_MAX_ARCHIVE_BYTES
@@ -277,6 +279,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(fiscal_years_router)
     app.include_router(gl_journal_router)
     app.include_router(cash_book_router)
+    app.include_router(bank_router)
+    app.include_router(treasurer_router)
     app.include_router(vouchers_router)
     app.include_router(ledger_router)
     app.include_router(opening_balances_router)

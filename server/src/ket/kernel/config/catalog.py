@@ -145,6 +145,8 @@ WARNING_LEVELS: Final[frozenset[str]] = frozenset(
 chung cho MỌI khóa `warning.*` về sau (vượt dự toán, vượt ngưỡng nợ…), để màn
 thiết lập vẽ cùng một bộ ba lựa chọn cho cả nhóm."""
 
+TREASURER_ENABLED_KEY: Final[str] = "treasurer.enabled"
+
 PRINT_ALLOW_DRAFT_KEY: Final[str] = "print.allow_draft_vouchers"
 PRINT_ALLOW_LOCKED_KEY: Final[str] = "print.allow_locked_vouchers"
 QUANTITY_DECIMALS_KEY: Final[str] = "format.quantity_decimals"
@@ -303,6 +305,19 @@ CATALOG: Final[dict[str, SettingDefinition]] = {
             scopes=frozenset({SettingScope.SYSTEM}),
             description="Cảnh báo khi chi quá số tồn tiền mặt/tiền gửi (ba mức FR-SYS-062)",
             choices=WARNING_LEVELS,
+        ),
+        SettingDefinition(
+            key=TREASURER_ENABLED_KEY,
+            value_type=ValueType.BOOLEAN,
+            default=FALSE_LITERAL,
+            # FR-WHK-021 (SRS 17 §1): doanh nghiệp không tách vai trò thủ quỹ
+            # thì ẩn phân hệ — phiếu thu/chi vào thẳng sổ quỹ lúc ghi sổ kế
+            # toán, không có hàng đợi. Mặc định **tắt** (phase-06 §Risk: DN nhỏ
+            # là số đông; bật là lựa chọn của đơn vị có thủ quỹ riêng). Cấp hệ
+            # thống: một két tiền không thể nửa phiếu chờ thủ quỹ nửa phiếu tự
+            # vào sổ tùy người nhập.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Bật phân hệ thủ quỹ: phiếu thu/chi chờ thủ quỹ ghi sổ quỹ",
         ),
         SettingDefinition(
             key=SAVE_ALSO_POSTS_KEY,
