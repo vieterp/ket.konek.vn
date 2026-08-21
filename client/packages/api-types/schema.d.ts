@@ -476,6 +476,11 @@ export interface paths {
          * Auto Match Statement
          * @description Khớp tự động (FR-BNK-030): cùng chiều + cùng số tiền + ngày ±3, ưu tiên
          *     trùng số tham chiếu; ứng viên nhập nhằng để lại cho khớp tay.
+         *
+         *     Đòi phạm vi MỌI chi nhánh (review 6D, M-1): ứng viên là chứng từ dưới RLS
+         *     chi nhánh, còn sao kê là dữ liệu mức tài khoản — phạm vi hẹp làm máy không
+         *     thấy ứng viên đúng và khớp nhầm ứng viên duy nhất còn lại một cách tất
+         *     định. Khớp TAY không bị chặn: người dùng chỉ chọn được thứ mình thấy.
          */
         post: operations["auto_match_statement_api_v1_bank_statements__statement_id__actions_auto_match_post"];
         delete?: never;

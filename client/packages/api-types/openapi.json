@@ -15922,7 +15922,7 @@
     },
     "/api/v1/bank/statements/{statement_id}/actions/auto-match": {
       "post": {
-        "description": "Khớp tự động (FR-BNK-030): cùng chiều + cùng số tiền + ngày ±3, ưu tiên\ntrùng số tham chiếu; ứng viên nhập nhằng để lại cho khớp tay.",
+        "description": "Khớp tự động (FR-BNK-030): cùng chiều + cùng số tiền + ngày ±3, ưu tiên\ntrùng số tham chiếu; ứng viên nhập nhằng để lại cho khớp tay.\n\nĐòi phạm vi MỌI chi nhánh (review 6D, M-1): ứng viên là chứng từ dưới RLS\nchi nhánh, còn sao kê là dữ liệu mức tài khoản — phạm vi hẹp làm máy không\nthấy ứng viên đúng và khớp nhầm ứng viên duy nhất còn lại một cách tất\nđịnh. Khớp TAY không bị chặn: người dùng chỉ chọn được thứ mình thấy.",
         "operationId": "auto_match_statement_api_v1_bank_statements__statement_id__actions_auto_match_post",
         "parameters": [
           {
