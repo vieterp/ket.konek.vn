@@ -232,3 +232,58 @@ def test_delete_without_adjustment_removes_the_sheet(
 
     with pytest.raises(_RollbackError):
         run(work)
+
+
+def test_concurrent_create_adjustment_yields_exactly_one_voucher(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Sửa H-3 review 6B: hai request create-adjustment đồng thời trên một biên
+    bản chỉ được sinh MỘT phiếu — `FOR UPDATE` trên biên bản nối tiếp hai txn,
+    txn sau thấy `adjustment_voucher_id` đã có và bị từ chối."""
+    import threading
+
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        sheet = CashCountSheetService(session).create(
+            _sheet(context, accounts, counted=40_000), user_id=ACTOR_ID
+        )
+        sheet_id = sheet.id
+
+    barrier = threading.Barrier(2)
+    outcomes: list[str] = []
+    lock = threading.Lock()
+
+    def attempt() -> None:
+        barrier.wait()
+        try:
+            with unit_of_work(session_factory, scope) as session:
+                CashCountSheetService(session).create_adjustment(sheet_id, user_id=ACTOR_ID)
+            outcome = "created"
+        except CountSheetAdjustmentError:
+            outcome = "refused"
+        with lock:
+            outcomes.append(outcome)
+
+    threads = [threading.Thread(target=attempt) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert sorted(outcomes) == ["created", "refused"]
+    with unit_of_work(session_factory, scope) as session:
+        service = CashCountSheetService(session)
+        refreshed = service.require(sheet_id)
+        assert refreshed.adjustment_voucher_id is not None
+        # Dọn: gỡ phiếu + biên bản để không rơi vãi vào chi nhánh dùng chung.
+        from ket.modules.cash_book.service import CashVoucherService
+
+        CashVoucherService(session).delete(refreshed.adjustment_voucher_id)
+        # FK `SET NULL` chạy ở DB — làm mới identity map trước khi đọc lại.
+        session.expire_all()
+        refreshed_again = service.require(sheet_id)
+        assert refreshed_again.adjustment_voucher_id is None
+        service.delete(sheet_id)

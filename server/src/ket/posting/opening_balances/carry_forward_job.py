@@ -34,7 +34,7 @@ from ket.kernel.errors import (
 from ket.kernel.identifiers import uuid7
 from ket.kernel.jobs.models import ResumeSemantics
 from ket.kernel.jobs.registry import REGISTRY, JobContext, JobResult, JobType
-from ket.kernel.money import ZERO, round_money
+from ket.kernel.money import ZERO
 from ket.kernel.periods.models import FiscalYear
 from ket.posting.balances.recalc_queue import mark_dirty
 from ket.posting.engine.models import Ledger
@@ -123,6 +123,7 @@ def _carry_invoices(
             OpeningBalanceInvoice.amount_fc,
             OpeningBalanceInvoice.amount,
             OpeningBalanceInvoice.paid_amount,
+            OpeningBalanceInvoice.paid_amount_fc,
             parent.detail_kind,
             parent.account_id,
             parent.partner_id,
@@ -133,7 +134,10 @@ def _carry_invoices(
         .where(parent.ledger == ledger)
         .where(parent.branch_id == branch_id)
         .where(parent.detail_kind.in_(_INVOICE_KINDS))
-        .where(OpeningBalanceInvoice.amount > OpeningBalanceInvoice.paid_amount)
+        # Lọc theo NGUYÊN TỆ — cùng trục với đối trừ (`paid_amount_fc`, lát 6B):
+        # hai cơ sở lọc khác nhau cho cùng bất biến "còn nợ" là chỗ hóa đơn tỷ
+        # giá lẻ trả hết FC nhưng dư vài đồng VND bị chuyển năm nhầm (L-1 6B).
+        .where(OpeningBalanceInvoice.amount_fc > OpeningBalanceInvoice.paid_amount_fc)
     ).all()
     if not rows:
         return 0, 0, 0
@@ -180,11 +184,10 @@ def _carry_invoices(
             dropped += 1
             continue
         remaining: Decimal = row.amount - row.paid_amount
-        remaining_fc = (
-            round_money(row.amount_fc * remaining / row.amount)
-            if row.amount > ZERO
-            else row.amount_fc
-        )
+        # Nguyên tệ còn nợ đọc THẲNG từ `paid_amount_fc` (lát 6B) — trước đây
+        # phải ước lượng tỷ lệ qua VND vì cột chưa tồn tại; phép chia-nhân-làm-
+        # tròn đó lệch được vài xu trên hóa đơn đối trừ từng phần.
+        remaining_fc: Decimal = row.amount_fc - row.paid_amount_fc
         carried.append(
             {
                 "id": uuid7(),
@@ -195,6 +198,7 @@ def _carry_invoices(
                 "amount_fc": remaining_fc,
                 "amount": remaining,
                 "paid_amount": ZERO,
+                "paid_amount_fc": ZERO,
             }
         )
         carried_total_by_parent[target.id] = (

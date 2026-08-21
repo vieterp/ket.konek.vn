@@ -242,3 +242,55 @@ def test_gl_save_also_posts_threads_the_acknowledgement(
 
     with pytest.raises(_RollbackError):
         run(acknowledged)
+
+
+def test_a_backdated_payment_that_sinks_a_later_day_is_caught(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Sửa M-2 review 6B: thu 500k ngày 6/1, chi 500k ngày 28/1 (quỹ về 0);
+    một phiếu chi LÙI NGÀY 12/1 không âm tại 12/1 (còn 200k) nhưng làm quỹ âm
+    từ 28/1 — guard soi số dư THẤP NHẤT từ ngày hạch toán trở đi nên phải bắt."""
+
+    def _cash_move(service: CashVoucherService, *, kind: int, day: date, amount: int) -> None:
+        receipt = kind == CashVoucherKind.RECEIPT
+        voucher = service.create(
+            CashVoucherIn(
+                kind=kind,
+                operation_code="thu-khac" if receipt else "chi-khac",
+                cash_account_id=accounts["111"],
+                branch_id=context.branch_id,
+                document_date=day,
+                posting_date=day,
+                currency_code="VND",
+                exchange_rate=Decimal(1),
+                lines=(
+                    CashVoucherLineIn(
+                        debit_account_id=accounts["111"] if receipt else accounts["642"],
+                        credit_account_id=accounts["3381"] if receipt else accounts["111"],
+                        amount_fc=Decimal(amount),
+                    ),
+                ),
+            ),
+            user_id=ACTOR_ID,
+        )
+        service.post(voucher.id, user_id=ACTOR_ID)
+
+    def work(session: Session) -> object:
+        _set_system_setting(session, CASH_BALANCE_WARNING_KEY, "warn", "string")
+        service = CashVoucherService(session)
+        _cash_move(service, kind=CashVoucherKind.RECEIPT, day=date(2026, 1, 6), amount=500_000)
+        _cash_move(service, kind=CashVoucherKind.PAYMENT, day=date(2026, 1, 28), amount=500_000)
+
+        backdated = service.create(
+            _overdraft_payment(context, accounts, amount=300_000).model_copy(
+                update={"document_date": date(2026, 1, 12), "posting_date": date(2026, 1, 12)}
+            ),
+            user_id=ACTOR_ID,
+        )
+        with pytest.raises(PostingValidationError) as caught:
+            service.post(backdated.id, user_id=ACTOR_ID)
+        assert caught.value.violations[0].code == "cash.balance_negative"
+        raise _RollbackError
+
+    with pytest.raises(_RollbackError):
+        run(work)

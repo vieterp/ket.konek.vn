@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from import_support import FakeProgress
 from ket.kernel.auditing.models import AuditAction, AuditLog
 from ket.kernel.datasets.provisioning import DatasetRef
-from ket.kernel.errors import OpeningPeriodLockedError
+from ket.kernel.errors import OpeningBalanceSettledError, OpeningPeriodLockedError
 from ket.kernel.jobs.registry import JobContext
 from ket.kernel.periods.models import AccountingPeriod
 from ket.kernel.persistence.unit_of_work import unit_of_work
@@ -348,3 +348,34 @@ def test_phase_8_kinds_are_rejected_at_the_parameter(context: PostingContext) ->
             ledger=Ledger.FINANCIAL.value,
             detail_kind=OpeningDetailKind.STOCK,
         )
+
+
+def test_clear_refuses_a_group_with_settled_invoices(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+) -> None:
+    """Hóa đơn đã bị phiếu đối trừ (paid_amount_fc > 0) thì không xóa nhóm được
+    (review 6B, M-1): xóa đích làm phiếu đã ghi sổ kẹt vĩnh viễn — bỏ ghi sổ
+    không còn dòng nào để gỡ số đã trả."""
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        payable_id = _seed_two_groups(session, context)
+        invoice = session.execute(
+            select(OpeningBalanceInvoice).where(
+                OpeningBalanceInvoice.opening_balance_id == payable_id
+            )
+        ).scalar_one()
+        invoice.paid_amount_fc = Decimal("100000.00")
+        invoice.paid_amount = Decimal("100000.00")
+        session.flush()
+
+        with pytest.raises(OpeningBalanceSettledError):
+            _clear(session, dataset_alpha, context, detail_kind=OpeningDetailKind.PAYABLE)
+
+        # Gỡ đối trừ (như bỏ ghi sổ phiếu) thì xóa lại được.
+        invoice.paid_amount_fc = Decimal(0)
+        invoice.paid_amount = Decimal(0)
+        session.flush()
+        result = _clear(session, dataset_alpha, context, detail_kind=OpeningDetailKind.PAYABLE)
+        assert result["deleted_rows"] == 1

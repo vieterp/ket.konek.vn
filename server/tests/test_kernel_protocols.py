@@ -89,6 +89,7 @@ def _an_invoice() -> OpenInvoice:
         exchange_rate=Decimal(1),
         amount_fc=Decimal("1000"),
         remaining_fc=Decimal("400"),
+        remaining=Decimal("400"),
     )
 
 

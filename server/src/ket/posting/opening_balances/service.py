@@ -36,6 +36,7 @@ from ket.kernel.config.accounts_models import (
 )
 from ket.kernel.config.accounts_provider import resolve_package
 from ket.kernel.currency.models import Currency
+from ket.kernel.errors import OpeningBalanceSettledError
 from ket.kernel.identifiers import uuid7
 from ket.kernel.master_data.models.employee import Employee
 from ket.kernel.master_data.models.partner import Partner
@@ -462,6 +463,13 @@ def write_staged(
         fiscal_year_id=fiscal_year.id,
     )
     first_period = guard_opening_writable(session, fiscal_year, for_share=True)
+    ensure_groups_not_settled(
+        session,
+        fiscal_year_id=fiscal_year.id,
+        ledger=ledger,
+        branch_id=branch_id,
+        detail_kinds=tuple(staged.replaced_kinds),
+    )
 
     session.execute(
         delete(OpeningBalance)
@@ -542,7 +550,43 @@ def write_staged(
 __all__ = [
     "PARTNER_KIND_BY_DETAIL",
     "StagedOpening",
+    "ensure_groups_not_settled",
     "first_period_of",
     "validate_rows",
     "write_staged",
 ]
+
+
+def ensure_groups_not_settled(
+    session: Session,
+    *,
+    fiscal_year_id: int,
+    ledger: int,
+    branch_id: int,
+    detail_kinds: tuple[int, ...],
+) -> None:
+    """Chặn thay-trọn/xóa nhóm khi chứng từ con đã bị phiếu đối trừ (M-1 6B).
+
+    Chạy SAU khi đã cầm advisory lock của đường ghi số dư: số `paid_amount_fc`
+    chỉ đổi trong transaction ghi/bỏ ghi sổ phiếu, và phiếu giữ `FOR UPDATE`
+    trên dòng hóa đơn — một dòng đếm được ở đây là một tham chiếu thật, không
+    phải trạng thái nửa vời.
+    """
+    settled = session.execute(
+        select(func.count())
+        .select_from(OpeningBalanceInvoice)
+        .join(OpeningBalance, OpeningBalance.id == OpeningBalanceInvoice.opening_balance_id)
+        .where(
+            OpeningBalance.fiscal_year_id == fiscal_year_id,
+            OpeningBalance.ledger == ledger,
+            OpeningBalance.branch_id == branch_id,
+            OpeningBalance.detail_kind.in_(detail_kinds),
+            OpeningBalanceInvoice.paid_amount_fc > 0,
+        )
+    ).scalar_one()
+    if settled:
+        raise OpeningBalanceSettledError(
+            "Nhóm số dư có chứng từ đã được phiếu thu/chi đối trừ — bỏ ghi sổ "
+            "các phiếu đó trước khi nhập lại hay xóa nhóm",
+            settled_invoices=int(settled),
+        )

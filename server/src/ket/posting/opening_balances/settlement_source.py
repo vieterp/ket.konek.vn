@@ -73,33 +73,32 @@ def _to_open_invoice(invoice: OpeningBalanceInvoice, parent: OpeningBalance) -> 
         exchange_rate=parent.exchange_rate,
         amount_fc=invoice.amount_fc,
         remaining_fc=invoice.amount_fc - invoice.paid_amount_fc,
+        remaining=invoice.amount - invoice.paid_amount,
     )
 
 
 class OpeningBalanceSettlementSource:
-    """Cài cả ba Protocol công nợ cho nguồn số dư ban đầu.
+    """Cài `SettlementTargetSource` + phần đọc chung cho hai provider công nợ.
 
-    Một lớp thay vì ba: cả ba cùng đọc một cặp bảng, và ranh giới thật nằm ở
-    Protocol (nơi gọi chỉ thấy đúng chữ ký nó cần), không phải ở số lớp.
+    `open_invoices` KHÔNG nằm trên lớp này mà trên hai view khóa-chiều bên
+    dưới (`_ReceivableView`/`_PayableView`) — sửa H-1 review 6B: một đối tượng
+    đăng ký làm CẢ hai provider sẽ trả lời theo `partner_kind` bất kể nó được
+    hỏi qua registry chiều nào, và cổng quyền phía API (kiểm theo chiều) bị đi
+    vòng — người chỉ có quyền xem phiếu thu đọc được công nợ phải trả.
     """
 
-    def open_invoices(
+    def _open_invoices(
         self,
         session: Session,
         *,
+        detail_kind: int,
         partner_kind: PartnerKind,
         partner_id: int,
         branch_id: int,
         as_of: date,
     ) -> Sequence[OpenInvoice]:
-        """Hóa đơn số dư đầu kỳ còn nợ của một đối tác — cả hai chiều đi chung
-        một câu đọc, chiều nào lấy chiều đó theo `detail_kind` khớp
-        `partner_kind` (khách → nhóm phải thu, NCC → nhóm phải trả)."""
-        detail_kinds = [
-            kind for kind, mapped in _DETAIL_KIND_TO_PARTNER.items() if mapped == partner_kind
-        ]
-        if not detail_kinds:
-            return ()
+        """Hóa đơn còn nợ của MỘT nhóm số dư — `detail_kind` do view khóa, nên
+        hỏi nhầm chiều (partner_kind không khớp nhóm) chỉ ra danh sách rỗng."""
         year = fiscal_year_covering(session, as_of)
         if year is None:
             return ()
@@ -110,7 +109,7 @@ class OpeningBalanceSettlementSource:
                 OpeningBalance.fiscal_year_id == year.id,
                 OpeningBalance.ledger == 0,
                 OpeningBalance.branch_id == branch_id,
-                OpeningBalance.detail_kind.in_(detail_kinds),
+                OpeningBalance.detail_kind == detail_kind,
                 OpeningBalance.partner_kind == partner_kind.value,
                 OpeningBalance.partner_id == partner_id,
                 OpeningBalanceInvoice.amount_fc > OpeningBalanceInvoice.paid_amount_fc,
@@ -137,7 +136,12 @@ class OpeningBalanceSettlementSource:
     ) -> None:
         invoice = self._lock(session, target_id)
         remaining_fc = invoice.amount_fc - invoice.paid_amount_fc
-        if amount_fc > remaining_fc:
+        remaining = invoice.amount - invoice.paid_amount
+        # Kiểm CẢ HAI phía (sửa H-2 review 6B): nguyên tệ là trục đối trừ
+        # (BR-QUY-02), còn phía VND có thể vượt riêng vì phần lẻ làm tròn của
+        # các lát trước — để lọt thì CHECK `paid_within_amount` của DB nổ thành
+        # IntegrityError 500 thay vì một vi phạm nghiệp vụ 422.
+        if amount_fc > remaining_fc or amount > remaining:
             raise PostingValidationError(
                 "Số đối trừ vượt số còn nợ của chứng từ công nợ",
                 violations=[
@@ -147,6 +151,8 @@ class OpeningBalanceSettlementSource:
                         target_id=str(target_id),
                         remaining_fc=str(remaining_fc),
                         amount_fc=str(amount_fc),
+                        remaining=str(remaining),
+                        amount=str(amount),
                     )
                 ],
             )
@@ -193,8 +199,59 @@ class OpeningBalanceSettlementSource:
         return invoice
 
 
+class _ReceivableView:
+    """`ReceivableProvider` khóa cứng vào nhóm PHẢI THU — bản đăng ký cho
+    registry chiều thu (sửa H-1 review 6B)."""
+
+    def __init__(self, source: OpeningBalanceSettlementSource) -> None:
+        self._source = source
+
+    def open_invoices(
+        self,
+        session: Session,
+        *,
+        partner_kind: PartnerKind,
+        partner_id: int,
+        branch_id: int,
+        as_of: date,
+    ) -> Sequence[OpenInvoice]:
+        return self._source._open_invoices(
+            session,
+            detail_kind=OpeningDetailKind.RECEIVABLE,
+            partner_kind=partner_kind,
+            partner_id=partner_id,
+            branch_id=branch_id,
+            as_of=as_of,
+        )
+
+
+class _PayableView:
+    """`PayableProvider` khóa cứng vào nhóm PHẢI TRẢ — đối xứng với trên."""
+
+    def __init__(self, source: OpeningBalanceSettlementSource) -> None:
+        self._source = source
+
+    def open_invoices(
+        self,
+        session: Session,
+        *,
+        partner_kind: PartnerKind,
+        partner_id: int,
+        branch_id: int,
+        as_of: date,
+    ) -> Sequence[OpenInvoice]:
+        return self._source._open_invoices(
+            session,
+            detail_kind=OpeningDetailKind.PAYABLE,
+            partner_kind=partner_kind,
+            partner_id=partner_id,
+            branch_id=branch_id,
+            as_of=as_of,
+        )
+
+
 SOURCE = OpeningBalanceSettlementSource()
 
-PROVIDERS.register_receivable(SOURCE)
-PROVIDERS.register_payable(SOURCE)
+PROVIDERS.register_receivable(_ReceivableView(SOURCE))
+PROVIDERS.register_payable(_PayableView(SOURCE))
 PROVIDERS.register_settlement_source(SettlementTargetKind.OPENING_BALANCE, SOURCE)

@@ -88,7 +88,18 @@ def price_settlements(
             continue
         _check_target(payload, row.amount_fc, invoice, violations)
         amount = convert_currency(row.amount_fc, payload.exchange_rate, scale)
+        # VND giải phóng trên sổ: theo tỷ giá ghi nhận, nhưng KHÔNG được vượt
+        # số VND còn treo, và lát đối trừ CUỐI (vét sạch nguyên tệ) phải gánh
+        # trọn phần lẻ còn lại — nếu không, tổng các phần làm-tròn-riêng lệch
+        # vài đồng so với giá trị ghi nhận và hoặc CHECK DB nổ (thu), hoặc sổ
+        # treo mãi vài đồng không ai đối trừ được (review 6B, H-2). Phần lẻ
+        # dồn vào `fx_diff` — đi vào 515/635 cùng chỗ với chênh lệch tỷ giá,
+        # đúng bản chất "chênh lệch do làm tròn khi thanh toán".
         recognition = convert_currency(row.amount_fc, invoice.exchange_rate, scale)
+        if row.amount_fc == invoice.remaining_fc:
+            recognition = invoice.remaining
+        else:
+            recognition = min(recognition, invoice.remaining)
         priced.append(
             PricedSettlement(
                 target_kind=row.target_kind,

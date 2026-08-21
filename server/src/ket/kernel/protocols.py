@@ -76,8 +76,13 @@ class OpenInvoice(BaseModel):
     `remaining_fc` là số **nguyên tệ** còn nợ — đối trừ nhập theo nguyên tệ,
     còn chênh lệch tỷ giá thu/trả tiền (FR-SYS-066) tính từ `exchange_rate`
     (tỷ giá lúc ghi nhận nợ) so với tỷ giá của phiếu thu/chi tại thời điểm
-    thanh toán. Không mang số VND đã quy đổi: nguồn nào cũng tính lại được từ
-    `remaining_fc × rate`, và hai cột cùng nói một điều là hai cột sẽ lệch.
+    thanh toán.
+
+    `remaining` là số **VND còn treo trên sổ** (giá trị ghi nhận − đã giải
+    phóng). Trường này tồn tại vì `round(remaining_fc × rate)` KHÔNG tái tạo
+    được nó: mỗi lượt đối trừ từng phần làm tròn riêng, và tổng các phần làm
+    tròn có thể vượt tổng-làm-tròn-một-lần vài đồng lẻ (review 6B, H-2) — số
+    VND của sổ chỉ nguồn dữ liệu mới biết, người tiêu dùng không được tự nhân.
 
     `account_id` là TK công nợ mà chứng từ này đang treo (131/331/1388… theo
     dòng số dư hoặc hóa đơn gốc): dòng điều chỉnh chênh lệch tỷ giá phải đâm
@@ -100,6 +105,7 @@ class OpenInvoice(BaseModel):
     exchange_rate: Decimal
     amount_fc: Decimal
     remaining_fc: Decimal
+    remaining: Decimal
     description: str | None = None
 
 

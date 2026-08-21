@@ -224,6 +224,7 @@ class OpenInvoiceOut(BaseModel):
     exchange_rate: Decimal
     amount_fc: Decimal
     remaining_fc: Decimal
+    remaining: Decimal
     description: str | None
 
     @classmethod

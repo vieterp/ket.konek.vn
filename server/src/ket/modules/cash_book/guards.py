@@ -9,11 +9,12 @@ gói `cash_book` — posting không import module (C4).
 Ba mức đọc từ khóa `warning.cash_balance` (catalog FR-SYS-060): guard tự đọc
 cấu hình của nó, đúng phân vai của pipeline (`posting/engine/guards.py`).
 
-Số dư tính theo `cash_balance_as_of` (BR-QUY-01: dư đầu năm + phát sinh tới
-hết ngày hạch toán, gộp theo số hiệu TK) cộng nhẩm phần chứng từ sắp ghi —
-không có chuyện ghi thử rồi xóa. Chứng từ lùi ngày vẫn được soi tại đúng ngày
-hạch toán của nó; phát sinh muộn hơn trong năm không tính (tồn quỹ là số của
-một ngày, không phải số cuối năm).
+Số dư soi bằng `cash_balance_floor_from` — số dư THẤP NHẤT từ ngày hạch toán
+của chứng từ tới hết năm, cộng nhẩm phần chứng từ sắp ghi (không có chuyện
+ghi thử rồi xóa). Lấy floor chứ không lấy số dư tại một ngày (review 6B, M-2):
+một phiếu chi lùi ngày trừ vào số dư của MỌI ngày về sau — nó có thể không âm
+tại chính ngày đó nhưng làm âm một ngày sau, nơi quỹ đã bị các phiếu khác rút
+xuống.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ from ket.kernel.config.catalog import (
 )
 from ket.kernel.config.settings_service import value_of
 from ket.kernel.errors import PostingViolation
-from ket.modules.cash_book.balance_service import cash_balance_as_of
+from ket.modules.cash_book.balance_service import cash_balance_floor_from
 from ket.posting.contracts import GuardFinding, Voucher
 from ket.posting.engine.prepared import PreparedLine
 
@@ -79,14 +80,14 @@ class CashBalanceGuard:
         findings: list[GuardFinding] = []
         blocking = level == WARNING_LEVEL_BLOCK
         for (ledger, account_code), delta in sorted(deltas.items()):
-            current = cash_balance_as_of(
+            floor = cash_balance_floor_from(
                 session,
                 ledger=ledger,
                 branch_id=voucher.branch_id,
                 account_code=account_code,
-                as_of=voucher.posting_date,
+                from_date=voucher.posting_date,
             )
-            projected = current + delta
+            projected = floor + delta
             if projected >= 0:
                 continue
             findings.append(

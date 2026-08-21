@@ -8029,6 +8029,11 @@
             "title": "Partner Kind",
             "type": "integer"
           },
+          "remaining": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Remaining",
+            "type": "string"
+          },
           "remaining_fc": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Remaining Fc",
@@ -8058,6 +8063,7 @@
           "exchange_rate",
           "amount_fc",
           "remaining_fc",
+          "remaining",
           "description"
         ],
         "title": "OpenInvoiceOut",
@@ -13952,7 +13958,7 @@
     },
     "/api/v1/cash-book/open-invoices": {
       "get": {
-        "description": "Chứng từ công nợ còn nợ của một đối tác cho picker đối trừ (`docs/srs/03` §4).\n\nPhía phải thu đòi quyền xem phiếu thu, phải trả đòi quyền xem phiếu chi —\ndanh sách này tồn tại để lập đúng loại phiếu đó.",
+        "description": "Chứng từ công nợ còn nợ của một đối tác cho picker đối trừ (`docs/srs/03` §4).\n\nPhía phải thu đòi quyền xem phiếu thu, phải trả đòi quyền xem phiếu chi —\ndanh sách này tồn tại để lập đúng loại phiếu đó. `side` phải KHỚP loại đối\ntác (phải thu ↔ khách hàng, phải trả ↔ NCC): cổng quyền kiểm theo chiều,\nnên một cặp lệch chiều là đường vòng qua chính cổng đó — provider đã khóa\nchiều ở tầng dữ liệu (sửa H-1 review 6B), đây là lớp chặn sớm có thông điệp.",
         "operationId": "list_open_invoices_api_v1_cash_book_open_invoices_get",
         "parameters": [
           {

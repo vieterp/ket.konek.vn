@@ -415,3 +415,27 @@ def test_update_via_http_respects_row_version(
     )
     assert updated.status_code == 200, updated.text
     assert Decimal(updated.json()["lines"][0]["amount_fc"]) == Decimal("99000")
+
+
+def test_open_invoices_side_must_match_partner_kind(
+    client: TestClient,
+    cashier_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Sửa H-1 review 6B: cổng quyền kiểm theo `side`, nên cặp side↔partner_kind
+    lệch chiều (xin phải-thu của một NCC) là đường vòng và bị chặn 422 — kể cả
+    với người có ĐỦ quyền hai chiều."""
+    mismatched = client.get(
+        "/api/v1/cash-book/open-invoices",
+        params={
+            "side": "receivable",
+            "partner_kind": 1,
+            "partner_id": 1,
+            "branch_id": context.branch_id,
+            "as_of": "2026-02-10",
+        },
+        headers=cashier_headers,
+    )
+    assert mismatched.status_code == 422
+    assert mismatched.json()["error_code"] == "settlement.side_mismatch"

@@ -1504,3 +1504,25 @@ class CountSheetAdjustmentError(DomainError):
 
     error_code: ClassVar[str] = "count_sheet.adjustment_conflict"
     http_status: ClassVar[int] = 409
+
+
+class SettlementSideMismatchError(DomainError):
+    """`side` của picker công nợ không khớp loại đối tác (review 6B, H-1):
+    phải thu đi với khách hàng, phải trả đi với nhà cung cấp — cổng quyền kiểm
+    theo chiều nên cặp lệch chiều phải bị chặn có thông điệp, không âm thầm."""
+
+    error_code: ClassVar[str] = "settlement.side_mismatch"
+
+
+class OpeningBalanceSettledError(DomainError):
+    """Nhóm số dư ban đầu có chứng từ công nợ ĐÃ được phiếu đối trừ — không
+    thay trọn/xóa được (review 6B, M-1): xóa đích đối trừ làm phiếu đã ghi sổ
+    kẹt vĩnh viễn (bỏ ghi sổ không gỡ được số đã trả vào một dòng không còn).
+    Đường đúng: bỏ ghi sổ các phiếu đối trừ trước, rồi nhập lại/xóa nhóm.
+
+    409 chứ không 422: dữ liệu gửi lên không sai — trạng thái hiện tại (phiếu
+    đang giữ tham chiếu) không cho phép, và trạng thái đó đổi được.
+    """
+
+    error_code: ClassVar[str] = "opening_balance.settled"
+    http_status: ClassVar[int] = 409

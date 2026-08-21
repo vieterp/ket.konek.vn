@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from ket.kernel.config.accounts_models import ChartOfAccount
@@ -40,19 +40,9 @@ def cash_balance_as_of(
     year = fiscal_year_covering(session, as_of)
     if year is None:
         return ZERO
-
     account_ids = select(ChartOfAccount.id).where(ChartOfAccount.code == account_code)
-
-    opening = (
-        session.execute(
-            select(func.coalesce(func.sum(OpeningBalance.debit - OpeningBalance.credit), 0)).where(
-                OpeningBalance.fiscal_year_id == year.id,
-                OpeningBalance.ledger == ledger,
-                OpeningBalance.branch_id == branch_id,
-                OpeningBalance.account_id.in_(account_ids),
-            )
-        ).scalar_one()
-        or ZERO
+    opening = _opening_net(
+        session, year_id=year.id, ledger=ledger, branch_id=branch_id, account_ids=account_ids
     )
     posted = (
         session.execute(
@@ -66,4 +56,85 @@ def cash_balance_as_of(
         ).scalar_one()
         or ZERO
     )
-    return Decimal(opening) + Decimal(posted)
+    return opening + Decimal(posted)
+
+
+def cash_balance_floor_from(
+    session: Session, *, ledger: int, branch_id: int, account_code: str, from_date: date
+) -> Decimal:
+    """Số dư THẤP NHẤT của TK từ `from_date` tới hết năm tài chính.
+
+    Guard chi-quá-tồn cần con số này chứ không phải số dư tại một ngày (review
+    6B, M-2): một phiếu chi LÙI NGÀY trừ vào số dư của MỌI ngày từ ngày hạch
+    toán trở đi — nó có thể không làm âm tại chính ngày đó nhưng làm âm một
+    ngày sau, nơi quỹ đã bị các phiếu khác rút xuống. `min(số dư(t)) + delta`
+    cho mọi `t ≥ from_date` chính là điều kiện "số dư 111x/112x < 0 sau khi
+    ghi sổ" của FR-SYS-062 xét trên cả trục thời gian.
+
+    Số ngày có phát sinh trong một năm ≤ 366 nên gộp theo ngày rồi gấp tích
+    lũy ở Python — phần nặng (SUM theo ngày) vẫn là set-based SQL (LD-14).
+    """
+    year = fiscal_year_covering(session, from_date)
+    if year is None:
+        return ZERO
+    account_ids = select(ChartOfAccount.id).where(ChartOfAccount.code == account_code)
+    opening = _opening_net(
+        session, year_id=year.id, ledger=ledger, branch_id=branch_id, account_ids=account_ids
+    )
+    before = (
+        session.execute(
+            select(func.coalesce(func.sum(GlPosting.debit - GlPosting.credit), 0)).where(
+                GlPosting.ledger == ledger,
+                GlPosting.branch_id == branch_id,
+                GlPosting.account_id.in_(account_ids),
+                GlPosting.posting_date >= year.start_date,
+                GlPosting.posting_date < from_date,
+            )
+        ).scalar_one()
+        or ZERO
+    )
+    daily = session.execute(
+        select(GlPosting.posting_date, func.sum(GlPosting.debit - GlPosting.credit))
+        .where(
+            GlPosting.ledger == ledger,
+            GlPosting.branch_id == branch_id,
+            GlPosting.account_id.in_(account_ids),
+            GlPosting.posting_date >= from_date,
+            GlPosting.posting_date <= year.end_date,
+        )
+        .group_by(GlPosting.posting_date)
+        .order_by(GlPosting.posting_date)
+    ).all()
+
+    running = opening + Decimal(before)
+    # Số dư chỉ quan sát được ở CUỐI mỗi ngày: mốc khởi điểm (`running` trước
+    # khi gấp) chỉ là một ứng viên khi chính `from_date` KHÔNG có phát sinh —
+    # nếu có, số dư cuối ngày đó đã gồm phát sinh cùng ngày, và lấy mốc trước-
+    # ngày làm floor sẽ báo âm cho một phiếu chi được chính phiếu thu cùng
+    # ngày tài trợ.
+    floor = running if not daily or daily[0][0] > from_date else Decimal("Infinity")
+    for _posting_date, net in daily:
+        running += Decimal(net)
+        floor = min(floor, running)
+    return floor
+
+
+def _opening_net(
+    session: Session,
+    *,
+    year_id: int,
+    ledger: int,
+    branch_id: int,
+    account_ids: Select[tuple[int]],
+) -> Decimal:
+    return Decimal(
+        session.execute(
+            select(func.coalesce(func.sum(OpeningBalance.debit - OpeningBalance.credit), 0)).where(
+                OpeningBalance.fiscal_year_id == year_id,
+                OpeningBalance.ledger == ledger,
+                OpeningBalance.branch_id == branch_id,
+                OpeningBalance.account_id.in_(account_ids),
+            )
+        ).scalar_one()
+        or ZERO
+    )

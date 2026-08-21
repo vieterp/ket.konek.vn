@@ -27,7 +27,7 @@ from ket.api.idempotency import idempotency_key_dependency
 from ket.kernel.config.catalog import SAVE_ALSO_POSTS_KEY
 from ket.kernel.config.settings_service import value_of
 from ket.kernel.contracts import PartnerKind
-from ket.kernel.errors import BranchNotInScopeError
+from ket.kernel.errors import BranchNotInScopeError, SettlementSideMismatchError
 from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
@@ -200,9 +200,20 @@ def list_open_invoices(
     """Chứng từ công nợ còn nợ của một đối tác cho picker đối trừ (`docs/srs/03` §4).
 
     Phía phải thu đòi quyền xem phiếu thu, phải trả đòi quyền xem phiếu chi —
-    danh sách này tồn tại để lập đúng loại phiếu đó.
+    danh sách này tồn tại để lập đúng loại phiếu đó. `side` phải KHỚP loại đối
+    tác (phải thu ↔ khách hàng, phải trả ↔ NCC): cổng quyền kiểm theo chiều,
+    nên một cặp lệch chiều là đường vòng qua chính cổng đó — provider đã khóa
+    chiều ở tầng dữ liệu (sửa H-1 review 6B), đây là lớp chặn sớm có thông điệp.
     """
     authorized.access.require(RECEIPT_VIEW if side == "receivable" else PAYMENT_VIEW)
+    expected_kind = PartnerKind.CUSTOMER if side == "receivable" else PartnerKind.VENDOR
+    if partner_kind != expected_kind.value:
+        raise SettlementSideMismatchError(
+            "Chiều công nợ không khớp loại đối tác — phải thu đi với khách hàng, "
+            "phải trả đi với nhà cung cấp",
+            side=side,
+            partner_kind=partner_kind,
+        )
     _require_branch_in_scope(authorized, branch_id)
     with unit_of_work(factory, authorized.scope) as session:
         invoices = open_invoices(

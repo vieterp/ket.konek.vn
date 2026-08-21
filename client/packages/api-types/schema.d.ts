@@ -370,7 +370,10 @@ export interface paths {
          * @description Chứng từ công nợ còn nợ của một đối tác cho picker đối trừ (`docs/srs/03` §4).
          *
          *     Phía phải thu đòi quyền xem phiếu thu, phải trả đòi quyền xem phiếu chi —
-         *     danh sách này tồn tại để lập đúng loại phiếu đó.
+         *     danh sách này tồn tại để lập đúng loại phiếu đó. `side` phải KHỚP loại đối
+         *     tác (phải thu ↔ khách hàng, phải trả ↔ NCC): cổng quyền kiểm theo chiều,
+         *     nên một cặp lệch chiều là đường vòng qua chính cổng đó — provider đã khóa
+         *     chiều ở tầng dữ liệu (sửa H-1 review 6B), đây là lớp chặn sớm có thông điệp.
          */
         get: operations["list_open_invoices_api_v1_cash_book_open_invoices_get"];
         put?: never;
@@ -9808,6 +9811,8 @@ export interface components {
             partner_id: number;
             /** Partner Kind */
             partner_kind: number;
+            /** Remaining */
+            remaining: string;
             /** Remaining Fc */
             remaining_fc: string;
             /**

@@ -454,3 +454,194 @@ def test_settlement_kind_without_a_source_is_refused(
         return None
 
     run(work)
+
+
+def test_partial_settlements_with_odd_rate_never_overflow_the_vnd_check(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    run: Runner,
+) -> None:
+    """Sửa H-2 review 6B: hóa đơn 3 USD @25.000,005 (amount = 75.000,02 VND);
+    ba lát ×1 USD làm tròn riêng cho 3 × 25.000,01 = 75.000,03 — trước sửa,
+    lát cuối nổ CHECK `paid_within_amount` thành IntegrityError 500. Nay lát
+    CUỐI gánh phần lẻ: giải phóng đúng số VND còn treo, phần dư 0,01 đi vào
+    515/635 như chênh lệch tỷ giá."""
+    odd_rate = Decimal("25000.005")
+    invoice_id = seed_open_invoice(
+        session_factory,
+        dataset_alpha,
+        context,
+        partner_id=CUSTOMER,
+        currency_code="USD",
+        exchange_rate=odd_rate,
+        amount_fc=Decimal(3),
+        invoice_no="HD-ODD-RATE",
+    )
+
+    def work(session: Session) -> object:
+        service = CashVoucherService(session)
+        for _ in range(3):
+            voucher = service.create(
+                _voucher(
+                    context,
+                    accounts,
+                    kind=CashVoucherKind.RECEIPT,
+                    amount_fc=Decimal(1),
+                    settlements=(_settle(invoice_id, Decimal(1)),),
+                    currency="USD",
+                    rate=odd_rate,
+                ),
+                user_id=ACTOR_ID,
+            )
+            service.post(voucher.id, user_id=ACTOR_ID)
+
+        invoice = session.get(OpeningBalanceInvoice, invoice_id)
+        assert invoice is not None
+        assert invoice.paid_amount_fc == Decimal(3)
+        # VND giải phóng đúng bằng giá trị ghi nhận — không tràn, không treo lẻ.
+        assert invoice.paid_amount == invoice.amount
+        return None
+
+    run(work)
+
+
+def test_apply_refuses_a_vnd_overflow_as_a_domain_error(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    run: Runner,
+) -> None:
+    """Lớp chặn cuối của H-2: `apply` bị đưa số VND vượt số còn treo (đường
+    đua/pricing lỗi) phải từ chối bằng vi phạm nghiệp vụ 422, không để CHECK
+    của DB nổ thành IntegrityError."""
+    from ket.posting.opening_balances.settlement_source import SOURCE
+
+    invoice_id = seed_open_invoice(
+        session_factory,
+        dataset_alpha,
+        context,
+        partner_id=CUSTOMER,
+        amount_fc=Decimal("100000"),
+        invoice_no="HD-VND-GUARD",
+    )
+
+    def work(session: Session) -> object:
+        with pytest.raises(PostingValidationError) as caught:
+            SOURCE.apply(
+                session,
+                target_id=invoice_id,
+                amount_fc=Decimal("50000"),
+                amount=Decimal("100001"),
+            )
+        assert caught.value.violations[0].code == "settlement.exceeds_remaining"
+        return None
+
+    run(work)
+
+
+def test_settlement_total_must_equal_voucher_total(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    run: Runner,
+) -> None:
+    """BR-QUY-03 với mọi đích HỢP LỆ (đóng lỗ test L-2 review 6B — mutation
+    M12 bỏ phép so tổng từng sống sót)."""
+    invoice_id = seed_open_invoice(
+        session_factory,
+        dataset_alpha,
+        context,
+        partner_id=CUSTOMER,
+        amount_fc=Decimal("500000"),
+        invoice_no="HD-BRQUY03",
+    )
+
+    def work(session: Session) -> object:
+        with pytest.raises(PostingValidationError) as caught:
+            CashVoucherService(session).create(
+                _voucher(
+                    context,
+                    accounts,
+                    kind=CashVoucherKind.RECEIPT,
+                    amount_fc=Decimal("300000"),
+                    settlements=(_settle(invoice_id, Decimal("200000")),),
+                ),
+                user_id=ACTOR_ID,
+            )
+        assert caught.value.violations[0].code == "settlement.total_mismatch"
+        return None
+
+    run(work)
+
+
+def test_receivable_registry_serves_no_payables_and_vice_versa(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    run: Runner,
+) -> None:
+    """Sửa H-1 review 6B ở tầng dữ liệu: provider đăng ký cho chiều PHẢI THU
+    khóa cứng vào nhóm phải thu — hỏi nó về NCC (phải trả) ra rỗng, dù cùng
+    một nguồn số dư ban đầu cài cả hai chiều."""
+    lone_vendor = VENDOR + 71
+    seed_open_invoice(
+        session_factory,
+        dataset_alpha,
+        context,
+        detail_kind=OpeningDetailKind.PAYABLE,
+        account_code="331",
+        partner_kind=PartnerKind.VENDOR,
+        partner_id=lone_vendor,
+        amount_fc=Decimal("70000"),
+        invoice_no="HD-AP-SIDE",
+    )
+
+    def work(session: Session) -> object:
+        via_receivable = open_invoices(
+            session,
+            side="receivable",
+            partner_kind=PartnerKind.VENDOR,
+            partner_id=lone_vendor,
+            branch_id=context.branch_id,
+            as_of=JAN_20,
+        )
+        assert via_receivable == ()
+        via_payable = open_invoices(
+            session,
+            side="payable",
+            partner_kind=PartnerKind.VENDOR,
+            partner_id=lone_vendor,
+            branch_id=context.branch_id,
+            as_of=JAN_20,
+        )
+        assert [item.invoice_no for item in via_payable] == ["HD-AP-SIDE"]
+        return None
+
+    run(work)
+
+
+def test_settlement_target_lock_is_for_update() -> None:
+    """Ghim `FOR UPDATE` trong câu khóa đích đối trừ (mutation M4 review 6B —
+    bỏ khóa đi thì mọi test một-luồng vẫn xanh; cùng lối ghim SQL biên dịch
+    của `period_share_lock_statement` phase 4)."""
+    from sqlalchemy.dialects import postgresql
+
+    from ket.posting.opening_balances.models import OpeningBalanceInvoice as Invoice
+
+    statement = (
+        select(Invoice).where(Invoice.id == None).with_for_update()  # noqa: E711
+    )
+    compiled = str(statement.compile(dialect=postgresql.dialect()))
+    assert "FOR UPDATE" in compiled
+
+    # Câu thật trong `_lock` phải giữ đúng cờ đó — đọc thẳng mã nguồn để một
+    # lần xóa `.with_for_update()` không thể sống qua test này.
+    import inspect
+
+    from ket.posting.opening_balances import settlement_source
+
+    source = inspect.getsource(settlement_source.OpeningBalanceSettlementSource._lock)
+    assert "with_for_update" in source

@@ -103,6 +103,18 @@ class CashCountSheetService:
             raise CountSheetNotFoundError("Không tìm thấy biên bản kiểm kê", sheet_id=str(sheet_id))
         return sheet
 
+    def _lock(self, sheet_id: UUID) -> CashCountSheet:
+        """Đọc biên bản kèm `FOR UPDATE` — cho hai đường đọc-rồi-quyết
+        (`create_adjustment`, `delete`). Không khóa thì hai request đồng thời
+        cùng thấy `adjustment_voucher_id IS NULL` và sinh HAI phiếu điều chỉnh
+        cho một biên bản (review 6B, H-3)."""
+        sheet = self._session.execute(
+            select(CashCountSheet).where(CashCountSheet.id == sheet_id).with_for_update()
+        ).scalar_one_or_none()
+        if sheet is None:
+            raise CountSheetNotFoundError("Không tìm thấy biên bản kiểm kê", sheet_id=str(sheet_id))
+        return sheet
+
     def lines_of(self, sheet_id: UUID) -> list[CashCountSheetLine]:
         return list(
             self._session.execute(
@@ -145,7 +157,7 @@ class CashCountSheetService:
     def delete(self, sheet_id: UUID) -> None:
         """Xóa biên bản CHƯA xử lý chênh lệch — đã sinh phiếu thì biên bản là
         căn cứ của phiếu, xóa phiếu trước rồi mới tới biên bản."""
-        sheet = self.require(sheet_id)
+        sheet = self._lock(sheet_id)
         if sheet.adjustment_voucher_id is not None:
             raise CountSheetAdjustmentError(
                 "Biên bản đã sinh phiếu xử lý chênh lệch — xóa phiếu đó trước",
@@ -166,7 +178,10 @@ class CashCountSheetService:
         # này cũng dùng; vòng đời hai service tách nhau.
         from ket.modules.cash_book.service import CashVoucherService
 
-        sheet = self.require(sheet_id)
+        # Khóa biên bản TRƯỚC khi đọc-rồi-quyết: request thứ hai chờ ở đây,
+        # thấy `adjustment_voucher_id` đã có và bị từ chối thay vì sinh phiếu
+        # thứ hai (review 6B, H-3).
+        sheet = self._lock(sheet_id)
         difference = sheet.counted_total - sheet.book_balance
         if difference == 0:
             raise CountSheetAdjustmentError("Biên bản không có chênh lệch — không có gì để xử lý")
