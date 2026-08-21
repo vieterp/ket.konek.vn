@@ -295,6 +295,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cash-book/count-sheets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Count Sheets */
+        get: operations["list_count_sheets_api_v1_cash_book_count_sheets_get"];
+        put?: never;
+        /**
+         * Create Count Sheet
+         * @description Lập biên bản kiểm kê quỹ (FR-QUY-030) — chụp số sổ tại ngày kiểm kê.
+         */
+        post: operations["create_count_sheet_api_v1_cash_book_count_sheets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-book/count-sheets/{sheet_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Count Sheet */
+        get: operations["get_count_sheet_api_v1_cash_book_count_sheets__sheet_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Count Sheet */
+        delete: operations["delete_count_sheet_api_v1_cash_book_count_sheets__sheet_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-book/count-sheets/{sheet_id}/actions/create-adjustment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Count Sheet Adjustment
+         * @description Sinh phiếu thu/chi xử lý chênh lệch kiểm kê (FR-QUY-031).
+         *
+         *     Người gọi phải có thêm quyền tạo đúng loại phiếu sẽ sinh (thừa → phiếu thu,
+         *     thiếu → phiếu chi) — kiểm trong transaction vì phải đọc biên bản mới biết
+         *     chiều chênh lệch.
+         */
+        post: operations["create_count_sheet_adjustment_api_v1_cash_book_count_sheets__sheet_id__actions_create_adjustment_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-book/open-invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Open Invoices
+         * @description Chứng từ công nợ còn nợ của một đối tác cho picker đối trừ (`docs/srs/03` §4).
+         *
+         *     Phía phải thu đòi quyền xem phiếu thu, phải trả đòi quyền xem phiếu chi —
+         *     danh sách này tồn tại để lập đúng loại phiếu đó. `side` phải KHỚP loại đối
+         *     tác (phải thu ↔ khách hàng, phải trả ↔ NCC): cổng quyền kiểm theo chiều,
+         *     nên một cặp lệch chiều là đường vòng qua chính cổng đó — provider đã khóa
+         *     chiều ở tầng dữ liệu (sửa H-1 review 6B), đây là lớp chặn sớm có thông điệp.
+         */
+        get: operations["list_open_invoices_api_v1_cash_book_open_invoices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-book/vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Cash Voucher
+         * @description Cất phiếu thu/chi; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.
+         *
+         *     `acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm đó (FR-SYS-062
+         *     mức "Cảnh báo" — ví dụ chi quá tồn quỹ); mức "Chặn" không mở được.
+         */
+        post: operations["create_cash_voucher_api_v1_cash_book_vouchers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-book/vouchers/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cash Voucher */
+        get: operations["get_cash_voucher_api_v1_cash_book_vouchers__voucher_id__get"];
+        /**
+         * Update Cash Voucher
+         * @description Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).
+         */
+        put: operations["update_cash_voucher_api_v1_cash_book_vouchers__voucher_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config-packages": {
         parameters: {
             query?: never;
@@ -502,6 +635,7 @@ export interface paths {
          *     Khi chế độ Cất-đồng-thời-ghi-sổ bật, người tạo phải có **cả** quyền `post`
          *     — kiểm trong `work` vì chỉ service mới biết tùy chọn đang bật hay không;
          *     ném ở đó thì khóa idempotency và số chứng từ cùng rollback.
+         *     `acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm (FR-SYS-062).
          */
         post: operations["create_journal_voucher_api_v1_gl_journal_vouchers_post"];
         delete?: never;
@@ -7420,6 +7554,317 @@ export interface components {
             /** Row Version */
             row_version: number;
         };
+        /**
+         * CashSettlementIn
+         * @description Một dòng đối trừ: chứng từ công nợ + số nguyên tệ người dùng nhập ("Số thu").
+         *
+         *     Chỉ nhận `amount_fc` — số VND và chênh lệch tỷ giá do server tính từ tỷ giá
+         *     phiếu và tỷ giá ghi nhận nợ (FR-SYS-066), không nhận từ client.
+         */
+        CashSettlementIn: {
+            /** Amount Fc */
+            amount_fc: number | string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            target_kind: components["schemas"]["SettlementTargetKind"];
+        };
+        /** CashSettlementOut */
+        CashSettlementOut: {
+            /** Amount */
+            amount: string;
+            /** Amount Fc */
+            amount_fc: string;
+            /** Fx Diff */
+            fx_diff: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /** Target Kind */
+            target_kind: number;
+        };
+        /**
+         * CashVoucherIn
+         * @description Thân phiếu thu/chi cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).
+         */
+        CashVoucherIn: {
+            /** Attachment Count */
+            attachment_count?: number | null;
+            /** Branch Id */
+            branch_id: number;
+            /** Cash Account Id */
+            cash_account_id: number;
+            /** Cashflow Activity */
+            cashflow_activity?: number | null;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Kind */
+            kind: number;
+            /** Lines */
+            lines: components["schemas"]["CashVoucherLineIn"][];
+            /** Operation Code */
+            operation_code: string;
+            /** Partner Id */
+            partner_id?: number | null;
+            partner_kind?: components["schemas"]["PartnerKind"] | null;
+            /** Payer Receiver Name */
+            payer_receiver_name?: string | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["CashSettlementIn"][];
+        };
+        /**
+         * CashVoucherLineIn
+         * @description Một dòng định khoản: cặp Nợ/Có + số tiền nguyên tệ.
+         *
+         *     Hai bên đều bỏ trống được **ở bản nháp** (nghiệp vụ "Thu khác" điền sẵn một
+         *     bên); `posting_mapper` từ chối dịch dòng còn thiếu bên khi ghi sổ.
+         */
+        CashVoucherLineIn: {
+            /** Amount */
+            amount?: number | string | null;
+            /** Amount Fc */
+            amount_fc: number | string;
+            /** Contract Id */
+            contract_id?: number | null;
+            /** Cost Object Id */
+            cost_object_id?: number | null;
+            /** Credit Account Id */
+            credit_account_id?: number | null;
+            /** Debit Account Id */
+            debit_account_id?: number | null;
+            /** Description */
+            description?: string | null;
+            /** Expense Item Id */
+            expense_item_id?: number | null;
+            /**
+             * Extended
+             * @default []
+             */
+            extended: components["schemas"]["ExtendedDimensionIn"][];
+            /** Item Id */
+            item_id?: number | null;
+            /** Order Id */
+            order_id?: number | null;
+            /** Partner Id */
+            partner_id?: number | null;
+            partner_kind?: components["schemas"]["PartnerKind"] | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Warehouse Id */
+            warehouse_id?: number | null;
+        };
+        /** CashVoucherLineOut */
+        CashVoucherLineOut: {
+            /** Amount Fc */
+            amount_fc: string;
+            /** Contract Id */
+            contract_id: number | null;
+            /** Cost Object Id */
+            cost_object_id: number | null;
+            /** Credit Account Id */
+            credit_account_id: number | null;
+            /** Debit Account Id */
+            debit_account_id: number | null;
+            /** Description */
+            description: string | null;
+            /** Expense Item Id */
+            expense_item_id: number | null;
+            /** Extended Dimensions */
+            extended_dimensions: {
+                [key: string]: number;
+            } | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Item Id */
+            item_id: number | null;
+            /** Line No */
+            line_no: number;
+            /** Order Id */
+            order_id: number | null;
+            /** Partner Id */
+            partner_id: number | null;
+            /** Partner Kind */
+            partner_kind: number | null;
+            /** Project Id */
+            project_id: number | null;
+            /** Warehouse Id */
+            warehouse_id: number | null;
+        };
+        /**
+         * CashVoucherOut
+         * @description Header chứng từ + thân phiếu — client cần cả hai để vẽ lại form.
+         */
+        CashVoucherOut: {
+            /** Attachment Count */
+            attachment_count?: number | null;
+            /** Branch Id */
+            branch_id: number;
+            /**
+             * Cash Account Id
+             * @default 0
+             */
+            cash_account_id: number;
+            /** Cashflow Activity */
+            cashflow_activity: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Document Type */
+            document_type: string;
+            /** Entry Kind */
+            entry_kind: number;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @default 0
+             */
+            kind: number;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["CashVoucherLineOut"][];
+            /**
+             * Operation Code
+             * @default
+             */
+            operation_code: string;
+            /** Partner Id */
+            partner_id?: number | null;
+            /** Partner Kind */
+            partner_kind?: number | null;
+            /** Payer Receiver Name */
+            payer_receiver_name?: string | null;
+            /** Period Id */
+            period_id: number;
+            /** Posted At */
+            posted_at: string | null;
+            /** Posted By */
+            posted_by: number | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Row Version */
+            row_version: number;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["CashSettlementOut"][];
+            /** Status */
+            status: number;
+            /**
+             * Treasurer Status
+             * @default 0
+             */
+            treasurer_status: number;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /**
+         * CashVoucherUpdate
+         * @description PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).
+         */
+        CashVoucherUpdate: {
+            /** Attachment Count */
+            attachment_count?: number | null;
+            /** Branch Id */
+            branch_id: number;
+            /** Cash Account Id */
+            cash_account_id: number;
+            /** Cashflow Activity */
+            cashflow_activity?: number | null;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Kind */
+            kind: number;
+            /** Lines */
+            lines: components["schemas"]["CashVoucherLineIn"][];
+            /** Operation Code */
+            operation_code: string;
+            /** Partner Id */
+            partner_id?: number | null;
+            partner_kind?: components["schemas"]["PartnerKind"] | null;
+            /** Payer Receiver Name */
+            payer_receiver_name?: string | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Row Version */
+            row_version: number;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["CashSettlementIn"][];
+        };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
             /**
@@ -7769,6 +8214,104 @@ export interface components {
             name_en?: string | null;
             /** Row Version */
             row_version: number;
+        };
+        /**
+         * CountSheetIn
+         * @description Biên bản kiểm kê quỹ (FR-QUY-030): số đếm thật + chi tiết mệnh giá tùy chọn.
+         */
+        CountSheetIn: {
+            /** Branch Id */
+            branch_id: number;
+            /** Cash Account Id */
+            cash_account_id: number;
+            /**
+             * Count Date
+             * Format: date
+             */
+            count_date: string;
+            /** Counted Total */
+            counted_total: number | string;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["CountSheetLineIn"][];
+            /** Note */
+            note?: string | null;
+        };
+        /** CountSheetLineIn */
+        CountSheetLineIn: {
+            /** Denomination */
+            denomination: number | string;
+            /** Quantity */
+            quantity: number;
+        };
+        /** CountSheetLineOut */
+        CountSheetLineOut: {
+            /** Denomination */
+            denomination: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Line No */
+            line_no: number;
+            /** Quantity */
+            quantity: number;
+        };
+        /** CountSheetListResponse */
+        CountSheetListResponse: {
+            /** Items */
+            items: components["schemas"]["CountSheetOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** CountSheetOut */
+        CountSheetOut: {
+            /** Adjustment Voucher Id */
+            adjustment_voucher_id: string | null;
+            /** Book Balance */
+            book_balance: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Cash Account Id */
+            cash_account_id: number;
+            /**
+             * Count Date
+             * Format: date
+             */
+            count_date: string;
+            /** Counted Total */
+            counted_total: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number;
+            /**
+             * Difference
+             * @default 0
+             */
+            difference: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["CountSheetLineOut"][];
+            /** Note */
+            note: string | null;
         };
         /** DatasetListResponse */
         DatasetListResponse: {
@@ -9238,6 +9781,54 @@ export interface components {
             table: string;
         };
         /**
+         * OpenInvoiceOut
+         * @description Một chứng từ công nợ còn nợ cho picker đối trừ — chép phẳng từ
+         *     `kernel.protocols.OpenInvoice` (hợp đồng API tách khỏi hợp đồng nội bộ).
+         */
+        OpenInvoiceOut: {
+            /** Account Id */
+            account_id: number;
+            /** Amount Fc */
+            amount_fc: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description: string | null;
+            /** Due Date */
+            due_date: string | null;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /**
+             * Invoice Date
+             * Format: date
+             */
+            invoice_date: string;
+            /** Invoice No */
+            invoice_no: string;
+            /** Partner Id */
+            partner_id: number;
+            /** Partner Kind */
+            partner_kind: number;
+            /** Remaining */
+            remaining: string;
+            /** Remaining Fc */
+            remaining_fc: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /** Target Kind */
+            target_kind: number;
+        };
+        /** OpenInvoicesResponse */
+        OpenInvoicesResponse: {
+            /** Items */
+            items: components["schemas"]["OpenInvoiceOut"][];
+        };
+        /**
          * OpeningBalanceListResponse
          * @description Trang dòng số dư + hai tổng cân đối của cả phạm vi (FR-OPB-006).
          *
@@ -10532,6 +11123,16 @@ export interface components {
             groups: components["schemas"]["SetupGroup"][];
         };
         /**
+         * SettlementTargetKind
+         * @description Loại chứng từ công nợ mà một lượt đối trừ trỏ tới.
+         *
+         *     Giá trị đi thẳng vào `cash_settlements.target_kind` và vào mọi bảng đối
+         *     trừ sau này (phase 7 `ar_ap_ledger`), nên khai ở kernel chứ không trong
+         *     module: hai module ghi cùng một cột thì từ vựng phải có đúng một chỗ.
+         * @enum {integer}
+         */
+        SettlementTargetKind: 0 | 1 | 2;
+        /**
          * SetupGroup
          * @description Một nhóm quyết định, phân theo **hệ quả** chứ không theo màn hình.
          */
@@ -11548,6 +12149,303 @@ export interface operations {
             };
         };
     };
+    list_count_sheets_api_v1_cash_book_count_sheets_get: {
+        parameters: {
+            query?: {
+                cash_account_id?: number | null;
+                from_date?: string | null;
+                to_date?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CountSheetListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_count_sheet_api_v1_cash_book_count_sheets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CountSheetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CountSheetOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_count_sheet_api_v1_cash_book_count_sheets__sheet_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sheet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CountSheetOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_count_sheet_api_v1_cash_book_count_sheets__sheet_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sheet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_count_sheet_adjustment_api_v1_cash_book_count_sheets__sheet_id__actions_create_adjustment_post: {
+        parameters: {
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
+            header?: never;
+            path: {
+                sheet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CountSheetOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_open_invoices_api_v1_cash_book_open_invoices_get: {
+        parameters: {
+            query: {
+                side: "receivable" | "payable";
+                partner_kind: number;
+                partner_id: number;
+                branch_id: number;
+                as_of: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenInvoicesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_cash_voucher_api_v1_cash_book_vouchers_post: {
+        parameters: {
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashVoucherIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_cash_voucher_api_v1_cash_book_vouchers__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_cash_voucher_api_v1_cash_book_vouchers__voucher_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashVoucherUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_config_packages_api_v1_config_packages_get: {
         parameters: {
             query?: never;
@@ -11875,7 +12773,9 @@ export interface operations {
     };
     create_journal_voucher_api_v1_gl_journal_vouchers_post: {
         parameters: {
-            query?: never;
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;

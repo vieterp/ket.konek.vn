@@ -134,6 +134,17 @@ LOCALE_KEY: Final[str] = "ui.locale"
 GRID_ENTER_KEY: Final[str] = "ui.grid_enter_moves_to_next_row"
 SAVE_ALSO_POSTS_KEY: Final[str] = "posting.save_also_posts"
 
+CASH_BALANCE_WARNING_KEY: Final[str] = "warning.cash_balance"
+WARNING_LEVEL_NONE: Final[str] = "none"
+WARNING_LEVEL_WARN: Final[str] = "warn"
+WARNING_LEVEL_BLOCK: Final[str] = "block"
+WARNING_LEVELS: Final[frozenset[str]] = frozenset(
+    {WARNING_LEVEL_NONE, WARNING_LEVEL_WARN, WARNING_LEVEL_BLOCK}
+)
+"""Ba mức của một cảnh báo FR-SYS-062 (`docs/srs/01` §8.2) — bộ giá trị dùng
+chung cho MỌI khóa `warning.*` về sau (vượt dự toán, vượt ngưỡng nợ…), để màn
+thiết lập vẽ cùng một bộ ba lựa chọn cho cả nhóm."""
+
 PRINT_ALLOW_DRAFT_KEY: Final[str] = "print.allow_draft_vouchers"
 PRINT_ALLOW_LOCKED_KEY: Final[str] = "print.allow_locked_vouchers"
 QUANTITY_DECIMALS_KEY: Final[str] = "format.quantity_decimals"
@@ -277,6 +288,21 @@ CATALOG: Final[dict[str, SettingDefinition]] = {
             description="Số dòng mà từ đó kết xuất XLSX chuyển sang chạy nền",
             minimum=1,
             maximum=5_000_000,
+        ),
+        SettingDefinition(
+            key=CASH_BALANCE_WARNING_KEY,
+            value_type=ValueType.STRING,
+            default=WARNING_LEVEL_NONE,
+            # FR-QUY-020/FR-SYS-062: "Chi quá số tồn tiền mặt/tiền gửi" — số dư
+            # TK 111x/112x âm sau khi ghi sổ. Cấp hệ thống: hai kế toán viên
+            # cùng một két tiền phải bị cùng một mức chặn. Mặc định "none" —
+            # SRS 01 §8.2 không ấn định mức khởi đầu, và một bản cài mới nhập
+            # liệu lùi ngày (chi trước, nhập phiếu thu sau) sẽ bị dội cảnh báo
+            # trên dữ liệu chưa đủ; đơn vị bật "warn"/"block" ở màn Thiết lập
+            # khi số dư đã vào nề nếp.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Cảnh báo khi chi quá số tồn tiền mặt/tiền gửi (ba mức FR-SYS-062)",
+            choices=WARNING_LEVELS,
         ),
         SettingDefinition(
             key=SAVE_ALSO_POSTS_KEY,

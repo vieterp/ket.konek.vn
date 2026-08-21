@@ -7,13 +7,16 @@ do RT-18 nêu thẳng: phase 7 và 8 chạy song song sau phase 6, và ranh gi�
 sẻ duy nhất giữa chúng là kernel + posting đã đóng băng. Protocol khai muộn ở
 phase 7/8 là một lần mở kernel ra sửa — đúng thứ "đóng băng" cấm.
 
-Bốn Protocol, ai cài — ai gọi:
+Năm Protocol, ai cài — ai gọi:
 
 * `ReceivableProvider` / `PayableProvider` — nguồn "hóa đơn còn nợ" cho đối
   trừ công nợ khi thu/chi tiền (`docs/srs/03` §4). Phase 6: nguồn duy nhất là
   số dư đầu kỳ (`posting.opening_balances` cài lúc 6B). Phase 7: module
   `sales`/`purchase` (qua `receivables`) đăng ký thêm nguồn hóa đơn thật.
   Người gọi: `cash_book.settlement_service`, và phase 7 là chính màn công nợ.
+* `SettlementTargetSource` — chủ dữ liệu của một loại đích đối trừ: tra đích
+  theo id lúc ghi sổ và cộng/gỡ số đã trả. Phase 6: `OPENING_BALANCE` do
+  `posting.opening_balances` cài; phase 7 cài nốt hai loại hóa đơn.
 * `InventoryPosting` — chứng từ mua/bán (phase 7) sinh phiếu nhập/xuất kho mà
   không import module kho; module `inventory` (phase 8) cài.
 * `CommitmentProvider` — "đã hứa giao" cho cột **Có thể bán** = tồn − đã hứa
@@ -73,8 +76,18 @@ class OpenInvoice(BaseModel):
     `remaining_fc` là số **nguyên tệ** còn nợ — đối trừ nhập theo nguyên tệ,
     còn chênh lệch tỷ giá thu/trả tiền (FR-SYS-066) tính từ `exchange_rate`
     (tỷ giá lúc ghi nhận nợ) so với tỷ giá của phiếu thu/chi tại thời điểm
-    thanh toán. Không mang số VND đã quy đổi: nguồn nào cũng tính lại được từ
-    `remaining_fc × rate`, và hai cột cùng nói một điều là hai cột sẽ lệch.
+    thanh toán.
+
+    `remaining` là số **VND còn treo trên sổ** (giá trị ghi nhận − đã giải
+    phóng). Trường này tồn tại vì `round(remaining_fc × rate)` KHÔNG tái tạo
+    được nó: mỗi lượt đối trừ từng phần làm tròn riêng, và tổng các phần làm
+    tròn có thể vượt tổng-làm-tròn-một-lần vài đồng lẻ (review 6B, H-2) — số
+    VND của sổ chỉ nguồn dữ liệu mới biết, người tiêu dùng không được tự nhân.
+
+    `account_id` là TK công nợ mà chứng từ này đang treo (131/331/1388… theo
+    dòng số dư hoặc hóa đơn gốc): dòng điều chỉnh chênh lệch tỷ giá phải đâm
+    vào **đúng TK đó** — đoán "131 của gói hiện hành" sẽ sai ngay khi số dư
+    treo ở TK chi tiết khác.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -84,6 +97,7 @@ class OpenInvoice(BaseModel):
     partner_kind: PartnerKind
     partner_id: int
     branch_id: int
+    account_id: int
     invoice_no: str
     invoice_date: date
     due_date: date | None = None
@@ -91,6 +105,7 @@ class OpenInvoice(BaseModel):
     exchange_rate: Decimal
     amount_fc: Decimal
     remaining_fc: Decimal
+    remaining: Decimal
     description: str | None = None
 
 
@@ -128,6 +143,40 @@ class PayableProvider(Protocol):
         as_of: date,
     ) -> Sequence[OpenInvoice]:
         """Hóa đơn còn nợ của một đối tác tính đến hết ngày `as_of`."""
+        ...
+
+
+class SettlementTargetSource(Protocol):
+    """Chủ dữ liệu của MỘT loại đích đối trừ — tra theo id, ghi/gỡ số đã trả.
+
+    Khác hai provider trên (liệt kê "còn nợ gì" để chọn), source trả lời cho
+    chứng từ thu/chi **đã chọn xong**: dòng `cash_settlements` chỉ cầm cặp
+    `(target_kind, target_id)`, và lúc ghi sổ phải tra lại đích để biết TK công
+    nợ + tỷ giá ghi nhận, rồi cộng số đã trả vào đích trong CÙNG transaction.
+    Mỗi `SettlementTargetKind` đúng một source: hai bản cài cho một loại đích
+    là hai nơi tranh nhau một cột `paid`, cùng luật với `InventoryPosting`.
+
+    `apply`/`revert` nhận cả `amount_fc` lẫn `amount` (VND theo tỷ giá **ghi
+    nhận nợ** — người gọi tính, một chỗ làm tròn duy nhất) và phải tự khóa dòng
+    đích (`FOR UPDATE`) + từ chối khi vượt số còn nợ: hai phiếu cùng đối trừ
+    một hóa đơn là chuyện thường ngày (BR-QUY-02 kiểm lần cuối ở đây).
+    """
+
+    def find(self, session: Session, *, target_ids: Sequence[UUID]) -> Sequence[OpenInvoice]:
+        """Tra các đích theo id — đích đã biến mất (nhập lại số dư…) thì vắng
+        mặt trong kết quả, người gọi coi đó là vi phạm chứ không phải lỗi 500."""
+        ...
+
+    def apply(
+        self, session: Session, *, target_id: UUID, amount_fc: Decimal, amount: Decimal
+    ) -> None:
+        """Cộng số đã trả vào đích khi chứng từ ghi sổ."""
+        ...
+
+    def revert(
+        self, session: Session, *, target_id: UUID, amount_fc: Decimal, amount: Decimal
+    ) -> None:
+        """Gỡ số đã trả khi chứng từ bỏ ghi sổ."""
         ...
 
 
@@ -216,6 +265,7 @@ class CrossModuleProviders:
         self._payable: list[PayableProvider] = []
         self._commitment: list[CommitmentProvider] = []
         self._inventory: InventoryPosting | None = None
+        self._settlement_sources: dict[SettlementTargetKind, SettlementTargetSource] = {}
 
     def register_receivable(self, provider: ReceivableProvider) -> None:
         self._receivable.append(provider)
@@ -231,6 +281,16 @@ class CrossModuleProviders:
             raise ValueError("InventoryPosting đã có bản cài — chỉ module kho được ghi sổ kho")
         self._inventory = implementation
 
+    def register_settlement_source(
+        self, kind: SettlementTargetKind, source: SettlementTargetSource
+    ) -> None:
+        if kind in self._settlement_sources:
+            raise ValueError(
+                f"Loại đích đối trừ {kind.name} đã có source — "
+                "hai bản cài là hai nơi tranh nhau một cột paid"
+            )
+        self._settlement_sources[kind] = source
+
     def receivable_providers(self) -> tuple[ReceivableProvider, ...]:
         return tuple(self._receivable)
 
@@ -244,6 +304,11 @@ class CrossModuleProviders:
         """`None` = chưa có module kho (trước phase 8) — nơi gọi phải từ chối
         rõ ràng ("chưa bật phân hệ kho") thay vì giả vờ đã ghi."""
         return self._inventory
+
+    def settlement_source(self, kind: SettlementTargetKind) -> SettlementTargetSource | None:
+        """`None` = loại đích chưa có chủ (hóa đơn bán/mua trước phase 7) —
+        nơi gọi từ chối dòng đối trừ trỏ vào loại đó, không đoán hộ."""
+        return self._settlement_sources.get(kind)
 
 
 PROVIDERS: Final[CrossModuleProviders] = CrossModuleProviders()

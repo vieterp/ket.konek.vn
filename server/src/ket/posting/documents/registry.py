@@ -29,10 +29,23 @@ from ket.posting.engine.requests import PostingRequest
 RequestBuilder = Callable[[Session, UUID], PostingRequest]
 """Dựng `PostingRequest` từ chi tiết đã lưu của một chứng từ."""
 
+LifecycleHook = Callable[[Session, UUID, int], None]
+"""`(session, voucher_id, user_id)` — việc riêng của module quanh một bước
+vòng đời, chạy trong CÙNG transaction với bước đó."""
+
 
 @dataclass(frozen=True)
 class PostingDocumentType:
-    """Một loại chứng từ ghi sổ được qua endpoint hành động chung."""
+    """Một loại chứng từ ghi sổ được qua endpoint hành động chung.
+
+    Ba hook vòng đời (thêm ở lát 6B): phiếu thu/chi phải cộng số đã trả vào
+    chứng từ công nợ khi ghi sổ, gỡ ra khi bỏ ghi sổ, và trả bộ đếm tham chiếu
+    danh mục trước khi xóa — mà endpoint hành động chung (`routers/vouchers.py`)
+    gọi thẳng `PostingService`/`VoucherService`, không đi qua service của
+    module. Không có hook thì mỗi module có việc-đi-kèm sẽ phải tự mở endpoint
+    hành động riêng, phá "một bộ endpoint cho mọi loại chứng từ" của phase-04.
+    Hook chạy cùng transaction: ghi sổ và việc-đi-kèm cùng sống cùng chết.
+    """
 
     code: str
     """Mã trên `vouchers.document_type` (`GLE`, `PT`, …)."""
@@ -44,6 +57,16 @@ class PostingDocumentType:
 
     title: str
     build_request: RequestBuilder
+
+    after_post: LifecycleHook | None = None
+    """Chạy SAU khi `PostingService.post` xong, cùng transaction."""
+
+    after_unpost: LifecycleHook | None = None
+    """Chạy SAU khi `PostingService.unpost` xong, cùng transaction."""
+
+    before_delete: LifecycleHook | None = None
+    """Chạy TRƯỚC `VoucherService.delete`, cùng transaction — dọn những gì
+    `ON DELETE CASCADE` không tự dọn được (bộ đếm tham chiếu, dấu vết ngoài)."""
 
     def permission(self, action: Action) -> str:
         return permission_code(self.permission_module, self.permission_name, action)

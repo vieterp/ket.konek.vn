@@ -233,6 +233,12 @@ def test_backfill_is_skipped_when_package_version_mismatches(
         package_id = connection.execute(
             select(ConfigPackage.id).where(ConfigPackage.code == "TT133-2016")
         ).scalar_one()
+        # Version thật đọc từ DB thay vì hằng số: mỗi lát bump version gói
+        # builtin (6A: 2, 6B: 3) sẽ âm thầm biến hằng số thành sai và nhánh
+        # khôi phục ở `finally` bỏ dataset dùng chung lại trong trạng thái lệch.
+        disk_version = connection.execute(
+            select(ConfigPackage.version).where(ConfigPackage.id == package_id)
+        ).scalar_one()
         layout_ids = list(
             connection.execute(
                 select(StatementLayout.id).where(StatementLayout.package_id == package_id)
@@ -262,7 +268,9 @@ def test_backfill_is_skipped_when_package_version_mismatches(
         with owner_engine.begin() as connection:
             bind_seed_schema(connection, dataset_alpha.schema_name)
             connection.execute(
-                update(ConfigPackage).where(ConfigPackage.id == package_id).values(version=1)
+                update(ConfigPackage)
+                .where(ConfigPackage.id == package_id)
+                .values(version=disk_version)
             )
         with owner_engine.begin() as connection:
             ensure_builtin_packages(connection, dataset_alpha.schema_name)

@@ -73,12 +73,15 @@ def refresh_builtin_reports(connection: Connection, schema: str) -> None:
     dung đóng gói của bản phát hành hiện tại — đường dành cho migration.
 
     Khác `ensure_builtin_reports` (chỉ lấp chỗ trống, không bao giờ ghi đè):
-    hàm này **thay** nội dung dòng builtin — dùng đúng một lần ở `0014`, khi
-    chưa có bản cài phát hành nào nên "người dùng đã sửa layout builtin" chưa
-    phải một trạng thái cần bảo toàn. Sau bản phát hành đầu tiên, nâng cấp nội
-    dung builtin phải quay về doctrine mã-mới-cho-nội-dung-mới của
-    `ensure_builtin_reports` (docstring đầu tệp) — KHÔNG gọi lại hàm này trong
-    một migration tương lai.
+    hàm này **thay** nội dung dòng builtin — hợp lệ khi chưa có bản cài phát
+    hành nào nên "người dùng đã sửa layout builtin" chưa phải một trạng thái
+    cần bảo toàn. Lời gọi duy nhất nằm ở migration **MỚI NHẤT** của chuỗi
+    (0014 lát 5D → chuyển sang 0017 lát 6B): hàm đọc dữ liệu đóng gói hiện tại
+    và probe SQL của từng dataset, nên chạy giữa chuỗi sẽ đổ ngay khi một
+    dataset builtin tham chiếu cột ra đời sau nó. Sau bản phát hành đầu tiên,
+    nâng cấp nội dung builtin phải quay về doctrine mã-mới-cho-nội-dung-mới
+    của `ensure_builtin_reports` (docstring đầu tệp) — khi đó bước này rời
+    khỏi chuỗi migration hẳn.
 
     Thứ tự: xóa definition builtin (không gì tham chiếu definition) → cập nhật
     dataset/layout/param set builtin còn tồn tại về nội dung đóng gói → gieo

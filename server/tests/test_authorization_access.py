@@ -147,7 +147,10 @@ def test_seeding_is_repeatable_and_grants_newly_registered_codes(
 
     registry = PermissionRegistry()
     registry.register(
-        DocumentType(module="cash_book", code="receipt", actions=frozenset({Action.POST}))
+        # Mã GIẢ chưa từng được module nào đăng ký thật: lát 6B biến
+        # `cash_book.receipt.post` (mã cũ của test này) thành mã thật được gieo
+        # lúc provision — mã giả phải nằm ngoài registry thật mãi mãi.
+        DocumentType(module="phan_he_gia", code="chung_tu_gia", actions=frozenset({Action.POST}))
     )
 
     with owner_engine.begin() as connection:

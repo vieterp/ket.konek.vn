@@ -1479,3 +1479,50 @@ class PrintNotAllowedError(DomainError):
 
     error_code: ClassVar[str] = "print.not_allowed"
     http_status: ClassVar[int] = 409
+
+
+class CountSheetInvalidError(DomainError):
+    """Biên bản kiểm kê quỹ không hợp lệ (FR-QUY-030): tổng theo mệnh giá lệch
+    số đếm, TK không phải tiền mặt, hoặc chưa có năm tài chính phủ ngày kiểm."""
+
+    error_code: ClassVar[str] = "count_sheet.invalid"
+
+
+class CountSheetNotFoundError(DomainError):
+    """Không tìm thấy biên bản kiểm kê quỹ."""
+
+    error_code: ClassVar[str] = "count_sheet.not_found"
+    http_status: ClassVar[int] = 404
+
+
+class CountSheetAdjustmentError(DomainError):
+    """Không sinh được phiếu xử lý chênh lệch (FR-QUY-031): không có chênh
+    lệch, đã xử lý rồi, hoặc gói cấu hình thiếu nghiệp vụ/TK xử lý.
+
+    409 chứ không 422: yêu cầu hợp lệ, trạng thái hiện tại (hoặc cấu hình gói)
+    không cho phép — cùng lập luận `MasterDataInUseError`."""
+
+    error_code: ClassVar[str] = "count_sheet.adjustment_conflict"
+    http_status: ClassVar[int] = 409
+
+
+class SettlementSideMismatchError(DomainError):
+    """`side` của picker công nợ không khớp loại đối tác (review 6B, H-1):
+    phải thu đi với khách hàng, phải trả đi với nhà cung cấp — cổng quyền kiểm
+    theo chiều nên cặp lệch chiều phải bị chặn có thông điệp, không âm thầm."""
+
+    error_code: ClassVar[str] = "settlement.side_mismatch"
+
+
+class OpeningBalanceSettledError(DomainError):
+    """Nhóm số dư ban đầu có chứng từ công nợ ĐÃ được phiếu đối trừ — không
+    thay trọn/xóa được (review 6B, M-1): xóa đích đối trừ làm phiếu đã ghi sổ
+    kẹt vĩnh viễn (bỏ ghi sổ không gỡ được số đã trả vào một dòng không còn).
+    Đường đúng: bỏ ghi sổ các phiếu đối trừ trước, rồi nhập lại/xóa nhóm.
+
+    409 chứ không 422: dữ liệu gửi lên không sai — trạng thái hiện tại (phiếu
+    đang giữ tham chiếu) không cho phép, và trạng thái đó đổi được.
+    """
+
+    error_code: ClassVar[str] = "opening_balance.settled"
+    http_status: ClassVar[int] = 409

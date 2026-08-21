@@ -1639,6 +1639,966 @@
         "title": "BranchUpdateRequest",
         "type": "object"
       },
+      "CashSettlementIn": {
+        "additionalProperties": false,
+        "description": "Một dòng đối trừ: chứng từ công nợ + số nguyên tệ người dùng nhập (\"Số thu\").\n\nChỉ nhận `amount_fc` — số VND và chênh lệch tỷ giá do server tính từ tỷ giá\nphiếu và tỷ giá ghi nhận nợ (FR-SYS-066), không nhận từ client.",
+        "properties": {
+          "amount_fc": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Amount Fc"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "$ref": "#/components/schemas/SettlementTargetKind"
+          }
+        },
+        "required": [
+          "target_kind",
+          "target_id",
+          "amount_fc"
+        ],
+        "title": "CashSettlementIn",
+        "type": "object"
+      },
+      "CashSettlementOut": {
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Fc",
+            "type": "string"
+          },
+          "fx_diff": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fx Diff",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "title": "Target Kind",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "target_kind",
+          "target_id",
+          "amount_fc",
+          "amount",
+          "fx_diff"
+        ],
+        "title": "CashSettlementOut",
+        "type": "object"
+      },
+      "CashVoucherIn": {
+        "additionalProperties": false,
+        "description": "Thân phiếu thu/chi cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).",
+        "properties": {
+          "attachment_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Count"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "cash_account_id": {
+            "title": "Cash Account Id",
+            "type": "integer"
+          },
+          "cashflow_activity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cashflow Activity"
+          },
+          "currency_code": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "exchange_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Exchange Rate"
+          },
+          "kind": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/CashVoucherLineIn"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartnerKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payer_receiver_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer Receiver Name"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CashSettlementIn"
+            },
+            "title": "Settlements",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "operation_code",
+          "cash_account_id",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "currency_code",
+          "lines"
+        ],
+        "title": "CashVoucherIn",
+        "type": "object"
+      },
+      "CashVoucherLineIn": {
+        "additionalProperties": false,
+        "description": "Một dòng định khoản: cặp Nợ/Có + số tiền nguyên tệ.\n\nHai bên đều bỏ trống được **ở bản nháp** (nghiệp vụ \"Thu khác\" điền sẵn một\nbên); `posting_mapper` từ chối dịch dòng còn thiếu bên khi ghi sổ.",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_fc": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Amount Fc"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "cost_object_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Object Id"
+          },
+          "credit_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Account Id"
+          },
+          "debit_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debit Account Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expense_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expense Item Id"
+          },
+          "extended": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtendedDimensionIn"
+            },
+            "title": "Extended",
+            "type": "array"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartnerKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          }
+        },
+        "required": [
+          "amount_fc"
+        ],
+        "title": "CashVoucherLineIn",
+        "type": "object"
+      },
+      "CashVoucherLineOut": {
+        "properties": {
+          "amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Fc",
+            "type": "string"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "cost_object_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Object Id"
+          },
+          "credit_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Account Id"
+          },
+          "debit_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debit Account Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expense_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expense Item Id"
+          },
+          "extended_dimensions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extended Dimensions"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Kind"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          }
+        },
+        "required": [
+          "id",
+          "line_no",
+          "debit_account_id",
+          "credit_account_id",
+          "amount_fc",
+          "partner_id",
+          "partner_kind",
+          "cost_object_id",
+          "project_id",
+          "order_id",
+          "contract_id",
+          "expense_item_id",
+          "item_id",
+          "warehouse_id",
+          "extended_dimensions",
+          "description"
+        ],
+        "title": "CashVoucherLineOut",
+        "type": "object"
+      },
+      "CashVoucherOut": {
+        "description": "Header chứng từ + thân phiếu — client cần cả hai để vẽ lại form.",
+        "properties": {
+          "attachment_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Count"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "cash_account_id": {
+            "default": 0,
+            "title": "Cash Account Id",
+            "type": "integer"
+          },
+          "cashflow_activity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cashflow Activity"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "entry_kind": {
+            "title": "Entry Kind",
+            "type": "integer"
+          },
+          "exchange_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exchange Rate",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "default": 0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CashVoucherLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "default": "",
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Kind"
+          },
+          "payer_receiver_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer Receiver Name"
+          },
+          "period_id": {
+            "title": "Period Id",
+            "type": "integer"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "posted_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted By"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CashSettlementOut"
+            },
+            "title": "Settlements",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "treasurer_status": {
+            "default": 0,
+            "title": "Treasurer Status",
+            "type": "integer"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "document_type",
+          "voucher_no",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "period_id",
+          "currency_code",
+          "exchange_rate",
+          "description",
+          "status",
+          "cashflow_activity",
+          "entry_kind",
+          "created_at",
+          "created_by",
+          "posted_at",
+          "posted_by",
+          "row_version"
+        ],
+        "title": "CashVoucherOut",
+        "type": "object"
+      },
+      "CashVoucherUpdate": {
+        "additionalProperties": false,
+        "description": "PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).",
+        "properties": {
+          "attachment_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Count"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "cash_account_id": {
+            "title": "Cash Account Id",
+            "type": "integer"
+          },
+          "cashflow_activity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cashflow Activity"
+          },
+          "currency_code": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "exchange_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Exchange Rate"
+          },
+          "kind": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/CashVoucherLineIn"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartnerKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payer_receiver_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer Receiver Name"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CashSettlementIn"
+            },
+            "title": "Settlements",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "operation_code",
+          "cash_account_id",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "currency_code",
+          "lines",
+          "row_version"
+        ],
+        "title": "CashVoucherUpdate",
+        "type": "object"
+      },
       "ChangePasswordRequest": {
         "properties": {
           "current_password": {
@@ -2694,6 +3654,248 @@
           "is_active"
         ],
         "title": "CostObjectsUpdateRequest",
+        "type": "object"
+      },
+      "CountSheetIn": {
+        "additionalProperties": false,
+        "description": "Biên bản kiểm kê quỹ (FR-QUY-030): số đếm thật + chi tiết mệnh giá tùy chọn.",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "cash_account_id": {
+            "title": "Cash Account Id",
+            "type": "integer"
+          },
+          "count_date": {
+            "format": "date",
+            "title": "Count Date",
+            "type": "string"
+          },
+          "counted_total": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Counted Total"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CountSheetLineIn"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "branch_id",
+          "cash_account_id",
+          "count_date",
+          "counted_total"
+        ],
+        "title": "CountSheetIn",
+        "type": "object"
+      },
+      "CountSheetLineIn": {
+        "additionalProperties": false,
+        "properties": {
+          "denomination": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Denomination"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "title": "Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "denomination",
+          "quantity"
+        ],
+        "title": "CountSheetLineIn",
+        "type": "object"
+      },
+      "CountSheetLineOut": {
+        "properties": {
+          "denomination": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Denomination",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "line_no",
+          "denomination",
+          "quantity"
+        ],
+        "title": "CountSheetLineOut",
+        "type": "object"
+      },
+      "CountSheetListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CountSheetOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "CountSheetListResponse",
+        "type": "object"
+      },
+      "CountSheetOut": {
+        "properties": {
+          "adjustment_voucher_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Voucher Id"
+          },
+          "book_balance": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Book Balance",
+            "type": "string"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "cash_account_id": {
+            "title": "Cash Account Id",
+            "type": "integer"
+          },
+          "count_date": {
+            "format": "date",
+            "title": "Count Date",
+            "type": "string"
+          },
+          "counted_total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Counted Total",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "integer"
+          },
+          "difference": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Difference",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CountSheetLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "id",
+          "branch_id",
+          "cash_account_id",
+          "count_date",
+          "book_balance",
+          "counted_total",
+          "note",
+          "adjustment_voucher_id",
+          "created_by",
+          "created_at"
+        ],
+        "title": "CountSheetOut",
         "type": "object"
       },
       "DatasetListResponse": {
@@ -6762,6 +7964,127 @@
         "title": "MovedReferenceResponse",
         "type": "object"
       },
+      "OpenInvoiceOut": {
+        "description": "Một chứng từ công nợ còn nợ cho picker đối trừ — chép phẳng từ\n`kernel.protocols.OpenInvoice` (hợp đồng API tách khỏi hợp đồng nội bộ).",
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Fc",
+            "type": "string"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "exchange_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exchange Rate",
+            "type": "string"
+          },
+          "invoice_date": {
+            "format": "date",
+            "title": "Invoice Date",
+            "type": "string"
+          },
+          "invoice_no": {
+            "title": "Invoice No",
+            "type": "string"
+          },
+          "partner_id": {
+            "title": "Partner Id",
+            "type": "integer"
+          },
+          "partner_kind": {
+            "title": "Partner Kind",
+            "type": "integer"
+          },
+          "remaining": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Remaining",
+            "type": "string"
+          },
+          "remaining_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Remaining Fc",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "title": "Target Kind",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "target_kind",
+          "target_id",
+          "partner_kind",
+          "partner_id",
+          "branch_id",
+          "account_id",
+          "invoice_no",
+          "invoice_date",
+          "due_date",
+          "currency_code",
+          "exchange_rate",
+          "amount_fc",
+          "remaining_fc",
+          "remaining",
+          "description"
+        ],
+        "title": "OpenInvoiceOut",
+        "type": "object"
+      },
+      "OpenInvoicesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OpenInvoiceOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "OpenInvoicesResponse",
+        "type": "object"
+      },
       "OpeningBalanceListResponse": {
         "description": "Trang dòng số dư + hai tổng cân đối của cả phạm vi (FR-OPB-006).\n\nHai tổng tính trên **toàn bộ** (năm, sổ) trong phạm vi chi nhánh nhìn thấy,\nkhông phải trên trang hiện tại — banner \"chưa cân\" phải đúng kể cả khi\nngười dùng đang đứng ở trang 3.",
         "properties": {
@@ -10164,6 +11487,16 @@
         "title": "SettingsGroupsResponse",
         "type": "object"
       },
+      "SettlementTargetKind": {
+        "description": "Loại chứng từ công nợ mà một lượt đối trừ trỏ tới.\n\nGiá trị đi thẳng vào `cash_settlements.target_kind` và vào mọi bảng đối\ntrừ sau này (phase 7 `ar_ap_ledger`), nên khai ở kernel chứ không trong\nmodule: hai module ghi cùng một cột thì từ vựng phải có đúng một chỗ.",
+        "enum": [
+          0,
+          1,
+          2
+        ],
+        "title": "SettlementTargetKind",
+        "type": "integer"
+      },
       "SetupGroup": {
         "description": "Một nhóm quyết định, phân theo **hệ quả** chứ không theo màn hình.",
         "properties": {
@@ -12346,6 +13679,518 @@
         ]
       }
     },
+    "/api/v1/cash-book/count-sheets": {
+      "get": {
+        "operationId": "list_count_sheets_api_v1_cash_book_count_sheets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cash_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cash Account Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountSheetListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Count Sheets",
+        "tags": [
+          "cash-book"
+        ]
+      },
+      "post": {
+        "description": "Lập biên bản kiểm kê quỹ (FR-QUY-030) — chụp số sổ tại ngày kiểm kê.",
+        "operationId": "create_count_sheet_api_v1_cash_book_count_sheets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CountSheetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountSheetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Create Count Sheet",
+        "tags": [
+          "cash-book"
+        ]
+      }
+    },
+    "/api/v1/cash-book/count-sheets/{sheet_id}": {
+      "delete": {
+        "operationId": "delete_count_sheet_api_v1_cash_book_count_sheets__sheet_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Delete Count Sheet",
+        "tags": [
+          "cash-book"
+        ]
+      },
+      "get": {
+        "operationId": "get_count_sheet_api_v1_cash_book_count_sheets__sheet_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountSheetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Count Sheet",
+        "tags": [
+          "cash-book"
+        ]
+      }
+    },
+    "/api/v1/cash-book/count-sheets/{sheet_id}/actions/create-adjustment": {
+      "post": {
+        "description": "Sinh phiếu thu/chi xử lý chênh lệch kiểm kê (FR-QUY-031).\n\nNgười gọi phải có thêm quyền tạo đúng loại phiếu sẽ sinh (thừa → phiếu thu,\nthiếu → phiếu chi) — kiểm trong transaction vì phải đọc biên bản mới biết\nchiều chênh lệch.",
+        "operationId": "create_count_sheet_adjustment_api_v1_cash_book_count_sheets__sheet_id__actions_create_adjustment_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "acknowledge_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledge Warnings",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountSheetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Create Count Sheet Adjustment",
+        "tags": [
+          "cash-book"
+        ]
+      }
+    },
+    "/api/v1/cash-book/open-invoices": {
+      "get": {
+        "description": "Chứng từ công nợ còn nợ của một đối tác cho picker đối trừ (`docs/srs/03` §4).\n\nPhía phải thu đòi quyền xem phiếu thu, phải trả đòi quyền xem phiếu chi —\ndanh sách này tồn tại để lập đúng loại phiếu đó. `side` phải KHỚP loại đối\ntác (phải thu ↔ khách hàng, phải trả ↔ NCC): cổng quyền kiểm theo chiều,\nnên một cặp lệch chiều là đường vòng qua chính cổng đó — provider đã khóa\nchiều ở tầng dữ liệu (sửa H-1 review 6B), đây là lớp chặn sớm có thông điệp.",
+        "operationId": "list_open_invoices_api_v1_cash_book_open_invoices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "side",
+            "required": true,
+            "schema": {
+              "enum": [
+                "receivable",
+                "payable"
+              ],
+              "title": "Side",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "partner_kind",
+            "required": true,
+            "schema": {
+              "maximum": 2,
+              "minimum": 0,
+              "title": "Partner Kind",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "partner_id",
+            "required": true,
+            "schema": {
+              "title": "Partner Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": true,
+            "schema": {
+              "title": "Branch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "As Of",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenInvoicesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Open Invoices",
+        "tags": [
+          "cash-book"
+        ]
+      }
+    },
+    "/api/v1/cash-book/vouchers": {
+      "post": {
+        "description": "Cất phiếu thu/chi; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.\n\n`acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm đó (FR-SYS-062\nmức \"Cảnh báo\" — ví dụ chi quá tồn quỹ); mức \"Chặn\" không mở được.",
+        "operationId": "create_cash_voucher_api_v1_cash_book_vouchers_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "acknowledge_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledge Warnings",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashVoucherIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Create Cash Voucher",
+        "tags": [
+          "cash-book"
+        ]
+      }
+    },
+    "/api/v1/cash-book/vouchers/{voucher_id}": {
+      "get": {
+        "operationId": "get_cash_voucher_api_v1_cash_book_vouchers__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Cash Voucher",
+        "tags": [
+          "cash-book"
+        ]
+      },
+      "put": {
+        "description": "Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).",
+        "operationId": "update_cash_voucher_api_v1_cash_book_vouchers__voucher_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashVoucherUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Update Cash Voucher",
+        "tags": [
+          "cash-book"
+        ]
+      }
+    },
     "/api/v1/config-packages": {
       "get": {
         "description": "Mọi gói cấu hình đã có trong dataset — dựng sẵn lẫn nhập thêm, mới nhất trước.",
@@ -12780,8 +14625,20 @@
     },
     "/api/v1/gl/journal-vouchers": {
       "post": {
-        "description": "Cất chứng từ; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.\n\nKhi chế độ Cất-đồng-thời-ghi-sổ bật, người tạo phải có **cả** quyền `post`\n— kiểm trong `work` vì chỉ service mới biết tùy chọn đang bật hay không;\nném ở đó thì khóa idempotency và số chứng từ cùng rollback.",
+        "description": "Cất chứng từ; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.\n\nKhi chế độ Cất-đồng-thời-ghi-sổ bật, người tạo phải có **cả** quyền `post`\n— kiểm trong `work` vì chỉ service mới biết tùy chọn đang bật hay không;\nném ở đó thì khóa idempotency và số chứng từ cùng rollback.\n`acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm (FR-SYS-062).",
         "operationId": "create_journal_voucher_api_v1_gl_journal_vouchers_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "acknowledge_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledge Warnings",
+              "type": "boolean"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {

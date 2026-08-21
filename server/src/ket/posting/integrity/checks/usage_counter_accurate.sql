@@ -4,14 +4,35 @@
 -- nhớ gọi `record_use` — và chỗ bắt lỗi "quên gọi" chính là check này
 -- (docstring `kernel/master_data/usage.py` chỉ thẳng sang đây).
 --
--- Ở phase 4 CHƯA CÓ đường ghi nào duy trì bộ đếm (người ghi đầu tiên là
--- chứng từ phase 6), nên "tham chiếu thực tế được đếm" là tập rỗng và mọi
--- bộ đếm khác 0 đều là lệch. Khi phase 6+ bắt đầu gọi `record_use`, mỗi
--- module bổ sung nguồn đếm của mình vào đây (UNION các câu đếm theo
--- `entity_type`) — check sẽ so bộ đếm với tổng các nguồn thay vì với 0.
-SELECT u.entity_type AS entity_type,
-       u.entity_id   AS entity_id,
-       u.usage_count AS usage_count,
-       0             AS counted_references
+-- Nguồn đếm khai theo module, UNION theo `entity_type` — mỗi module ghi
+-- chứng từ bổ sung nhánh của mình:
+--
+-- * `cash_book` (lát 6B): đối tác trên phiếu thu/chi (header + từng dòng).
+--   `partner_kind` 0/1 → `partners`, 2 → `employees` — cùng ánh xạ
+--   `_USAGE_TABLE_BY_PARTNER_KIND` của `modules/cash_book/service.py`.
+--
+-- FULL JOIN hai phía: bộ đếm có mà không ai tham chiếu → lệch; tham chiếu có
+-- mà bộ đếm thiếu/khác → lệch. Đường ghi nào quên `record_use` lộ ra ở đây.
+WITH counted AS (
+    SELECT CASE WHEN partner_kind = 2 THEN 'employees' ELSE 'partners' END AS entity_type,
+           partner_id AS entity_id,
+           COUNT(*)   AS references_seen
+    FROM (
+        SELECT partner_kind, partner_id
+        FROM cash_vouchers
+        WHERE partner_id IS NOT NULL
+        UNION ALL
+        SELECT partner_kind, partner_id
+        FROM cash_voucher_lines
+        WHERE partner_id IS NOT NULL
+    ) refs
+    GROUP BY 1, 2
+)
+SELECT COALESCE(u.entity_type, c.entity_type) AS entity_type,
+       COALESCE(u.entity_id, c.entity_id)     AS entity_id,
+       COALESCE(u.usage_count, 0)             AS usage_count,
+       COALESCE(c.references_seen, 0)         AS counted_references
 FROM master_data_usage u
-WHERE u.usage_count <> 0
+FULL JOIN counted c
+       ON c.entity_type = u.entity_type AND c.entity_id = u.entity_id
+WHERE COALESCE(u.usage_count, 0) <> COALESCE(c.references_seen, 0)

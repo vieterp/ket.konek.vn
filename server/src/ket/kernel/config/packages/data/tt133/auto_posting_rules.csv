@@ -17,6 +17,7 @@ PC,nop-thue-khac,Nộp các loại thuế khác,,cash,0,,7
 PC,nop-thue-tndn,Nộp thuế TNDN tạm tính,cit,cash,0,,8
 PC,nop-bao-hiem,Nộp bảo hiểm,,cash,0,,9
 PC,chi-khac,Chi khác,,cash,0,,10
+PC,thieu-quy-kiem-ke,Thiếu quỹ phát hiện khi kiểm kê,unexplained_shortage,cash,0,,11
 BC,khach-ung-truoc,Khách hàng ứng trước tiền mua hàng,bank,ar_trade,1,0,1
 BC,thu-no-khach-hang,Khách hàng trả nợ,bank,ar_trade,1,0,2
 BC,thu-no-nhieu-khach,Thu nợ nhiều khách hàng,bank,ar_trade,0,0,3

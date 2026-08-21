@@ -13,7 +13,7 @@ from datetime import timedelta
 from typing import Annotated, Final
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from ket.api.dependencies import (
@@ -80,12 +80,14 @@ def create_journal_voucher(
     settings: AppSettings,
     idempotency_key: CreateKey,
     response: Response,
+    acknowledge_warnings: Annotated[bool, Query()] = False,
 ) -> JournalVoucherOut:
     """Cất chứng từ; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.
 
     Khi chế độ Cất-đồng-thời-ghi-sổ bật, người tạo phải có **cả** quyền `post`
     — kiểm trong `work` vì chỉ service mới biết tùy chọn đang bật hay không;
     ném ở đó thì khóa idempotency và số chứng từ cùng rollback.
+    `acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm (FR-SYS-062).
     """
     _require_branch_in_scope(authorized, payload.branch_id)
 
@@ -95,7 +97,11 @@ def create_journal_voucher(
             authorized.access.require(
                 permission_code(JOURNAL_PERMISSION_MODULE, JOURNAL_PERMISSION_CODE, Action.POST)
             )
-        voucher = service.create(payload, user_id=authorized.scope.user_id)
+        voucher = service.create(
+            payload,
+            user_id=authorized.scope.user_id,
+            acknowledged_warnings=acknowledge_warnings,
+        )
         _, lines = service.get(voucher.id)
         return _to_response(voucher, lines), IdempotentRef(
             result_type=Voucher.__tablename__, result_id=str(voucher.id)

@@ -16,3 +16,6 @@ document_type,purpose,account_code
 *,financial_income,515
 *,unexplained_surplus,3381
 *,insurance,3383
+*,fx_gain,515
+*,fx_loss,635
+*,unexplained_shortage,1381

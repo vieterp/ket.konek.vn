@@ -82,12 +82,14 @@ def _an_invoice() -> OpenInvoice:
         partner_kind=PartnerKind.CUSTOMER,
         partner_id=7,
         branch_id=1,
+        account_id=131,
         invoice_no="HD-001",
         invoice_date=date(2026, 1, 15),
         currency_code="VND",
         exchange_rate=Decimal(1),
         amount_fc=Decimal("1000"),
         remaining_fc=Decimal("400"),
+        remaining=Decimal("400"),
     )
 
 
@@ -125,6 +127,33 @@ def test_commitment_provider_registration_round_trips() -> None:
     stub = _StubCommitments()
     providers.register_commitment(stub)
     assert providers.commitment_providers() == (stub,)
+
+
+def test_settlement_source_is_one_per_target_kind() -> None:
+    """Mỗi loại đích đối trừ đúng một chủ — bản cài thứ hai là hai nơi tranh
+    nhau một cột `paid`, ném ngay lúc đăng ký (lát 6B)."""
+
+    class _StubSource:
+        def find(self, session: Session, *, target_ids: Sequence[UUID]) -> Sequence[OpenInvoice]:
+            return ()
+
+        def apply(
+            self, session: Session, *, target_id: UUID, amount_fc: Decimal, amount: Decimal
+        ) -> None:
+            return None
+
+        def revert(
+            self, session: Session, *, target_id: UUID, amount_fc: Decimal, amount: Decimal
+        ) -> None:
+            return None
+
+    providers = CrossModuleProviders()
+    assert providers.settlement_source(SettlementTargetKind.OPENING_BALANCE) is None
+    source = _StubSource()
+    providers.register_settlement_source(SettlementTargetKind.OPENING_BALANCE, source)
+    assert providers.settlement_source(SettlementTargetKind.OPENING_BALANCE) is source
+    with pytest.raises(ValueError, match="đã có source"):
+        providers.register_settlement_source(SettlementTargetKind.OPENING_BALANCE, _StubSource())
 
 
 def test_open_invoice_is_frozen_and_rejects_unknown_fields() -> None:

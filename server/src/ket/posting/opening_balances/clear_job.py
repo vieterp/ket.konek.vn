@@ -33,6 +33,7 @@ from ket.posting.opening_balances.guards import (
 )
 from ket.posting.opening_balances.import_job import OPENING_WRITE
 from ket.posting.opening_balances.models import OpeningBalance, OpeningDetailKind
+from ket.posting.opening_balances.service import ensure_groups_not_settled
 
 CLEAR_GROUP_CODE: Final[str] = "posting.opening_balances.clear_group"
 
@@ -84,6 +85,13 @@ def run_clear_group(context: JobContext, params: ClearGroupParams) -> JobResult:
     ]
     # Đếm trước rồi xóa: `rowcount` của DELETE đáng tin nhưng con số này còn
     # vào nhật ký — một truy vấn đếm rẻ đổi lấy audit không phụ thuộc driver.
+    ensure_groups_not_settled(
+        session,
+        fiscal_year_id=fiscal_year.id,
+        ledger=params.ledger,
+        branch_id=branch_id,
+        detail_kinds=(params.detail_kind,),
+    )
     deleted_rows = int(
         session.execute(select(func.count()).select_from(OpeningBalance).where(*scope)).scalar_one()
     )

@@ -11,13 +11,12 @@ Chạy **một lần cho mỗi schema dataset** như `0001`..`0013`, bằng `ket
   `report_layouts`); quyền đọc/ghi cho vai trò runtime.
 * `print_log` — **chỉ-thêm** (`grants.APPEND_ONLY_TABLES`): vai trò runtime
   không sửa/xóa được lịch sử in; RLS theo chi nhánh.
-* Dữ liệu: `refresh_builtin_reports` thay metadata báo cáo builtin bằng nội
-  dung đóng gói hiện tại (mã trung lập `SO-CAI` nhường chỗ cho bộ mã mẫu
-  thông tư `S03a-DN`…) — hợp lệ VÌ chưa có bản cài phát hành; xem docstring
-  hàm đó về việc migration tương lai KHÔNG được lặp lại cách này. Trên schema
-  đang provision (chuỗi migration chạy trước khi gói cấu hình được gieo),
-  definition gắn scheme được seed bỏ qua và lượt gieo trong
-  `provision_dataset` lấp sau.
+* Dữ liệu: bước `refresh_builtin_reports` từng nằm ở đây (lát 5D) đã CHUYỂN
+  sang migration mới nhất (0017, lát 6B): hàm đọc dữ liệu builtin ĐÓNG GÓI
+  HIỆN TẠI và probe SQL của nó — chạy giữa chuỗi migration thì dataset nào
+  tham chiếu cột ra đời sau 0014 (`cash_forecast` cần `paid_amount_fc` của
+  0017) sẽ đổ ngay tại đây. Bước làm-mới-theo-dữ-liệu-hiện-tại chỉ đúng ở
+  ĐẦU chuỗi (head) — bài học hạ tầng của phase 6, bước 22.
 """
 
 from __future__ import annotations
@@ -27,8 +26,6 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import context, op
 
-from ket.kernel.config.printing.seed import ensure_builtin_print_templates
-from ket.kernel.config.reports.seed import refresh_builtin_reports
 from ket.kernel.datasets.naming import role_name_for_schema
 from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 from ket.kernel.security.grants import (
@@ -58,7 +55,6 @@ def upgrade() -> None:
     _create_print_templates()
     _create_print_log()
     _apply_security()
-    _refresh_builtin_data()
 
 
 def _create_print_templates() -> None:
@@ -148,19 +144,6 @@ def _apply_security() -> None:
         op.execute(statement)
     for statement in enable_branch_rls_statements("print_log", allow_null_branch=False):
         op.execute(statement)
-
-
-def _refresh_builtin_data() -> None:
-    if context.is_offline_mode():
-        # `alembic upgrade --sql` chỉ phát DDL trên connection giả — bước dữ
-        # liệu là đọc-rồi-ghi nên không diễn đạt được thành SQL tĩnh. Đường
-        # nâng cấp thật của bản cài là online (`upgrade_dataset_schema`); ai
-        # chạy offline phải chạy lại `ensure_builtin_*` sau khi áp SQL.
-        return
-    schema = _target_schema()
-    connection = op.get_bind()
-    refresh_builtin_reports(connection, schema)
-    ensure_builtin_print_templates(connection, schema)
 
 
 def downgrade() -> None:
