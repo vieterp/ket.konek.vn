@@ -7448,11 +7448,8 @@ export interface components {
             branch_id?: number | null;
             /** Code */
             code: string;
-            /**
-             * Tiền tệ
-             * @default VND
-             */
-            currency_code: string;
+            /** Tiền tệ */
+            currency_code?: string | null;
             /**
              * Is Group
              * @default false
@@ -7490,11 +7487,8 @@ export interface components {
             branch_id: number | null;
             /** Code */
             code: string;
-            /**
-             * Tiền tệ
-             * @default VND
-             */
-            currency_code: string;
+            /** Tiền tệ */
+            currency_code?: string | null;
             /** Id */
             id: number;
             /** Is Active */
@@ -7529,11 +7523,8 @@ export interface components {
             bank_id: number;
             /** Code */
             code: string;
-            /**
-             * Tiền tệ
-             * @default VND
-             */
-            currency_code: string;
+            /** Tiền tệ */
+            currency_code?: string | null;
             /** Is Active */
             is_active: boolean;
             /** Name */

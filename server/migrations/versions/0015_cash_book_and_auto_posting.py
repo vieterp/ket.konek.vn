@@ -11,7 +11,11 @@ Năm bảng:
 1. `auto_posting_rules` — nghiệp vụ thu/chi và cặp Nợ/Có ngầm định, thuộc gói
    cấu hình (cùng nhóm `default_accounts` của 0009). Dữ liệu builtin do
    `ensure_builtin_packages` gieo; dataset cấp trước 0015 được lấp qua đường
-   backfill của seed (xem `kernel/config/packages/seed.py`).
+   backfill của seed (xem `kernel/config/packages/seed.py`) — TRỪ gói TT133:
+   lát 6A bump version tt133 1→2 (sửa purpose cash/bank 111/112 → 1111/1121 vì
+   111/112 là TK tổng hợp), và seed không backfill gói lệch version (doctrine
+   5B M-1). Dataset TT133 cấp trước 6A cấp lại thì có nghiệp vụ; bản cài phát
+   hành chưa tồn tại nên không có đường nâng cấp nào bị bỏ rơi.
 2. `cash_vouchers` — thân phiếu thu/chi, một-một với header `vouchers` (0009).
 3. `cash_voucher_lines` — dòng định khoản nháp.
 4. `cash_settlements` — đối trừ công nợ của phiếu (`docs/srs/03` §4).

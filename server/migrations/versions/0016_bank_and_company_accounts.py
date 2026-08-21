@@ -179,6 +179,10 @@ def _create_bank_vouchers() -> None:
             name=op.f(f"ck_{table}_counter_account_iff_transfer"),
         ),
         sa.CheckConstraint(
+            "counter_bank_account_id IS NULL OR counter_bank_account_id <> bank_account_id",
+            name=op.f(f"ck_{table}_counter_account_differs"),
+        ),
+        sa.CheckConstraint(
             "kind = 2 OR cheque_no IS NULL", name=op.f(f"ck_{table}_cheque_fields_only_on_cheque")
         ),
         sa.CheckConstraint(

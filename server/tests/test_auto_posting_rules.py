@@ -135,3 +135,78 @@ def test_reseeding_backfills_missing_rules_only(
             ).all()
         )
     assert after == before
+
+
+def test_a_specific_document_type_default_beats_the_wildcard(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
+) -> None:
+    """Resolver phải theo đúng luật `default_account`: dòng `(PT, cash)` thắng
+    dòng `('*', cash)` (review 6A, M12 — trước đó không test nào phân biệt,
+    đảo thứ tự fallback vẫn xanh)."""
+    from ket.kernel.config.accounts_models import DefaultAccount
+
+    with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
+        package_id = _package_id(session, "TT99-2025")
+        override = DefaultAccount(
+            package_id=package_id, document_type="PT", purpose="cash", account_code="112"
+        )
+        session.add(override)
+        session.flush()
+        try:
+            receipts = operations_in_package(session, package_id=package_id, document_type="PT")
+            by_code = {item.operation_code: item for item in receipts.items}
+            assert by_code["thu-khac"].debit_account_code == "112"
+            payments = operations_in_package(session, package_id=package_id, document_type="PC")
+            assert {i.operation_code: i for i in payments.items}[
+                "chi-khac"
+            ].credit_account_code == "111", "loại chứng từ khác vẫn theo wildcard"
+        finally:
+            session.delete(override)
+
+
+def test_a_version_mismatched_package_receives_no_backfill(
+    owner_engine: Engine, dataset_alpha: DatasetRef
+) -> None:
+    """Ghim hệ quả của bump version tt133 (review 6A, H-2, controller chốt
+    chấp-nhận-và-ghi-nhận): dataset mang gói version cũ KHÔNG nhận backfill —
+    cùng doctrine 5B M-1: nghiệp vụ v2 tham chiếu purpose/TK được loader kiểm
+    theo dữ liệu CÙNG version trên đĩa, gắn vào gói version cũ trong DB là đi
+    vòng qua chính lượt kiểm đó. Đường sửa cho bản cài thật là nâng cấp gói có
+    kiểm soát (phase 11), không phải đường gieo mầm; trước phát hành thì
+    dataset dev cấp lại. Nửa sau của test: trả version về khớp → backfill chạy."""
+    from sqlalchemy import update
+
+    code = "TT133-2016"
+    with owner_engine.begin() as connection:
+        bind_seed_schema(connection, dataset_alpha.schema_name)
+        package_id = connection.execute(
+            select(ConfigPackage.id).where(ConfigPackage.code == code)
+        ).scalar_one()
+        disk_version = connection.execute(
+            select(ConfigPackage.version).where(ConfigPackage.id == package_id)
+        ).scalar_one()
+        connection.execute(
+            update(ConfigPackage).where(ConfigPackage.id == package_id).values(version=1)
+        )
+        connection.execute(delete(AutoPostingRule).where(AutoPostingRule.package_id == package_id))
+
+    with owner_engine.begin() as connection:
+        assert ensure_builtin_packages(connection, dataset_alpha.schema_name) == 0
+    with owner_engine.begin() as connection:
+        bind_seed_schema(connection, dataset_alpha.schema_name)
+        leftover = connection.execute(
+            select(AutoPostingRule.id).where(AutoPostingRule.package_id == package_id).limit(1)
+        ).scalar_one_or_none()
+        assert leftover is None, "version lệch mà vẫn backfill là đi vòng qua lượt kiểm loader"
+        connection.execute(
+            update(ConfigPackage).where(ConfigPackage.id == package_id).values(version=disk_version)
+        )
+
+    with owner_engine.begin() as connection:
+        assert ensure_builtin_packages(connection, dataset_alpha.schema_name) == 0
+    with owner_engine.begin() as connection:
+        bind_seed_schema(connection, dataset_alpha.schema_name)
+        refilled = connection.execute(
+            select(AutoPostingRule.id).where(AutoPostingRule.package_id == package_id).limit(1)
+        ).scalar_one_or_none()
+        assert refilled is not None, "version khớp trở lại thì backfill phải lấp chỗ trống"

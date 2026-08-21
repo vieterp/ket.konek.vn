@@ -82,7 +82,13 @@ class CompanyBankAccountFields(BaseModel):
     """Phần riêng của tài khoản ngân hàng doanh nghiệp trên API (`CatalogSpec`)."""
 
     bank_id: int = Field(title="Ngân hàng")
-    currency_code: str = Field(title="Tiền tệ", default="VND", max_length=CURRENCY_CODE_MAX_LENGTH)
+    currency_code: str | None = Field(
+        title="Tiền tệ", default=None, max_length=CURRENCY_CODE_MAX_LENGTH
+    )
+    """`None` = đồng hạch toán (VND) — khớp cột nullable: dataset chưa khai
+    đồng tiền nào vẫn tạo được TK ngân hàng (review 6A, H-1: default `"VND"`
+    ở đây đâm vào FK `currencies` trên dataset trần, còn ô để trống thì
+    `_blank_is_absent` trả `None` cho một field không-Optional → 422)."""
     account_holder: str | None = Field(
         title="Chủ tài khoản", default=None, max_length=NAME_MAX_LENGTH
     )

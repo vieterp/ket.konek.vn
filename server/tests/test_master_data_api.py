@@ -1298,3 +1298,64 @@ def test_search_does_not_leak_other_branches_private_records(
         f"/api/v1/master/{PLAIN}", params={"ids": [private["id"]]}, headers=editor
     ).json()
     assert hydrate["items"] == []
+
+
+def test_company_bank_account_is_creatable_without_declaring_any_currency(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    catalog_branches: list[str],
+    test_password: str,
+) -> None:
+    """Hồi quy review 6A, H-1: `CompanyBankAccountFields.currency_code` từng
+    mặc định `"VND"` (không Optional) — dataset chưa khai đồng tiền nào thì mọi
+    đường tạo TK ngân hàng đều chết: bỏ ô → FK `currencies` đổ; chuỗi rỗng →
+    `_blank_is_absent` trả `None` cho field không-Optional → 422. Cột đúng
+    nghĩa là nullable, `NULL` = đồng hạch toán."""
+    role = ensure_role(
+        session_factory,
+        dataset_alpha,
+        "ke_toan_tk_ngan_hang",
+        [
+            *catalog_codes("company_bank_accounts", Action.VIEW, Action.CREATE),
+            *catalog_codes("banks", Action.VIEW, Action.CREATE),
+        ],
+    )
+    headers = actor(
+        client,
+        session_factory,
+        dataset_alpha,
+        user_factory,
+        role,
+        "tknh",
+        test_password,
+        branch_codes=[catalog_branches[0]],
+    )
+    bank = create_record(
+        client, headers, "banks", {"code": unique_code("NH"), "name": "Ngân hàng thử"}
+    )
+    assert bank.status_code == 201, bank.text
+
+    omitted = create_record(
+        client,
+        headers,
+        "company_bank_accounts",
+        {"code": unique_code("TK"), "name": "TK VND mặc định", "bank_id": bank.json()["id"]},
+    )
+    assert omitted.status_code == 201, omitted.text
+    assert omitted.json()["currency_code"] is None
+
+    blank = create_record(
+        client,
+        headers,
+        "company_bank_accounts",
+        {
+            "code": unique_code("TK"),
+            "name": "TK ô tiền tệ để trống",
+            "bank_id": bank.json()["id"],
+            "currency_code": "",
+        },
+    )
+    assert blank.status_code == 201, blank.text
+    assert blank.json()["currency_code"] is None

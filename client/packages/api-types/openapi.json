@@ -1715,10 +1715,16 @@
             "type": "string"
           },
           "currency_code": {
-            "default": "VND",
-            "maxLength": 3,
-            "title": "Tiền tệ",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiền tệ"
           },
           "is_group": {
             "default": false,
@@ -1832,10 +1838,16 @@
             "type": "string"
           },
           "currency_code": {
-            "default": "VND",
-            "maxLength": 3,
-            "title": "Tiền tệ",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiền tệ"
           },
           "id": {
             "title": "Id",
@@ -1949,10 +1961,16 @@
             "type": "string"
           },
           "currency_code": {
-            "default": "VND",
-            "maxLength": 3,
-            "title": "Tiền tệ",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiền tệ"
           },
           "is_active": {
             "title": "Is Active",

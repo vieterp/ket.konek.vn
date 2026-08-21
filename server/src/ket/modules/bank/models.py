@@ -90,6 +90,12 @@ class BankVoucher(DatasetBase, Audited):
             f"(kind = {BankVoucherKind.INTERNAL_TRANSFER}) = (counter_bank_account_id IS NOT NULL)",
             name="counter_account_iff_transfer",
         ),
+        # Chuyển nội bộ vào chính TK nguồn là một bút toán không kể chuyện gì —
+        # chặn ở DB thay vì đợi số dư "chuyển" mà không đổi (review 6A).
+        CheckConstraint(
+            "counter_bank_account_id IS NULL OR counter_bank_account_id <> bank_account_id",
+            name="counter_account_differs",
+        ),
         CheckConstraint(
             f"kind = {BankVoucherKind.CHEQUE} OR cheque_no IS NULL",
             name="cheque_fields_only_on_cheque",
