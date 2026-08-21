@@ -21,6 +21,9 @@ Năm Protocol, ai cài — ai gọi:
   không import module kho; module `inventory` (phase 8) cài.
 * `CommitmentProvider` — "đã hứa giao" cho cột **Có thể bán** = tồn − đã hứa
   (U7, phase 8); module `sales` cài từ đơn hàng.
+* `DepositMovementSource` (lát 6D) — phát sinh tiền gửi ròng theo TK ngân
+  hàng; module `bank` cài, job carry-forward số dư đầu kỳ gọi để giữ nhóm
+  ngân hàng (kind 1) qua năm mà `posting` không phải đọc bảng của module bank.
 * `TreasurerCashBook` / `TreasurerVoucherSource` (lát 6C) — cặp hai chiều giữa
   `cash_book` (chủ trạng thái thủ quỹ trên thân phiếu) và `warehousing` (chủ
   bảng sổ quỹ): hàng đợi thủ quỹ đọc phiếu chờ qua source, còn đường
@@ -253,6 +256,46 @@ class CommitmentProvider(Protocol):
         ...
 
 
+# ------------------------------------------------------- tiền gửi (BNK, 6D)
+
+
+class BankAccountMovement(BaseModel):
+    """Phát sinh ròng một năm của MỘT (TK kế toán, TK ngân hàng, tiền tệ).
+
+    `net`/`net_fc` là Nợ − Có (dương = tiền vào). Con số này cho phép
+    carry-forward số dư đầu kỳ (`posting.opening_balances`) tách phát sinh
+    112x theo từng TK ngân hàng — thứ `gl_postings` không mang (chiều TK ngân
+    hàng sống trên thân chứng từ của module bank, không phải trên dòng sổ).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: int
+    bank_account_id: int
+    currency_code: str
+    net_fc: Decimal
+    net: Decimal
+
+
+class DepositMovementSource(Protocol):
+    """Nguồn phát sinh tiền gửi theo TK ngân hàng — module `bank` cài (6D).
+
+    Người gọi: job carry-forward của số dư đầu kỳ. Nó cộng các con số này vào
+    nhóm ngân hàng (kind 1) của năm sau và trừ đúng chừng ấy khỏi phần không
+    gắn TK ngân hàng — tổng chuyển năm không đổi, chỉ được chia đúng chỗ; phát
+    sinh 112x KHÔNG đi qua chứng từ tiền gửi (bút toán GLE gõ thẳng) ở lại
+    phần không gắn, đúng sự thật là không ai biết nó thuộc tài khoản nào.
+    """
+
+    def deposit_movements(
+        self, session: Session, *, fiscal_year_id: int, ledger: int, branch_id: int
+    ) -> Sequence[BankAccountMovement]:
+        """Phát sinh ròng của các chứng từ tiền gửi ĐÃ ghi sổ trong năm, gộp
+        theo (TK kế toán nhóm 112, TK ngân hàng, tiền tệ) — dưới phạm vi RLS
+        của session người gọi."""
+        ...
+
+
 # ------------------------------------------------------------- thủ quỹ (WHK)
 
 
@@ -354,6 +397,7 @@ class CrossModuleProviders:
         self._settlement_sources: dict[SettlementTargetKind, SettlementTargetSource] = {}
         self._treasurer_cash_book: TreasurerCashBook | None = None
         self._treasurer_voucher_source: TreasurerVoucherSource | None = None
+        self._deposit_movement_source: DepositMovementSource | None = None
 
     def register_receivable(self, provider: ReceivableProvider) -> None:
         self._receivable.append(provider)
@@ -391,6 +435,13 @@ class CrossModuleProviders:
             )
         self._treasurer_voucher_source = source
 
+    def register_deposit_movement_source(self, source: DepositMovementSource) -> None:
+        if self._deposit_movement_source is not None:
+            raise ValueError(
+                "DepositMovementSource đã có bản cài — chiều TK ngân hàng có một chủ dữ liệu"
+            )
+        self._deposit_movement_source = source
+
     def receivable_providers(self) -> tuple[ReceivableProvider, ...]:
         return tuple(self._receivable)
 
@@ -418,6 +469,11 @@ class CrossModuleProviders:
     def treasurer_voucher_source(self) -> TreasurerVoucherSource | None:
         """`None` = không có nguồn phiếu — hàng đợi thủ quỹ rỗng chứ không lỗi."""
         return self._treasurer_voucher_source
+
+    def deposit_movement_source(self) -> DepositMovementSource | None:
+        """`None` = không có module bank trong tiến trình — carry-forward giữ
+        phát sinh 112x ở phần không gắn TK ngân hàng, đúng như trước lát 6D."""
+        return self._deposit_movement_source
 
 
 PROVIDERS: Final[CrossModuleProviders] = CrossModuleProviders()

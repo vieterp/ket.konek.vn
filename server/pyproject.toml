@@ -1,6 +1,6 @@
 [project]
 name = "ket-server"
-version = "0.18.0"
+version = "0.19.0"
 description = "Konek Két — app server phần mềm kế toán VN (TT99/TT133), chạy LAN hoặc offline một máy"
 requires-python = "==3.12.*"
 license = { text = "Proprietary" }
@@ -139,6 +139,11 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q --strict-markers --strict-config"
+# Một test chạy quá 5 phút thì in stack trace của MỌI thread vào stderr rồi
+# chạy tiếp (không giết test): job DB trên CI từng treo im lặng tới khi bị hủy
+# ở phút 20 — không có dòng log nào chỉ ra khung nào đang chờ. Test hợp lệ chậm
+# nhất của bộ hiện tại dưới một phút, nên 300s không bao giờ nổ oan.
+faulthandler_timeout = 300
 markers = [
     # Cần một PostgreSQL thật (RLS, tách quyền owner/app, định tuyến schema
     # không mô phỏng được bằng SQLite hay mock). Chạy: `make server-test-db`.

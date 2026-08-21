@@ -38,6 +38,7 @@ from ket.kernel.config.accounts_provider import resolve_package
 from ket.kernel.currency.models import Currency
 from ket.kernel.errors import OpeningBalanceSettledError
 from ket.kernel.identifiers import uuid7
+from ket.kernel.master_data.models.company_bank_account import CompanyBankAccount
 from ket.kernel.master_data.models.employee import Employee
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.money import ZERO
@@ -91,6 +92,7 @@ class _AggregatedRow:
     kind: int
     account_id: int
     partner_id: int | None
+    bank_account_id: int | None
     currency_code: str
     exchange_rate: Decimal
     debit_fc: Decimal = ZERO
@@ -166,6 +168,22 @@ class _Lookups:
                 .all()
             ):
                 self.employees[employee.code] = employee
+        bank_account_codes = {
+            row.bank_account_code for row in rows if row.bank_account_code is not None
+        }
+        self.bank_accounts: dict[str, CompanyBankAccount] = {}
+        if bank_account_codes:
+            for bank_account in (
+                session.execute(
+                    select(CompanyBankAccount)
+                    .where(CompanyBankAccount.code.in_(bank_account_codes))
+                    .order_by(CompanyBankAccount.branch_id.asc().nulls_first())
+                )
+                .scalars()
+                .all()
+            ):
+                self.bank_accounts[bank_account.code] = bank_account
+        self.base_currency = fiscal_year.base_currency
         # Tiền tệ tra danh mục như mọi mã khác (review 4C, M7): không có FK trên
         # `currency_code`, nên một mã gõ nhầm sẽ ghi vào DB và chỉ lộ ra ở phase
         # đánh giá lại tỷ giá — nơi không còn ai nhớ nó từ tệp nào.
@@ -299,6 +317,69 @@ def _partner_errors(
     return partner.id, []
 
 
+DEPOSIT_ACCOUNT_CODE_PREFIX: Final[str] = "112"
+"""Nhóm TK tiền gửi — cùng doctrine với `MONEY_ACCOUNT_CODE_PREFIXES` của
+mapper tiền gửi (không import được: `posting` không import `modules.*`, luật
+phụ thuộc C4): nhóm 112 = tiền gửi do chính SRS định nghĩa và là bất biến
+chung của TT99 lẫn TT133; chế độ tương lai đổi nhóm thì chỗ sửa là MỘT hằng."""
+
+
+def _bank_account_errors(
+    row: ParsedOpeningRow, account: ChartOfAccount | None, lookups: _Lookups
+) -> tuple[int | None, list[tuple[str | None, str, str]]]:
+    """`(bank_account_id, lỗi)` cho sheet ngân hàng (kind 1, lát 6D).
+
+    Tiền tệ của dòng phải đúng tiền tệ của TK ngân hàng (`NULL` = đồng hạch
+    toán): một TK USD mang số dư VND là dữ liệu tự mâu thuẫn — số dư ấy sẽ
+    không bao giờ khớp được với sao kê của chính tài khoản đó (BR-BNK-01).
+    """
+    if row.kind != OpeningDetailKind.BANK:
+        return None, []
+    errors: list[tuple[str | None, str, str]] = []
+    if account is not None and not account.code.startswith(DEPOSIT_ACCOUNT_CODE_PREFIX):
+        errors.append(
+            (
+                "Số hiệu tài khoản *",
+                "opening.bank_account_not_deposit",
+                "Sheet ngân hàng chỉ nhận tài khoản nhóm 112 (tiền gửi ngân hàng)",
+            )
+        )
+    if row.bank_account_code is None:
+        return None, errors
+    header = "Số tài khoản ngân hàng *"
+    bank_account = lookups.bank_accounts.get(row.bank_account_code)
+    if bank_account is None:
+        return None, [
+            *errors,
+            (
+                header,
+                "opening.bank_account_unknown",
+                "Số tài khoản không có trong danh mục tài khoản ngân hàng của doanh nghiệp",
+            ),
+        ]
+    if bank_account.is_group:
+        return None, [
+            *errors,
+            (header, "opening.partner_is_group", "Đây là một nhóm — chọn một tài khoản cụ thể"),
+        ]
+    if not bank_account.is_active:
+        return None, [
+            *errors,
+            (header, "opening.bank_account_inactive", "Tài khoản ngân hàng đã ngừng theo dõi"),
+        ]
+    expected_currency = bank_account.currency_code or lookups.base_currency
+    if row.currency_code != expected_currency:
+        errors.append(
+            (
+                "Loại tiền",
+                "opening.bank_account_currency_mismatch",
+                f"Tài khoản ngân hàng này hạch toán bằng {expected_currency} — "
+                "loại tiền của dòng phải khớp",
+            )
+        )
+    return bank_account.id, errors
+
+
 def validate_rows(
     session: Session,
     *,
@@ -315,15 +396,18 @@ def validate_rows(
     nguyên tắc trả-toàn-bộ-lỗi của phase 4: người dùng sửa tệp một lượt.
     """
     lookups = _Lookups(session, fiscal_year, rows)
-    aggregated: dict[tuple[int, int, int | None, str, Decimal], _AggregatedRow] = {}
+    aggregated: dict[tuple[int, int, int | None, int | None, str, Decimal], _AggregatedRow] = {}
     seen_invoices: dict[tuple[int, str | None, str, str, str], tuple[str, int]] = {}
     tracking_warned: set[str] = set()
+    deposit_warned: set[str] = set()
 
     for row in rows:
         account = lookups.accounts.get(row.account_code)
         row_errors = _account_errors(row, account)
         partner_id, partner_issues = _partner_errors(row, lookups)
         row_errors.extend(partner_issues)
+        bank_account_id, bank_issues = _bank_account_errors(row, account, lookups)
+        row_errors.extend(bank_issues)
         if row.currency_code not in lookups.currencies:
             row_errors.append(
                 (
@@ -339,6 +423,26 @@ def validate_rows(
                 )
             )
             failed.add((row.sheet, row.row))
+
+        if (
+            account is not None
+            and row.kind == OpeningDetailKind.ACCOUNT
+            and account.code.startswith(DEPOSIT_ACCOUNT_CODE_PREFIX)
+            and account.code not in deposit_warned
+        ):
+            # Cảnh báo chứ không lỗi: dữ liệu nhập trước lát 6D nằm ở sheet Số
+            # dư tài khoản là hợp lệ — nhưng phần 112 ngoài nhóm 1 thì
+            # BR-BNK-01 không đối chiếu theo TK ngân hàng được.
+            deposit_warned.add(account.code)
+            report.warnings.append(
+                OpeningImportWarning(
+                    code="opening.deposit_on_account_sheet",
+                    message=(
+                        f"TK {account.code} là tiền gửi ngân hàng — nên nhập ở sheet "
+                        "'Số dư ngân hàng' để chi tiết theo từng tài khoản (BR-BNK-01)"
+                    ),
+                )
+            )
 
         if account is not None:
             uncaptured = frozenset(account.detail_tracking or ()) - _PARTNER_TRACKINGS
@@ -384,13 +488,21 @@ def validate_rows(
         if (row.sheet, row.row) in failed or account is None:
             continue
 
-        key = (row.kind, account.id, partner_id, row.currency_code, row.exchange_rate)
+        key = (
+            row.kind,
+            account.id,
+            partner_id,
+            bank_account_id,
+            row.currency_code,
+            row.exchange_rate,
+        )
         bucket = aggregated.get(key)
         if bucket is None:
             bucket = _AggregatedRow(
                 kind=row.kind,
                 account_id=account.id,
                 partner_id=partner_id,
+                bank_account_id=bank_account_id,
                 currency_code=row.currency_code,
                 exchange_rate=row.exchange_rate,
             )
@@ -399,7 +511,9 @@ def validate_rows(
         bucket.credit_fc += row.credit_fc
         bucket.debit += row.debit
         bucket.credit += row.credit
-        if row.kind != OpeningDetailKind.ACCOUNT and row.is_natural_side:
+        # Chỉ nhóm công nợ (2/3/4) treo chi tiết chứng từ; nhóm ngân hàng (1)
+        # có dòng dư Có hợp lệ (thấu chi) nhưng không có hóa đơn để treo.
+        if row.kind in PARTNER_KIND_BY_DETAIL and row.is_natural_side:
             bucket.invoices.append(row)
 
     report.error_rows = len(failed)
@@ -490,6 +604,7 @@ def write_staged(
                 "exchange_rate": bucket.exchange_rate,
                 "partner_id": bucket.partner_id,
                 "partner_kind": PARTNER_KIND_BY_DETAIL.get(bucket.kind),
+                "bank_account_id": bucket.bank_account_id,
                 "debit_fc": bucket.debit_fc,
                 "credit_fc": bucket.credit_fc,
                 "debit": bucket.debit,

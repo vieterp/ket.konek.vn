@@ -45,6 +45,14 @@ ALLOWED_FILES: dict[str, str] = {
         "— cùng hạng tin cậy với integrity/runner; identifier sắp xếp đã ràng regex ở "
         "`scope.py`, mọi giá trị động đi qua tham số ràng buộc (`_probe_binds`)"
     ),
+    "posting/opening_balances/carry_forward_job.py": (
+        "Khuôn `.format()` điền thân CTE bank_movements vào `sql/carry_forward.sql` ĐÓNG "
+        "GÓI (importlib.resources — cùng hạng tin cậy với integrity/runner): phần điền "
+        "hoặc là hằng SELECT-rỗng, hoặc là dãy `(CAST(:bmN_x AS …))` mà chính vòng lặp "
+        "sinh tên tham số theo chỉ số — không dữ liệu ngoài nào vào chuỗi lệnh, mọi giá "
+        "trị đi qua tham số ràng buộc. Không dùng được bảng tạm vì TEMPORARY đã bị thu "
+        "hồi khỏi role app/worker (roles.sql, chống che audit_log bằng pg_temp)"
+    ),
 }
 """Tệp được phép ghép chuỗi vào SQL, kèm lý do.
 

@@ -1,16 +1,17 @@
-"""Tệp mẫu Excel của số dư ban đầu — bốn sheet cho nhóm 0–4 (FR-OPB-002).
+"""Tệp mẫu Excel của số dư ban đầu — năm sheet cho nhóm 0–4 (FR-OPB-002).
 
-Một workbook nhiều sheet chứ không bốn tệp: kế toán chuyển từ phần mềm cũ nhập
-số dư **một lần cho cả năm**, và bốn tệp là bốn lần tải lên với bốn lượt kiểm
+Một workbook nhiều sheet chứ không năm tệp: kế toán chuyển từ phần mềm cũ nhập
+số dư **một lần cho cả năm**, và năm tệp là năm lần tải lên với năm lượt kiểm
 phải tự nhớ đã chạy đủ chưa. Sheet vắng mặt = nhóm đó không đụng tới trong lượt
 nhập này (người dùng hay xóa sheet không dùng — cùng lý do `INSTRUCTIONS_SHEET`
 được phép vắng ở khung danh mục).
 
-Nhóm **ngân hàng (kind 1) chưa có sheet**: chi tiết "từng tài khoản ngân hàng"
-đòi danh mục tài khoản ngân hàng của chính doanh nghiệp, mà danh mục ấy thuộc
-module ngân hàng (phase 6 — `bank_vouchers.bank_account_id`). Số dư 112 nhập
-tạm ở sheet "Số dư tài khoản"; phase 6 thêm sheet ngân hàng cạnh danh mục của
-nó, đúng bài RT-24 đã tách nhóm 5–9 về phase 8.
+Sheet **ngân hàng (kind 1)** vào ở lát 6D — 4C phải hoãn nó vì chi tiết "từng
+tài khoản ngân hàng" đòi danh mục tài khoản ngân hàng của chính doanh nghiệp,
+mà danh mục ấy chỉ có từ 6A (`company_bank_accounts`, đặt ở kernel đúng để
+posting import được). Số dư 112 nhập ở sheet Số dư tài khoản từ trước lát này
+vẫn đọc được — nhưng lượt kiểm sẽ cảnh báo chuyển sang sheet ngân hàng, vì
+BR-BNK-01 chỉ đối chiếu được phần nằm trong nhóm 1.
 
 Tái dùng `ColumnDescriptor`/`TemplateDescriptor` của khung danh mục: `reader`
 kiểm cấu trúc và đọc dòng theo đúng descriptor này, nên "tệp mẫu tải về" và
@@ -130,6 +131,26 @@ ACCOUNT_SHEET: Final[TemplateDescriptor] = TemplateDescriptor(
     columns=(ACCOUNT_CODE_COLUMN, *_CURRENCY_COLUMNS, *_AMOUNT_COLUMNS),
 )
 
+BANK_SHEET: Final[TemplateDescriptor] = TemplateDescriptor(
+    slug="opening-bank",
+    sheet_name="Số dư ngân hàng",
+    columns=(
+        ColumnDescriptor(
+            field="bank_account_code",
+            header="Số tài khoản ngân hàng",
+            kind=CellKind.TEXT,
+            required=True,
+            max_length=50,
+            note=(
+                "Mã trong danh mục tài khoản ngân hàng của doanh nghiệp (mã chính là số tài khoản)."
+            ),
+        ),
+        ACCOUNT_CODE_COLUMN,
+        *_CURRENCY_COLUMNS,
+        *_AMOUNT_COLUMNS,
+    ),
+)
+
 RECEIVABLE_SHEET: Final[TemplateDescriptor] = TemplateDescriptor(
     slug="opening-receivable",
     sheet_name="Phải thu khách hàng",
@@ -195,6 +216,7 @@ EMPLOYEE_ADVANCE_SHEET: Final[TemplateDescriptor] = TemplateDescriptor(
 
 SHEETS: Final[dict[int, TemplateDescriptor]] = {
     OpeningDetailKind.ACCOUNT: ACCOUNT_SHEET,
+    OpeningDetailKind.BANK: BANK_SHEET,
     OpeningDetailKind.RECEIVABLE: RECEIVABLE_SHEET,
     OpeningDetailKind.PAYABLE: PAYABLE_SHEET,
     OpeningDetailKind.EMPLOYEE_ADVANCE: EMPLOYEE_ADVANCE_SHEET,
@@ -219,8 +241,8 @@ def _write_instructions(workbook: Workbook) -> None:
     sheet.append(["Cột có dấu * là cột bắt buộc nhập. Mỗi dòng chỉ điền một bên Nợ hoặc Có."])
     sheet.append(
         [
-            "Số dư tiền gửi ngân hàng (TK 112) tạm nhập ở sheet Số dư tài khoản; "
-            "chi tiết theo từng tài khoản ngân hàng sẽ có cùng phân hệ Ngân hàng."
+            "Số dư tiền gửi ngân hàng (TK 112) nhập ở sheet Số dư ngân hàng, chi tiết "
+            "theo từng tài khoản ngân hàng trong danh mục."
         ]
     )
     for descriptor in SHEETS.values():

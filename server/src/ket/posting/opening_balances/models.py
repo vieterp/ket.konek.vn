@@ -89,6 +89,13 @@ class OpeningBalance(DatasetBase, Audited):
             f"ledger IN ({Ledger.FINANCIAL}, {Ledger.MANAGEMENT})", name="ledger_known"
         ),
         CheckConstraint("detail_kind BETWEEN 0 AND 9", name="detail_kind_known"),
+        # Nhóm ngân hàng (kind 1) và cột TK ngân hàng sống chết cùng nhau: một
+        # dòng nhóm 1 không biết thuộc TK ngân hàng nào thì BR-BNK-01 không đối
+        # chiếu được, còn dòng nhóm khác mang TK ngân hàng là dữ liệu đi lạc.
+        CheckConstraint(
+            "(detail_kind = 1) = (bank_account_id IS NOT NULL)",
+            name="bank_account_iff_bank_kind",
+        ),
         CheckConstraint("exchange_rate > 0", name="exchange_rate_positive"),
         CheckConstraint(
             "debit >= 0 AND credit >= 0 AND debit_fc >= 0 AND credit_fc >= 0",
@@ -100,6 +107,13 @@ class OpeningBalance(DatasetBase, Audited):
             "ledger",
             "branch_id",
             "account_id",
+        ),
+        # Hai đường đọc thật: RESTRICT của FK khi xóa một TK ngân hàng, và tổng
+        # dư đầu kỳ theo TK ngân hàng của đối chiếu/BFF thẻ tài khoản (6D/6E).
+        Index(
+            "ix_opening_balances_bank_account",
+            "bank_account_id",
+            postgresql_where=text("bank_account_id IS NOT NULL"),
         ),
     )
 
@@ -121,6 +135,12 @@ class OpeningBalance(DatasetBase, Audited):
 
     partner_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     partner_kind: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    bank_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("company_bank_accounts.id", ondelete="RESTRICT"), nullable=True
+    )
+    """TK ngân hàng doanh nghiệp của dòng nhóm 1 (sheet ngân hàng, lát 6D —
+    hoãn từ 4C). `RESTRICT` cùng quy ước danh mục: còn số dư treo thì không xóa
+    được TK ngân hàng."""
     cost_object_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     project_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     order_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

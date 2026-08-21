@@ -1541,3 +1541,82 @@ class TreasurerBookDateInvalidError(DomainError):
     """Ngày ghi sổ quỹ tùy chọn nhỏ hơn ngày hạch toán trên chứng từ (BR-WHK-05)."""
 
     error_code: ClassVar[str] = "treasurer.book_date_invalid"
+
+
+class BankStatementImportInvalidError(DomainError):
+    """Lượt nhập sao kê không hợp lệ trước khi đọc tệp (lát 6D): TK ngân hàng
+    không có/ngừng theo dõi/là nhóm, hồ sơ đọc không thuộc ngân hàng của TK,
+    hoặc tệp không có dòng dữ liệu nào."""
+
+    error_code: ClassVar[str] = "bank_statement.import_invalid"
+
+
+class BankStatementParseError(DomainError):
+    """Tệp sao kê có dòng không đọc được theo hồ sơ định dạng (RT-26).
+
+    Trả **toàn bộ** dòng hỏng trong `issues` (nguyên tắc trả-toàn-bộ-lỗi của
+    phase 4): người dùng sửa tệp — hoặc sửa hồ sơ — một lượt. Không nhập một
+    phần: nửa sao kê là một báo cáo đối chiếu nói dối.
+    """
+
+    error_code: ClassVar[str] = "bank_statement.parse_failed"
+
+    def __init__(self, message: str, *, issues: list[dict[str, str | int | None]]) -> None:
+        super().__init__(message, issue_count=len(issues))
+        self.issues = issues
+
+    def problem_extra(self) -> dict[str, Any]:
+        return {"issues": self.issues}
+
+
+class BankStatementBalanceMismatchError(DomainError):
+    """Cột số dư của tệp không khớp phát sinh cộng dồn — dấu hiệu hồ sơ định
+    dạng trỏ nhầm cột (số tiền thành số dư là ca hỏng IM LẶNG mà
+    `profile_models` cảnh báo; phép kiểm chéo này là chỗ nó lộ ra)."""
+
+    error_code: ClassVar[str] = "bank_statement.balance_mismatch"
+
+
+class BankStatementDuplicateError(DomainError):
+    """Đúng tệp này đã nhập cho đúng TK ngân hàng này rồi (so bằng băm nội
+    dung). 409: muốn nhập lại thì xóa sao kê cũ trước — hai bản của cùng một
+    sao kê làm báo cáo chênh lệch đếm đôi mọi giao dịch chưa khớp."""
+
+    error_code: ClassVar[str] = "bank_statement.duplicate"
+    http_status: ClassVar[int] = 409
+
+
+class BankStatementNotFoundError(DomainError):
+    """Không tìm thấy sao kê (hoặc dòng sao kê) được trỏ tới."""
+
+    error_code: ClassVar[str] = "bank_statement.not_found"
+    http_status: ClassVar[int] = 404
+
+
+class BankStatementMatchStateError(DomainError):
+    """Trạng thái khớp hiện tại không cho phép thao tác: dòng đã khớp rồi,
+    dòng chưa khớp mà đòi gỡ, chứng từ đã khớp vào dòng khác, hoặc xóa sao kê
+    còn dòng đã khớp. 409 — trạng thái đổi được (gỡ khớp trước)."""
+
+    error_code: ClassVar[str] = "bank_statement.match_state"
+    http_status: ClassVar[int] = 409
+
+
+class BankStatementMatchInvalidError(DomainError):
+    """Chứng từ không khớp được với dòng sao kê này: chưa ghi sổ, không phải
+    chứng từ tiền gửi của đúng TK ngân hàng, sai chiều tiền, hoặc số tiền
+    không bằng nhau tuyệt đối (quyết định 6D: lệch số tiền = xử lý bằng chứng
+    từ bổ sung, không khớp cưỡng bức)."""
+
+    error_code: ClassVar[str] = "bank_statement.match_invalid"
+
+
+class BankReconciliationScopeError(DomainError):
+    """Khớp tự động đòi phạm vi MỌI chi nhánh (review 6D, M-1): sao kê là dữ
+    liệu mức tài khoản (không chiều chi nhánh) còn chứng từ nằm dưới RLS chi
+    nhánh — người phạm vi hẹp chạy khớp tự động sẽ không thấy ứng viên đúng ở
+    chi nhánh khác và máy chọn nhầm ứng viên duy nhất còn nhìn thấy. Khớp TAY
+    thì không sao: người dùng chỉ chọn được chứng từ mình thấy."""
+
+    error_code: ClassVar[str] = "bank_statement.scope_insufficient"
+    http_status: ClassVar[int] = 403

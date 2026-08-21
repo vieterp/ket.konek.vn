@@ -79,6 +79,17 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         # idempotent theo nội dung, không có bản ghi nào bị nhân đôi (kho blob
         # content-addressed khử trùng theo hash).
         "/api/v1/system/settings/logo",
+        # Nhập sao kê (lát 6D): lượt gửi lại đâm vào khóa băm-nội-dung per-TK
+        # (`bank_statement.duplicate`, 409) — không thể nhân đôi sao kê, và
+        # khóa ấy còn bền hơn khóa idempotency vì không hết hạn.
+        "/api/v1/bank/statements/import",
+        # Ba thao tác khớp/gỡ khớp (lát 6D) ghi **trạng thái của một tập dòng**,
+        # cùng họ với gán vai trò ở trên: chạy lại cho ra đúng trạng thái đó
+        # (auto-match lần 2 thấy 0 dòng chưa khớp; match lần 2 → 409 đã khớp;
+        # unmatch lần 2 → 409 chưa khớp) — không lần gửi lại nào tạo thêm bản ghi.
+        "/api/v1/bank/statements/{statement_id}/actions/auto-match",
+        "/api/v1/bank/statements/lines/{line_id}/actions/match",
+        "/api/v1/bank/statements/lines/{line_id}/actions/unmatch",
     }
 )
 """Miễn trừ theo **đúng một đường dẫn**, cho thao tác tự nó đã idempotent.

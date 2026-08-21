@@ -21,11 +21,13 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ket.kernel.security.permissions import (
-    REGISTRY as PERMISSION_REGISTRY,
+    CATALOG_ACTIONS,
+    VOUCHER_ACTIONS,
+    Action,
+    DocumentType,
 )
 from ket.kernel.security.permissions import (
-    VOUCHER_ACTIONS,
-    DocumentType,
+    REGISTRY as PERMISSION_REGISTRY,
 )
 from ket.posting.contracts import (
     POSTING_DOCUMENT_REGISTRY,
@@ -39,6 +41,9 @@ PAYMENT_ORDER_PERMISSION_CODE = "payment_order"
 CHEQUE_PERMISSION_CODE = "cheque"
 INTERNAL_TRANSFER_PERMISSION_CODE = "internal_transfer"
 
+STATEMENT_PERMISSION_CODE = "statement"
+EBANKING_PERMISSION_CODE = "ebanking"
+
 for _permission_code in (
     CREDIT_ADVICE_PERMISSION_CODE,
     PAYMENT_ORDER_PERMISSION_CODE,
@@ -48,6 +53,30 @@ for _permission_code in (
     PERMISSION_REGISTRY.register(
         DocumentType(module=BANK_PERMISSION_MODULE, code=_permission_code, actions=VOUCHER_ACTIONS)
     )
+
+PERMISSION_REGISTRY.register(
+    # Sao kê + đối chiếu (lát 6D): quyền riêng khỏi bốn loại chứng từ — người
+    # đối chiếu không đương nhiên lập được ủy nhiệm chi. create = nhập sao kê,
+    # edit = khớp/gỡ khớp, delete = xóa sao kê nhập nhầm.
+    DocumentType(
+        module=BANK_PERMISSION_MODULE, code=STATEMENT_PERMISSION_CODE, actions=CATALOG_ACTIONS
+    )
+)
+PERMISSION_REGISTRY.register(
+    # Ngân hàng điện tử (FR-BNK-020/021/022): v1 chưa có endpoint nào cầm mã
+    # quyền này (kết nối/gửi lệnh ngoài v1 — phase file §Ngân hàng điện tử),
+    # nhưng mã phải có từ bây giờ vì `requires_second_factor=True` là cách
+    # FR-NFR-016 được thi hành: vai trò nào cấp quyền này thì người giữ bị bật
+    # `totp_required` ngay lúc gán vai trò (`_role_requires_second_factor`) —
+    # khai muộn cùng endpoint là mở đường cho một vai trò cấp trước khi luật 2FA
+    # tồn tại. view = truy vấn số dư/sao kê trực tuyến, create = gửi lệnh chi.
+    DocumentType(
+        module=BANK_PERMISSION_MODULE,
+        code=EBANKING_PERMISSION_CODE,
+        actions=frozenset({Action.VIEW, Action.CREATE}),
+        requires_second_factor=True,
+    )
+)
 
 
 def _build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest:
@@ -65,8 +94,12 @@ def _after_post(session: Session, voucher_id: UUID, user_id: int) -> None:
 
 
 def _after_unpost(session: Session, voucher_id: UUID, user_id: int) -> None:
+    from ket.modules.bank.reconciliation import ensure_not_matched_to_statement
     from ket.modules.bank.settlement_service import revert_settlements
 
+    # H-3 review 6D: chứng từ đã khớp sao kê không bỏ ghi sổ được — hook chạy
+    # cùng transaction với unpost nên ném ở đây là hủy cả lượt.
+    ensure_not_matched_to_statement(session, voucher_id=voucher_id)
     revert_settlements(session, voucher_id=voucher_id)
 
 
@@ -74,6 +107,31 @@ def _before_delete(session: Session, voucher_id: UUID, user_id: int) -> None:
     from ket.modules.bank.service import BankVoucherService
 
     BankVoucherService(session).release_usage(voucher_id)
+
+
+def _register_deposit_movement_source() -> None:
+    """Bản cài `DepositMovementSource` (lát 6D) — carry-forward số dư đầu kỳ
+    gọi qua kernel Protocol để giữ nhóm ngân hàng (kind 1) qua năm."""
+    from ket.modules.bank.movement_source import register
+
+    register()
+
+
+_register_deposit_movement_source()
+
+
+def _register_statement_merge_hook() -> None:
+    """Hook gộp `company_bank_accounts` cho bảng con `bank_statement_lines`
+    (unique theo tài khoản) — gắn từ module vì kernel không import ngược."""
+    from ket.kernel.master_data.registry import REGISTRY as CATALOG_REGISTRY
+    from ket.modules.bank.statement_merge import CompanyBankAccountStatementMergeHook
+
+    CATALOG_REGISTRY.extend_merge_hooks(
+        "company_bank_accounts", CompanyBankAccountStatementMergeHook()
+    )
+
+
+_register_statement_merge_hook()
 
 
 for _code, _permission_name, _title in (

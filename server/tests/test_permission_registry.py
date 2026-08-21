@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pytest
 
+import ket.model_registry  # noqa: F401 - nạp đăng ký quyền của mọi module (bank.ebanking dưới)
 from ket.kernel.security.auth_models import SessionScope, session_scope_of
 from ket.kernel.security.permissions import (
     REGISTRY,
@@ -114,6 +115,15 @@ def test_the_process_registry_covers_this_slice_and_marks_admin_codes() -> None:
     # Quản lý tài khoản và vai trò = tự cấp được mọi quyền còn lại (FR-NFR-016).
     assert f"{SYSTEM_MODULE}.role.edit" in sensitive
     assert f"{SYSTEM_MODULE}.user.edit" in sensitive
+    # Ngân hàng điện tử (lát 6D): FR-NFR-016 nêu đích danh — vai trò cấp
+    # `bank.ebanking.*` bật `totp_required` ngay lúc gán, trước cả khi endpoint
+    # gửi lệnh đầu tiên ra đời (hậu v1).
+    assert "bank.ebanking.view" in sensitive
+    assert "bank.ebanking.create" in sensitive
+    # Sao kê/đối chiếu là việc kế toán thường ngày — quyền riêng (FR-BNK-022)
+    # nhưng KHÔNG kéo 2FA.
+    assert "bank.statement.create" in codes
+    assert "bank.statement.create" not in sensitive
     # Xem danh mục chi nhánh thì không — bắt 2FA cho mọi thứ là cách nhanh nhất
     # để người dùng tìm đường vòng.
     assert f"{SYSTEM_MODULE}.branch.view" not in sensitive

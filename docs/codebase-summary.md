@@ -1,8 +1,8 @@
 # Tóm tắt mã nguồn — Konek Két
 
-**Cập nhật:** 2026-08-21 (lát 6C) · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); **phase 3 xong**; **phase 4 xong** (posting engine, sổ cái hai sổ, số dư ban đầu, khóa kỳ, toàn vẹn); phase 5 xong lát 5A–5E (gói cấu hình, formula engine, statement builder, report engine metadata-driven, render job nền); **phase 6A xong** (protocol liên-module, guards, auto-posting, danh mục TK ngân hàng); **phase 6B xong** (module quỹ tiền mặt hoàn chỉnh); **phase 6C xong** (thủ quỹ hàng đợi + sổ quỹ, module ngân hàng BC/UNC/SEC/CTNB, engine đối trừ dùng chung `posting/settlements`).
+**Cập nhật:** 2026-08-21 (lát 6D) · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); **phase 3 xong**; **phase 4 xong** (posting engine, sổ cái hai sổ, số dư ban đầu, khóa kỳ, toàn vẹn); phase 5 xong lát 5A–5E (gói cấu hình, formula engine, statement builder, report engine metadata-driven, render job nền); **phase 6A xong** (protocol liên-module, guards, auto-posting, danh mục TK ngân hàng); **phase 6B xong** (module quỹ tiền mặt hoàn chỉnh); **phase 6C xong** (thủ quỹ hàng đợi + sổ quỹ, module ngân hàng BC/UNC/SEC/CTNB, engine đối trừ dùng chung `posting/settlements`); **phase 6D xong** (nhập sao kê per-bank profile + đối chiếu ngân hàng, số dư đầu kỳ ngân hàng kind 1 + carry-forward chia theo TK ngân hàng, 2FA e-banking mức vai trò).
 
-> ⚠️ **Nợ tài liệu:** mục 1–2 mới được cập nhật tới lát 6C; **phần mô tả chi tiết phase 4, 5A, 5C–5E chưa được viết lại** (tài liệu này đứng ở mốc 2026-08-18 trước đó). Cần một lượt refresh riêng.
+> ⚠️ **Nợ tài liệu:** mục 1–2 mới được cập nhật tới lát 6D; **phần mô tả chi tiết phase 4, 5A, 5C–5E chưa được viết lại** (tài liệu này đứng ở mốc 2026-08-18 trước đó). Cần một lượt refresh riêng.
 
 Tài liệu này mô tả **thứ đang có thật trong repo**. Kiến trúc đích của cả v1
 nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó chưa dựng.
@@ -12,7 +12,7 @@ nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó ch�
 ## 1. Đang có gì
 
 `server/src/ket` ≈ **50.400 dòng Python**: **hạ tầng** (định tuyến dữ
-liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **posting engine + sổ cái hai sổ** (phase 4), **gói cấu hình TT99/TT133** (5A), **formula engine & statement builder** (5B), **report engine metadata-driven** (5C–5D), **render job nền** (5E), **protocol liên-module RT-18 + guards + auto-posting** (6A), **module quỹ tiền mặt (cash_book) hoàn chỉnh** (6B), **module ngân hàng (bank) + thủ quỹ (warehousing/treasurer) server** (6C). **Chưa có** sao kê/đối chiếu ngân hàng (6D), BFF + báo cáo + UI dòng tiền (6E–6F), module mua/bán/kho/lương/thuế (phase 7–9).
+liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **posting engine + sổ cái hai sổ** (phase 4), **gói cấu hình TT99/TT133** (5A), **formula engine & statement builder** (5B), **report engine metadata-driven** (5C–5D), **render job nền** (5E), **protocol liên-module RT-18 + guards + auto-posting** (6A), **module quỹ tiền mặt (cash_book) hoàn chỉnh** (6B), **module ngân hàng (bank) + thủ quỹ (warehousing/treasurer) server** (6C), **sao kê + đối chiếu ngân hàng + số dư đầu kỳ ngân hàng** (6D). **Chưa có** BFF + báo cáo + UI dòng tiền (6E–6F), module mua/bán/kho/lương/thuế (phase 7–9).
 
 | Có thật | Chưa có |
 | --- | --- |
@@ -91,7 +91,8 @@ liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **
 | `modules/bank/` | **Phase 6C** — `service.py` (BC/UNC/SEC/CTNB, tiền tệ khớp TK ngân hàng, chuyển nội bộ cùng tiền tệ), `settlement_service.py` (vỏ mỏng trên `posting/settlements`), `posting_mapper.py` (money-side theo tiền tố 111/112), `models.py` (+`bank_settlements` 0018), `schemas.py`; router `/api/v1/bank/*` | Chứng từ tiền gửi, đối trừ công nợ |
 | `modules/warehousing/treasurer/` | **Phase 6C** — `book.py` (bản cài `TreasurerCashBook`), `queue_service.py` (hàng đợi + ghi sổ hàng loạt 1 transaction, BR-WHK-05); cùng `cash_book/treasurer_source.py` (nguồn phiếu + sync sau post/unpost, FR-WHK-021) và cặp Protocol trong `kernel/protocols.py`; setting `treasurer.enabled` (mặc định tắt); router `/api/v1/treasurer/*` | Sổ quỹ thủ quỹ hai sổ song song |
 | `posting/settlements.py` | **Phase 6C** — engine đối trừ + chênh lệch tỷ giá thu/trả (FR-SYS-066) dùng chung cho quỹ và ngân hàng (`money_in: bool`); integrity check thứ 8 `treasurer_book_matches_ledger` (BR-WHK-03) | Đối trừ công nợ mọi chứng từ tiền |
-| `modules/*` | `cash_book/` (6B–6C); `bank/`, `warehousing/treasurer/` (6C); `general_ledger/journal/` (phase 4); còn lại chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase 7–9 | — |
+| `modules/bank/` (6D) | **Phase 6D** — `statement_import.py` (nhập sao kê CSV/XLSX theo `bank_statement_profiles`, trọn-hoặc-không, unique DB `(bank_account_id, content_hash)` chống nhập đúp, kiểm chéo cột số dư chịu ô thưa), `reconciliation.py` (khớp tự động ±3 ngày + tiebreak reference + đòi phạm vi mọi chi nhánh; khớp tay/gỡ; unique khớp THEO TÀI KHOẢN — CTNB nằm trên hai sao kê; unpost chứng từ đã khớp bị chặn cả hai cửa), `movement_source.py` (bản cài `DepositMovementSource` — carry-forward chia phát sinh 112 theo TK ngân hàng), `statement_merge.py` (hook gộp qua `CatalogRegistry.extend_merge_hooks` mới); router `/api/v1/bank/statements/*` + `/api/v1/bank/reconciliation`; quyền `bank.statement.*` riêng, `bank.ebanking.*` requires_second_factor (FR-NFR-016); sheet "Số dư ngân hàng" kind 1 + `opening_balances.bank_account_id` (migration 0019) | Đối chiếu ngân hàng, số dư đầu kỳ theo TK |
+| `modules/*` | `cash_book/` (6B–6C); `bank/`, `warehousing/treasurer/` (6C–6D); `general_ledger/journal/` (phase 4); còn lại chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase 7–9 | — |
 
 ### Ngoài server
 
@@ -275,7 +276,7 @@ Tổng **1.527 test** (891 cần PostgreSQL 16). Máy không có DB thì bỏ qu
 
 ## 6. Việc tiếp theo
 
-Lát **6C–6D–7**: module ngân hàng (BNK) + mua hàng (PUR, phase 7); lát **2C**: client UI Báo cáo phía client + design system mở rộng (lưới render, tree picker, lookup input).
+Lát **6E–6G–7**: BFF cashflow + báo cáo + UI dòng tiền, đóng băng kernel; mua hàng (PUR, phase 7); lát **2C**: client UI Báo cáo phía client + design system mở rộng (lưới render, tree picker, lookup input).
 
 **Còn mở:**
 
