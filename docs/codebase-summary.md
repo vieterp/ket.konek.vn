@@ -1,8 +1,8 @@
 # Tóm tắt mã nguồn — Konek Két
 
-**Cập nhật:** 2026-08-20 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); **phase 3 xong**; **phase 4 xong** (posting engine, sổ cái hai sổ, số dư ban đầu, khóa kỳ, toàn vẹn); phase 5 xong lát 5A (gói cấu hình TT99/TT133) + 5B (formula engine + layout BCTC + statement builder).
+**Cập nhật:** 2026-08-21 · **Trạng thái:** phase 1 xong; phase 2 xong lát 2A–2C-5 (còn 2C-6: spike S1 esign + S4 đóng gói, chờ phần cứng); **phase 3 xong**; **phase 4 xong** (posting engine, sổ cái hai sổ, số dư ban đầu, khóa kỳ, toàn vẹn); phase 5 xong lát 5A–5E (gói cấu hình, formula engine, statement builder, report engine metadata-driven, render job nền); **phase 6A xong** (protocol liên-module, guards, auto-posting, danh mục TK ngân hàng); **phase 6B xong** (module quỹ tiền mặt hoàn chỉnh).
 
-> ⚠️ **Nợ tài liệu:** mục 1–2 và 5 dưới đây mới được cập nhật tới lát 5B ở những chỗ 5B chạm vào; **phần mô tả chi tiết phase 4 và lát 5A chưa được viết lại** (tài liệu này đứng ở mốc 2026-08-18 trước đó). Cần một lượt refresh riêng.
+> ⚠️ **Nợ tài liệu:** mục 1–2 mới được cập nhật tới lát 6B; **phần mô tả chi tiết phase 4, 5A, 5C–5E chưa được viết lại** (tài liệu này đứng ở mốc 2026-08-18 trước đó). Cần một lượt refresh riêng.
 
 Tài liệu này mô tả **thứ đang có thật trong repo**. Kiến trúc đích của cả v1
 nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó chưa dựng.
@@ -11,27 +11,32 @@ nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó ch�
 
 ## 1. Đang có gì
 
-`server/src/ket` ≈ **40.700 dòng Python**: **hạ tầng** (định tuyến dữ
-liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **posting engine + sổ cái hai sổ** (phase 4), **gói cấu hình TT99/TT133** (5A), **formula engine & statement builder** (5B). **Chưa có** các module nghiệp vụ (quỹ/ngân hàng/mua/bán/kho/lương/thuế — phase 6–9).
+`server/src/ket` ≈ **50.400 dòng Python**: **hạ tầng** (định tuyến dữ
+liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **posting engine + sổ cái hai sổ** (phase 4), **gói cấu hình TT99/TT133** (5A), **formula engine & statement builder** (5B), **report engine metadata-driven** (5C–5D), **render job nền** (5E), **protocol liên-module RT-18 + guards + auto-posting** (6A), **module quỹ tiền mặt (cash_book) hoàn chỉnh** (6B). **Chưa có** module ngân hàng/mua/bán/kho/lương/thuế (phase 6–9 còn lại).
 
 | Có thật | Chưa có |
 | --- | --- |
-| Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | Module quỹ / ngân hàng (phase 6) |
+| Vai trò DB tách đôi, RLS, nhật ký bất biến, **cô lập dataset bằng vai trò per-dataset** | Module ngân hàng / mua / bán (phase 6–7) |
 | **RBAC tới cấp `{module}.{chứng từ}.{hành vi}`** + `require_permission`, **định tuyến dataset theo header `X-Dataset`**, phạm vi chi nhánh cho RLS | Mua / bán / công nợ / HĐĐT (phase 7) |
 | **Idempotency cùng transaction** (giành khóa → làm việc → điền kết quả), **khóa lạc quan `row_version`**, **tùy chọn hai cấp**, **hạn mức request** | Kho / CCDC / TSCĐ (phase 8), thuế / lương / giá thành (phase 9) |
 | **Formula engine** (lát 5B) — `ket.kernel.config.statements.formula`: parser (lexer + đệ quy xuống), account range (khớp tiền tố), evaluator (tô-pô) cho 7 hàm (`DR`/`CR`/`BAL`/`DR_PS`/`CR_PS`/`DR_NET`/`CR_NET`) | B03/LCTT (hoãn 10a — cần phát sinh đối ứng) |
-| **Statement builder** (lát 5B) — `ket.reporting.statements`: lấy số từ `opening_balances` + `gl_postings` (**không** snapshot), lập BCTC theo layout, API + quyền `reporting.statement.view` | Report engine chung + renderer PDF/XLSX (5C–5D) |
-| **Sổ đăng ký danh mục** — `CatalogRegistry` + `CatalogSpec` (slug, model, extra_fields, flags, references); **router sinh tự động từ registry** — 7 thao tác/danh mục (GET danh sách/một, POST/PUT/DELETE/chuyển nhánh, gộp bản ghi), 190 operation tổng; phạm vi chi nhánh trong cấu trúc; `CatalogFlag` (bộ lọc `?flag=` theo cột boolean); `CatalogReference` (kiểm khóa ngoại sang danh mục khác từ DB lúc chạy) | — |
+| **Statement builder** (lát 5B) — `ket.reporting.statements`: lấy số từ `opening_balances` + `gl_postings` (**không** snapshot), lập BCTC theo layout, API + quyền `reporting.statement.view` | — |
+| **Report engine metadata-driven** (lát 5C–5D) — `ket.reporting.engine`: metadata `report_definitions`, `ket.reporting.rendering` (PDF WeasyPrint + XLSX openpyxl), sandbox Jinja2 + URL fetcher chặn `file://`, tham số động per-report, phân trang ADR-009, preview lưới trực tiếp | — |
+| **Render job nền** (lát 5E) — `ket.reporting.render_job`: `JobType.branch_scope` (REQUESTER_BRANCHES), threshold chuyển-job cấu hình, tiến độ + hủy trên UI báo cáo phía client | — |
+| **Protocol liên-module RT-18** (lát 6A) — `ket.kernel.protocols`: `Protocol` registry + `PROVIDERS`; guard ba mức (lát 6A) — `PostingGuard` + `CashBalanceGuard` (FR-SYS-062), định khoản tự động `kernel/config/auto_posting_*` (FR-SYS-025) | — |
+| **Danh mục thứ 21: TK ngân hàng doanh nghiệp** (lát 6A) — `company_bank_accounts`, search server-side `search=`/`ids=` trên `/api/v1/master/{slug}` | — |
+| **Module quỹ tiền mặt (cash_book)** (lát 6B) — `ket.modules.cash_book`: service PT/PC, settlement_service đối trừ công nợ + FX (515/635 FR-SYS-066), posting_mapper cặp Nợ/Có, guards `CashBalanceGuard` soi số dư thấp nhất, count_sheet_service kiểm kê (FR-QUY-030/031), balance_service; `SettlementTargetSource` protocol + opening balances, hook vòng đời; router `/api/routers/cash_book.py`; dataset `cash_forecast` + definition `du-bao-dong-tien` (FR-QUY-032) | — |
+| **Sổ đăng ký danh mục** — `CatalogRegistry` + `CatalogSpec` (slug, model, extra_fields, flags, references); **router sinh tự động từ registry** — 7 thao tác/danh mục (GET danh sách/một, POST/PUT/DELETE/chuyển nhánh, gộp bản ghi), 190+ operation tổng; phạm vi chi nhánh trong cấu trúc; `CatalogFlag` (bộ lọc `?flag=` theo cột boolean); `CatalogReference` (kiểm khóa ngoại sang danh mục khác từ DB lúc chạy) | — |
 | **Ba cơ chế chung** — `merge_hooks` (số nhiều, từ chối/chuẩn bị gộp bản ghi), `extra_update_fields` (trường chốt một lần), `update_guard` (luật liên-trường ở đường sửa) | Lát 3B-3: người dùng thứ nhất là vật tư, bảng con đơn vị quy đổi + mã quy cách |
-| **20 danh mục** — 15 danh mục lát 3B-1 + 2 chiều lõi lát 3A + `partners`/`employees` lát 3B-2 + `items` lát 3B-3: `projects`, `project_types`, `contracts`, `warehouses`, `units_of_measure`, `asset_types`, `tool_types`, `payment_terms`, `banks`, `timekeeping_symbols`, `document_types`, `invoice_forms`, `pit_tables`, `excise_tax_tables`, `resource_tax_tables`, `partners`, `employees`, `cost_objects`, `expense_items`, `items` | Dòng 4–6 của SRS §1–2 hoãn tới phase 5/7/9 |
+| **21 danh mục** — 15 danh mục lát 3B-1 + 2 chiều lõi lát 3A + `partners`/`employees` lát 3B-2 + `items` lát 3B-3 + `company_bank_accounts` lát 6A: `projects`, `project_types`, `contracts`, `warehouses`, `units_of_measure`, `asset_types`, `tool_types`, `payment_terms`, `banks`, `timekeeping_symbols`, `document_types`, `invoice_forms`, `pit_tables`, `excise_tax_tables`, `resource_tax_tables`, `partners`, `employees`, `cost_objects`, `expense_items`, `items`, `company_bank_accounts` | Dòng 4–6 của SRS §1–2 hoãn tới phase 6–9 |
 | **Chiều phân tích mở rộng** — hai bảng `analysis_dimensions` + `analysis_dimension_values`, `DimensionService`, gieo mầm "Mã thống kê" (STAT, FR-SYS-051) lúc cấp dữ liệu kế toán; `value_source` + `master_slug` phân tách (không chuỗi ghép) | — |
-| **Hàng đợi job + tiến trình worker riêng** (không FastAPI); **lease/heartbeat/reaper** chống job mồ côi; **vai trò `ket_worker`**; **API `/api/v1/jobs` + OpenAPI → type TypeScript** | Các module nghiệp vụ kế toán (phase 4 trở đi) |
-| Schema-per-dataset + provisioning + `ensure_cluster` + `repair_dataset_privileges_statements` + **gieo mã quyền/vai trò `admin`** | API nghiệp vụ (mới có `/health`, `/api/v1/auth/*`, `/api/v1/system/*`) |
+| **Hàng đợi job + tiến trình worker riêng** (không FastAPI); **lease/heartbeat/reaper** chống job mồ côi; **vai trò `ket_worker`**; **API `/api/v1/jobs` + OpenAPI → type TypeScript** | Các module nghiệp vụ kế toán (phase 7 trở đi) |
+| Schema-per-dataset + provisioning + `ensure_cluster` + `repair_dataset_privileges_statements` + **gieo mã quyền/vai trò `admin`** | API nghiệp vụ (mới có `/health`, `/api/v1/auth/*`, `/api/v1/system/*`, `/api/v1/reports/*`, `/api/v1/cash-book/*`) |
 | **Đăng nhập Argon2id (có trần đồng thời), phiên lưu DB thu hồi được ngay, 2FA TOTP chống phát lại, khóa tạm khi dò mật khẩu** | Client (mới là bộ khung rỗng) |
 | **Phiên hạn chế `totp_enrollment`** — tài khoản bị bắt bật 2FA tự đăng ký thiết bị được, không cần ai chạm máy chủ | Bắt tay schema-version với client |
 | **Khóa mã hóa từ OS keystore** (fail-closed) — `totp_secret` không bao giờ ở dạng rõ trong DB/backup | Bộ cài app server (S4/phase 11); ký chứng thư OS |
 | **Hợp đồng lỗi RFC 7807** + mã tương quan mỗi request (mã HTTP khai ở lớp lỗi) | — |
-| 13 bảng nền + 2 bảng điều khiển mới, migration `0001`, **schema điều khiển có bước nâng cấp tường minh (v4)** | — |
+| 17 bảng nền + 2 bảng điều khiển, migration `0001`–`0017`, **schema điều khiển có bước nâng cấp tường minh (v4)** | — |
 | `money` (Decimal, ROUND_HALF_UP) + **luật cứng quét AST cấm tiêm SQL không tham số** | — |
 | **`python -m ket.admin`**: ensure-cluster · create-user · reset-password · reset-totp · grant-role · grant-branch · generate-app-key · **prune-sessions · prune-idempotency-keys** | — |
 | **PostgreSQL 16** là phiên bản đích; kiểm lúc khởi động, tắt cổng thì có cảnh báo trong log | — |
@@ -64,7 +69,7 @@ liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **
 | `kernel/jobs/` | `models` (bảng `jobs`, `ResumeSemantics`, `JobStatus`), **`registry` (loại job + quyền + semantics), `queue` (giành job), `reaper` (dọn mồ côi), `builtin` (ba loại job mẫu)** | Thêm loại job mới, chạm job metadata |
 | `kernel/numbering/` | `models` (`number_sequences` + sổ cấp số `allocated_numbers`, `ResetRule`), **`service` (`NumberingRule` + `NumberingService`: `FOR UPDATE` trong transaction của người gọi, nên rollback trả lại số)** | Cấp số chứng từ, đổi quy tắc đánh số |
 | `kernel/identifiers.py` | **`uuid7()` RFC 9562 tự viết** — `uid` ổn định của danh mục (RT-19). Khóa bảo vệ **tính đơn điệu**, không phải tính duy nhất | Đụng khóa danh mục |
-| `kernel/master_data/` | **`registry` (đăng ký danh mục + loại quyền + ba cơ chế chung), `tree_path` (materialized path, chuyển nhánh bằng một UPDATE), `base` (`MasterDataRow`), `service` (`MasterDataService[ModelT]` generic), `usage` (bộ đếm tham chiếu), `models/` (20 danh mục + 2 danh mục lõi)** | Thêm một danh mục → thêm model + khai registry |
+| `kernel/master_data/` | **`registry` (đăng ký danh mục + loại quyền + ba cơ chế chung), `tree_path` (materialized path, chuyển nhánh bằng một UPDATE), `base` (`MasterDataRow`), `service` (`MasterDataService[ModelT]` generic), `usage` (bộ đếm tham chiếu), `models/` (21 danh mục + 2 danh mục lõi)** | Thêm một danh mục → thêm model + khai registry |
 | `kernel/quantity.py` | **Kiểu `NUMERIC(20,6)` cho số lượng + tỷ lệ quy đổi** — khóa `quantity.scale` hoãn phase 8 | Phép tính số lượng, quy đổi |
 | `api/routers/master_data_guards.py` | **Phép kiểm phạm vi trích từ `master_data.py`** — bảng con vật tư (đơn vị quy đổi, mã quy cách) + đối tác (tài khoản ngân hàng) là ba người dùng | Thêm bảng con mới → cô lập kiểm phạm vi ở đây |
 | `kernel/dimensions/` | **`models` (`analysis_dimensions`/`analysis_dimension_values`), `service` (API cây giá trị + kiểm nguồn), `seed` (gieo chiều lõi)** | Thêm chiều → thêm dòng vào bảng giá trị |
@@ -72,12 +77,18 @@ liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **
 | `kernel/periods/` | **`models` (`fiscal_years`/`accounting_periods`), `service` (sinh 12 kỳ, tra kỳ, khóa/mở có vết)** | Chạm kỳ kế toán, khóa sổ |
 | `kernel/organization/service.py` | **`BranchService`** — cây chi nhánh. Bảng `Branch` vẫn ở `kernel/security/models.py` vì nó là neo cô lập dữ liệu của luồng đăng nhập | Thêm/chuyển chi nhánh |
 | `kernel/persistence/sequences.py` | **`reserve_id`** — lấy khóa chính trước khi `INSERT` để `path` chứa đúng id | Bảng cây mới |
-| `api/routers/master_data` | **Router sinh tự động từ registry** — 7 thao tác × 19 danh mục = 175 operation. Endpoint `/api/v1/master/{slug}` (GET danh sách/một, POST, PUT, DELETE, PUT .../parent, POST .../actions/merge). Response model sinh động từ `pydantic.create_model` + `extra_fields`. RLS chi nhánh + quyền theo danh mục | Danh mục mới = không cần đổi router |
+| `api/routers/master_data` | **Router sinh tự động từ registry** — 7 thao tác × 21 danh mục = 190+ operation. Endpoint `/api/v1/master/{slug}` (GET danh sách/một, POST, PUT, DELETE, PUT .../parent, POST .../actions/merge), search server-side `search=`/`ids=`. Response model sinh động từ `pydantic.create_model` + `extra_fields`. RLS chi nhánh + quyền theo danh mục | Danh mục mới = không cần đổi router |
 | `api/routers/dimensions` | **API `/api/v1/dimensions`** — đọc chiều + cây giá trị, khai chiều mới, thêm giá trị (chưa có sửa/xóa; UI người dùng cuối hoãn v1.1 theo RT-20) | Chiều mở rộng, giá trị mới |
 | `api/routers/jobs` | **API `/api/v1/jobs/{types,list,detail,cancel}`** + schema request/response | Thêm loại job, đổi hợp đồng |
+| `api/routers/reports` | **API `/api/v1/reports/{definitions,preview,render}`** + schema request/response, định tuyến `JobType.branch_scope` | Báo cáo, render job |
+| `api/routers/cash_book` | **API `/api/v1/cash-book/{vouchers,open-invoices,count-sheets}`** — tạo/sửa phiếu (hành động post/unpost/xóa đi qua `/api/v1/vouchers` chung), picker công nợ, biên bản kiểm kê (lát 6B) | Quỹ tiền mặt, đối trừ công nợ |
+| `api/routers/auto_posting_schemas` | **Schema + model `auto_posting_*` (FR-SYS-025)** — định khoản tự động từ gói cấu hình | Auto-posting |
+| `kernel/protocols.py` | **Protocol liên-module (RT-18)** — `ReceivableProvider`/`PayableProvider`/`SettlementTargetSource`/`InventoryPosting`/`CommitmentProvider` + registry `PROVIDERS` (module đăng ký bản cài lúc import qua `model_registry`) | Thêm provider = đăng ký lúc import, không sửa kernel |
 | `worker/` | **`__main__.py` (điểm vào `python -m ket.worker`), `runner` (vòng lặp), `progress` (tiến độ + hủy), `contracts`** | Đổi cơ chế giành/chạy job |
-| `posting/` | **Phase 4 (chưa mô tả chi tiết ở tài liệu này)** — `engine/` (`gl_postings`, validator, `PostingService`), `documents/`, `balances/` (snapshot + recalc + bảng cân đối), `opening_balances/`, `periods/` (khóa kỳ), `integrity/` | Ghi sổ, số dư, khóa kỳ |
-| `modules/*` | `general_ledger/journal/` đã có (phase 4); còn lại chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase 6–9 | — |
+| `posting/` | **Phase 4–6B** — `engine/` (`gl_postings`, validator, `PostingService`, `guards.py` PostingGuard), `documents/` (hook `after_post`/`after_unpost`/`before_delete` trên registry), `balances/` (snapshot + recalc + bảng cân đối), `opening_balances/` (`settlement_source.py` SettlementTargetSource protocol), `periods/` (khóa kỳ), `integrity/` | Ghi sổ, số dư, khóa kỳ |
+| `reporting/` | **Phase 5C–5E** — `engine/` (metadata `report_definitions`, param động, executor, grouping), `rendering/` (PDF WeasyPrint + XLSX openpyxl, sandbox Jinja2), `statements/` (builder BCTC, balance_source), `printing/` (print_log, templates Jinja2), `render_job.py` (job nền, branch_scope, threshold), API `/api/v1/reports` | Báo cáo, render nền, BCTC |
+| `modules/cash_book/` | **Phase 6B** — `service.py` (PT/PC, định khoản), `settlement_service.py` (đối trừ công nợ + FX 515/635), `posting_mapper.py` (Nợ/Có → 2 dòng), `guards.py` (CashBalanceGuard soi số dư thấp nhất), `count_sheet_service.py` (kiểm kê FR-QUY-030/031), `balance_service.py`, `models.py`, `schemas.py` | Ghi sổ quỹ, đối trừ công nợ |
+| `modules/*` | `cash_book/` (6B); `general_ledger/journal/` (phase 4); còn lại chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase 6–9 | — |
 
 ### Ngoài server
 
@@ -261,7 +272,7 @@ Tổng **1.527 test** (891 cần PostgreSQL 16). Máy không có DB thì bỏ qu
 
 ## 6. Việc tiếp theo
 
-Lát **2C**: client (design system, layout, quản lý phiên, i18n) + ba spike S1/S3/S4 (lưới nhập liệu, IME Việt, đóng gói bộ cài).
+Lát **6C–6D–7**: module ngân hàng (BNK) + mua hàng (PUR, phase 7); lát **2C**: client UI Báo cáo phía client + design system mở rộng (lưới render, tree picker, lookup input).
 
 **Còn mở:**
 
@@ -274,3 +285,4 @@ Lát **2C**: client (design system, layout, quản lý phiên, i18n) + ba spike 
 4. Dọn phiên `prune_sessions` và `prune_idempotency_keys` có sẵn làm job (xếp hàng qua API); lịch tự động thuộc phase 3 hoặc sau (tuỳ chức năng Scheduler).
 5. Bộ vai trò mẫu (`ke-toan`, `thu-quy`, `xem`) vẫn chờ gói cấu hình TT99/TT133
    ở phase 5 — hiện chỉ gieo `admin`.
+6. Setting `warning.cash_balance` (none/warn/block, mặc định none) được khai sẵn lát 6B; UI thực thi cảnh báo hoãn phase 6–7.

@@ -16,7 +16,7 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 
 ---
 
-## 1b. Trạng thái hiện thực hóa (2026-08-20, lát 4F)
+## 1b. Trạng thái hiện thực hóa (2026-08-21, lát 6B)
 
 | Thành phần | Trạng thái |
 | --- | --- |
@@ -52,7 +52,7 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | **Tệp đính kèm** (FR-NFR-053) — kho định địa chỉ theo nội dung tách theo dataset, `/api/v1/attachments` có RBAC + RLS + idempotency, gỡ-không-xóa | ✅ chạy thật (2C-5) |
 | **Khung danh mục dùng chung** — materialized path (cây ≥6 cấp, chuyển nhánh bằng **một** UPDATE), `MasterDataService[ModelT]` generic có kiểu, mã duy nhất theo phạm vi dùng-chung/riêng-chi-nhánh (BR-SYS-01), bộ đếm tham chiếu chặn xóa (BR-SYS-02) | ✅ chạy thật (3A) |
 | **Sổ đăng ký danh mục** — `CatalogRegistry` + `CatalogSpec` (slug, model, extra_fields, flags, references); **router sinh tự động** từ registry — 7 thao tác/danh mục (GET/POST/PUT/DELETE/chuyển nhánh/gộp bản ghi), endpoint `/api/v1/master/{slug}`; quyền theo từng danh mục không mã chung `master.*` (H48) | ✅ chạy thật (3B-2) |
-| **20 danh mục SRS 7 + 3 chiều lõi** — 15 danh mục (lát 3B-1) + `partners`/`employees` (3B-2) + `items` (3B-3). **Không** bật RLS — miễn trừ khai từng bảng trong `test_rls_policy_coverage.py` (H39, H53) | ✅ chạy thật (3B-1, 3B-2, 3B-3) |
+| **21 danh mục SRS 7 + 3 chiều lõi** — 15 danh mục (lát 3B-1) + `partners`/`employees` (3B-2) + `items` (3B-3) + `company_bank_accounts` (lát 6A). **Không** bật RLS — miễn trừ khai từng bảng trong `test_rls_policy_coverage.py` (H39, H53) | ✅ chạy thật (3B-1, 3B-2, 3B-3, 6A) |
 | **Ba cơ chế chung của registry** — `merge_hooks` (tuple từ chối/chuẩn bị gộp bản ghi), `extra_update_fields` (trường chốt một lần), `update_guard` (luật liên-trường ở đường sửa) | ✅ chạy thật (3B-3, người dùng đầu: vật tư + bảng con đơn vị tính) |
 | **Chiều phân tích mở rộng** — `analysis_dimensions` + `analysis_dimension_values`, `DimensionService`; gieo mầm chiều "Mã thống kê" (STAT, FR-SYS-051); `value_source` + `master_slug` phân tách (không chuỗi ghép, cho phép `CHECK` kiểm bất biến) | ✅ chạy thật (3B-1) |
 | **Danh mục đối tác + nhân viên** — `partners` (một bản ghi, hai danh sách khách + NCC qua `is_customer`/`is_vendor`); `employees`; bảng con `partner_bank_accounts` (khóa ngoại `RESTRICT` sang `banks`) | ✅ chạy thật (3B-2) |
@@ -68,8 +68,13 @@ Phần mềm kế toán doanh nghiệp Việt Nam chạy **offline hoàn toàn t
 | **Khung Excel nhập liệu** — `TemplateDescriptor` sinh tệp mẫu (sheet Hướng dẫn, cột `*`), bảng đệm `import_staging_rows`, kiểm set-based (hình thức → quan hệ → luật liên-trường), từ chối tệp đổi cấu trúc (FR-SYS-082); hai job kiểm/ghi chạy **cùng một hàm** (H85), so `content_hash` giữa kiểm và ghi (H78); ghi theo cấp cây bằng `INSERT … SELECT`; migration `0006` | ✅ chạy thật (3C-1) |
 | **Xuất Excel + tự tạo danh mục thiếu + sao kê ngân hàng** — exporter dùng chung descriptor (round-trip xuất → nhập 0 lỗi, cả 20 danh mục); tự tạo danh mục còn thiếu (FR-NFR-062, ba hàng rào: người dùng chọn, `auto_creatable`, quyền per-danh-mục — `ON CONFLICT DO NOTHING` cho hai lượt nhập đồng thời); khung sao kê per-bank `bank_statement_profiles` **ngoài** strict-template (RT-26, migration `0008`; tệp thật VCB/ACB là nợ M1 — cổng chặn phase 6) | ✅ chạy thật (3C-2) |
 | **UI nhóm 07 (client)** — màn danh mục cây+lưới cho cả 20 danh mục (registry client canh khớp `openapi.json` bằng test), drawer sửa theo U2, màn đối tác + thẻ công nợ giữ chỗ (H56), wizard nhập Excel 3 bước trên job nền, màn Thiết lập hai nhóm + banner U14; `TreePicker`/`LookupInput` vào design system | ✅ chạy thật (3D) |
+| **Report engine metadata-driven (lát 5C–5D)** — `ket.reporting.engine` (metadata `report_definitions`, tham số động), `ket.reporting.rendering` (PDF WeasyPrint + XLSX openpyxl, sandbox Jinja2, URL fetcher chặn `file://`), 4 dataset builtin bộ sổ (dataset thứ 5 `cash_forecast` vào ở 6B), phân trang ADR-009, preview lưới | ✅ chạy thật (5C–5D) |
+| **Render job nền (lát 5E)** — `ket.reporting.render_job` (`JobType.branch_scope` REQUESTER_BRANCHES, threshold chuyển-job cấu hình, tiến độ + hủy), API `/api/v1/reports`, UI báo cáo phía client | ✅ chạy thật (5E) |
+| **Protocol liên-module RT-18 (lát 6A)** — `ket.kernel.protocols` (`Protocol` registry + `PROVIDERS`), guard ba mức (`PostingGuard` + `CashBalanceGuard` FR-SYS-062), định khoản tự động `kernel/config/auto_posting_*` (FR-SYS-025), TK ngân hàng doanh nghiệp `company_bank_accounts`, search server-side `search=`/`ids=` | ✅ chạy thật (6A) |
+| **Module quỹ tiền mặt (cash_book) hoàn chỉnh (lát 6B)** — `ket.modules.cash_book`: service PT/PC, settlement_service (đối trừ công nợ + FX 515/635), posting_mapper, guards (CashBalanceGuard), count_sheet_service (kiểm kê FR-QUY-030/031), balance_service; `SettlementTargetSource` protocol, hook vòng đời, router, dataset `cash_forecast` (dự báo dòng tiền FR-QUY-032) | ✅ chạy thật (6B) |
+| **Migration `0013`–`0017`** — report engine (0013), print templates + print_log (0014), cash_book + auto_posting (0015–0016), settlement + count_sheets (0017) | ✅ chạy thật (5C–6B) |
 | **Vòng đời job cứng hóa** — thân job gia hạn lease **theo lô** (đọc tệp) và **theo cấp cây** (pha ghi); cờ hủy kiểm ở ranh giới lô (`request_cancel` giữ đúng lời hứa); `Worker._fence_before_commit` gia hạn lease bằng chính transaction nghiệp vụ ngay trước commit — mất lease là rollback trọn, không còn cửa hai worker cùng commit một job; CLI `upgrade-datasets` nâng schema dataset đã tồn tại lên head (nửa vận hành của LD-05) | ✅ chạy thật (lát vá audit phase 1–3) |
-| Posting engine, báo cáo, và toàn bộ phân hệ nghiệp vụ | ⏳ phase 4 trở đi |
+| Mua hàng (PUR, phase 7), ngân hàng (BNK, phase 6), công nợ (AR/AP), hóa đơn điện tử (HĐĐT) | ⏳ phase 6–7 |
 
 Bảng còn lại trong §11 và phần lớn §12 là **thiết kế đích**, chưa có mã.
 
