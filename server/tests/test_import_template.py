@@ -462,6 +462,18 @@ PINNED_HEADERS: Final[dict[str, tuple[str, ...]]] = {
         "Tên viết tắt",
         "Mã SWIFT",
     ),
+    "company_bank_accounts": (
+        "Mã *",
+        "Tên *",
+        "Tên tiếng Anh",
+        "Mã nhóm cha",
+        "Là nhóm",
+        "Còn theo dõi",
+        "Mã ngân hàng *",
+        "Tiền tệ",
+        "Chủ tài khoản",
+        "Chi nhánh ngân hàng",
+    ),
     "contracts": (
         "Mã *",
         "Tên *",

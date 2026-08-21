@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from ket.kernel.master_data.models.asset_type import AssetType
 from ket.kernel.master_data.models.bank import Bank
+from ket.kernel.master_data.models.company_bank_account import CompanyBankAccount
 from ket.kernel.master_data.models.contract import Contract
 from ket.kernel.master_data.models.cost_object import CostObject
 from ket.kernel.master_data.models.document_type import DocumentTypeCatalog
@@ -51,6 +52,7 @@ from ket.kernel.master_data.models.warehouse import Warehouse
 __all__ = [
     "AssetType",
     "Bank",
+    "CompanyBankAccount",
     "Contract",
     "CostObject",
     "DocumentTypeCatalog",

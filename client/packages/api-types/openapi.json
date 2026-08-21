@@ -568,6 +568,92 @@
         "title": "AuditListResponse",
         "type": "object"
       },
+      "AutoPostingOperationResponse": {
+        "description": "Một nghiệp vụ đã phân giải — form đọc và điền sẵn cặp Nợ/Có.",
+        "properties": {
+          "credit_account_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Account Code"
+          },
+          "debit_account_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debit Account Code"
+          },
+          "display_order": {
+            "title": "Display Order",
+            "type": "integer"
+          },
+          "operation_code": {
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "operation_name": {
+            "title": "Operation Name",
+            "type": "string"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Kind"
+          },
+          "requires_partner": {
+            "title": "Requires Partner",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "operation_code",
+          "operation_name",
+          "debit_account_code",
+          "credit_account_code",
+          "requires_partner",
+          "partner_kind",
+          "display_order"
+        ],
+        "title": "AutoPostingOperationResponse",
+        "type": "object"
+      },
+      "AutoPostingOperationsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AutoPostingOperationResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "package_id": {
+            "title": "Package Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "package_id",
+          "items"
+        ],
+        "title": "AutoPostingOperationsResponse",
+        "type": "object"
+      },
       "BanksCreateRequest": {
         "additionalProperties": false,
         "description": "Ngân hàng — tạo mới.",
@@ -957,6 +1043,28 @@
           "file"
         ],
         "title": "Body_validate_import_api_v1_master_banks_import_validate_post",
+        "type": "object"
+      },
+      "Body_validate_import_api_v1_master_company_bank_accounts_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_company_bank_accounts_import_validate_post",
         "type": "object"
       },
       "Body_validate_import_api_v1_master_contracts_import_validate_post": {
@@ -1555,6 +1663,351 @@
           "new_password"
         ],
         "title": "ChangePasswordRequest",
+        "type": "object"
+      },
+      "CompanyBankAccountsCreateRequest": {
+        "additionalProperties": false,
+        "description": "Tài khoản ngân hàng doanh nghiệp — tạo mới.",
+        "properties": {
+          "account_holder": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chủ tài khoản"
+          },
+          "bank_branch": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chi nhánh ngân hàng"
+          },
+          "bank_id": {
+            "title": "Ngân hàng",
+            "type": "integer"
+          },
+          "branch_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch Id"
+          },
+          "code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "currency_code": {
+            "anyOf": [
+              {
+                "maxLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiền tệ"
+          },
+          "is_group": {
+            "default": false,
+            "title": "Is Group",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "bank_id",
+          "code",
+          "name"
+        ],
+        "title": "CompanyBankAccountsCreateRequest",
+        "type": "object"
+      },
+      "CompanyBankAccountsListResponse": {
+        "description": "Tài khoản ngân hàng doanh nghiệp — một trang bản ghi.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyBankAccountsResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "CompanyBankAccountsListResponse",
+        "type": "object"
+      },
+      "CompanyBankAccountsResponse": {
+        "description": "Tài khoản ngân hàng doanh nghiệp — một bản ghi.",
+        "properties": {
+          "account_holder": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chủ tài khoản"
+          },
+          "bank_branch": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chi nhánh ngân hàng"
+          },
+          "bank_id": {
+            "title": "Ngân hàng",
+            "type": "integer"
+          },
+          "branch_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch Id"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "currency_code": {
+            "anyOf": [
+              {
+                "maxLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiền tệ"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_group": {
+            "title": "Is Group",
+            "type": "boolean"
+          },
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "uid": {
+            "title": "Uid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "id",
+          "uid",
+          "code",
+          "name",
+          "name_en",
+          "parent_id",
+          "path",
+          "level",
+          "is_group",
+          "is_active",
+          "branch_id",
+          "row_version"
+        ],
+        "title": "CompanyBankAccountsResponse",
+        "type": "object"
+      },
+      "CompanyBankAccountsUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Tài khoản ngân hàng doanh nghiệp — sửa.",
+        "properties": {
+          "account_holder": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chủ tài khoản"
+          },
+          "bank_branch": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chi nhánh ngân hàng"
+          },
+          "bank_id": {
+            "title": "Ngân hàng",
+            "type": "integer"
+          },
+          "code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "currency_code": {
+            "anyOf": [
+              {
+                "maxLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiền tệ"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "row_version": {
+            "minimum": 1.0,
+            "title": "Row Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bank_id",
+          "row_version",
+          "code",
+          "name",
+          "is_active"
+        ],
+        "title": "CompanyBankAccountsUpdateRequest",
         "type": "object"
       },
       "ConfigPackageAccountResponse": {
@@ -6794,7 +7247,7 @@
         "type": "object"
       },
       "PartnerKind": {
-        "description": "Loại đối tác trên dòng hạch toán — `0 customer 1 vendor 2 employee`.\n\nMột cột `partner_id` + một cột loại, chứ không ba cột khóa riêng: TK 131\ntheo dõi khách, 331 theo dõi nhà cung cấp, 141 theo dõi nhân viên — mỗi\ndòng chỉ có **một** đối tượng công nợ, và ba cột sẽ cho phép điền hai.",
+        "description": "Loại đối tác trên dòng hạch toán và trong công nợ — `0 customer 1 vendor 2 employee`.\n\nMột cột `partner_id` + một cột loại, chứ không ba cột khóa riêng: TK 131\ntheo dõi khách, 331 theo dõi nhà cung cấp, 141 theo dõi nhân viên — mỗi\ndòng chỉ có **một** đối tượng công nợ, và ba cột sẽ cho phép điền hai.",
         "enum": [
           0,
           1,
@@ -11838,6 +12291,61 @@
         ]
       }
     },
+    "/api/v1/auto-posting/operations": {
+      "get": {
+        "description": "Nghiệp vụ của một loại chứng từ, đã phân giải TK theo gói hiệu lực.\n\n`on_date` bắt buộc, cùng lý do với `/accounts`: gói cấu hình hiệu lực theo\nngày, và form đã biết ngày hạch toán nên cứ gửi nó lên. Loại chứng từ chưa\nkhai nghiệp vụ nào trả danh sách rỗng — không phải lỗi: gói nhập ngoài có\nthể không mang `auto_posting_rules.csv`.",
+        "operationId": "list_operations_api_v1_auto_posting_operations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "document_type",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Document Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "on_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "On Date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoPostingOperationsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Operations",
+        "tags": [
+          "auto-posting"
+        ]
+      }
+    },
     "/api/v1/config-packages": {
       "get": {
         "description": "Mọi gói cấu hình đã có trong dataset — dựng sẵn lẫn nhập thêm, mới nhất trước.",
@@ -12858,7 +13366,7 @@
     },
     "/api/v1/master/asset_types": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_asset_types_get",
         "parameters": [
           {
@@ -12909,6 +13417,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -13384,7 +13929,7 @@
     },
     "/api/v1/master/banks": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_banks_get",
         "parameters": [
           {
@@ -13435,6 +13980,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -13908,9 +14490,572 @@
         ]
       }
     },
+    "/api/v1/master/company_bank_accounts": {
+      "get": {
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "operationId": "list_records_api_v1_master_company_bank_accounts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "parent_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Parent Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subtree_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subtree Of"
+            }
+          },
+          {
+            "description": "Danh mục này không có bộ lọc nào",
+            "in": "query",
+            "name": "flag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Danh mục này không có bộ lọc nào",
+              "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyBankAccountsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Tài khoản ngân hàng doanh nghiệp — danh sách",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "post": {
+        "description": "Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).\n\nLần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã\ntrạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.",
+        "operationId": "create_record_api_v1_master_company_bank_accounts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyBankAccountsCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyBankAccountsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Tài khoản ngân hàng doanh nghiệp — tạo mới",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/company_bank_accounts/actions/merge": {
+      "post": {
+        "description": "Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).\n\nQuyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi\n**biến mất**, và người được sửa tên một mã hàng không đương nhiên được\nlàm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.\n\nCó khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:\nlần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo\n`404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,\nlần gửi lại trả lại đúng báo cáo của lần đã chạy.",
+        "operationId": "merge_two_records_api_v1_master_company_bank_accounts_actions_merge_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterDataMergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterDataMergeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Tài khoản ngân hàng doanh nghiệp — gộp hai bản ghi trùng",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/company_bank_accounts/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_company_bank_accounts_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Tài khoản ngân hàng doanh nghiệp — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
+    "/api/v1/master/company_bank_accounts/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_company_bank_accounts_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Tài khoản ngân hàng doanh nghiệp — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/company_bank_accounts/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_company_bank_accounts_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_company_bank_accounts_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Tài khoản ngân hàng doanh nghiệp — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/company_bank_accounts/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_company_bank_accounts_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Tài khoản ngân hàng doanh nghiệp — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/company_bank_accounts/{record_id}": {
+      "delete": {
+        "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
+        "operationId": "delete_record_api_v1_master_company_bank_accounts__record_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Tài khoản ngân hàng doanh nghiệp — xóa",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "get": {
+        "operationId": "get_record_api_v1_master_company_bank_accounts__record_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyBankAccountsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Tài khoản ngân hàng doanh nghiệp — một bản ghi",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "put": {
+        "description": "Sửa mô tả, cột riêng và cờ \"Ngừng theo dõi\" — một lượt ghi, một `row_version`.",
+        "operationId": "update_record_api_v1_master_company_bank_accounts__record_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyBankAccountsUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyBankAccountsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Tài khoản ngân hàng doanh nghiệp — sửa",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/company_bank_accounts/{record_id}/parent": {
+      "put": {
+        "description": "Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).",
+        "operationId": "move_record_api_v1_master_company_bank_accounts__record_id__parent_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterDataMoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyBankAccountsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Tài khoản ngân hàng doanh nghiệp — chuyển nhánh",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
     "/api/v1/master/contracts": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_contracts_get",
         "parameters": [
           {
@@ -13961,6 +15106,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -14436,7 +15618,7 @@
     },
     "/api/v1/master/cost_objects": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_cost_objects_get",
         "parameters": [
           {
@@ -14487,6 +15669,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -14962,7 +16181,7 @@
     },
     "/api/v1/master/document_types": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_document_types_get",
         "parameters": [
           {
@@ -15013,6 +16232,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -15488,7 +16744,7 @@
     },
     "/api/v1/master/employees": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_employees_get",
         "parameters": [
           {
@@ -15539,6 +16795,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -16014,7 +17307,7 @@
     },
     "/api/v1/master/excise_tax_tables": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_excise_tax_tables_get",
         "parameters": [
           {
@@ -16065,6 +17358,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -16540,7 +17870,7 @@
     },
     "/api/v1/master/expense_items": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_expense_items_get",
         "parameters": [
           {
@@ -16591,6 +17921,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -17066,7 +18433,7 @@
     },
     "/api/v1/master/invoice_forms": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_invoice_forms_get",
         "parameters": [
           {
@@ -17117,6 +18484,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -17592,7 +18996,7 @@
     },
     "/api/v1/master/items": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_items_get",
         "parameters": [
           {
@@ -17643,6 +19047,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -18526,7 +19967,7 @@
     },
     "/api/v1/master/partners": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_partners_get",
         "parameters": [
           {
@@ -18577,6 +20018,43 @@
               ],
               "description": "Lọc theo: `customer` (Khách hàng), `vendor` (Nhà cung cấp)",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -19261,7 +20739,7 @@
     },
     "/api/v1/master/payment_terms": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_payment_terms_get",
         "parameters": [
           {
@@ -19312,6 +20790,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -19787,7 +21302,7 @@
     },
     "/api/v1/master/pit_tables": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_pit_tables_get",
         "parameters": [
           {
@@ -19838,6 +21353,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -20313,7 +21865,7 @@
     },
     "/api/v1/master/project_types": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_project_types_get",
         "parameters": [
           {
@@ -20364,6 +21916,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -20839,7 +22428,7 @@
     },
     "/api/v1/master/projects": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_projects_get",
         "parameters": [
           {
@@ -20890,6 +22479,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -21365,7 +22991,7 @@
     },
     "/api/v1/master/resource_tax_tables": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_resource_tax_tables_get",
         "parameters": [
           {
@@ -21416,6 +23042,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -21891,7 +23554,7 @@
     },
     "/api/v1/master/timekeeping_symbols": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_timekeeping_symbols_get",
         "parameters": [
           {
@@ -21942,6 +23605,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -22417,7 +24117,7 @@
     },
     "/api/v1/master/tool_types": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_tool_types_get",
         "parameters": [
           {
@@ -22468,6 +24168,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -22943,7 +24680,7 @@
     },
     "/api/v1/master/units_of_measure": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_units_of_measure_get",
         "parameters": [
           {
@@ -22994,6 +24731,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -23469,7 +25243,7 @@
     },
     "/api/v1/master/warehouses": {
       "get": {
-        "description": "Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.\n\nHai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng\ncấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai\ncùng có — nó là câu hỏi hẹp hơn.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
         "operationId": "list_records_api_v1_master_warehouses_get",
         "parameters": [
           {
@@ -23520,6 +25294,43 @@
               ],
               "description": "Danh mục này không có bộ lọc nào",
               "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
             }
           },
           {
@@ -25651,7 +27462,7 @@
     },
     "/api/v1/vouchers/{voucher_id}/actions/post": {
       "post": {
-        "description": "Ghi sổ một chứng từ Đã cất (SRS 00 §3.3, FR-NFR-003).",
+        "description": "Ghi sổ một chứng từ Đã cất (SRS 00 §3.3, FR-NFR-003).\n\n`acknowledge_warnings=true` là lượt gửi lại **sau khi** người dùng đã xác\nnhận các cảnh báo nghiệp vụ (mọi vi phạm trong phản hồi trước đều mang\n`details.warning=1` — FR-SYS-062 mức \"Cảnh báo\"). Nó không mở được cảnh\nbáo mức \"Chặn\": guard trả blocking thì lượt nào cũng bị từ chối.",
         "operationId": "post_voucher_api_v1_vouchers__voucher_id__actions_post_post",
         "parameters": [
           {
@@ -25662,6 +27473,16 @@
               "format": "uuid",
               "title": "Voucher Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "acknowledge_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledge Warnings",
+              "type": "boolean"
             }
           }
         ],

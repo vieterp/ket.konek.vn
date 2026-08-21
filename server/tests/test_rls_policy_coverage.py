@@ -74,6 +74,8 @@ _EXEMPT: dict[str, str] = {
     "partners": "danh mục, NULL = dùng chung toàn công ty",
     "employees": "danh mục, NULL = dùng chung toàn công ty",
     "items": "danh mục, NULL = dùng chung toàn công ty",
+    # Lát 6A — danh mục thứ 21, cùng lập luận cả nhóm trên.
+    "company_bank_accounts": "danh mục, NULL = dùng chung toàn công ty",
 }
 
 

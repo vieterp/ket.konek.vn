@@ -270,6 +270,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auto-posting/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Operations
+         * @description Nghiệp vụ của một loại chứng từ, đã phân giải TK theo gói hiệu lực.
+         *
+         *     `on_date` bắt buộc, cùng lý do với `/accounts`: gói cấu hình hiệu lực theo
+         *     ngày, và form đã biết ngày hạch toán nên cứ gửi nó lên. Loại chứng từ chưa
+         *     khai nghiệp vụ nào trả danh sách rỗng — không phải lỗi: gói nhập ngoài có
+         *     thể không mang `auto_posting_rules.csv`.
+         */
+        get: operations["list_operations_api_v1_auto_posting_operations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config-packages": {
         parameters: {
             query?: never;
@@ -675,11 +700,22 @@ export interface paths {
         };
         /**
          * Loại tài sản cố định — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -905,11 +941,22 @@ export interface paths {
         };
         /**
          * Ngân hàng — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -1126,6 +1173,247 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/company_bank_accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tài khoản ngân hàng doanh nghiệp — danh sách
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
+         *
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_company_bank_accounts_get"];
+        put?: never;
+        /**
+         * Tài khoản ngân hàng doanh nghiệp — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_company_bank_accounts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/company_bank_accounts/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tài khoản ngân hàng doanh nghiệp — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_company_bank_accounts_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/company_bank_accounts/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tài khoản ngân hàng doanh nghiệp — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_company_bank_accounts_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/company_bank_accounts/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tài khoản ngân hàng doanh nghiệp — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_company_bank_accounts_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/company_bank_accounts/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tài khoản ngân hàng doanh nghiệp — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_company_bank_accounts_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/company_bank_accounts/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tài khoản ngân hàng doanh nghiệp — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_company_bank_accounts_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/company_bank_accounts/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tài khoản ngân hàng doanh nghiệp — một bản ghi */
+        get: operations["get_record_api_v1_master_company_bank_accounts__record_id__get"];
+        /**
+         * Tài khoản ngân hàng doanh nghiệp — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_company_bank_accounts__record_id__put"];
+        post?: never;
+        /**
+         * Tài khoản ngân hàng doanh nghiệp — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_company_bank_accounts__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/company_bank_accounts/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Tài khoản ngân hàng doanh nghiệp — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_company_bank_accounts__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/contracts": {
         parameters: {
             query?: never;
@@ -1135,11 +1423,22 @@ export interface paths {
         };
         /**
          * Hợp đồng — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -1365,11 +1664,22 @@ export interface paths {
         };
         /**
          * Đối tượng tập hợp chi phí — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -1595,11 +1905,22 @@ export interface paths {
         };
         /**
          * Loại chứng từ — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -1825,11 +2146,22 @@ export interface paths {
         };
         /**
          * Nhân viên — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -2055,11 +2387,22 @@ export interface paths {
         };
         /**
          * Biểu thuế tiêu thụ đặc biệt — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -2285,11 +2628,22 @@ export interface paths {
         };
         /**
          * Khoản mục chi phí — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -2515,11 +2869,22 @@ export interface paths {
         };
         /**
          * Mẫu số hóa đơn — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -2745,11 +3110,22 @@ export interface paths {
         };
         /**
          * Vật tư hàng hóa — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -3078,11 +3454,22 @@ export interface paths {
         };
         /**
          * Đối tác — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -3360,11 +3747,22 @@ export interface paths {
         };
         /**
          * Điều khoản thanh toán — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -3590,11 +3988,22 @@ export interface paths {
         };
         /**
          * Biểu tính thuế thu nhập cá nhân — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -3820,11 +4229,22 @@ export interface paths {
         };
         /**
          * Loại công trình — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -4050,11 +4470,22 @@ export interface paths {
         };
         /**
          * Công trình — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -4280,11 +4711,22 @@ export interface paths {
         };
         /**
          * Biểu thuế tài nguyên — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -4510,11 +4952,22 @@ export interface paths {
         };
         /**
          * Ký hiệu chấm công — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -4740,11 +5193,22 @@ export interface paths {
         };
         /**
          * Loại công cụ dụng cụ — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -4970,11 +5434,22 @@ export interface paths {
         };
         /**
          * Đơn vị tính — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -5200,11 +5675,22 @@ export interface paths {
         };
         /**
          * Kho — danh sách
-         * @description Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
          *
-         *     Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-         *     cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-         *     cùng có — nó là câu hỏi hẹp hơn.
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
          *
          *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
          *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -6204,6 +6690,11 @@ export interface paths {
         /**
          * Post Voucher
          * @description Ghi sổ một chứng từ Đã cất (SRS 00 §3.3, FR-NFR-003).
+         *
+         *     `acknowledge_warnings=true` là lượt gửi lại **sau khi** người dùng đã xác
+         *     nhận các cảnh báo nghiệp vụ (mọi vi phạm trong phản hồi trước đều mang
+         *     `details.warning=1` — FR-SYS-062 mức "Cảnh báo"). Nó không mở được cảnh
+         *     báo mức "Chặn": guard trả blocking thì lượt nào cũng bị từ chối.
          */
         post: operations["post_voucher_api_v1_vouchers__voucher_id__actions_post_post"];
         delete?: never;
@@ -6542,6 +7033,33 @@ export interface components {
             total: number;
         };
         /**
+         * AutoPostingOperationResponse
+         * @description Một nghiệp vụ đã phân giải — form đọc và điền sẵn cặp Nợ/Có.
+         */
+        AutoPostingOperationResponse: {
+            /** Credit Account Code */
+            credit_account_code: string | null;
+            /** Debit Account Code */
+            debit_account_code: string | null;
+            /** Display Order */
+            display_order: number;
+            /** Operation Code */
+            operation_code: string;
+            /** Operation Name */
+            operation_name: string;
+            /** Partner Kind */
+            partner_kind: number | null;
+            /** Requires Partner */
+            requires_partner: boolean;
+        };
+        /** AutoPostingOperationsResponse */
+        AutoPostingOperationsResponse: {
+            /** Items */
+            items: components["schemas"]["AutoPostingOperationResponse"][];
+            /** Package Id */
+            package_id: number;
+        };
+        /**
          * BanksCreateRequest
          * @description Ngân hàng — tạo mới.
          */
@@ -6660,6 +7178,15 @@ export interface components {
         };
         /** Body_validate_import_api_v1_master_banks_import_validate_post */
         Body_validate_import_api_v1_master_banks_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
+        /** Body_validate_import_api_v1_master_company_bank_accounts_import_validate_post */
+        Body_validate_import_api_v1_master_company_bank_accounts_import_validate_post: {
             /** File */
             file: string;
             /** @default error */
@@ -6905,6 +7432,107 @@ export interface components {
              * Format: password
              */
             new_password: string;
+        };
+        /**
+         * CompanyBankAccountsCreateRequest
+         * @description Tài khoản ngân hàng doanh nghiệp — tạo mới.
+         */
+        CompanyBankAccountsCreateRequest: {
+            /** Chủ tài khoản */
+            account_holder?: string | null;
+            /** Chi nhánh ngân hàng */
+            bank_branch?: string | null;
+            /** Ngân hàng */
+            bank_id: number;
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /** Tiền tệ */
+            currency_code?: string | null;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /**
+         * CompanyBankAccountsListResponse
+         * @description Tài khoản ngân hàng doanh nghiệp — một trang bản ghi.
+         */
+        CompanyBankAccountsListResponse: {
+            /** Items */
+            items: components["schemas"]["CompanyBankAccountsResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * CompanyBankAccountsResponse
+         * @description Tài khoản ngân hàng doanh nghiệp — một bản ghi.
+         */
+        CompanyBankAccountsResponse: {
+            /** Chủ tài khoản */
+            account_holder?: string | null;
+            /** Chi nhánh ngân hàng */
+            bank_branch?: string | null;
+            /** Ngân hàng */
+            bank_id: number;
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Tiền tệ */
+            currency_code?: string | null;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * CompanyBankAccountsUpdateRequest
+         * @description Tài khoản ngân hàng doanh nghiệp — sửa.
+         */
+        CompanyBankAccountsUpdateRequest: {
+            /** Chủ tài khoản */
+            account_holder?: string | null;
+            /** Chi nhánh ngân hàng */
+            bank_branch?: string | null;
+            /** Ngân hàng */
+            bank_id: number;
+            /** Code */
+            code: string;
+            /** Tiền tệ */
+            currency_code?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Row Version */
+            row_version: number;
         };
         /**
          * ConfigPackageAccountResponse
@@ -8819,7 +9447,7 @@ export interface components {
         };
         /**
          * PartnerKind
-         * @description Loại đối tác trên dòng hạch toán — `0 customer 1 vendor 2 employee`.
+         * @description Loại đối tác trên dòng hạch toán và trong công nợ — `0 customer 1 vendor 2 employee`.
          *
          *     Một cột `partner_id` + một cột loại, chứ không ba cột khóa riêng: TK 131
          *     theo dõi khách, 331 theo dõi nhà cung cấp, 141 theo dõi nhân viên — mỗi
@@ -10888,6 +11516,38 @@ export interface operations {
             };
         };
     };
+    list_operations_api_v1_auto_posting_operations_get: {
+        parameters: {
+            query: {
+                document_type: string;
+                on_date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoPostingOperationsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_config_packages_api_v1_config_packages_get: {
         parameters: {
             query?: never;
@@ -11546,6 +12206,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -11912,6 +12574,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -12271,6 +12935,374 @@ export interface operations {
             };
         };
     };
+    list_records_api_v1_master_company_bank_accounts_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyBankAccountsListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_company_bank_accounts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanyBankAccountsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyBankAccountsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_company_bank_accounts_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_records_api_v1_master_company_bank_accounts_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_master_company_bank_accounts_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_company_bank_accounts_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_company_bank_accounts_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_company_bank_accounts_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_company_bank_accounts__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyBankAccountsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_company_bank_accounts__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanyBankAccountsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyBankAccountsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_company_bank_accounts__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_company_bank_accounts__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyBankAccountsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_records_api_v1_master_contracts_get: {
         parameters: {
             query?: {
@@ -12278,6 +13310,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -12644,6 +13678,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -13010,6 +14046,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -13376,6 +14414,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -13742,6 +14782,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -14108,6 +15150,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -14474,6 +15518,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -14840,6 +15886,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -15472,6 +16520,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Lọc theo: `customer` (Khách hàng), `vendor` (Nhà cung cấp) */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -15972,6 +17022,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -16338,6 +17390,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -16704,6 +17758,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -17070,6 +18126,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -17436,6 +18494,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -17802,6 +18862,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -18168,6 +19230,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -18534,6 +19598,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -18900,6 +19966,8 @@ export interface operations {
                 subtree_of?: number | null;
                 /** @description Danh mục này không có bộ lọc nào */
                 flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -20359,7 +21427,9 @@ export interface operations {
     };
     post_voucher_api_v1_vouchers__voucher_id__actions_post_post: {
         parameters: {
-            query?: never;
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
             header?: never;
             path: {
                 voucher_id: string;

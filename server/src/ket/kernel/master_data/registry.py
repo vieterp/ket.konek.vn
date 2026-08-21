@@ -45,6 +45,10 @@ from ket.kernel.master_data.models.asset_type import (
     asset_type_row_rules,
 )
 from ket.kernel.master_data.models.bank import Bank, BankFields, bank_row_rules
+from ket.kernel.master_data.models.company_bank_account import (
+    CompanyBankAccount,
+    CompanyBankAccountFields,
+)
 from ket.kernel.master_data.models.contract import Contract
 from ket.kernel.master_data.models.cost_object import CostObject
 from ket.kernel.master_data.models.document_type import DocumentTypeCatalog
@@ -381,7 +385,8 @@ dữ liệu kế toán mới — đều thấy đủ mã quyền danh mục.
 
 
 def _register_all() -> None:
-    """Hai mươi danh mục của lát 3A + 3B-1 + 3B-2 + 3B-3.
+    """Hai mươi danh mục của lát 3A + 3B-1 + 3B-2 + 3B-3, cộng tài khoản
+    ngân hàng doanh nghiệp của lát 6A.
 
     Xếp theo nhóm nghiệp vụ chứ không theo bảng chữ cái: người đọc tệp này đang
     tìm "danh mục kho nằm ở đâu", không tìm chữ cái. Thứ tự **xuất ra** thì đã
@@ -478,6 +483,16 @@ def _register_all() -> None:
             # `bank_statement_profiles` mang ràng buộc duy nhất `(bank_id, name)`
             # từ lát 3C-2, nên gộp hai ngân hàng phải có bước hợp nhất (RT-26).
             merge_hooks=(BankStatementProfileMergeHook(),),
+        ),
+        # Danh mục thứ 21 (lát 6A) — tài khoản ngân hàng CỦA DOANH NGHIỆP.
+        # Ở kernel chứ không trong module bank vì sheet số dư đầu kỳ nhóm
+        # ngân hàng (posting, hoãn từ 4C) cũng đọc nó — xem docstring model.
+        CatalogSpec(
+            slug="company_bank_accounts",
+            model=CompanyBankAccount,
+            title="Tài khoản ngân hàng doanh nghiệp",
+            extra_fields=CompanyBankAccountFields,
+            references=(CatalogReference(field="bank_id", slug="banks"),),
         ),
         # Chứng từ – hóa đơn
         CatalogSpec(slug="document_types", model=DocumentTypeCatalog, title="Loại chứng từ"),

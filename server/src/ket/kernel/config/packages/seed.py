@@ -34,6 +34,7 @@ from sqlalchemy import Connection, insert, select, update
 
 from ket.kernel.config.accounts_models import ChartOfAccount, ClosingAccountPair, DefaultAccount
 from ket.kernel.config.accounts_models import ConfigPackage as ConfigPackageModel
+from ket.kernel.config.auto_posting_models import AutoPostingRule
 from ket.kernel.config.packages.loader import LoadedPackage, load_builtin_package
 from ket.kernel.config.statements.models import StatementLayout, StatementRow
 from ket.kernel.master_data.tree_path import ROOT_LEVEL, child_path, level_of
@@ -144,6 +145,30 @@ def _insert_default_accounts(
     )
 
 
+def _insert_auto_posting_rules(
+    connection: Connection, package_id: int, loaded: LoadedPackage
+) -> None:
+    if not loaded.auto_posting_rules:
+        return
+    connection.execute(
+        insert(AutoPostingRule),
+        [
+            {
+                "package_id": package_id,
+                "document_type": row.document_type,
+                "operation_code": row.operation_code,
+                "operation_name": row.operation_name,
+                "debit_purpose": row.debit_purpose,
+                "credit_purpose": row.credit_purpose,
+                "requires_partner": row.requires_partner,
+                "partner_kind": row.partner_kind,
+                "display_order": row.display_order,
+            }
+            for row in loaded.auto_posting_rules
+        ],
+    )
+
+
 def _insert_closing_pairs(connection: Connection, package_id: int, loaded: LoadedPackage) -> None:
     if not loaded.closing_pairs:
         return
@@ -220,6 +245,60 @@ def _ensure_statements_backfilled(
     return True
 
 
+def _ensure_auto_posting_backfilled(
+    connection: Connection, package_id: int, loaded: LoadedPackage
+) -> bool:
+    """Gieo nghiệp vụ định khoản tự động cho gói builtin **đã tồn tại từ trước
+    lát 6A** nhưng chưa có dòng nào — cùng doctrine với
+    `_ensure_statements_backfilled`: chỉ **thêm vào chỗ trống**, không ghi đè.
+
+    Kèm theo là các `purpose` mới trong `default_accounts` mà bộ nghiệp vụ trỏ
+    tới (`borrowings`, `import_tax`, …): một bộ nghiệp vụ backfill mà thiếu
+    purpose thì resolver trả "không điền sẵn" ở đúng những nghiệp vụ đáng điền
+    nhất. Chỉ chèn khóa `(document_type, purpose)` **chưa có** — gán lại một
+    purpose đang tồn tại là nâng cấp nội dung, việc của một gói `code` mới.
+    """
+    has_rules = connection.scalar(
+        select(AutoPostingRule.id).where(AutoPostingRule.package_id == package_id).limit(1)
+    )
+    if has_rules is not None or not loaded.auto_posting_rules:
+        return False
+
+    existing_defaults = set(
+        connection.execute(
+            select(DefaultAccount.document_type, DefaultAccount.purpose).where(
+                DefaultAccount.package_id == package_id
+            )
+        ).all()
+    )
+    missing_defaults = [
+        row
+        for row in loaded.default_accounts
+        if (row.document_type, row.purpose) not in existing_defaults
+    ]
+    if missing_defaults:
+        connection.execute(
+            insert(DefaultAccount),
+            [
+                {
+                    "package_id": package_id,
+                    "document_type": row.document_type,
+                    "purpose": row.purpose,
+                    "account_code": row.account_code,
+                }
+                for row in missing_defaults
+            ],
+        )
+    _insert_auto_posting_rules(connection, package_id, loaded)
+    logger.info(
+        "config_package.seed_auto_posting_backfilled",
+        package_code=loaded.manifest.code,
+        rules=len(loaded.auto_posting_rules),
+        default_accounts_added=len(missing_defaults),
+    )
+    return True
+
+
 def _seed_one(connection: Connection, slug: str) -> bool:
     """Gieo một gói dựng sẵn. Trả `True` nếu vừa thêm mới."""
     loaded = load_builtin_package(slug)
@@ -247,6 +326,7 @@ def _seed_one(connection: Connection, slug: str) -> bool:
             )
             return False
         _ensure_statements_backfilled(connection, existing_id, loaded)
+        _ensure_auto_posting_backfilled(connection, existing_id, loaded)
         return False
 
     package_id = _insert_package(connection, loaded)
@@ -254,6 +334,7 @@ def _seed_one(connection: Connection, slug: str) -> bool:
     _insert_default_accounts(connection, package_id, loaded)
     _insert_closing_pairs(connection, package_id, loaded)
     _insert_statements(connection, package_id, loaded)
+    _insert_auto_posting_rules(connection, package_id, loaded)
     return True
 
 

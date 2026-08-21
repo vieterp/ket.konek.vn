@@ -402,3 +402,53 @@ def test_statements_json_without_signed_checksum_is_rejected(
             select(ConfigPackage).where(ConfigPackage.code == "IMPORT-TEST-STMT-UNSIGNED")
         )
         assert package is None
+
+
+def test_signed_auto_posting_rules_csv_is_imported_with_rules(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
+) -> None:
+    """`auto_posting_rules.csv` là mục tùy chọn thứ hai (lát 6A): có mặt + có
+    checksum trong manifest đã ký → nghiệp vụ vào DB cùng transaction với gói
+    (review 6A, M14 — đường importer của tệp mới trước đó chưa từng chạy)."""
+    from ket.kernel.config.auto_posting_models import AutoPostingRule
+
+    signer = Ed25519PrivateKey.generate()
+    files = _sample_files(code="IMPORT-TEST-APR")
+    files["auto_posting_rules.csv"] = (
+        "document_type,operation_code,operation_name,debit_purpose,credit_purpose,"
+        "requires_partner,partner_kind,display_order\n"
+        "PT,thu-khac,Thu khác,cash,,0,,1\n"
+    ).encode()
+    archive_bytes = _build_zip(files, signer=signer)
+
+    with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
+        package = import_package(
+            session, archive_bytes=archive_bytes, public_keys=(signer.public_key(),)
+        )
+        rule = session.scalar(
+            select(AutoPostingRule).where(AutoPostingRule.package_id == package.id)
+        )
+        assert rule is not None
+        assert rule.operation_code == "thu-khac"
+        assert rule.debit_purpose == "cash" and rule.credit_purpose is None
+
+
+def test_a_flat_entry_outside_the_allowlist_is_rejected_even_when_signed(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
+) -> None:
+    """Chiều "thừa tệp" của allowlist (review 6A, M9): gói ĐỦ mọi tệp bắt buộc
+    và tệp thừa CÓ checksum trong manifest đã ký — lý do từ chối duy nhất còn
+    lại là cấu trúc, nên test này canh đúng `_ALLOWED_ENTRIES` chứ không đỏ
+    nhờ thiếu tệp hay thiếu chữ ký như `test_unexpected_entry_name_is_rejected`."""
+    signer = Ed25519PrivateKey.generate()
+    files = _sample_files(code="IMPORT-TEST-EXTRA-FLAT")
+    files["notes.csv"] = b"a,b\n1,2\n"
+    archive_bytes = _build_zip(files, signer=signer)
+
+    with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
+        with pytest.raises(ConfigPackageArchiveInvalidError):
+            import_package(session, archive_bytes=archive_bytes, public_keys=(signer.public_key(),))
+        package = session.scalar(
+            select(ConfigPackage).where(ConfigPackage.code == "IMPORT-TEST-EXTRA-FLAT")
+        )
+        assert package is None

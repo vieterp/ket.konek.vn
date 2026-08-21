@@ -509,3 +509,61 @@ def test_replaying_an_action_still_requires_the_view_permission(
         headers={**headers, IDEMPOTENCY_HEADER: key},
     )
     assert replay.status_code == 403, replay.text
+
+
+def test_acknowledge_warnings_reaches_the_posting_service_through_http(
+    client: TestClient, author_headers: dict[str, str], context: PostingContext
+) -> None:
+    """Dây `?acknowledge_warnings=` từ query tới `PostingService.post` (review
+    6A, M5 — mutation cắt dây này trước đó không làm test nào đỏ): lượt đầu 422
+    mang dấu `warning=1`, lượt gửi lại kèm xác nhận thì 200 và lên sổ."""
+    from collections.abc import Sequence
+
+    from ket.kernel.errors import PostingViolation
+    from ket.posting.contracts import GUARD_REGISTRY, GuardFinding, PostingGuard, Voucher
+    from ket.posting.engine.guards import GUARD_WARNING_DETAIL
+    from ket.posting.engine.prepared import PreparedLine
+
+    class _HttpProbeGuard:
+        def check(
+            self, session: Session, *, voucher: Voucher, lines: Sequence[PreparedLine]
+        ) -> Sequence[GuardFinding]:
+            return (
+                GuardFinding(
+                    violation=PostingViolation("guard.http_probe", "cảnh báo qua HTTP"),
+                    blocking=False,
+                ),
+            )
+
+    guard: PostingGuard = _HttpProbeGuard()
+    GUARD_REGISTRY.register(guard)
+    try:
+        created = _create(client, author_headers, context)
+        assert created.status_code == 201, created.text
+        voucher = created.json()
+
+        refused = client.post(
+            f"/api/v1/vouchers/{voucher['id']}/actions/post",
+            headers={**author_headers, IDEMPOTENCY_HEADER: uuid4().hex},
+        )
+        assert refused.status_code == 422, refused.text
+        violations = refused.json()["violations"]
+        assert [v["code"] for v in violations] == ["guard.http_probe"]
+        assert violations[0]["details"][GUARD_WARNING_DETAIL] == 1
+
+        acknowledged = client.post(
+            f"/api/v1/vouchers/{voucher['id']}/actions/post",
+            params={"acknowledge_warnings": "true"},
+            headers={**author_headers, IDEMPOTENCY_HEADER: uuid4().hex},
+        )
+        assert acknowledged.status_code == 200, acknowledged.text
+        assert acknowledged.json()["status"] == 2
+
+        unposted = client.post(
+            f"/api/v1/vouchers/{voucher['id']}/actions/unpost",
+            headers={**author_headers, IDEMPOTENCY_HEADER: uuid4().hex},
+        )
+        assert unposted.status_code == 200, unposted.text
+        client.delete(f"/api/v1/vouchers/{voucher['id']}", headers=author_headers)
+    finally:
+        GUARD_REGISTRY._guards.remove(guard)

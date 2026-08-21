@@ -22,7 +22,7 @@ from ket.api.routers.accounts_schemas import AccountListResponse, AccountRespons
 from ket.kernel.config.accounts_models import ChartOfAccount
 from ket.kernel.config.accounts_provider import resolve_package
 from ket.kernel.errors import DomainError
-from ket.kernel.periods.models import FiscalYear
+from ket.kernel.periods.service import fiscal_year_covering
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import MASTER_MODULE, Action, permission_code
 
@@ -63,15 +63,7 @@ def search_accounts(
     """
     lookup_date = on_date
     with unit_of_work(factory, authorized.scope) as session:
-        # ORDER BY để hai năm chồng lấn (bất biến app canh — nếu vỡ) vẫn cho
-        # kết quả xác định: lấy năm bắt đầu muộn nhất phủ ngày này.
-        year = session.execute(
-            select(FiscalYear)
-            .where(FiscalYear.start_date <= lookup_date)
-            .where(FiscalYear.end_date >= lookup_date)
-            .order_by(FiscalYear.start_date.desc())
-            .limit(1)
-        ).scalar_one_or_none()
+        year = fiscal_year_covering(session, lookup_date)
         if year is None:
             raise DomainError(
                 "Chưa có năm tài chính phủ ngày này — tạo năm tài chính trước khi tra TK",

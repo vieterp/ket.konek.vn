@@ -200,3 +200,61 @@ def test_loader_length_limits_match_orm_columns() -> None:
         loader._CLOSING_DESCRIPTION_MAX_LENGTH
         == ClosingAccountPair.__table__.c.description.type.length
     )
+
+
+# ----------------------------------------------------- auto_posting_rules.csv
+
+
+_RULES_HEADER = (
+    "document_type,operation_code,operation_name,debit_purpose,credit_purpose,"
+    "requires_partner,partner_kind,display_order\n"
+)
+
+
+def _texts_with_rules(rules_body: str) -> dict[str, str]:
+    from ket.kernel.config.packages.loader import AUTO_POSTING_RULES_FILE
+
+    return _valid_texts(**{AUTO_POSTING_RULES_FILE: _RULES_HEADER + rules_body})
+
+
+def test_auto_posting_rules_parse_with_open_sides_and_partner_hint() -> None:
+    """Ô purpose trống = cố ý để ngỏ (`None`); `partner_kind` trống = không gợi ý."""
+    loaded = load_package_from_texts(
+        _texts_with_rules(
+            "PT,thu-khac,Thu khác,cash,,0,,7\n"
+            "PT,thu-no-khach-hang,Khách hàng trả nợ,cash,cash,1,0,3\n"
+        )
+    )
+    open_sided = loaded.auto_posting_rules[0]
+    assert open_sided.debit_purpose == "cash"
+    assert open_sided.credit_purpose is None
+    assert open_sided.partner_kind is None
+    assert loaded.auto_posting_rules[1].requires_partner is True
+    assert loaded.auto_posting_rules[1].partner_kind == 0
+
+
+def test_auto_posting_rule_with_unknown_purpose_is_rejected() -> None:
+    """Purpose lạ bị chặn lúc nạp — gõ nhầm không được giả dạng "để ngỏ"."""
+    with pytest.raises(ConfigPackageDataInvalidError, match="purpose"):
+        load_package_from_texts(_texts_with_rules("PT,thu-khac,Thu khác,cash,khong_ton_tai,0,,1\n"))
+
+
+def test_duplicate_auto_posting_operation_is_rejected() -> None:
+    with pytest.raises(ConfigPackageDataInvalidError, match="khai trùng"):
+        load_package_from_texts(
+            _texts_with_rules(
+                "PT,thu-khac,Thu khác,,cash,0,,1\nPT,thu-khac,Thu khác bản hai,,cash,0,,2\n"
+            )
+        )
+
+
+def test_auto_posting_rule_with_bad_partner_kind_is_rejected() -> None:
+    with pytest.raises(ConfigPackageDataInvalidError, match="partner_kind"):
+        load_package_from_texts(_texts_with_rules("PT,thu-khac,Thu khác,,cash,0,9,1\n"))
+
+
+def test_a_package_without_the_rules_file_is_still_valid() -> None:
+    """`auto_posting_rules.csv` là tệp tùy chọn — gói nhập ngoài chỉ mang hệ
+    thống TK vẫn hợp lệ, danh sách nghiệp vụ khi đó rỗng."""
+    loaded = load_package_from_texts(_valid_texts())
+    assert loaded.auto_posting_rules == ()

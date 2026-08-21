@@ -127,6 +127,7 @@ export const en: Record<TranslationKey, string> = {
   'catalog.title.toolTypes': 'Tool types',
   'catalog.title.paymentTerms': 'Payment terms',
   'catalog.title.banks': 'Banks',
+  'catalog.title.companyBankAccounts': 'Company bank accounts',
   'catalog.title.documentTypes': 'Document types',
   'catalog.title.invoiceForms': 'Invoice forms',
   'catalog.title.timekeepingSymbols': 'Timekeeping symbols',
@@ -190,6 +191,8 @@ export const en: Record<TranslationKey, string> = {
   'catalog.field.discountPercent': 'Discount rate (%)',
   'catalog.field.shortName': 'Short name',
   'catalog.field.swiftCode': 'SWIFT code',
+  'catalog.field.currencyCode': 'Currency',
+  'catalog.field.bankBranchName': 'Bank branch',
 
   'catalog.itemNature.goods': 'Goods',
   'catalog.itemNature.finishedGoods': 'Finished goods',

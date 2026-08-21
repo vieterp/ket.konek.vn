@@ -184,6 +184,27 @@ export const CATALOGS: readonly CatalogDef[] = [
     ],
     listColumns: ['short_name'],
   },
+  {
+    // Danh mục thứ 21 (lát 6A) — TK ngân hàng CỦA DOANH NGHIỆP, khác bảng con
+    // "TK ngân hàng của đối tác" trên trang đối tác. Mã = số tài khoản.
+    slug: 'company_bank_accounts',
+    urlSegment: 'tai-khoan-ngan-hang',
+    titleKey: 'catalog.title.companyBankAccounts',
+    flags: [],
+    extraFields: [
+      {
+        key: 'bank_id',
+        labelKey: 'catalog.field.bank',
+        type: 'lookup',
+        lookupSlug: 'banks',
+        essential: true,
+      },
+      { key: 'currency_code', labelKey: 'catalog.field.currencyCode', type: 'text' },
+      { key: 'account_holder', labelKey: 'catalog.field.bankAccountHolder', type: 'text' },
+      { key: 'bank_branch', labelKey: 'catalog.field.bankBranchName', type: 'text' },
+    ],
+    listColumns: ['currency_code', 'account_holder'],
+  },
   simple('document_types', 'loai-chung-tu', 'catalog.title.documentTypes'),
   simple('invoice_forms', 'mau-so-hoa-don', 'catalog.title.invoiceForms'),
   simple('timekeeping_symbols', 'ky-hieu-cham-cong', 'catalog.title.timekeepingSymbols'),
@@ -206,7 +227,7 @@ export const CATALOG_GROUPS: readonly {
   { labelKey: 'catalog.group.assets', slugs: ['asset_types', 'tool_types'] },
   {
     labelKey: 'catalog.group.trading',
-    slugs: ['payment_terms', 'banks', 'invoice_forms', 'document_types'],
+    slugs: ['payment_terms', 'banks', 'company_bank_accounts', 'invoice_forms', 'document_types'],
   },
   {
     labelKey: 'catalog.group.payrollTax',

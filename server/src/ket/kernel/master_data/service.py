@@ -196,6 +196,60 @@ class MasterDataService[ModelT: MasterDataRow]:
         )
         return self._page(self._with_flag(statement, flag_column), limit=limit, offset=offset)
 
+    def search_page(
+        self,
+        term: str,
+        *,
+        branch_id: int | None = None,
+        flag_column: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> Page[ModelT]:
+        """Tra cứu **phẳng** theo mã/tên — trả nợ "search server-side" của lát 3D/4E.
+
+        Vì sao tồn tại cạnh `children_of`/`subtree_of`: ô tra cứu trên form
+        chứng từ (đối tác, vật tư — lưới phase 6–9) không duyệt cây, nó gõ vài
+        ký tự và cần trang đầu của **toàn danh mục** khớp chuỗi đó. Trước đây
+        client nạp trọn danh mục qua trần 200 rồi lọc tại chỗ — danh mục thứ
+        201 biến mất khỏi ô tra cứu mà không ai được báo.
+
+        Cùng luật khớp với `/accounts` (lát 4E): **tiền tố mã** hoặc **chứa
+        trong tên**, không phân biệt hoa thường, `%`/`_` được escape — người
+        dùng tra mã, không tra mẫu LIKE. Bản ghi ngừng theo dõi không trả về:
+        ô tra cứu phục vụ chứng từ mới, mà `ensure_postable` sẽ từ chối chúng.
+        Nút nhóm vẫn trả về — người dùng tìm cả nhóm để lọc; chỗ chặn "không
+        hạch toán vào nhóm" là lúc ghi, không phải lúc tìm.
+        """
+        statement = (
+            select(self._model)
+            .where(self._visible_to(branch_id))
+            .where(self._model.is_active.is_(True))
+            .order_by(self._model.code)
+        )
+        stripped = term.strip()
+        if stripped:
+            statement = statement.where(
+                self._model.code.startswith(stripped, autoescape=True)
+                | self._model.name.icontains(stripped, autoescape=True)
+            )
+        return self._page(self._with_flag(statement, flag_column), limit=limit, offset=offset)
+
+    def by_ids(self, ids: Sequence[int], *, branch_id: int | None = None) -> Page[ModelT]:
+        """Đường dựng lại (hydrate) cho form sửa — cùng vai với `ids=` của `/accounts`.
+
+        Gồm **cả** bản ghi ngừng theo dõi, cố ý: chứng từ cũ trỏ vào một đối
+        tác nay đã ngừng vẫn phải hiện được mã/tên của nó trên form. Lọc chi
+        nhánh vẫn áp — bản ghi riêng của chi nhánh khác không hiện ra chỉ vì
+        biết `id` của nó.
+        """
+        statement = (
+            select(self._model)
+            .where(self._model.id.in_(ids))
+            .where(self._visible_to(branch_id))
+            .order_by(self._model.code)
+        )
+        return self._page(statement, limit=None, offset=0)
+
     def _page(
         self, statement: Select[tuple[ModelT]], *, limit: int | None, offset: int
     ) -> Page[ModelT]:

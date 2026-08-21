@@ -1,0 +1,39 @@
+document_type,operation_code,operation_name,debit_purpose,credit_purpose,requires_partner,partner_kind,display_order
+PT,rut-tgnh-nhap-quy,Rút tiền gửi ngân hàng về nhập quỹ,cash,bank,0,,1
+PT,khach-ung-truoc,Khách hàng ứng trước tiền mua hàng,cash,ar_trade,1,0,2
+PT,thu-no-khach-hang,Khách hàng trả nợ,cash,ar_trade,1,0,3
+PT,thu-no-nhieu-khach,Thu nợ của nhiều khách hàng cùng lúc,cash,ar_trade,0,0,4
+PT,hoan-thue-gtgt,Hoàn thuế GTGT,cash,vat_input,0,,5
+PT,thu-hoan-ung,Thu hoàn ứng sau quyết toán tạm ứng,cash,employee_advance,1,2,6
+PT,thu-khac,Thu khác,cash,,0,,7
+PT,thua-quy-kiem-ke,Thừa quỹ phát hiện khi kiểm kê,cash,unexplained_surplus,0,,8
+PC,gui-tien-vao-ngan-hang,Mang tiền mặt gửi vào ngân hàng,bank,cash,0,,1
+PC,tra-truoc-ncc,Trả trước tiền hàng cho nhà cung cấp,ap_trade,cash,1,1,2
+PC,tra-no-ncc,Trả nợ nhà cung cấp,ap_trade,cash,1,1,3
+PC,tam-ung-nhan-vien,Tạm ứng cho nhân viên,employee_advance,cash,1,2,4
+PC,tra-luong,Trả lương,payroll,cash,0,,5
+PC,nop-thue-nhap-khau,Nộp thuế hàng nhập khẩu,import_tax,cash,0,,6
+PC,nop-thue-khac,Nộp các loại thuế khác,,cash,0,,7
+PC,nop-thue-tndn,Nộp thuế TNDN tạm tính,cit,cash,0,,8
+PC,nop-bao-hiem,Nộp bảo hiểm,,cash,0,,9
+PC,chi-khac,Chi khác,,cash,0,,10
+BC,khach-ung-truoc,Khách hàng ứng trước tiền mua hàng,bank,ar_trade,1,0,1
+BC,thu-no-khach-hang,Khách hàng trả nợ,bank,ar_trade,1,0,2
+BC,thu-no-nhieu-khach,Thu nợ nhiều khách hàng,bank,ar_trade,0,0,3
+BC,hoan-thue-gtgt,Hoàn thuế GTGT,bank,vat_input,0,,4
+BC,thu-hoan-ung,Thu hoàn ứng sau quyết toán tạm ứng,bank,employee_advance,1,2,5
+BC,nhan-tien-vay,Nhận tiền vay,bank,borrowings,0,,6
+BC,thu-lai-dau-tu,Thu lãi đầu tư tài chính,bank,financial_income,0,,7
+BC,thu-khac,Thu khác,bank,,0,,8
+BC,nop-tien-mat-vao-nh,Nộp tiền mặt vào ngân hàng,bank,cash,0,,9
+UNC,tra-truoc-ncc,Trả trước tiền hàng cho nhà cung cấp,ap_trade,bank,1,1,1
+UNC,tra-no-ncc,Trả nợ nhà cung cấp,ap_trade,bank,1,1,2
+UNC,tam-ung-nhan-vien,Tạm ứng cho nhân viên,employee_advance,bank,1,2,3
+UNC,tra-luong,Trả lương,payroll,bank,0,,4
+UNC,nop-thue-nhap-khau,Nộp thuế hàng nhập khẩu,import_tax,bank,0,,5
+UNC,nop-thue-khac,Nộp các loại thuế khác,,bank,0,,6
+UNC,nop-thue-tndn,Nộp thuế TNDN tạm tính,cit,bank,0,,7
+UNC,nop-bao-hiem,Nộp bảo hiểm,,bank,0,,8
+UNC,tra-tien-vay,Trả các khoản vay,borrowings,bank,0,,9
+UNC,rut-tgnh-nhap-quy,Rút tiền gửi về nhập quỹ,cash,bank,0,,10
+UNC,chi-khac,Chi khác,,bank,0,,11

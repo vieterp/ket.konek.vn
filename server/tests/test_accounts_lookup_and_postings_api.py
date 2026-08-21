@@ -477,3 +477,121 @@ class TestFiscalYears:
     def test_without_a_session_the_calendar_is_unauthorized(self, client: TestClient) -> None:
         response = client.get("/api/v1/fiscal-years")
         assert response.status_code == 401
+
+
+class TestAutoPostingOperations:
+    """`GET /api/v1/auto-posting/operations` (FR-SYS-025, lát 6A).
+
+    Gói `TT99-TEST` của `context` thắng `resolve_package` trong dataset này
+    (kích hoạt sau builtin — xem `posting_support`), nên test tự gieo nghiệp vụ
+    vào chính gói đó: nội dung phản hồi tất định, và đồng thời chứng minh
+    endpoint đọc đúng gói mà `/accounts` đang phục vụ.
+    """
+
+    @pytest.fixture
+    def seeded_operation(
+        self,
+        session_factory: sessionmaker[Session],
+        dataset_alpha: DatasetRef,
+        context: PostingContext,
+    ) -> Iterator[None]:
+        from ket.kernel.config.accounts_models import DefaultAccount
+        from ket.kernel.config.auto_posting_models import AutoPostingRule
+
+        scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+        with unit_of_work(session_factory, scope) as session:
+            default = DefaultAccount(
+                package_id=context.package_id,
+                document_type="*",
+                purpose="cash",
+                account_code="111",
+            )
+            rule = AutoPostingRule(
+                package_id=context.package_id,
+                document_type="PT",
+                operation_code="thu-khac",
+                operation_name="Thu khác",
+                debit_purpose="cash",
+                credit_purpose=None,
+                requires_partner=False,
+                partner_kind=None,
+                display_order=1,
+            )
+            session.add_all([default, rule])
+        try:
+            yield
+        finally:
+            with unit_of_work(session_factory, scope) as session:
+                for instance in (
+                    session.get(AutoPostingRule, rule.id),
+                    session.get(DefaultAccount, (context.package_id, "*", "cash")),
+                ):
+                    if instance is not None:
+                        session.delete(instance)
+
+    def test_operations_resolve_against_the_same_package_as_accounts(
+        self,
+        client: TestClient,
+        session_factory: sessionmaker[Session],
+        dataset_alpha: DatasetRef,
+        user_factory: UserFactory,
+        reader_role: str,
+        test_password: str,
+        context: PostingContext,
+        seeded_operation: None,
+    ) -> None:
+        headers = _headers(
+            client,
+            session_factory,
+            dataset_alpha,
+            user_factory,
+            reader_role,
+            "tra-nghiep-vu",
+            test_password,
+            context.branch_id,
+        )
+        response = client.get(
+            "/api/v1/auto-posting/operations",
+            params={"document_type": "PT", "on_date": MAR_1.isoformat()},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["package_id"] == context.package_id
+        thu_khac = next(item for item in body["items"] if item["operation_code"] == "thu-khac")
+        assert thu_khac["debit_account_code"] == "111"
+        assert thu_khac["credit_account_code"] is None
+
+        accounts = client.get(
+            "/api/v1/accounts",
+            params={"on_date": MAR_1.isoformat(), "search": "111"},
+            headers=headers,
+        )
+        assert accounts.json()["package_id"] == body["package_id"]
+
+    def test_without_account_view_the_operations_are_403(
+        self,
+        client: TestClient,
+        session_factory: sessionmaker[Session],
+        dataset_alpha: DatasetRef,
+        user_factory: UserFactory,
+        outsider_role: str,
+        test_password: str,
+        context: PostingContext,
+    ) -> None:
+        headers = _headers(
+            client,
+            session_factory,
+            dataset_alpha,
+            user_factory,
+            outsider_role,
+            "khong-quyen-nv",
+            test_password,
+            context.branch_id,
+        )
+        response = client.get(
+            "/api/v1/auto-posting/operations",
+            params={"document_type": "PT", "on_date": MAR_1.isoformat()},
+            headers=headers,
+        )
+        assert response.status_code == 403
