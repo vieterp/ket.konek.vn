@@ -261,6 +261,27 @@ def auto_match(session: Session, *, statement_id: UUID) -> AutoMatchOutcome:
     )
 
 
+def ensure_not_matched_to_statement(session: Session, *, voucher_id: UUID) -> None:
+    """Chặn bỏ ghi sổ chứng từ đã khớp sao kê (review 6D, H-3).
+
+    Đối xứng với chiều xóa (FK RESTRICT): dòng sao kê "đã khớp" trỏ phiếu nháp
+    làm báo cáo FR-BNK-031 câm ở CẢ HAI phía, và phiếu nháp sửa được số tiền
+    rồi ghi sổ lại — vòng qua trọn luật khớp-bằng-tuyệt-đối. Gọi từ CẢ HAI
+    cửa: hook `after_unpost` của endpoint hành động chung, và
+    `BankVoucherService.unpost` (đường dịch vụ).
+    """
+    matched = session.execute(
+        select(BankStatementLine.id)
+        .where(BankStatementLine.matched_voucher_id == voucher_id)
+        .limit(1)
+    ).first()
+    if matched is not None:
+        raise BankStatementMatchStateError(
+            "Chứng từ đã khớp với dòng sao kê — gỡ khớp ở màn đối chiếu trước khi bỏ ghi sổ",
+            voucher_id=str(voucher_id),
+        )
+
+
 def _require_line(session: Session, line_id: UUID) -> BankStatementLine:
     line = session.execute(
         select(BankStatementLine).where(BankStatementLine.id == line_id).with_for_update()

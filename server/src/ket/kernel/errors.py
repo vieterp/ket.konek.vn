@@ -1609,3 +1609,14 @@ class BankStatementMatchInvalidError(DomainError):
     từ bổ sung, không khớp cưỡng bức)."""
 
     error_code: ClassVar[str] = "bank_statement.match_invalid"
+
+
+class BankReconciliationScopeError(DomainError):
+    """Khớp tự động đòi phạm vi MỌI chi nhánh (review 6D, M-1): sao kê là dữ
+    liệu mức tài khoản (không chiều chi nhánh) còn chứng từ nằm dưới RLS chi
+    nhánh — người phạm vi hẹp chạy khớp tự động sẽ không thấy ứng viên đúng ở
+    chi nhánh khác và máy chọn nhầm ứng viên duy nhất còn nhìn thấy. Khớp TAY
+    thì không sao: người dùng chỉ chọn được chứng từ mình thấy."""
+
+    error_code: ClassVar[str] = "bank_statement.scope_insufficient"
+    http_status: ClassVar[int] = 403

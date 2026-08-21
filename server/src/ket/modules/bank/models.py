@@ -271,6 +271,15 @@ class BankStatement(DatasetBase, Audited):
     __tablename__ = "bank_statements"
     __table_args__ = (
         Index("ix_bank_statements_account_date", "bank_account_id", "statement_date"),
+        # Khóa chống nhập đúp là ràng buộc DB (review 6D, H-2) — tầng dịch vụ
+        # chỉ dịch vi phạm thành 409 đọc được, không phải người canh duy nhất.
+        Index(
+            "uq_bank_statements_account_hash",
+            "bank_account_id",
+            "content_hash",
+            unique=True,
+            postgresql_where=text("content_hash IS NOT NULL"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)

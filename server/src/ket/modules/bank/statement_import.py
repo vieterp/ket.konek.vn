@@ -24,6 +24,7 @@ from typing import IO
 from uuid import UUID
 
 from sqlalchemy import delete, func, insert, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ket.kernel.auditing.listener import record_action
@@ -151,7 +152,16 @@ def import_statement(
         imported_by=user_id,
     )
     session.add(statement)
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError as error:
+        # Lượt song song vừa commit đúng tệp này — phép kiểm trùng ở trên
+        # không thấy dòng chưa commit, unique index mới là người canh thật
+        # (review 6D, H-2); dịch thành cùng 409 với đường tuần tự.
+        raise BankStatementDuplicateError(
+            "Đúng tệp này đã nhập cho tài khoản này rồi — xóa sao kê cũ nếu muốn nhập lại",
+            content_hash=content_hash,
+        ) from error
 
     session.execute(
         insert(BankStatementLine),
@@ -206,18 +216,29 @@ def _verify_running_balance(
     tiền ↔ số dư là ca hỏng im lặng) hoặc tệp bị cắt xén — cả hai đều phải
     dừng lượt nhập chứ không ghi một sao kê tự mâu thuẫn.
 
+    Ô số dư ĐƯỢC PHÉP THƯA (review 6D, H-1): nhiều export ngân hàng thật chỉ
+    in số dư ở dòng cuối mỗi ngày. Phát sinh của các dòng không mang số dư
+    phải cộng dồn vào kỳ vọng của dòng-có-số-dư kế tiếp — bỏ qua chúng là vừa
+    từ chối tệp hợp lệ, vừa nhận tệp mất đúng chừng ấy tiền.
+
     Tệp không mang số dư (mọi `balance` là `None`) thì trả `(None, None)` —
     không bịa số 0 (docstring `BankStatement`).
     """
     running: Decimal | None = None
     opening: Decimal | None = None
+    pending = ZERO
+    """Tổng phát sinh của các dòng KHÔNG mang số dư kể từ mốc gần nhất."""
     for line in lines:
+        pending += line.amount
         if line.balance is None:
             continue
         if running is None:
-            opening = line.balance - line.amount
+            # Dư đầu sao kê = số dư mốc đầu tiên trừ MỌI phát sinh trước đó
+            # (kể cả các dòng thưa đứng trước mốc — H-1: mốc đầu không nhất
+            # thiết là dòng 1).
+            opening = line.balance - pending
         else:
-            expected = running + line.amount
+            expected = running + pending
             if line.balance != expected:
                 raise BankStatementBalanceMismatchError(
                     "Cột số dư không khớp phát sinh cộng dồn — kiểm tra hồ sơ định dạng "
@@ -227,6 +248,7 @@ def _verify_running_balance(
                     found=str(line.balance),
                 )
         running = line.balance
+        pending = ZERO
     return opening, running
 
 
@@ -245,14 +267,20 @@ def delete_statement(session: Session, *, statement_id: UUID) -> None:
     "chưa từng được đối chiếu".
     """
     statement = require_statement(session, statement_id)
-    matched = session.execute(
-        select(func.count())
-        .select_from(BankStatementLine)
-        .where(
-            BankStatementLine.statement_id == statement_id,
-            BankStatementLine.matched_voucher_id.is_not(None),
+    # Khóa TOÀN BỘ dòng trước khi đếm (review 6D, H-4): một `match_line` đang
+    # giữ FOR UPDATE chưa commit thì COUNT kiểu READ COMMITTED thấy 0 — xóa sẽ
+    # nuốt im lặng đúng dòng vừa khớp. Khóa ở đây xếp hàng sau lượt khớp, và
+    # đếm lại SAU khóa thấy sự thật đã commit.
+    locked = (
+        session.execute(
+            select(BankStatementLine)
+            .where(BankStatementLine.statement_id == statement_id)
+            .with_for_update()
         )
-    ).scalar_one()
+        .scalars()
+        .all()
+    )
+    matched = sum(1 for line in locked if line.matched_voucher_id is not None)
     if matched:
         raise BankStatementMatchStateError(
             "Sao kê còn dòng đã khớp chứng từ — gỡ khớp trước khi xóa",

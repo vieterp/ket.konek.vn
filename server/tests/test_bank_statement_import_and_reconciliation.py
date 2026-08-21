@@ -377,9 +377,20 @@ def test_auto_match_amount_date_window_reference_and_ambiguity(
         _post_payment_order(
             session, context, accounts, bank_account, amount=300_000, posting_date=date(2026, 1, 14)
         )
-        # Hai báo có 200k giống hệt — nhập nhằng, phải để lại.
+        # 500k tồn tại nhưng NGOÀI cửa sổ ±3 ngày — không được khớp (M5).
+        _post_credit_advice(
+            session, context, accounts, bank_account, amount=500_000, posting_date=date(2026, 3, 1)
+        )
+        # Hai báo có 200k cùng ngày — nhưng một mang reference trùng dòng sao
+        # kê: tiebreak phải chọn đúng nó (M6).
         _post_credit_advice(session, context, accounts, bank_account, amount=200_000)
-        _post_credit_advice(session, context, accounts, bank_account, amount=200_000)
+        with_reference = _post_credit_advice(
+            session, context, accounts, bank_account, amount=200_000, reference="FT-4"
+        )
+        with_reference_id = with_reference.id  # type: ignore[attr-defined]
+        # Hai báo có 150k giống hệt — nhập nhằng, phải để lại.
+        _post_credit_advice(session, context, accounts, bank_account, amount=150_000)
+        _post_credit_advice(session, context, accounts, bank_account, amount=150_000)
 
     with unit_of_work(session_factory, scope) as session:
         result = _import(
@@ -390,15 +401,16 @@ def test_auto_match_amount_date_window_reference_and_ambiguity(
                 [
                     ("16/01/2026", "FT-1", "khach chuyen", "", "700000", "1700000"),
                     ("16/01/2026", "FT-2", "tra ncc", "300000", "", "1400000"),
-                    ("17/01/2026", "FT-3", "khong co chung tu", "", "500000", "1900000"),
-                    ("17/01/2026", "FT-4", "hai ung vien", "", "200000", "2100000"),
+                    ("17/01/2026", "FT-3", "chung tu ngoai cua so", "", "500000", "1900000"),
+                    ("17/01/2026", "FT-4", "tiebreak reference", "", "200000", "2100000"),
+                    ("17/01/2026", "FT-5", "hai ung vien", "", "150000", "2250000"),
                 ]
             ),
             content_hash="e" * 64,
         )
         statement_id = result.statement.id  # type: ignore[attr-defined]
         outcome = auto_match(session, statement_id=statement_id)
-        assert outcome.matched == 2
+        assert outcome.matched == 3
         assert outcome.ambiguous_lines == 1
         assert outcome.unmatched_lines == 1
 
@@ -413,24 +425,28 @@ def test_auto_match_amount_date_window_reference_and_ambiguity(
         )
         assert lines[0].match_kind == StatementMatchKind.AUTO
         assert lines[1].match_kind == StatementMatchKind.AUTO
+        # 500k: ứng viên duy nhất nằm ngoài ±3 ngày — KHÔNG khớp (M5).
         assert lines[2].match_kind == StatementMatchKind.UNMATCHED
-        assert lines[3].match_kind == StatementMatchKind.UNMATCHED
+        # 200k: hai ứng viên cùng số tiền, reference phân định (M6).
+        assert lines[3].match_kind == StatementMatchKind.AUTO
+        assert lines[3].matched_voucher_id == with_reference_id
+        assert lines[4].match_kind == StatementMatchKind.UNMATCHED
 
-        # Gợi ý cho dòng nhập nhằng: đúng hai ứng viên 200k.
-        suggested = candidates_for_line(session, line_id=lines[3].id)
+        # Gợi ý cho dòng nhập nhằng: đúng hai ứng viên 150k.
+        suggested = candidates_for_line(session, line_id=lines[4].id)
         assert len(suggested) == 2
 
-        # Báo cáo lệch: dòng 500k chưa khớp + dòng 200k chưa khớp; sổ còn hai
-        # báo có 200k chưa khớp.
+        # Báo cáo lệch: dòng 500k (ứng viên ngoài cửa sổ vẫn hiện phía sổ) +
+        # dòng 150k chưa khớp; sổ còn: BC 500k + BC 200k thua tiebreak + 2×150k.
         summary = reconciliation_summary(
-            session, bank_account_id=bank_account, as_of=date(2026, 1, 31)
+            session, bank_account_id=bank_account, as_of=date(2026, 3, 31)
         )
         assert {line.id for line in summary.unmatched_statement_lines} == {
             lines[2].id,
-            lines[3].id,
+            lines[4].id,
         }
-        assert len(summary.unmatched_vouchers) == 2
-        assert summary.statement_total_unmatched_in == Decimal(700_000)
+        assert len(summary.unmatched_vouchers) == 4
+        assert summary.statement_total_unmatched_in == Decimal(650_000)
         assert summary.statement_total_unmatched_out == Decimal(0)
 
 
@@ -584,3 +600,160 @@ def test_internal_transfer_matches_on_both_statements(
             .all()
         )
         assert {line.bank_account_id for line in matched} == {bank_account, second_account}
+
+        # Hook gộp danh mục (review 6D, M11 — phải CHẠY chứ không chỉ có mặt):
+        # đúng trạng thái này — một chứng từ khớp cả hai bên — là ca nó chặn.
+        from ket.modules.bank.statement_merge import CompanyBankAccountStatementMergeHook
+
+        hook = CompanyBankAccountStatementMergeHook()
+        with pytest.raises(BankStatementMatchStateError):
+            hook.before_move(session, source_id=bank_account, target_id=second_account)
+        # Cặp không dính dáng thì đi qua.
+        hook.before_move(session, source_id=bank_account, target_id=999_999)
+
+
+def test_sparse_balance_column_verifies_and_derives_opening(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    bank_account: int,
+    profile_id: int,
+) -> None:
+    """Ô số dư THƯA (review 6D, H-1): nhiều ngân hàng chỉ in số dư dòng cuối
+    ngày. Phát sinh của dòng không mang số dư phải cộng dồn vào kỳ vọng của
+    mốc kế tiếp; dư đầu suy đúng cả khi mốc đầu tiên không phải dòng 1."""
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    # Tệp hợp lệ: dòng 1 không dư (+5.000), dòng 2 có dư sau +20.000.
+    # Dư đầu = 1.035.000 − 20.000 − 5.000 = 1.010.000.
+    with unit_of_work(session_factory, scope) as session:
+        result = _import(
+            session,
+            bank_account_id=bank_account,
+            profile_id=profile_id,
+            source=csv_of(
+                [
+                    ("15/01/2026", "SP-1", "khong in du", "", "5000", ""),
+                    ("15/01/2026", "SP-2", "cuoi ngay", "", "20000", "1035000"),
+                    ("16/01/2026", "SP-3", "khong in du", "3000", "", ""),
+                    ("17/01/2026", "SP-4", "cuoi ky", "", "8000", "1040000"),
+                ]
+            ),
+            content_hash="3" * 64,
+        )
+        statement = result.statement  # type: ignore[attr-defined]
+        assert statement.opening_balance == Decimal(1_010_000)
+        assert statement.closing_balance == Decimal(1_040_000)
+        delete_statement(session, statement_id=statement.id)
+
+    # Tệp mâu thuẫn: mất đúng phát sinh của dòng thưa — phải BỊ từ chối.
+    with pytest.raises(BankStatementBalanceMismatchError):
+        with unit_of_work(session_factory, scope) as session:
+            _import(
+                session,
+                bank_account_id=bank_account,
+                profile_id=profile_id,
+                source=csv_of(
+                    [
+                        ("15/01/2026", "SP-1", "co du", "", "10000", "1010000"),
+                        ("15/01/2026", "SP-2", "khong in du", "", "5000", ""),
+                        # 1.010.000 + 5.000 + 20.000 = 1.035.000, tệp nói 1.030.000.
+                        ("15/01/2026", "SP-3", "cuoi ngay", "", "20000", "1030000"),
+                    ]
+                ),
+                content_hash="4" * 64,
+            )
+
+
+def test_unpost_of_matched_voucher_is_refused(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    bank_account: int,
+    profile_id: int,
+) -> None:
+    """Review 6D, H-3: bỏ ghi sổ chứng từ đã khớp = dòng sao kê "đã khớp" trỏ
+    phiếu nháp, báo cáo FR-BNK-031 câm cả hai phía — chặn đối xứng với xóa."""
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        voucher = _post_credit_advice(session, context, accounts, bank_account, amount=640_000)
+        voucher_id = voucher.id  # type: ignore[attr-defined]
+        result = _import(
+            session,
+            bank_account_id=bank_account,
+            profile_id=profile_id,
+            source=csv_of([("15/01/2026", "UP-1", "se khop", "", "640000", "")]),
+            content_hash="5" * 64,
+        )
+        statement_id = result.statement.id  # type: ignore[attr-defined]
+        line_id = session.execute(
+            select(BankStatementLine.id).where(BankStatementLine.statement_id == statement_id)
+        ).scalar_one()
+        match_line(session, line_id=line_id, voucher_id=voucher_id)
+
+    with pytest.raises(BankStatementMatchStateError):
+        with unit_of_work(session_factory, scope) as session:
+            BankVoucherService(session).unpost(voucher_id, user_id=ACTOR_ID)
+
+    # Gỡ khớp xong thì bỏ ghi sổ được.
+    with unit_of_work(session_factory, scope) as session:
+        unmatch_line(session, line_id=line_id)
+        BankVoucherService(session).unpost(voucher_id, user_id=ACTOR_ID)
+        delete_statement(session, statement_id=statement_id)
+
+
+def test_delete_statement_waits_for_inflight_match_then_refuses(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    bank_account: int,
+    profile_id: int,
+) -> None:
+    """Review 6D, H-4: xóa-sao-kê khóa TOÀN BỘ dòng trước khi đếm — lượt khớp
+    đang bay commit trước, lượt xóa phải thấy dòng đã khớp và 409 thay vì nuốt
+    im lặng dòng vừa khớp."""
+    import threading
+    import time
+
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        voucher = _post_credit_advice(session, context, accounts, bank_account, amount=770_000)
+        voucher_id = voucher.id  # type: ignore[attr-defined]
+        result = _import(
+            session,
+            bank_account_id=bank_account,
+            profile_id=profile_id,
+            source=csv_of([("15/01/2026", "RC-1", "dua", "", "770000", "")]),
+            content_hash="6" * 64,
+        )
+        statement_id = result.statement.id  # type: ignore[attr-defined]
+        line_id = session.execute(
+            select(BankStatementLine.id).where(BankStatementLine.statement_id == statement_id)
+        ).scalar_one()
+
+    outcomes: list[str] = []
+
+    def deleter() -> None:
+        try:
+            with unit_of_work(session_factory, scope) as session:
+                delete_statement(session, statement_id=statement_id)
+            outcomes.append("deleted")
+        except BankStatementMatchStateError:
+            outcomes.append("refused")
+
+    with unit_of_work(session_factory, scope) as session:
+        match_line(session, line_id=line_id, voucher_id=voucher_id)
+        # Giữ transaction khớp mở trong lúc lượt xóa khởi động và kẹt ở khóa dòng.
+        thread = threading.Thread(target=deleter)
+        thread.start()
+        time.sleep(0.5)
+    thread.join()
+    assert outcomes == ["refused"]
+
+    with unit_of_work(session_factory, scope) as session:
+        line = session.get(BankStatementLine, line_id)
+        assert line is not None and line.match_kind == StatementMatchKind.MANUAL
+        # Dọn cho chi nhánh dùng chung.
+        unmatch_line(session, line_id=line_id)
+        delete_statement(session, statement_id=statement_id)

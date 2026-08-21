@@ -99,9 +99,21 @@ def upgrade() -> None:
         "bank_statements",
         sa.Column("content_hash", sa.String(length=_CONTENT_HASH_LENGTH), nullable=True),
     )
+    # Khóa chống nhập đúp phải là RÀNG BUỘC DB (review 6D, H-2): check-then-
+    # insert ở tầng dịch vụ không thấy dòng chưa commit của lượt song song —
+    # hai lượt nhập chồng nhau sẽ ra hai sao kê trùng tệp và báo cáo FR-BNK-031
+    # đếm đôi. Unique một phần vì sao kê nhập tay (tương lai) không có băm.
+    op.create_index(
+        "uq_bank_statements_account_hash",
+        "bank_statements",
+        ["bank_account_id", "content_hash"],
+        unique=True,
+        postgresql_where=sa.text("content_hash IS NOT NULL"),
+    )
 
 
 def downgrade() -> None:
+    op.drop_index("uq_bank_statements_account_hash", table_name="bank_statements")
     op.drop_column("bank_statements", "content_hash")
     op.drop_index("uq_bank_statement_lines_matched_voucher", table_name="bank_statement_lines")
     op.drop_constraint(

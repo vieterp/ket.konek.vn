@@ -121,6 +121,18 @@ def profile_id(
         return profile.id
 
 
+def _all_branch_codes(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef, context: PostingContext
+) -> list[str]:
+    """Khớp tự động đòi phạm vi MỌI chi nhánh (guard M-1) — người đối chiếu
+    của test cầm trọn danh sách chi nhánh hiện có của dataset dùng chung."""
+    from ket.kernel.security.models import Branch
+
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        return list(session.scalars(select(Branch.code)).all())
+
+
 @pytest.fixture
 def clerk_headers(
     client: TestClient,
@@ -138,6 +150,57 @@ def clerk_headers(
         user_factory,
         role,
         "stmt_clerk",
+        test_password,
+        branch_codes=_all_branch_codes(session_factory, dataset_alpha, context),
+    )
+
+
+@pytest.fixture
+def viewer_headers(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    test_password: str,
+    context: PostingContext,
+) -> dict[str, str]:
+    """Chỉ `bank.statement.view` — mọi hành động khớp phải 403 (M17)."""
+    role = ensure_role(
+        session_factory,
+        dataset_alpha,
+        "xem_sao_ke",
+        [permission_code("bank", "statement", Action.VIEW)],
+    )
+    return actor(
+        client,
+        session_factory,
+        dataset_alpha,
+        user_factory,
+        role,
+        "stmt_viewer",
+        test_password,
+        branch_codes=[context.branch_code],
+    )
+
+
+@pytest.fixture
+def narrow_clerk_headers(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    test_password: str,
+    context: PostingContext,
+) -> dict[str, str]:
+    """Đủ quyền statement nhưng chỉ MỘT chi nhánh — auto-match phải 403 (M-1)."""
+    role = ensure_role(session_factory, dataset_alpha, STATEMENT_ROLE, _statement_codes())
+    return actor(
+        client,
+        session_factory,
+        dataset_alpha,
+        user_factory,
+        role,
+        "stmt_narrow",
         test_password,
         branch_codes=[context.branch_code],
     )
@@ -274,3 +337,91 @@ def test_statement_permission_is_separate_from_voucher_permission(
         params={"bank_account_id": bank_account},
     )
     assert listing.status_code == 403
+
+
+def test_match_actions_require_edit_permission(
+    client: TestClient,
+    clerk_headers: dict[str, str],
+    viewer_headers: dict[str, str],
+    bank_account: int,
+    profile_id: int,
+) -> None:
+    """Review 6D, M17: ba endpoint khớp phải đòi `bank.statement.edit` —
+    quyền VIEW chỉ xem, đột biến hạ cổng xuống VIEW phải bị bắt ở đây."""
+    body = "Ngay GD;So CT;Dien giai;Ghi no;Ghi co\n15/01/2026;PM-1;xem thoi;;50000\n"
+    imported = _upload(
+        client, clerk_headers, bank_account_id=bank_account, profile_id=profile_id, body=body
+    )
+    assert imported.status_code == 201, imported.text  # type: ignore[attr-defined]
+    statement_id = imported.json()["statement"]["id"]  # type: ignore[attr-defined]
+    detail = client.get(f"/api/v1/bank/statements/{statement_id}", headers=viewer_headers)
+    assert detail.status_code == 200  # VIEW xem được
+    line_id = detail.json()["lines"][0]["id"]
+
+    from uuid import uuid4
+
+    assert (
+        client.post(
+            f"/api/v1/bank/statements/{statement_id}/actions/auto-match", headers=viewer_headers
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            f"/api/v1/bank/statements/lines/{line_id}/actions/match",
+            headers=viewer_headers,
+            json={"voucher_id": str(uuid4())},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            f"/api/v1/bank/statements/lines/{line_id}/actions/unmatch", headers=viewer_headers
+        ).status_code
+        == 403
+    )
+    # VIEW cũng không xóa được.
+    assert (
+        client.delete(f"/api/v1/bank/statements/{statement_id}", headers=viewer_headers).status_code
+        == 403
+    )
+    # Dọn bằng người đủ quyền.
+    assert (
+        client.delete(f"/api/v1/bank/statements/{statement_id}", headers=clerk_headers).status_code
+        == 204
+    )
+
+
+def test_auto_match_requires_full_branch_scope(
+    client: TestClient,
+    clerk_headers: dict[str, str],
+    narrow_clerk_headers: dict[str, str],
+    bank_account: int,
+    profile_id: int,
+) -> None:
+    """Review 6D, M-1: sao kê là dữ liệu mức tài khoản còn chứng từ dưới RLS
+    chi nhánh — người phạm vi hẹp chạy khớp tự động sẽ khớp nhầm tất định vào
+    ứng viên duy nhất còn nhìn thấy, nên bị chặn bằng 403 có thông điệp."""
+    body = "Ngay GD;So CT;Dien giai;Ghi no;Ghi co\n15/01/2026;SC-1;scope;;60000\n"
+    imported = _upload(
+        client, clerk_headers, bank_account_id=bank_account, profile_id=profile_id, body=body
+    )
+    assert imported.status_code == 201, imported.text  # type: ignore[attr-defined]
+    statement_id = imported.json()["statement"]["id"]  # type: ignore[attr-defined]
+
+    refused = client.post(
+        f"/api/v1/bank/statements/{statement_id}/actions/auto-match",
+        headers=narrow_clerk_headers,
+    )
+    assert refused.status_code == 403
+    assert refused.json()["error_code"] == "bank_statement.scope_insufficient"
+
+    allowed = client.post(
+        f"/api/v1/bank/statements/{statement_id}/actions/auto-match", headers=clerk_headers
+    )
+    assert allowed.status_code == 200
+
+    assert (
+        client.delete(f"/api/v1/bank/statements/{statement_id}", headers=clerk_headers).status_code
+        == 204
+    )

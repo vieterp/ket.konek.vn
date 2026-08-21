@@ -67,6 +67,15 @@ def vnd_account(
 
 
 @pytest.fixture
+def vnd_account_2(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef, context: PostingContext
+) -> tuple[int, str]:
+    code = f"OB-{context.branch_code}-VND2"
+    account_id = ensure_company_bank_account(session_factory, dataset_alpha, context, code=code)
+    return account_id, code
+
+
+@pytest.fixture
 def usd_account(
     session_factory: sessionmaker[Session], dataset_alpha: DatasetRef, context: PostingContext
 ) -> tuple[int, str]:
@@ -95,10 +104,12 @@ def test_bank_sheet_writes_kind1_rows_with_bank_account(
     dataset_alpha: DatasetRef,
     context: PostingContext,
     vnd_account: tuple[int, str],
+    vnd_account_2: tuple[int, str],
     usd_account: tuple[int, str],
     tmp_path: object,
 ) -> None:
     vnd_id, vnd_code = vnd_account
+    vnd2_id, vnd2_code = vnd_account_2
     usd_id, usd_code = usd_account
     report = run_opening_import(
         session_factory,
@@ -109,13 +120,17 @@ def test_bank_sheet_writes_kind1_rows_with_bank_account(
             {
                 BANK_SHEET: [
                     [vnd_code, "112", None, None, None, None, 800_000, None],
+                    # Cùng tiền tệ, cùng TK kế toán — khóa gộp PHẢI giữ hai
+                    # dòng theo hai TK ngân hàng (review 6D, M18: bỏ chiều
+                    # bank_account_id là gán nhầm toàn bộ cho TK đầu).
+                    [vnd2_code, "112", None, None, None, None, 300_000, None],
                     [usd_code, "112", "USD", 25_000, 100, None, 2_500_000, None],
                 ],
             }
         ),
     )
     assert report.committed, report.errors
-    assert report.rows_by_kind == {OpeningDetailKind.BANK: 2}
+    assert report.rows_by_kind == {OpeningDetailKind.BANK: 3}
 
     scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
     with unit_of_work(session_factory, scope) as session:
@@ -125,8 +140,9 @@ def test_bank_sheet_writes_kind1_rows_with_bank_account(
             if row.detail_kind == OpeningDetailKind.BANK
         ]
         by_account = {row.bank_account_id: row for row in rows}
-        assert set(by_account) == {vnd_id, usd_id}
+        assert set(by_account) == {vnd_id, vnd2_id, usd_id}
         assert by_account[vnd_id].debit == Decimal(800_000)
+        assert by_account[vnd2_id].debit == Decimal(300_000)
         assert by_account[vnd_id].currency_code == "VND"
         assert by_account[usd_id].debit_fc == Decimal(100)
         assert by_account[usd_id].debit == Decimal(2_500_000)
@@ -192,15 +208,18 @@ def test_carry_forward_splits_deposit_movement_by_bank_account(
     context: PostingContext,
     accounts: dict[str, int],
     vnd_account: tuple[int, str],
+    vnd_account_2: tuple[int, str],
     tmp_path: object,
 ) -> None:
-    """Năm nguồn: dư đầu ngân hàng 800k + báo có 700k + GLE gõ thẳng 112 100k.
+    """Năm nguồn: dư đầu ngân hàng 800k + báo có 700k + chuyển nội bộ 250k
+    sang TK thứ hai + GLE gõ thẳng 112 100k.
 
-    Năm nhận phải ra: kind 1 (đúng TK ngân hàng) = 1.500k — dư đầu cộng phát
-    sinh QUA chứng từ tiền gửi; phần GLE 100k ở lại kind 0 vì không ai biết nó
-    thuộc tài khoản nào (docstring `DepositMovementSource`).
+    Năm nhận phải ra: kind 1 TK nguồn = 800 + 700 − 250 = 1.250k; kind 1 TK
+    đích = 250k (CTNB quy chủ theo CHIỀU dòng — review 6D, M9); phần GLE 100k
+    ở lại kind 0 vì không ai biết nó thuộc tài khoản nào.
     """
     vnd_id, vnd_code = vnd_account
+    vnd2_id, _vnd2_code = vnd_account_2
     report = run_opening_import(
         session_factory,
         dataset_alpha,
@@ -235,6 +254,29 @@ def test_carry_forward_splits_deposit_movement_by_bank_account(
             user_id=ACTOR_ID,
         )
         bank_service.post(voucher.id, user_id=ACTOR_ID)
+        transfer = bank_service.create(
+            BankVoucherIn(
+                kind=BankVoucherKind.INTERNAL_TRANSFER,
+                operation_code=None,
+                bank_account_id=vnd_id,
+                counter_bank_account_id=vnd2_id,
+                branch_id=context.branch_id,
+                document_date=JAN_15,
+                posting_date=JAN_15,
+                currency_code="VND",
+                exchange_rate=Decimal(1),
+                description="chuyển nội bộ carry-forward",
+                lines=(
+                    BankVoucherLineIn(
+                        debit_account_id=accounts["112"],
+                        credit_account_id=accounts["112"],
+                        amount_fc=Decimal(250_000),
+                    ),
+                ),
+            ),
+            user_id=ACTOR_ID,
+        )
+        bank_service.post(transfer.id, user_id=ACTOR_ID)
 
         journal = JournalVoucherService(session)
         gle = journal.create(
@@ -272,8 +314,10 @@ def test_carry_forward_splits_deposit_movement_by_bank_account(
             .all()
         )
         by_kind = {(row.detail_kind, row.bank_account_id): row for row in rows}
-        bank_row = by_kind[(OpeningDetailKind.BANK, vnd_id)]
-        assert bank_row.debit == Decimal(1_500_000)
+        source_row = by_kind[(OpeningDetailKind.BANK, vnd_id)]
+        assert source_row.debit == Decimal(1_250_000)
+        target_row = by_kind[(OpeningDetailKind.BANK, vnd2_id)]
+        assert target_row.debit == Decimal(250_000)
         plain_row = by_kind[(OpeningDetailKind.ACCOUNT, None)]
         assert plain_row.debit == Decimal(100_000)
 

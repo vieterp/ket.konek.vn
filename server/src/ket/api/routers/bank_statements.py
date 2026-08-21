@@ -22,7 +22,7 @@ from typing import Annotated, Final
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ket.api.dependencies import (
     AppSettings,
@@ -42,8 +42,12 @@ from ket.api.routers.bank_statements_schemas import (
     ReconciliationResponse,
 )
 from ket.kernel.attachments import storage
-from ket.kernel.errors import AttachmentStorageNotConfiguredError
+from ket.kernel.errors import (
+    AttachmentStorageNotConfiguredError,
+    BankReconciliationScopeError,
+)
 from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.security.models import Branch
 from ket.kernel.security.permissions import Action, permission_code
 from ket.modules.bank import BANK_PERMISSION_MODULE, STATEMENT_PERMISSION_CODE
 from ket.modules.bank.models import BankStatement, BankStatementLine
@@ -183,8 +187,22 @@ def auto_match_statement(
     statement_id: UUID, authorized: StatementMatcher, factory: SessionFactory
 ) -> AutoMatchResponse:
     """Khớp tự động (FR-BNK-030): cùng chiều + cùng số tiền + ngày ±3, ưu tiên
-    trùng số tham chiếu; ứng viên nhập nhằng để lại cho khớp tay."""
+    trùng số tham chiếu; ứng viên nhập nhằng để lại cho khớp tay.
+
+    Đòi phạm vi MỌI chi nhánh (review 6D, M-1): ứng viên là chứng từ dưới RLS
+    chi nhánh, còn sao kê là dữ liệu mức tài khoản — phạm vi hẹp làm máy không
+    thấy ứng viên đúng và khớp nhầm ứng viên duy nhất còn lại một cách tất
+    định. Khớp TAY không bị chặn: người dùng chỉ chọn được thứ mình thấy.
+    """
     with unit_of_work(factory, authorized.scope) as session:
+        total_branches = session.execute(select(func.count()).select_from(Branch)).scalar_one()
+        if len(set(authorized.scope.branch_ids)) < total_branches:
+            raise BankReconciliationScopeError(
+                "Khớp tự động cần quyền trên mọi chi nhánh — dùng khớp tay, hoặc nhờ "
+                "người có phạm vi toàn đơn vị chạy",
+                branches_visible=len(set(authorized.scope.branch_ids)),
+                branches_total=int(total_branches),
+            )
         outcome = auto_match(session, statement_id=statement_id)
         return AutoMatchResponse.from_outcome(outcome)
 

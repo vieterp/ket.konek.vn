@@ -94,8 +94,12 @@ def _after_post(session: Session, voucher_id: UUID, user_id: int) -> None:
 
 
 def _after_unpost(session: Session, voucher_id: UUID, user_id: int) -> None:
+    from ket.modules.bank.reconciliation import ensure_not_matched_to_statement
     from ket.modules.bank.settlement_service import revert_settlements
 
+    # H-3 review 6D: chứng từ đã khớp sao kê không bỏ ghi sổ được — hook chạy
+    # cùng transaction với unpost nên ném ở đây là hủy cả lượt.
+    ensure_not_matched_to_statement(session, voucher_id=voucher_id)
     revert_settlements(session, voucher_id=voucher_id)
 
 
