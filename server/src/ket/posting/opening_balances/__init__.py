@@ -7,7 +7,10 @@ hai thứ, cùng khuôn với `posting/balances/__init__.py`:
   `posting.opening_balance.create` (ghi từ tệp đã kiểm, chuyển số dư năm sau)
   — phải có mặt trước khi `provision_dataset` gieo bảng `permissions`;
 * bốn loại job (kiểm tệp, ghi tệp, chuyển năm, xóa nhóm) vào registry hàng đợi
-  — worker và API cùng nhìn thấy chúng.
+  — worker và API cùng nhìn thấy chúng;
+* (lát 6B) nguồn công nợ số dư ban đầu vào `kernel.protocols.PROVIDERS` —
+  `ReceivableProvider`/`PayableProvider`/`SettlementTargetSource` cho đối trừ
+  của phiếu thu/chi tiền.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from ket.kernel.security.permissions import (
 from ket.posting.opening_balances import carry_forward_job as carry_forward_job
 from ket.posting.opening_balances import clear_job as clear_job
 from ket.posting.opening_balances import import_job as import_job
+from ket.posting.opening_balances import settlement_source as settlement_source
 
 PERMISSION_REGISTRY.register(
     DocumentType(

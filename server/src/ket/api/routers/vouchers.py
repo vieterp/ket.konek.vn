@@ -218,15 +218,23 @@ def _run_action(
         voucher, document_type = _document_type_of(session, voucher_id)
         authorized.access.require(document_type.permission(action))
         posting = PostingService(session)
+        user_id = authorized.scope.user_id
+        # Hook vòng đời của module chạy trong CÙNG transaction với hành động
+        # (đối trừ công nợ của phiếu thu/chi sống chết cùng lượt ghi sổ) —
+        # xem docstring `PostingDocumentType`.
         if action is Action.POST:
             request = document_type.build_request(session, voucher_id)
             voucher = posting.post(
                 request,
-                user_id=authorized.scope.user_id,
+                user_id=user_id,
                 acknowledged_warnings=acknowledge_warnings,
             )
+            if document_type.after_post is not None:
+                document_type.after_post(session, voucher_id, user_id)
         else:
-            voucher = posting.unpost(voucher_id, user_id=authorized.scope.user_id)
+            voucher = posting.unpost(voucher_id, user_id=user_id)
+            if document_type.after_unpost is not None:
+                document_type.after_unpost(session, voucher_id, user_id)
         return VoucherResponse.model_validate(voucher), IdempotentRef(
             result_type=Voucher.__tablename__, result_id=str(voucher.id)
         )
@@ -321,4 +329,6 @@ def delete_voucher(
     with unit_of_work(factory, authorized.scope) as session:
         _, document_type = _document_type_of(session, voucher_id)
         authorized.access.require(document_type.permission(Action.DELETE))
+        if document_type.before_delete is not None:
+            document_type.before_delete(session, voucher_id, authorized.scope.user_id)
         VoucherService(session).delete(voucher_id)

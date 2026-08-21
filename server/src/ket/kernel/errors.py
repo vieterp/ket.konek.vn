@@ -1479,3 +1479,28 @@ class PrintNotAllowedError(DomainError):
 
     error_code: ClassVar[str] = "print.not_allowed"
     http_status: ClassVar[int] = 409
+
+
+class CountSheetInvalidError(DomainError):
+    """Biên bản kiểm kê quỹ không hợp lệ (FR-QUY-030): tổng theo mệnh giá lệch
+    số đếm, TK không phải tiền mặt, hoặc chưa có năm tài chính phủ ngày kiểm."""
+
+    error_code: ClassVar[str] = "count_sheet.invalid"
+
+
+class CountSheetNotFoundError(DomainError):
+    """Không tìm thấy biên bản kiểm kê quỹ."""
+
+    error_code: ClassVar[str] = "count_sheet.not_found"
+    http_status: ClassVar[int] = 404
+
+
+class CountSheetAdjustmentError(DomainError):
+    """Không sinh được phiếu xử lý chênh lệch (FR-QUY-031): không có chênh
+    lệch, đã xử lý rồi, hoặc gói cấu hình thiếu nghiệp vụ/TK xử lý.
+
+    409 chứ không 422: yêu cầu hợp lệ, trạng thái hiện tại (hoặc cấu hình gói)
+    không cho phép — cùng lập luận `MasterDataInUseError`."""
+
+    error_code: ClassVar[str] = "count_sheet.adjustment_conflict"
+    http_status: ClassVar[int] = 409

@@ -59,8 +59,16 @@ class JournalVoucherService:
         self._vouchers = VoucherService(session)
         self._posting = PostingService(session)
 
-    def create(self, payload: JournalVoucherIn, *, user_id: int) -> Voucher:
-        """Cất; nếu tùy chọn FR-SYS-061 bật thì ghi sổ luôn trong cùng transaction."""
+    def create(
+        self, payload: JournalVoucherIn, *, user_id: int, acknowledged_warnings: bool = False
+    ) -> Voucher:
+        """Cất; nếu tùy chọn FR-SYS-061 bật thì ghi sổ luôn trong cùng transaction.
+
+        `acknowledged_warnings` đi tiếp vào lượt ghi sổ đi kèm đó (nợ 6A): từ
+        khi guard đầu tiên đăng ký (CashBalanceGuard soi cả chứng từ GLE chạm
+        111x), đường "Cất đồng thời ghi sổ" cũng phải mang được xác nhận của
+        người dùng — không thì cảnh báo mức "Cảnh báo" chặn vĩnh viễn đường này.
+        """
         self._verify_client_amounts(payload, user_id=user_id)
         voucher = self._vouchers.create(
             VoucherDraft(
@@ -81,7 +89,7 @@ class JournalVoucherService:
 
         save_also_posts = value_of(self._session, key=SAVE_ALSO_POSTS_KEY, user_id=user_id)
         if save_also_posts is True:
-            self.post(voucher.id, user_id=user_id)
+            self.post(voucher.id, user_id=user_id, acknowledged_warnings=acknowledged_warnings)
         return voucher
 
     def update(
@@ -135,9 +143,15 @@ class JournalVoucherService:
         self._write_lines(voucher, payload)
         return voucher
 
-    def post(self, voucher_id: UUID, *, user_id: int) -> Voucher:
+    def post(
+        self, voucher_id: UUID, *, user_id: int, acknowledged_warnings: bool = False
+    ) -> Voucher:
         lines = self._lines_of(voucher_id)
-        return self._posting.post(to_posting_request(voucher_id, lines), user_id=user_id)
+        return self._posting.post(
+            to_posting_request(voucher_id, lines),
+            user_id=user_id,
+            acknowledged_warnings=acknowledged_warnings,
+        )
 
     def unpost(self, voucher_id: UUID, *, user_id: int) -> Voucher:
         return self._posting.unpost(voucher_id, user_id=user_id)

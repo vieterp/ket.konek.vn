@@ -26,6 +26,7 @@ from sqlalchemy import (
     Numeric,
     SmallInteger,
     String,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -172,6 +173,8 @@ class OpeningBalanceInvoice(DatasetBase, Audited):
         CheckConstraint("amount >= 0 AND amount_fc >= 0", name="amounts_not_negative"),
         CheckConstraint("paid_amount >= 0", name="paid_not_negative"),
         CheckConstraint("paid_amount <= amount", name="paid_within_amount"),
+        CheckConstraint("paid_amount_fc >= 0", name="paid_fc_not_negative"),
+        CheckConstraint("paid_amount_fc <= amount_fc", name="paid_fc_within_amount"),
         Index("ix_opening_balance_invoices_parent", "opening_balance_id"),
     )
 
@@ -195,3 +198,16 @@ class OpeningBalanceInvoice(DatasetBase, Audited):
     paid_amount: Mapped[Decimal] = mapped_column(
         Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False, default=Decimal(0)
     )
+    """VND đã trả, theo tỷ giá **ghi nhận nợ** của dòng cha — phần giá trị sổ
+    đã giải phóng, không phải VND thực nhận (chênh hai tỷ giá đi vào 515/635,
+    FR-SYS-066)."""
+
+    paid_amount_fc: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE),
+        nullable=False,
+        default=Decimal(0),
+        server_default=text("0"),
+    )
+    """Nguyên tệ đã trả — trục của đối trừ (lát 6B): `remaining_fc = amount_fc
+    - paid_amount_fc`. Không suy được từ `paid_amount` vì phép chia ngược qua
+    tỷ giá không hoàn lại đúng số đã làm tròn."""

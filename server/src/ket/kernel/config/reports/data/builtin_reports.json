@@ -1,5 +1,5 @@
 {
-  "__doc__": "Báo cáo dựng sẵn. 4 dataset phủ 8 báo cáo bộ sổ đầu tiên (trần ≤5 dataset cho 10 báo cáo — phase-05 §Chiến lược quy mô). Mã definition = đúng mã mẫu thông tư (quyết định 5D, đóng câu hỏi mở #1 của 5C): TT99 Phụ lục III đối chiếu Công báo 1575+1576 (S03a/S03b/S38/S06-DN); TT133 Phụ lục 4 đối chiếu toàn văn thông tư (S03a/S03b/S19-DNN, F01-DNN Điều 83) — chờ kế toán trưởng duyệt cùng gói TT133. `package_scheme` gắn definition vào gói cấu hình builtin cùng scheme lúc gieo. Layout dùng chung giữa hai thông tư khi biểu mẫu trùng cột; nhãn cột dùng chữ 'kỳ' thay 'tháng/năm' vì bộ tham số là khoảng ngày tự do (Điều 12 k2 TT99 cho phép, ghi trong Quy chế hạch toán kèm phần mềm).",
+  "__doc__": "Báo cáo dựng sẵn. 4 dataset phủ 8 báo cáo bộ sổ đầu tiên (trần ≤5 dataset cho 10 báo cáo — phase-05 §Chiến lược quy mô); lát 6B thêm dataset thứ 5 `cash_forecast` (Dự báo dòng tiền FR-QUY-032, bước 11 phase-06 — dự báo là một dataset báo cáo, không màn hình riêng; scheme-agnostic nên `package_scheme` null). Mã definition = đúng mã mẫu thông tư (quyết định 5D, đóng câu hỏi mở #1 của 5C): TT99 Phụ lục III đối chiếu Công báo 1575+1576 (S03a/S03b/S38/S06-DN); TT133 Phụ lục 4 đối chiếu toàn văn thông tư (S03a/S03b/S19-DNN, F01-DNN Điều 83) — chờ kế toán trưởng duyệt cùng gói TT133. `package_scheme` gắn definition vào gói cấu hình builtin cùng scheme lúc gieo. Layout dùng chung giữa hai thông tư khi biểu mẫu trùng cột; nhãn cột dùng chữ 'kỳ' thay 'tháng/năm' vì bộ tham số là khoảng ngày tự do (Điều 12 k2 TT99 cho phép, ghi trong Quy chế hạch toán kèm phần mềm).",
   "datasets": [
     {
       "code": "gl_ledger",
@@ -32,6 +32,14 @@
       "supports_branch": false,
       "supports_ledger": false,
       "description": "Bảng cân đối số phát sinh: dư đầu/phát sinh/dư cuối tách hai bên theo tài khoản (S06/F01)"
+    },
+    {
+      "code": "cash_forecast",
+      "sql_file": "cash_forecast.sql",
+      "allowed_params": ["from_date", "to_date", "ledger", "branch_ids"],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Dự báo dòng tiền: công nợ phải thu/phải trả còn nợ theo hạn thanh toán (FR-QUY-032)"
     }
   ],
   "param_sets": [
@@ -64,7 +72,8 @@
         ]
       }
     },
-    { "code": "trial_balance_params", "spec": { "params": [] } }
+    { "code": "trial_balance_params", "spec": { "params": [] } },
+    { "code": "cash_forecast_params", "spec": { "params": [] } }
   ],
   "layouts": [
     {
@@ -153,6 +162,27 @@
           "closing_credit"
         ],
         "sort": ["account_code"],
+        "page": { "orientation": "landscape" }
+      }
+    },
+    {
+      "code": "cash-forecast",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          { "key": "direction", "label": "Dòng", "label_en": "Direction", "type": "text", "align": "center", "width": 6 },
+          { "key": "partner_code", "label": "Mã đối tác", "label_en": "Partner code", "type": "text", "width": 10 },
+          { "key": "partner_name", "label": "Tên đối tác", "label_en": "Partner name", "type": "text" },
+          { "key": "invoice_no", "label": "Số chứng từ", "label_en": "Invoice no.", "type": "text", "width": 10 },
+          { "key": "invoice_date", "label": "Ngày chứng từ", "label_en": "Invoice date", "type": "date", "width": 9 },
+          { "key": "due_date", "label": "Hạn thanh toán", "label_en": "Due date", "type": "date", "width": 9 },
+          { "key": "bucket", "label": "Mốc", "label_en": "Bucket", "type": "text", "align": "center", "width": 8 },
+          { "key": "currency_code", "label": "Loại tiền", "label_en": "Currency", "type": "text", "align": "center", "width": 6 },
+          { "key": "remaining_fc", "label": "Còn nợ nguyên tệ", "label_en": "Remaining (FC)", "type": "money", "width": 12 },
+          { "key": "remaining", "label": "Còn nợ quy đổi", "label_en": "Remaining (VND)", "type": "money", "width": 12 }
+        ],
+        "totals": ["remaining"],
+        "sort": ["direction", "due_date"],
         "page": { "orientation": "landscape" }
       }
     }
@@ -253,6 +283,18 @@
       "param_set_code": "trial_balance_params",
       "ledger_scope": "both",
       "package_scheme": "TT133"
+    },
+    {
+      "code": "du-bao-dong-tien",
+      "name": "Dự báo dòng tiền",
+      "name_en": "Cash flow forecast",
+      "category": "quy-tien-mat",
+      "module": "cash_book",
+      "dataset_code": "cash_forecast",
+      "layout_code": "cash-forecast",
+      "param_set_code": "cash_forecast_params",
+      "ledger_scope": "both",
+      "package_scheme": null
     }
   ]
 }

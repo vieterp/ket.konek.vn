@@ -53,6 +53,7 @@ from ket.api.routers.attachments import ATTACHMENTS_PREFIX
 from ket.api.routers.attachments import router as attachments_router
 from ket.api.routers.auth import router as auth_router
 from ket.api.routers.auto_posting import router as auto_posting_router
+from ket.api.routers.cash_book import router as cash_book_router
 from ket.api.routers.config_packages import CONFIG_PACKAGES_PREFIX
 from ket.api.routers.config_packages import router as config_packages_router
 from ket.api.routers.dimensions import router as dimensions_router
@@ -275,6 +276,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auto_posting_router)
     app.include_router(fiscal_years_router)
     app.include_router(gl_journal_router)
+    app.include_router(cash_book_router)
     app.include_router(vouchers_router)
     app.include_router(ledger_router)
     app.include_router(opening_balances_router)

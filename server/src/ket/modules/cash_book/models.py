@@ -58,6 +58,8 @@ from ket.kernel.persistence.base import DatasetBase
 from ket.kernel.protocols import SettlementTargetKind
 from ket.posting.contracts import AMOUNT_PRECISION, AMOUNT_SCALE
 
+NOTE_MAX_LENGTH = 500
+
 DESCRIPTION_MAX_LENGTH = 500
 PAYER_RECEIVER_MAX_LENGTH = 255
 
@@ -268,3 +270,72 @@ class CashSettlement(DatasetBase, Audited):
     """Chênh lệch tỷ giá thu/trả tiền, VND, có dấu: dương = lãi tỷ giá.
     `settlement_service` (6B) tính = `amount_fc × (tỷ giá phiếu − tỷ giá ghi
     nhận nợ)` và hạch toán vào TK cấu hình (FR-SYS-066)."""
+
+
+class CashCountSheet(DatasetBase, Audited):
+    """Biên bản kiểm kê quỹ (FR-QUY-030/031) — đối chiếu đếm thật với số sổ.
+
+    `book_balance` là **ảnh chụp** số sổ tại lúc lập biên bản: số sổ đổi theo
+    từng chứng từ ghi thêm, mà biên bản kiểm kê là chứng cứ của MỘT thời điểm —
+    tính lại sau này ra số khác là đúng, và chính vì thế phải chụp.
+
+    `counted_total` là số đếm thật do người kiểm kê chịu trách nhiệm; các dòng
+    mệnh giá là chi tiết **tùy chọn** (đơn vị đếm nhanh chỉ ghi tổng) — khi có
+    dòng, service bắt tổng dòng khớp `counted_total` lúc ghi.
+    """
+
+    __tablename__ = "cash_count_sheets"
+    __table_args__ = (
+        CheckConstraint("counted_total >= 0", name="counted_total_not_negative"),
+        Index("ix_cash_count_sheets_account_date", "cash_account_id", "count_date"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
+    branch_id: Mapped[int] = mapped_column(
+        ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False
+    )
+    cash_account_id: Mapped[int] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False
+    )
+    count_date: Mapped[date] = mapped_column(Date, nullable=False)
+
+    book_balance: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False
+    )
+    counted_total: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False
+    )
+    note: Mapped[str | None] = mapped_column(String(NOTE_MAX_LENGTH), nullable=True)
+
+    adjustment_voucher_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True
+    )
+    """Phiếu thu/chi xử lý chênh lệch đã sinh từ biên bản này (FR-QUY-031).
+    `SET NULL` khi phiếu bị xóa lúc còn nháp — biên bản quay về trạng thái
+    "chưa xử lý", sinh lại được."""
+
+    created_by: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+
+class CashCountSheetLine(DatasetBase, Audited):
+    """Một dòng mệnh giá của biên bản kiểm kê: mệnh giá × số tờ."""
+
+    __tablename__ = "cash_count_sheet_lines"
+    __table_args__ = (
+        CheckConstraint("denomination > 0", name="denomination_positive"),
+        CheckConstraint("quantity > 0", name="quantity_positive"),
+        Index("ix_cash_count_sheet_lines_sheet", "sheet_id", "line_no"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
+    sheet_id: Mapped[UUID] = mapped_column(
+        ForeignKey("cash_count_sheets.id", ondelete="CASCADE"), nullable=False
+    )
+    line_no: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    denomination: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
