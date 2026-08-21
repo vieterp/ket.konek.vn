@@ -68,6 +68,7 @@ class ParsedOpeningRow:
     row: int
     account_code: str
     partner_code: str | None
+    bank_account_code: str | None
     currency_code: str
     exchange_rate: Decimal
     invoice_no: str | None
@@ -247,6 +248,7 @@ def _parse_sheet(
 ) -> list[ParsedOpeningRow]:
     sheet = descriptor.sheet_name
     partner_column = descriptor.column("partner_code") or descriptor.column("employee_code")
+    bank_account_column = descriptor.column("bank_account_code")
     invoice_no_column = descriptor.column("invoice_no")
     invoice_date_column = descriptor.column("invoice_date")
     due_date_column = descriptor.column("due_date")
@@ -279,6 +281,19 @@ def _parse_sheet(
                 column=partner_column.display_header,
                 code="opening.required",
                 message=f"Thiếu {partner_column.header.lower()}",
+            )
+        bank_account_code = (
+            values.get(bank_account_column.field) if bank_account_column is not None else None
+        )
+        if bank_account_column is not None and bank_account_code is None:
+            _row_error(
+                report,
+                failed,
+                sheet=sheet,
+                row=row_no,
+                column=bank_account_column.display_header,
+                code="opening.required",
+                message="Thiếu số tài khoản ngân hàng",
             )
 
         debit_fc = _decimal_of(
@@ -441,6 +456,7 @@ def _parse_sheet(
             row=row_no,
             account_code=account_code or "",
             partner_code=partner_code,
+            bank_account_code=bank_account_code,
             currency_code=currency,
             exchange_rate=exchange_rate,
             invoice_no=invoice_no,

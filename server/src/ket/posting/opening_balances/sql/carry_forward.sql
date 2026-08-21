@@ -3,6 +3,11 @@
 --
 -- Tham số:
 --   :source_fiscal_year_id, :target_fiscal_year_id, :ledger, :branch_id
+-- Chỗ trống bank_movements_rows (khuôn str.format — chỉ MỘT chỗ, trong thân
+-- CTE bank_movements): job điền một dãy VALUES tham-số-hóa (hoặc SELECT-rỗng
+-- khi không có gì) TRƯỚC khi chạy — KHÔNG phải bảng tạm, vì TEMPORARY đã bị
+-- thu hồi khỏi role app/worker (roles.sql, chống che audit_log bằng pg_temp)
+-- và mọi giá trị vẫn đi qua bound parameter.
 --
 -- Số cuối năm tính THẲNG từ nguồn sự thật: số dư ban đầu năm nguồn cộng mọi
 -- phát sinh `gl_postings` của các kỳ năm nguồn — không đọc snapshot
@@ -10,14 +15,22 @@
 -- bẩn. Gộp theo TRỌN bộ chiều để "giữ nguyên chi tiết" (FR-OPB-010): đối
 -- tượng công nợ, và cả các chiều 5 cột cố định mà chứng từ đã ghi.
 --
--- detail_kind của dòng sinh ra suy từ partner_kind (khách 2, NCC 3, nhân viên
--- 4, còn lại 0). CẢNH BÁO PHASE 8: nhóm 5–9 (tồn kho, dở dang, CCDC, TSCĐ,
--- trả trước) bị LOẠI ở nhánh opening_balances (detail_kind 0–4) và phát sinh
--- mang item_id/warehouse_id sẽ rơi về nhóm 0 — phase 8 phải mở rộng câu này
--- (lớp FIFO còn lại, thẻ tài sản) trước khi bật kho/tài sản, nếu không tổng
--- chuyển sang năm sau thiếu đúng phần tồn kho. CẢNH BÁO PHASE 6: CASE dưới
--- không bao giờ sinh nhóm BANK (kind 1) — khi module ngân hàng thêm danh mục
--- tài khoản ngân hàng, câu này phải học cách giữ nhóm 1 qua năm.
+-- Chiều TK NGÂN HÀNG (kind 1, lát 6D): `gl_postings` không mang nó (nó sống
+-- trên thân chứng từ của module bank), nên job hỏi `DepositMovementSource`
+-- (kernel Protocol, module bank cài) rồi đổ vào `carry_bank_movements`. Câu
+-- này cộng mỗi con số ấy vào xô (TK, TK ngân hàng, tiền tệ) và trừ đúng chừng
+-- ấy khỏi xô không-gắn-TK-ngân-hàng — tổng chuyển năm không đổi, chỉ được
+-- chia đúng chỗ. Phát sinh 112x KHÔNG qua chứng từ tiền gửi (bút toán GLE gõ
+-- thẳng) ở lại xô không gắn (kind 0): không ai biết nó thuộc tài khoản nào,
+-- và bịa một tài khoản sẽ làm BR-BNK-01 "khớp" trên một con số dối.
+--
+-- detail_kind của dòng sinh ra: có bank_account_id → 1; còn lại suy từ
+-- partner_kind (khách 2, NCC 3, nhân viên 4, còn lại 0). CẢNH BÁO PHASE 8:
+-- nhóm 5–9 (tồn kho, dở dang, CCDC, TSCĐ, trả trước) bị LOẠI ở nhánh
+-- opening_balances (detail_kind 0–4) và phát sinh mang item_id/warehouse_id
+-- sẽ rơi về nhóm 0 — phase 8 phải mở rộng câu này (lớp FIFO còn lại, thẻ tài
+-- sản) trước khi bật kho/tài sản, nếu không tổng chuyển sang năm sau thiếu
+-- đúng phần tồn kho.
 --
 -- Tỷ giá của dòng mới là tỷ giá BÌNH QUÂN suy ra (quy đổi ÷ nguyên tệ) vì các
 -- dòng nguồn khác tỷ giá đã gộp làm một; hai cột số tiền mới là sự thật, tỷ
@@ -35,15 +48,18 @@ WITH source_periods AS (
     SELECT id FROM accounting_periods
     WHERE fiscal_year_id = :source_fiscal_year_id
 ),
+bank_movements(account_id, bank_account_id, currency_code, net_fc, net) AS (
+    {bank_movements_rows}
+),
 combined AS (
-    SELECT account_id, currency_code,
+    SELECT account_id, currency_code, bank_account_id,
            partner_id, partner_kind, cost_object_id, project_id, order_id,
            contract_id, expense_item_id, item_id, warehouse_id, lot_id,
            SUM(debit)    - SUM(credit)    AS net,
            SUM(debit_fc) - SUM(credit_fc) AS net_fc
     FROM (
-        SELECT account_id, currency_code, partner_id, partner_kind,
-               cost_object_id, project_id, order_id, contract_id,
+        SELECT account_id, currency_code, bank_account_id, partner_id,
+               partner_kind, cost_object_id, project_id, order_id, contract_id,
                expense_item_id, item_id, warehouse_id, lot_id,
                debit, credit, debit_fc, credit_fc
         FROM opening_balances
@@ -52,7 +68,7 @@ combined AS (
           AND branch_id = :branch_id
           AND detail_kind BETWEEN 0 AND 4
         UNION ALL
-        SELECT account_id, currency_code, partner_id, partner_kind,
+        SELECT account_id, currency_code, NULL, partner_id, partner_kind,
                cost_object_id, project_id, order_id, contract_id,
                expense_item_id, item_id, warehouse_id, NULL,
                debit, credit, debit_fc, credit_fc
@@ -60,15 +76,28 @@ combined AS (
         WHERE ledger = :ledger
           AND branch_id = :branch_id
           AND period_id IN (SELECT id FROM source_periods)
+        UNION ALL
+        -- Cộng phát sinh tiền gửi vào xô của TK ngân hàng… (net âm hợp lệ:
+        -- đây là dòng trung gian, SUM ở trên mới là con số thật)
+        SELECT account_id, currency_code, bank_account_id, NULL, NULL,
+               NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+               net, 0, net_fc, 0
+        FROM bank_movements
+        UNION ALL
+        -- …và trừ đúng chừng ấy khỏi xô không gắn TK ngân hàng.
+        SELECT account_id, currency_code, NULL, NULL, NULL,
+               NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+               0, net, 0, net_fc
+        FROM bank_movements
     ) united
-    GROUP BY account_id, currency_code, partner_id, partner_kind,
-             cost_object_id, project_id, order_id, contract_id,
+    GROUP BY account_id, currency_code, bank_account_id, partner_id,
+             partner_kind, cost_object_id, project_id, order_id, contract_id,
              expense_item_id, item_id, warehouse_id, lot_id
 )
 INSERT INTO opening_balances (
     fiscal_year_id, ledger, branch_id, account_id, currency_code, exchange_rate,
-    partner_id, partner_kind, cost_object_id, project_id, order_id, contract_id,
-    expense_item_id, item_id, warehouse_id, lot_id,
+    partner_id, partner_kind, bank_account_id, cost_object_id, project_id,
+    order_id, contract_id, expense_item_id, item_id, warehouse_id, lot_id,
     debit_fc, credit_fc, debit, credit, detail_kind
 )
 SELECT :target_fiscal_year_id,
@@ -81,12 +110,15 @@ SELECT :target_fiscal_year_id,
                THEN LEAST(GREATEST(ROUND(net / net_fc, 6), 0.000001), 999999999999.999999)
            ELSE 1
        END,
-       partner_id, partner_kind, cost_object_id, project_id, order_id,
-       contract_id, expense_item_id, item_id, warehouse_id, lot_id,
+       partner_id, partner_kind, bank_account_id, cost_object_id, project_id,
+       order_id, contract_id, expense_item_id, item_id, warehouse_id, lot_id,
        GREATEST(net_fc, 0),
        GREATEST(-net_fc, 0),
        GREATEST(net, 0),
        GREATEST(-net, 0),
-       CASE partner_kind WHEN 0 THEN 2 WHEN 1 THEN 3 WHEN 2 THEN 4 ELSE 0 END
+       CASE
+           WHEN bank_account_id IS NOT NULL THEN 1
+           ELSE CASE partner_kind WHEN 0 THEN 2 WHEN 1 THEN 3 WHEN 2 THEN 4 ELSE 0 END
+       END
 FROM combined
 WHERE net <> 0 OR net_fc <> 0

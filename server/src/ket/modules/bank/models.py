@@ -49,6 +49,9 @@ BENEFICIARY_NAME_MAX_LENGTH = 255
 BANK_NAME_MAX_LENGTH = 255
 REFERENCE_NO_MAX_LENGTH = 100
 CHEQUE_NO_MAX_LENGTH = 50
+CONTENT_HASH_MAX_LENGTH = 64
+"""SHA-256 hex — cùng độ dài với `attachments.content_hash` (kho định địa chỉ
+theo nội dung là nơi giữ tệp gốc; cột này chỉ là con trỏ vào đó)."""
 
 
 class BankVoucherKind:
@@ -290,6 +293,10 @@ class BankStatement(DatasetBase, Audited):
     )
     """Profile per-bank đã dùng để đọc tệp (RT-26); `NULL` = nhập tay."""
 
+    content_hash: Mapped[str | None] = mapped_column(String(CONTENT_HASH_MAX_LENGTH), nullable=True)
+    """Băm nội dung tệp gốc trong kho đính kèm — chống nhập đúp cùng một tệp
+    cho cùng TK ngân hàng, và lần lại được tệp khi đối chiếu có nghi vấn."""
+
     imported_by: Mapped[int] = mapped_column(Integer, nullable=False)
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
@@ -314,12 +321,32 @@ class BankStatementLine(DatasetBase, Audited):
         ),
         Index("ix_bank_statement_lines_statement", "statement_id", "line_no"),
         Index("ix_bank_statement_lines_matched_voucher", "matched_voucher_id"),
+        # Một chứng từ khớp đúng MỘT dòng sao kê CỦA MỖI TÀI KHOẢN (lát 6D):
+        # một khoản tiền qua tài khoản là một giao dịch ngân hàng — hai dòng
+        # cùng tài khoản trỏ một chứng từ chỉ có thể là khớp nhầm, và để lọt
+        # thì báo cáo chênh lệch đếm thiếu. Chiều tài khoản có mặt vì chuyển
+        # nội bộ hợp lệ khớp ở CẢ HAI sao kê (nguồn + đích).
+        Index(
+            "uq_bank_statement_lines_matched_voucher",
+            "matched_voucher_id",
+            "bank_account_id",
+            unique=True,
+            postgresql_where=text("matched_voucher_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
     statement_id: Mapped[UUID] = mapped_column(
         ForeignKey("bank_statements.id", ondelete="CASCADE"), nullable=False
     )
+    bank_account_id: Mapped[int] = mapped_column(
+        ForeignKey("company_bank_accounts.id", ondelete="RESTRICT"), nullable=False
+    )
+    """Bản sao `bank_statements.bank_account_id` (dịch vụ nhập chép xuống lúc
+    ghi — cùng khuôn denormalize `gl_postings.branch_id`): unique một-chứng-từ-
+    một-dòng phải tính THEO TÀI KHOẢN, vì một chuyển nội bộ hợp lệ nằm trên
+    HAI sao kê — tiền ra ở tài khoản nguồn, tiền vào ở tài khoản đích."""
+
     line_no: Mapped[int] = mapped_column(Integer, nullable=False)
     """Thứ tự dòng trong tệp gốc — sao kê 500 dòng phải hiện đúng thứ tự ngân
     hàng in, kể cả khi nhiều dòng cùng ngày."""

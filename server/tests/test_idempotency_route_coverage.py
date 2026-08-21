@@ -109,6 +109,15 @@ def test_the_exemption_list_is_exactly_what_was_reviewed() -> None:
             # hash và cùng hai giá trị settings; kho blob content-addressed
             # khử trùng theo nội dung nên không có gì bị nhân đôi.
             "/api/v1/system/settings/logo",
+            # Lát 6D: nhập sao kê — khóa băm-nội-dung per-TK chặn nhân đôi
+            # (409 duplicate), bền hơn khóa idempotency vì không hết hạn.
+            "/api/v1/bank/statements/import",
+            # Lát 6D: ba thao tác khớp ghi trạng thái của một tập dòng (cùng
+            # họ gán vai trò): chạy lại cho ra đúng trạng thái đó hoặc 409,
+            # không lần gửi lại nào tạo thêm bản ghi.
+            "/api/v1/bank/statements/{statement_id}/actions/auto-match",
+            "/api/v1/bank/statements/lines/{line_id}/actions/match",
+            "/api/v1/bank/statements/lines/{line_id}/actions/unmatch",
         }
     )
     # Cơ chế thứ ba, thêm ở lát 3C-1. Ghim nó ở đây vì chính docstring bên trên

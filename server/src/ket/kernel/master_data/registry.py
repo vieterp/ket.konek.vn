@@ -25,7 +25,7 @@ tách được sẽ hoặc nổ, hoặc làm bẩn registry thật cho các test
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final, Protocol
 
 from pydantic import BaseModel
@@ -361,6 +361,21 @@ class CatalogRegistry:
         # nửa vời — trạng thái đó sẽ làm lần đăng ký lại sau đó báo "đã tồn tại".
         self._permissions.register(spec.document_type())
         self._specs[spec.slug] = spec
+
+    def extend_merge_hooks(self, slug: str, hook: MergeHook) -> None:
+        """Cho MODULE gắn thêm hook gộp vào một danh mục kernel (lát 6D).
+
+        Tồn tại vì chiều phụ thuộc: bảng con mang ràng buộc duy nhất có thể
+        thuộc một module (`bank_statement_lines` → `company_bank_accounts`),
+        mà kernel không import được module (luật phụ thuộc #5) — nên hook viết
+        ở module và tự gắn lúc import, cùng thời điểm mọi đăng ký khác của
+        `ket.model_registry`. Cổng `test_master_data_merge.py` đọc registry lúc
+        chạy nên vẫn canh đủ: thiếu lời gọi này là cổng đỏ.
+        """
+        spec = self._specs.get(slug)
+        if spec is None:
+            raise ValueError(f"Danh mục {slug!r} chưa được đăng ký — gắn hook không có chỗ đặt")
+        self._specs[slug] = replace(spec, merge_hooks=(*spec.merge_hooks, hook))
 
     def specs(self) -> tuple[CatalogSpec, ...]:
         """Mọi danh mục, sắp theo `slug` — thứ tự ổn định cho OpenAPI đã commit.

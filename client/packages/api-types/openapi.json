@@ -568,6 +568,29 @@
         "title": "AuditListResponse",
         "type": "object"
       },
+      "AutoMatchResponse": {
+        "properties": {
+          "ambiguous_lines": {
+            "title": "Ambiguous Lines",
+            "type": "integer"
+          },
+          "matched": {
+            "title": "Matched",
+            "type": "integer"
+          },
+          "unmatched_lines": {
+            "title": "Unmatched Lines",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "matched",
+          "unmatched_lines",
+          "ambiguous_lines"
+        ],
+        "title": "AutoMatchResponse",
+        "type": "object"
+      },
       "AutoPostingOperationResponse": {
         "description": "Một nghiệp vụ đã phân giải — form đọc và điền sẵn cặp Nợ/Có.",
         "properties": {
@@ -748,6 +771,239 @@
           "fx_diff"
         ],
         "title": "BankSettlementOut",
+        "type": "object"
+      },
+      "BankStatementDetailResponse": {
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/BankStatementLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "statement": {
+            "$ref": "#/components/schemas/BankStatementOut"
+          }
+        },
+        "required": [
+          "statement",
+          "lines"
+        ],
+        "title": "BankStatementDetailResponse",
+        "type": "object"
+      },
+      "BankStatementImportOut": {
+        "description": "Kết quả một lượt nhập — con số màn hình đối chiếu hiện ngay.",
+        "properties": {
+          "line_count": {
+            "title": "Line Count",
+            "type": "integer"
+          },
+          "statement": {
+            "$ref": "#/components/schemas/BankStatementOut"
+          },
+          "total_credit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Credit",
+            "type": "string"
+          },
+          "total_debit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Debit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "statement",
+          "line_count",
+          "total_credit",
+          "total_debit"
+        ],
+        "title": "BankStatementImportOut",
+        "type": "object"
+      },
+      "BankStatementLineOut": {
+        "description": "Một dòng sao kê + trạng thái khớp (U5: dòng đã khớp mờ đi).",
+        "properties": {
+          "credit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Credit",
+            "type": "string"
+          },
+          "debit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Debit",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "match_kind": {
+            "title": "Match Kind",
+            "type": "integer"
+          },
+          "matched_voucher_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched Voucher Id"
+          },
+          "reference_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference No"
+          },
+          "txn_date": {
+            "format": "date",
+            "title": "Txn Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "line_no",
+          "txn_date",
+          "reference_no",
+          "description",
+          "debit",
+          "credit",
+          "matched_voucher_id",
+          "match_kind"
+        ],
+        "title": "BankStatementLineOut",
+        "type": "object"
+      },
+      "BankStatementListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BankStatementOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BankStatementListResponse",
+        "type": "object"
+      },
+      "BankStatementOut": {
+        "description": "Header một sao kê đã nhập.",
+        "properties": {
+          "bank_account_id": {
+            "title": "Bank Account Id",
+            "type": "integer"
+          },
+          "closing_balance": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closing Balance"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "imported_at": {
+            "format": "date-time",
+            "title": "Imported At",
+            "type": "string"
+          },
+          "imported_by": {
+            "title": "Imported By",
+            "type": "integer"
+          },
+          "opening_balance": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opening Balance"
+          },
+          "profile_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Id"
+          },
+          "statement_date": {
+            "format": "date",
+            "title": "Statement Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bank_account_id",
+          "statement_date",
+          "opening_balance",
+          "closing_balance",
+          "profile_id",
+          "content_hash",
+          "imported_by",
+          "imported_at"
+        ],
+        "title": "BankStatementOut",
         "type": "object"
       },
       "BankVoucherIn": {
@@ -2109,6 +2365,32 @@
           "is_active"
         ],
         "title": "BanksUpdateRequest",
+        "type": "object"
+      },
+      "Body_import_bank_statement_api_v1_bank_statements_import_post": {
+        "properties": {
+          "bank_account_id": {
+            "minimum": 1.0,
+            "title": "Bank Account Id",
+            "type": "integer"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "profile_id": {
+            "minimum": 1.0,
+            "title": "Profile Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file",
+          "bank_account_id",
+          "profile_id"
+        ],
+        "title": "Body_import_bank_statement_api_v1_bank_statements_import_post",
         "type": "object"
       },
       "Body_import_config_package_api_v1_config_packages_import_post": {
@@ -9058,6 +9340,98 @@
         "title": "MasterDataMoveRequest",
         "type": "object"
       },
+      "MatchCandidateOut": {
+        "description": "Một chứng từ gợi ý ghép — `net_fc` dương = tiền vào tài khoản.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "integer"
+          },
+          "net_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Fc",
+            "type": "string"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "reference_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference No"
+          },
+          "voucher_id": {
+            "format": "uuid",
+            "title": "Voucher Id",
+            "type": "string"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "voucher_id",
+          "voucher_no",
+          "posting_date",
+          "kind",
+          "reference_no",
+          "description",
+          "net_fc"
+        ],
+        "title": "MatchCandidateOut",
+        "type": "object"
+      },
+      "MatchCandidatesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MatchCandidateOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "MatchCandidatesResponse",
+        "type": "object"
+      },
+      "MatchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "voucher_id": {
+            "format": "uuid",
+            "title": "Voucher Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "voucher_id"
+        ],
+        "title": "MatchRequest",
+        "type": "object"
+      },
       "MeResponse": {
         "description": "Danh tính của phiên hiện tại. Chưa có vai trò/quyền — chúng per-dataset.\n\nQuyền trả riêng theo dataset ở `GET /api/v1/system/access`, vì cùng một\nngười có vai trò khác nhau ở mỗi dữ liệu kế toán.",
         "properties": {
@@ -11984,6 +12358,54 @@
           "is_active"
         ],
         "title": "ProjectsUpdateRequest",
+        "type": "object"
+      },
+      "ReconciliationResponse": {
+        "description": "Hai phía lệch của FR-BNK-031 tính đến hết `as_of`.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "bank_account_id": {
+            "title": "Bank Account Id",
+            "type": "integer"
+          },
+          "statement_total_unmatched_in": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Statement Total Unmatched In",
+            "type": "string"
+          },
+          "statement_total_unmatched_out": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Statement Total Unmatched Out",
+            "type": "string"
+          },
+          "unmatched_statement_lines": {
+            "items": {
+              "$ref": "#/components/schemas/BankStatementLineOut"
+            },
+            "title": "Unmatched Statement Lines",
+            "type": "array"
+          },
+          "unmatched_vouchers": {
+            "items": {
+              "$ref": "#/components/schemas/MatchCandidateOut"
+            },
+            "title": "Unmatched Vouchers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_account_id",
+          "as_of",
+          "unmatched_statement_lines",
+          "unmatched_vouchers",
+          "statement_total_unmatched_in",
+          "statement_total_unmatched_out"
+        ],
+        "title": "ReconciliationResponse",
         "type": "object"
       },
       "ReportListResponse": {
@@ -15150,6 +15572,395 @@
         "summary": "List Open Invoices",
         "tags": [
           "bank"
+        ]
+      }
+    },
+    "/api/v1/bank/reconciliation": {
+      "get": {
+        "description": "Báo cáo lệch hai phía (FR-BNK-031): trên sao kê chưa có trên sổ và\nngược lại, tính đến hết ngày `as_of`.",
+        "operationId": "get_reconciliation_api_v1_bank_reconciliation_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bank_account_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Bank Account Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "As Of",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Reconciliation",
+        "tags": [
+          "bank-statements"
+        ]
+      }
+    },
+    "/api/v1/bank/statements": {
+      "get": {
+        "operationId": "list_bank_statements_api_v1_bank_statements_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bank_account_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Bank Account Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankStatementListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Bank Statements",
+        "tags": [
+          "bank-statements"
+        ]
+      }
+    },
+    "/api/v1/bank/statements/import": {
+      "post": {
+        "description": "Nhập một tệp sao kê theo hồ sơ per-bank (FR-BNK-032, RT-26).\n\nTrọn-hoặc-không: dòng hỏng nào cũng dừng cả lượt và trả toàn bộ lỗi.\nNhập trùng tệp (băm nội dung) → 409, xóa sao kê cũ trước nếu muốn nhập lại.",
+        "operationId": "import_bank_statement_api_v1_bank_statements_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_bank_statement_api_v1_bank_statements_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankStatementImportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Import Bank Statement",
+        "tags": [
+          "bank-statements"
+        ]
+      }
+    },
+    "/api/v1/bank/statements/lines/{line_id}/actions/match": {
+      "post": {
+        "description": "Khớp tay một dòng với một chứng từ — vẫn đòi đúng tài khoản, đúng chiều,\nđúng số tiền; chỉ cửa sổ ngày là không giới hạn.",
+        "operationId": "match_statement_line_api_v1_bank_statements_lines__line_id__actions_match_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "line_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Line Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Match Statement Line",
+        "tags": [
+          "bank-statements"
+        ]
+      }
+    },
+    "/api/v1/bank/statements/lines/{line_id}/actions/unmatch": {
+      "post": {
+        "operationId": "unmatch_statement_line_api_v1_bank_statements_lines__line_id__actions_unmatch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "line_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Line Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Unmatch Statement Line",
+        "tags": [
+          "bank-statements"
+        ]
+      }
+    },
+    "/api/v1/bank/statements/lines/{line_id}/candidates": {
+      "get": {
+        "description": "Gợi ý ghép cho khớp tay (U5) — đúng chiều + đúng số tiền, xếp theo\nkhoảng cách ngày.",
+        "operationId": "statement_line_candidates_api_v1_bank_statements_lines__line_id__candidates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "line_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Line Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchCandidatesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Statement Line Candidates",
+        "tags": [
+          "bank-statements"
+        ]
+      }
+    },
+    "/api/v1/bank/statements/{statement_id}": {
+      "delete": {
+        "description": "Xóa một sao kê nhập nhầm — chỉ khi chưa có dòng nào khớp (409 nếu có).",
+        "operationId": "delete_bank_statement_api_v1_bank_statements__statement_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "statement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Statement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Delete Bank Statement",
+        "tags": [
+          "bank-statements"
+        ]
+      },
+      "get": {
+        "description": "Header + toàn bộ dòng theo thứ tự tệp gốc — nguồn của khung trái U5.",
+        "operationId": "get_bank_statement_api_v1_bank_statements__statement_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "statement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Statement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankStatementDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Bank Statement",
+        "tags": [
+          "bank-statements"
+        ]
+      }
+    },
+    "/api/v1/bank/statements/{statement_id}/actions/auto-match": {
+      "post": {
+        "description": "Khớp tự động (FR-BNK-030): cùng chiều + cùng số tiền + ngày ±3, ưu tiên\ntrùng số tham chiếu; ứng viên nhập nhằng để lại cho khớp tay.",
+        "operationId": "auto_match_statement_api_v1_bank_statements__statement_id__actions_auto_match_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "statement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Statement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoMatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Auto Match Statement",
+        "tags": [
+          "bank-statements"
         ]
       }
     },

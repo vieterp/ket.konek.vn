@@ -319,6 +319,171 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bank/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reconciliation
+         * @description Báo cáo lệch hai phía (FR-BNK-031): trên sao kê chưa có trên sổ và
+         *     ngược lại, tính đến hết ngày `as_of`.
+         */
+        get: operations["get_reconciliation_api_v1_bank_reconciliation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/statements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Bank Statements */
+        get: operations["list_bank_statements_api_v1_bank_statements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/statements/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Bank Statement
+         * @description Nhập một tệp sao kê theo hồ sơ per-bank (FR-BNK-032, RT-26).
+         *
+         *     Trọn-hoặc-không: dòng hỏng nào cũng dừng cả lượt và trả toàn bộ lỗi.
+         *     Nhập trùng tệp (băm nội dung) → 409, xóa sao kê cũ trước nếu muốn nhập lại.
+         */
+        post: operations["import_bank_statement_api_v1_bank_statements_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/statements/lines/{line_id}/actions/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match Statement Line
+         * @description Khớp tay một dòng với một chứng từ — vẫn đòi đúng tài khoản, đúng chiều,
+         *     đúng số tiền; chỉ cửa sổ ngày là không giới hạn.
+         */
+        post: operations["match_statement_line_api_v1_bank_statements_lines__line_id__actions_match_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/statements/lines/{line_id}/actions/unmatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unmatch Statement Line */
+        post: operations["unmatch_statement_line_api_v1_bank_statements_lines__line_id__actions_unmatch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/statements/lines/{line_id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Statement Line Candidates
+         * @description Gợi ý ghép cho khớp tay (U5) — đúng chiều + đúng số tiền, xếp theo
+         *     khoảng cách ngày.
+         */
+        get: operations["statement_line_candidates_api_v1_bank_statements_lines__line_id__candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/statements/{statement_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Bank Statement
+         * @description Header + toàn bộ dòng theo thứ tự tệp gốc — nguồn của khung trái U5.
+         */
+        get: operations["get_bank_statement_api_v1_bank_statements__statement_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Bank Statement
+         * @description Xóa một sao kê nhập nhầm — chỉ khi chưa có dòng nào khớp (409 nếu có).
+         */
+        delete: operations["delete_bank_statement_api_v1_bank_statements__statement_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/statements/{statement_id}/actions/auto-match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Auto Match Statement
+         * @description Khớp tự động (FR-BNK-030): cùng chiều + cùng số tiền + ngày ±3, ưu tiên
+         *     trùng số tham chiếu; ứng viên nhập nhằng để lại cho khớp tay.
+         */
+        post: operations["auto_match_statement_api_v1_bank_statements__statement_id__actions_auto_match_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/bank/vouchers": {
         parameters: {
             query?: never;
@@ -7296,6 +7461,15 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** AutoMatchResponse */
+        AutoMatchResponse: {
+            /** Ambiguous Lines */
+            ambiguous_lines: number;
+            /** Matched */
+            matched: number;
+            /** Unmatched Lines */
+            unmatched_lines: number;
+        };
         /**
          * AutoPostingOperationResponse
          * @description Một nghiệp vụ đã phân giải — form đọc và điền sẵn cặp Nợ/Có.
@@ -7365,6 +7539,93 @@ export interface components {
             target_id: string;
             /** Target Kind */
             target_kind: number;
+        };
+        /** BankStatementDetailResponse */
+        BankStatementDetailResponse: {
+            /** Lines */
+            lines: components["schemas"]["BankStatementLineOut"][];
+            statement: components["schemas"]["BankStatementOut"];
+        };
+        /**
+         * BankStatementImportOut
+         * @description Kết quả một lượt nhập — con số màn hình đối chiếu hiện ngay.
+         */
+        BankStatementImportOut: {
+            /** Line Count */
+            line_count: number;
+            statement: components["schemas"]["BankStatementOut"];
+            /** Total Credit */
+            total_credit: string;
+            /** Total Debit */
+            total_debit: string;
+        };
+        /**
+         * BankStatementLineOut
+         * @description Một dòng sao kê + trạng thái khớp (U5: dòng đã khớp mờ đi).
+         */
+        BankStatementLineOut: {
+            /** Credit */
+            credit: string;
+            /** Debit */
+            debit: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Line No */
+            line_no: number;
+            /** Match Kind */
+            match_kind: number;
+            /** Matched Voucher Id */
+            matched_voucher_id: string | null;
+            /** Reference No */
+            reference_no: string | null;
+            /**
+             * Txn Date
+             * Format: date
+             */
+            txn_date: string;
+        };
+        /** BankStatementListResponse */
+        BankStatementListResponse: {
+            /** Items */
+            items: components["schemas"]["BankStatementOut"][];
+        };
+        /**
+         * BankStatementOut
+         * @description Header một sao kê đã nhập.
+         */
+        BankStatementOut: {
+            /** Bank Account Id */
+            bank_account_id: number;
+            /** Closing Balance */
+            closing_balance: string | null;
+            /** Content Hash */
+            content_hash: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Imported At
+             * Format: date-time
+             */
+            imported_at: string;
+            /** Imported By */
+            imported_by: number;
+            /** Opening Balance */
+            opening_balance: string | null;
+            /** Profile Id */
+            profile_id: number | null;
+            /**
+             * Statement Date
+             * Format: date
+             */
+            statement_date: string;
         };
         /**
          * BankVoucherIn
@@ -7747,6 +8008,15 @@ export interface components {
             short_name?: string | null;
             /** Mã SWIFT */
             swift_code?: string | null;
+        };
+        /** Body_import_bank_statement_api_v1_bank_statements_import_post */
+        Body_import_bank_statement_api_v1_bank_statements_import_post: {
+            /** Bank Account Id */
+            bank_account_id: number;
+            /** File */
+            file: string;
+            /** Profile Id */
+            profile_id: number;
         };
         /** Body_import_config_package_api_v1_config_packages_import_post */
         Body_import_config_package_api_v1_config_packages_import_post: {
@@ -10201,6 +10471,45 @@ export interface components {
             row_version: number;
         };
         /**
+         * MatchCandidateOut
+         * @description Một chứng từ gợi ý ghép — `net_fc` dương = tiền vào tài khoản.
+         */
+        MatchCandidateOut: {
+            /** Description */
+            description: string | null;
+            /** Kind */
+            kind: number;
+            /** Net Fc */
+            net_fc: string;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Reference No */
+            reference_no: string | null;
+            /**
+             * Voucher Id
+             * Format: uuid
+             */
+            voucher_id: string;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /** MatchCandidatesResponse */
+        MatchCandidatesResponse: {
+            /** Items */
+            items: components["schemas"]["MatchCandidateOut"][];
+        };
+        /** MatchRequest */
+        MatchRequest: {
+            /**
+             * Voucher Id
+             * Format: uuid
+             */
+            voucher_id: string;
+        };
+        /**
          * MeResponse
          * @description Danh tính của phiên hiện tại. Chưa có vai trò/quyền — chúng per-dataset.
          *
@@ -11290,6 +11599,27 @@ export interface components {
             name_en?: string | null;
             /** Row Version */
             row_version: number;
+        };
+        /**
+         * ReconciliationResponse
+         * @description Hai phía lệch của FR-BNK-031 tính đến hết `as_of`.
+         */
+        ReconciliationResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Bank Account Id */
+            bank_account_id: number;
+            /** Statement Total Unmatched In */
+            statement_total_unmatched_in: string;
+            /** Statement Total Unmatched Out */
+            statement_total_unmatched_out: string;
+            /** Unmatched Statement Lines */
+            unmatched_statement_lines: components["schemas"]["BankStatementLineOut"][];
+            /** Unmatched Vouchers */
+            unmatched_vouchers: components["schemas"]["MatchCandidateOut"][];
         };
         /** ReportListResponse */
         ReportListResponse: {
@@ -12741,6 +13071,286 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpenInvoicesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_reconciliation_api_v1_bank_reconciliation_get: {
+        parameters: {
+            query: {
+                bank_account_id: number;
+                as_of: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_bank_statements_api_v1_bank_statements_get: {
+        parameters: {
+            query: {
+                bank_account_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    import_bank_statement_api_v1_bank_statements_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_bank_statement_api_v1_bank_statements_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementImportOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    match_statement_line_api_v1_bank_statements_lines__line_id__actions_match_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                line_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    unmatch_statement_line_api_v1_bank_statements_lines__line_id__actions_unmatch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                line_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    statement_line_candidates_api_v1_bank_statements_lines__line_id__candidates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                line_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchCandidatesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_bank_statement_api_v1_bank_statements__statement_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                statement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementDetailResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_bank_statement_api_v1_bank_statements__statement_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                statement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    auto_match_statement_api_v1_bank_statements__statement_id__actions_auto_match_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                statement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoMatchResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
