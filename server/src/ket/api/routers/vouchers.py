@@ -210,6 +210,7 @@ def _run_action(
     settings: AppSettings,
     idempotency_key: str,
     response: Response,
+    acknowledge_warnings: bool = False,
 ) -> VoucherResponse:
     """Khung chung của post/unpost — chỉ khác mã hành vi và lời gọi service."""
 
@@ -219,7 +220,11 @@ def _run_action(
         posting = PostingService(session)
         if action is Action.POST:
             request = document_type.build_request(session, voucher_id)
-            voucher = posting.post(request, user_id=authorized.scope.user_id)
+            voucher = posting.post(
+                request,
+                user_id=authorized.scope.user_id,
+                acknowledged_warnings=acknowledge_warnings,
+            )
         else:
             voucher = posting.unpost(voucher_id, user_id=authorized.scope.user_id)
         return VoucherResponse.model_validate(voucher), IdempotentRef(
@@ -258,8 +263,15 @@ def post_voucher(
     settings: AppSettings,
     idempotency_key: PostKey,
     response: Response,
+    acknowledge_warnings: Annotated[bool, Query()] = False,
 ) -> VoucherResponse:
-    """Ghi sổ một chứng từ Đã cất (SRS 00 §3.3, FR-NFR-003)."""
+    """Ghi sổ một chứng từ Đã cất (SRS 00 §3.3, FR-NFR-003).
+
+    `acknowledge_warnings=true` là lượt gửi lại **sau khi** người dùng đã xác
+    nhận các cảnh báo nghiệp vụ (mọi vi phạm trong phản hồi trước đều mang
+    `details.warning=1` — FR-SYS-062 mức "Cảnh báo"). Nó không mở được cảnh
+    báo mức "Chặn": guard trả blocking thì lượt nào cũng bị từ chối.
+    """
     return _run_action(
         action=Action.POST,
         route_key=POST_ROUTE,
@@ -269,6 +281,7 @@ def post_voucher(
         settings=settings,
         idempotency_key=idempotency_key,
         response=response,
+        acknowledge_warnings=acknowledge_warnings,
     )
 
 

@@ -13,7 +13,7 @@ Bốn nhóm bất biến, mỗi nhóm là một tiêu chí thành công của ph
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Sequence
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
@@ -777,3 +777,124 @@ def test_an_all_zero_voucher_has_nothing_to_post(run: Runner, context: PostingCo
 
     with pytest.raises(_RollbackError):
         run(work)
+
+
+# ------------------------------------------------------- guard ba mức (6A)
+
+
+@pytest.fixture
+def warning_guard() -> Iterator[None]:
+    """Cắm một guard cảnh-báo vào registry toàn cục rồi gỡ ra sau test.
+
+    Đi qua registry thật (không truyền registry riêng vào service) vì thứ cần
+    chứng minh là `PostingService.post` đọc đúng chỗ mà module nghiệp vụ sẽ
+    đăng ký ở lát 6B.
+    """
+    from ket.kernel.errors import PostingViolation
+    from ket.posting.engine.guards import GUARD_REGISTRY, GuardFinding
+    from ket.posting.engine.prepared import PreparedLine
+
+    class _CashLikeGuard:
+        def check(
+            self, session: Session, *, voucher: Voucher, lines: Sequence[PreparedLine]
+        ) -> Sequence[GuardFinding]:
+            return (
+                GuardFinding(
+                    violation=PostingViolation("guard.test_warning", "cảnh báo thử"),
+                    blocking=False,
+                ),
+            )
+
+    guard = _CashLikeGuard()
+    GUARD_REGISTRY.register(guard)
+    try:
+        yield
+    finally:
+        GUARD_REGISTRY._guards.remove(guard)
+
+
+def test_post_requires_acknowledgement_for_guard_warnings(
+    run: Runner, context: PostingContext, warning_guard: None
+) -> None:
+    """FR-SYS-062 mức "Cảnh báo": lượt đầu bị từ chối kèm dấu `warning=1`,
+    lượt gửi lại với xác nhận thì ghi sổ — và dòng sổ chỉ xuất hiện ở lượt sau.
+    """
+    from ket.modules.general_ledger.journal.posting_mapper import to_posting_request
+    from ket.posting.engine.guards import GUARD_WARNING_DETAIL
+    from ket.posting.engine.service import PostingService
+
+    def work(session: Session) -> object:
+        service = JournalVoucherService(session)
+        voucher = service.create(_payload(context), user_id=ACTOR_ID)
+        lines = session.execute(
+            select(JournalLine).where(JournalLine.voucher_id == voucher.id)
+        ).scalars()
+        request = to_posting_request(voucher.id, list(lines))
+
+        posting = PostingService(session)
+        with pytest.raises(PostingValidationError) as caught:
+            posting.post(request, user_id=ACTOR_ID)
+        assert [v.code for v in caught.value.violations] == ["guard.test_warning"]
+        assert caught.value.violations[0].details[GUARD_WARNING_DETAIL] == 1
+        assert _postings_of(session, voucher.id) == []
+        assert VoucherStatus(voucher.status) is VoucherStatus.DA_CAT
+
+        posting.post(request, user_id=ACTOR_ID, acknowledged_warnings=True)
+        assert VoucherStatus(voucher.status) is VoucherStatus.DA_GHI_SO
+        assert len(_postings_of(session, voucher.id)) == 4
+
+        posting.unpost(voucher.id, user_id=ACTOR_ID)
+        service.delete(voucher.id)
+        return None
+
+    run(work)
+
+
+def test_a_blocking_guard_ignores_acknowledgement(run: Runner, context: PostingContext) -> None:
+    """FR-SYS-062 mức "Chặn": xác nhận không mở được, và vi phạm chặn không
+    mang dấu `warning` để client không mời xác nhận vô ích."""
+    from ket.kernel.errors import PostingViolation
+    from ket.modules.general_ledger.journal.posting_mapper import to_posting_request
+    from ket.posting.engine.guards import (
+        GUARD_REGISTRY,
+        GUARD_WARNING_DETAIL,
+        GuardFinding,
+    )
+    from ket.posting.engine.prepared import PreparedLine
+    from ket.posting.engine.service import PostingService
+
+    class _BlockingGuard:
+        def check(
+            self, session: Session, *, voucher: Voucher, lines: Sequence[PreparedLine]
+        ) -> Sequence[GuardFinding]:
+            return (
+                GuardFinding(
+                    violation=PostingViolation("guard.test_block", "chặn thử"),
+                    blocking=True,
+                ),
+            )
+
+    guard = _BlockingGuard()
+    GUARD_REGISTRY.register(guard)
+    try:
+
+        def work(session: Session) -> object:
+            service = JournalVoucherService(session)
+            voucher = service.create(_payload(context), user_id=ACTOR_ID)
+            lines = session.execute(
+                select(JournalLine).where(JournalLine.voucher_id == voucher.id)
+            ).scalars()
+            request = to_posting_request(voucher.id, list(lines))
+
+            posting = PostingService(session)
+            with pytest.raises(PostingValidationError) as caught:
+                posting.post(request, user_id=ACTOR_ID, acknowledged_warnings=True)
+            assert [v.code for v in caught.value.violations] == ["guard.test_block"]
+            assert GUARD_WARNING_DETAIL not in caught.value.violations[0].details
+            assert _postings_of(session, voucher.id) == []
+            service.delete(voucher.id)
+            return None
+
+        run(work)
+    finally:
+        GUARD_REGISTRY._guards.remove(guard)

@@ -38,6 +38,7 @@ from ket.kernel.config.accounts_models import (
     BalanceNature,
     DetailTracking,
 )
+from ket.kernel.config.auto_posting_models import OPERATION_CODE_MAX_LENGTH
 from ket.kernel.config.statements.formula.evaluator import evaluate_rows
 from ket.kernel.config.statements.formula.parser import (
     FormulaNode,
@@ -53,6 +54,7 @@ from ket.kernel.config.statements.models import (
     ROW_NOTE_MAX_LENGTH,
     StatementKind,
 )
+from ket.kernel.contracts import PartnerKind
 from ket.kernel.errors import ConfigPackageDataInvalidError, StatementFormulaInvalidError
 from ket.kernel.periods.models import AccountingScheme
 
@@ -70,6 +72,7 @@ ACCOUNTS_FILE = "accounts.csv"
 DEFAULT_ACCOUNTS_FILE = "default_accounts.csv"
 CLOSING_PAIRS_FILE = "closing_pairs.csv"
 STATEMENTS_FILE = "statements.json"
+AUTO_POSTING_RULES_FILE = "auto_posting_rules.csv"
 
 REQUIRED_DATA_FILES: tuple[str, ...] = (
     PACKAGE_MANIFEST_FILE,
@@ -81,11 +84,15 @@ REQUIRED_DATA_FILES: tuple[str, ...] = (
 (`importer.py` chỉ đọc theo danh sách tên cố định này, không đọc theo danh sách
 trong gói — xem docstring `importer.py` về chống zip-slip)."""
 
-OPTIONAL_DATA_FILES: tuple[str, ...] = (STATEMENTS_FILE,)
-"""Tệp một gói **được phép** có thêm (lát 5B): `statements.json` — mọi layout
-BCTC của gói trong MỘT tệp phẳng, không thư mục con, để hợp đồng "chỉ những tên
-tệp cố định, không ghép đường dẫn" của importer giữ nguyên. Gói không có tệp
-này hợp lệ (gói nhập ngoài có thể chỉ mang hệ thống TK)."""
+OPTIONAL_DATA_FILES: tuple[str, ...] = (STATEMENTS_FILE, AUTO_POSTING_RULES_FILE)
+"""Tệp một gói **được phép** có thêm — vẫn là tập tên cố định, phẳng, không
+thư mục con, để hợp đồng "chỉ những tên tệp cố định, không ghép đường dẫn" của
+importer giữ nguyên. Gói không có chúng hợp lệ (gói nhập ngoài có thể chỉ mang
+hệ thống TK):
+
+* `statements.json` (lát 5B) — mọi layout BCTC của gói trong MỘT tệp phẳng.
+* `auto_posting_rules.csv` (lát 6A) — nghiệp vụ thu/chi và cặp Nợ/Có ngầm
+  định (FR-SYS-025)."""
 
 _ACCOUNTS_HEADER = (
     "code",
@@ -100,6 +107,16 @@ _ACCOUNTS_HEADER = (
 )
 _DEFAULT_ACCOUNTS_HEADER = ("document_type", "purpose", "account_code")
 _CLOSING_PAIRS_HEADER = ("source_account", "target_account", "sequence", "description")
+_AUTO_POSTING_RULES_HEADER = (
+    "document_type",
+    "operation_code",
+    "operation_name",
+    "debit_purpose",
+    "credit_purpose",
+    "requires_partner",
+    "partner_kind",
+    "display_order",
+)
 
 _KNOWN_SCHEMES = frozenset(member.value for member in AccountingScheme)
 _BALANCE_NATURE_RANGE = range(
@@ -156,6 +173,25 @@ class ClosingPairRow:
 
 
 @dataclass(frozen=True)
+class AutoPostingRuleRow:
+    """Một dòng `auto_posting_rules.csv`, đã kiểm (FR-SYS-025, lát 6A).
+
+    `debit_purpose`/`credit_purpose` là `purpose` của `default_accounts`;
+    `None` = cố ý để ngỏ bên đó cho người dùng chọn — xem docstring
+    `kernel/config/auto_posting_models.py`.
+    """
+
+    document_type: str
+    operation_code: str
+    operation_name: str
+    debit_purpose: str | None
+    credit_purpose: str | None
+    requires_partner: bool
+    partner_kind: int | None
+    display_order: int
+
+
+@dataclass(frozen=True)
 class StatementRowData:
     """Một chỉ tiêu trong `statements.json`, đã kiểm (công thức parse được,
     rowref/dải TK đã đối chiếu). `display_order` suy từ thứ tự trong tệp —
@@ -193,6 +229,7 @@ class LoadedPackage:
     default_accounts: tuple[DefaultAccountRow, ...]
     closing_pairs: tuple[ClosingPairRow, ...]
     statements: tuple[StatementLayoutData, ...] = ()
+    auto_posting_rules: tuple[AutoPostingRuleRow, ...] = ()
 
 
 def _fail(reason: str, **details: str | int | None) -> ConfigPackageDataInvalidError:
@@ -762,6 +799,108 @@ def _load_statements(text: str, known_codes: frozenset[str]) -> tuple[StatementL
     return tuple(layouts)
 
 
+def _load_auto_posting_rules(
+    text: str, known_purposes: frozenset[str]
+) -> tuple[AutoPostingRuleRow, ...]:
+    """Đọc + kiểm `auto_posting_rules.csv` (FR-SYS-025, lát 6A).
+
+    `known_purposes` là tập `purpose` mà `default_accounts.csv` của CHÍNH gói
+    này khai. Purpose lạ bị từ chối chứ không lặng lẽ thành "không điền sẵn":
+    ô trống là cách duy nhất nói "cố ý để ngỏ", nên gõ nhầm không thể giả dạng
+    một quyết định — cùng triết lý với việc `default_accounts` từ chối TK
+    không có trong `accounts.csv`.
+    """
+    rows = _parse_csv_text(text, AUTO_POSTING_RULES_FILE, _AUTO_POSTING_RULES_HEADER)
+    seen: dict[tuple[str, str], int] = {}
+    result: list[AutoPostingRuleRow] = []
+    for line, raw in enumerate(rows, start=2):
+        document_type = _require_str(
+            raw.get("document_type"), field="document_type", file=AUTO_POSTING_RULES_FILE
+        )
+        operation_code = _require_str(
+            raw.get("operation_code"), field="operation_code", file=AUTO_POSTING_RULES_FILE
+        )
+        operation_name = _require_str(
+            raw.get("operation_name"), field="operation_name", file=AUTO_POSTING_RULES_FILE
+        )
+        debit_purpose = _optional_str(raw.get("debit_purpose"))
+        credit_purpose = _optional_str(raw.get("credit_purpose"))
+        for field, value, limit in (
+            ("document_type", document_type, DOCUMENT_TYPE_MAX_LENGTH),
+            ("operation_code", operation_code, OPERATION_CODE_MAX_LENGTH),
+            ("operation_name", operation_name, NAME_MAX_LENGTH),
+            ("debit_purpose", debit_purpose, PURPOSE_MAX_LENGTH),
+            ("credit_purpose", credit_purpose, PURPOSE_MAX_LENGTH),
+        ):
+            _bounded(value, field=field, file=AUTO_POSTING_RULES_FILE, max_length=limit, line=line)
+        for field, purpose in (
+            ("debit_purpose", debit_purpose),
+            ("credit_purpose", credit_purpose),
+        ):
+            if purpose is not None and purpose not in known_purposes:
+                raise _fail(
+                    f"`{field}` trỏ tới purpose {purpose!r} không có trong "
+                    f"{DEFAULT_ACCOUNTS_FILE} của gói",
+                    file=AUTO_POSTING_RULES_FILE,
+                    field=field,
+                    purpose=purpose,
+                    line=line,
+                )
+        requires_partner = _parse_bool(
+            (raw.get("requires_partner") or "").strip(),
+            field="requires_partner",
+            file=AUTO_POSTING_RULES_FILE,
+            line=line,
+        )
+        partner_kind_text = (raw.get("partner_kind") or "").strip()
+        partner_kind: int | None = None
+        if partner_kind_text:
+            try:
+                partner_kind = PartnerKind(int(partner_kind_text)).value
+            except ValueError as error:
+                raise _fail(
+                    "`partner_kind` phải là 0 (khách hàng), 1 (nhà cung cấp) "
+                    "hoặc 2 (nhân viên), hoặc để trống",
+                    file=AUTO_POSTING_RULES_FILE,
+                    value=partner_kind_text,
+                    line=line,
+                ) from error
+        display_order_text = (raw.get("display_order") or "").strip()
+        try:
+            display_order = int(display_order_text)
+        except ValueError as error:
+            raise _fail(
+                "`display_order` phải là số nguyên",
+                file=AUTO_POSTING_RULES_FILE,
+                value=display_order_text,
+                line=line,
+            ) from error
+        key = (document_type, operation_code)
+        if key in seen:
+            raise _fail(
+                f"Cặp (document_type={document_type}, operation_code={operation_code}) "
+                f"bị khai trùng (đã có ở dòng {seen[key]})",
+                file=AUTO_POSTING_RULES_FILE,
+                document_type=document_type,
+                operation_code=operation_code,
+                line=line,
+            )
+        result.append(
+            AutoPostingRuleRow(
+                document_type=document_type,
+                operation_code=operation_code,
+                operation_name=operation_name,
+                debit_purpose=debit_purpose,
+                credit_purpose=credit_purpose,
+                requires_partner=requires_partner,
+                partner_kind=partner_kind,
+                display_order=display_order,
+            )
+        )
+        seen[key] = line
+    return tuple(result)
+
+
 def load_package_from_texts(texts: Mapping[str, str]) -> LoadedPackage:
     """Đọc + kiểm một gói cấu hình từ nội dung **đã có sẵn trong bộ nhớ**.
 
@@ -781,6 +920,11 @@ def load_package_from_texts(texts: Mapping[str, str]) -> LoadedPackage:
     statements = (
         _load_statements(statements_text, known_codes) if statements_text is not None else ()
     )
+    rules_text = texts.get(AUTO_POSTING_RULES_FILE)
+    known_purposes = frozenset(row.purpose for row in default_accounts)
+    auto_posting_rules = (
+        _load_auto_posting_rules(rules_text, known_purposes) if rules_text is not None else ()
+    )
 
     return LoadedPackage(
         manifest=manifest,
@@ -788,6 +932,7 @@ def load_package_from_texts(texts: Mapping[str, str]) -> LoadedPackage:
         default_accounts=default_accounts,
         closing_pairs=closing_pairs,
         statements=statements,
+        auto_posting_rules=auto_posting_rules,
     )
 
 
@@ -831,6 +976,7 @@ def load_builtin_package(slug: str) -> LoadedPackage:
 
 __all__ = [
     "ACCOUNTS_FILE",
+    "AUTO_POSTING_RULES_FILE",
     "CLOSING_PAIRS_FILE",
     "DEFAULT_ACCOUNTS_FILE",
     "OPTIONAL_DATA_FILES",
@@ -838,6 +984,7 @@ __all__ = [
     "REQUIRED_DATA_FILES",
     "STATEMENTS_FILE",
     "AccountRow",
+    "AutoPostingRuleRow",
     "ClosingPairRow",
     "DefaultAccountRow",
     "LoadedPackage",

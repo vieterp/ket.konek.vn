@@ -9,24 +9,15 @@ câu hỏi "dòng này đã điền chiều đó chưa".
 
 from __future__ import annotations
 
-from enum import IntEnum
-
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ket.kernel.config.accounts_models import DetailTracking
+from ket.kernel.contracts import PartnerKind
 
-
-class PartnerKind(IntEnum):
-    """Loại đối tác trên dòng hạch toán — `0 customer 1 vendor 2 employee`.
-
-    Một cột `partner_id` + một cột loại, chứ không ba cột khóa riêng: TK 131
-    theo dõi khách, 331 theo dõi nhà cung cấp, 141 theo dõi nhân viên — mỗi
-    dòng chỉ có **một** đối tượng công nợ, và ba cột sẽ cho phép điền hai.
-    """
-
-    CUSTOMER = 0
-    VENDOR = 1
-    EMPLOYEE = 2
+__all__ = ["ExtendedDimensionValue", "PartnerKind", "PostingDimensions"]
+# `PartnerKind` chuyển về `kernel.contracts` ở lát 6A (từ vựng chung của công
+# nợ liên-module — RT-18); re-export tại đây giữ nguyên mọi import cũ, cùng
+# lối `Ledger` đã đi ở lát 5C.
 
 
 class ExtendedDimensionValue(BaseModel):

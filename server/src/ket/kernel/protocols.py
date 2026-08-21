@@ -1,0 +1,252 @@
+"""Protocol liên-module — khai TRỌN BỘ ở phase 6 để đóng băng kernel (RT-18).
+
+Luật phụ thuộc #2 (plan §Bố cục): module cần dữ liệu của module khác thì đi qua
+Protocol đặt trong kernel, được đăng ký lúc khởi động — không truy vấn thẳng
+bảng của module khác. Tệp này là chỗ đặt **tập trung** các Protocol đó, vì lý
+do RT-18 nêu thẳng: phase 7 và 8 chạy song song sau phase 6, và ranh giới chia
+sẻ duy nhất giữa chúng là kernel + posting đã đóng băng. Protocol khai muộn ở
+phase 7/8 là một lần mở kernel ra sửa — đúng thứ "đóng băng" cấm.
+
+Bốn Protocol, ai cài — ai gọi:
+
+* `ReceivableProvider` / `PayableProvider` — nguồn "hóa đơn còn nợ" cho đối
+  trừ công nợ khi thu/chi tiền (`docs/srs/03` §4). Phase 6: nguồn duy nhất là
+  số dư đầu kỳ (`posting.opening_balances` cài lúc 6B). Phase 7: module
+  `sales`/`purchase` (qua `receivables`) đăng ký thêm nguồn hóa đơn thật.
+  Người gọi: `cash_book.settlement_service`, và phase 7 là chính màn công nợ.
+* `InventoryPosting` — chứng từ mua/bán (phase 7) sinh phiếu nhập/xuất kho mà
+  không import module kho; module `inventory` (phase 8) cài.
+* `CommitmentProvider` — "đã hứa giao" cho cột **Có thể bán** = tồn − đã hứa
+  (U7, phase 8); module `sales` cài từ đơn hàng.
+
+**KHÔNG** khai `InventoryValuation` — RT-18 xóa vì không có consumer thật.
+
+Registry ở cuối tệp theo đúng khuôn `posting.documents.registry`: module đăng
+ký bản cài lúc import (qua `ket.model_registry`), nơi gọi chỉ biết Protocol.
+Trạng thái "chưa ai cài" là hợp lệ và **rỗng chứ không giả**: danh sách nguồn
+công nợ rỗng nghĩa là chưa có hóa đơn nào — đúng sự thật của một bản cài chưa
+có phase 7 — thay vì một bản no-op trả dữ liệu bịa.
+
+Chữ ký ở đây là **bản nháp có chủ đích** cho tới bước "đóng băng" cuối phase 6
+(bước 23): 6B–6F là người dùng thật đầu tiên của chúng, và chữ ký chỉ chốt sau
+khi có người gọi thật. Sau bước 23, đổi chữ ký cần ADR bổ sung.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from datetime import date
+from decimal import Decimal
+from enum import IntEnum
+from typing import Final, Protocol
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
+
+from ket.kernel.contracts import PartnerKind
+
+# --------------------------------------------------------------- công nợ mở
+
+
+class SettlementTargetKind(IntEnum):
+    """Loại chứng từ công nợ mà một lượt đối trừ trỏ tới.
+
+    Giá trị đi thẳng vào `cash_settlements.target_kind` và vào mọi bảng đối
+    trừ sau này (phase 7 `ar_ap_ledger`), nên khai ở kernel chứ không trong
+    module: hai module ghi cùng một cột thì từ vựng phải có đúng một chỗ.
+    """
+
+    SALES_INVOICE = 0
+    """Chứng từ bán hàng (module `sales`, phase 7)."""
+
+    PURCHASE_INVOICE = 1
+    """Chứng từ mua hàng (module `purchase`, phase 7)."""
+
+    OPENING_BALANCE = 2
+    """Hóa đơn số dư đầu kỳ (`opening_balance_invoices`, phase 4C)."""
+
+
+class OpenInvoice(BaseModel):
+    """Một chứng từ công nợ còn nợ, đã quy về hình dạng chung cho mọi nguồn.
+
+    `remaining_fc` là số **nguyên tệ** còn nợ — đối trừ nhập theo nguyên tệ,
+    còn chênh lệch tỷ giá thu/trả tiền (FR-SYS-066) tính từ `exchange_rate`
+    (tỷ giá lúc ghi nhận nợ) so với tỷ giá của phiếu thu/chi tại thời điểm
+    thanh toán. Không mang số VND đã quy đổi: nguồn nào cũng tính lại được từ
+    `remaining_fc × rate`, và hai cột cùng nói một điều là hai cột sẽ lệch.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    target_kind: SettlementTargetKind
+    target_id: UUID
+    partner_kind: PartnerKind
+    partner_id: int
+    branch_id: int
+    invoice_no: str
+    invoice_date: date
+    due_date: date | None = None
+    currency_code: str
+    exchange_rate: Decimal
+    amount_fc: Decimal
+    remaining_fc: Decimal
+    description: str | None = None
+
+
+class ReceivableProvider(Protocol):
+    """Một nguồn hóa đơn **phải thu** còn nợ (khách hàng trả tiền — Có 131)."""
+
+    def open_invoices(
+        self,
+        session: Session,
+        *,
+        partner_kind: PartnerKind,
+        partner_id: int,
+        branch_id: int,
+        as_of: date,
+    ) -> Sequence[OpenInvoice]:
+        """Hóa đơn còn nợ của một đối tác tính đến hết ngày `as_of`."""
+        ...
+
+
+class PayableProvider(Protocol):
+    """Một nguồn hóa đơn **phải trả** còn nợ (trả nhà cung cấp — Nợ 331).
+
+    Cùng chữ ký với `ReceivableProvider` nhưng là Protocol riêng: hai chiều
+    công nợ do hai nhóm module cài (bán vs mua), và một bên gọi nhầm registry
+    của bên kia phải là lỗi kiểu, không phải lỗi dữ liệu chỉ lộ trên thẻ công nợ.
+    """
+
+    def open_invoices(
+        self,
+        session: Session,
+        *,
+        partner_kind: PartnerKind,
+        partner_id: int,
+        branch_id: int,
+        as_of: date,
+    ) -> Sequence[OpenInvoice]:
+        """Hóa đơn còn nợ của một đối tác tính đến hết ngày `as_of`."""
+        ...
+
+
+# ----------------------------------------------------------------- kho vận
+
+
+class InventoryMovementKind(IntEnum):
+    """Chiều của một phiếu kho sinh từ chứng từ mua/bán."""
+
+    RECEIPT = 0
+    """Nhập kho (mua hàng về kho)."""
+
+    ISSUE = 1
+    """Xuất kho (bán hàng giao từ kho)."""
+
+
+class InventoryMovementLine(BaseModel):
+    """Một dòng vật tư trên phiếu nhập/xuất sinh từ chứng từ mua/bán.
+
+    `unit_price_fc` chỉ có nghĩa ở chiều **nhập** (giá vốn nhập theo chứng từ
+    mua); chiều xuất để `None` — giá xuất do engine tính giá của module kho
+    quyết định (4 phương pháp, phase 8), không phải chứng từ bán áp xuống.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    item_id: int
+    item_variant_id: int | None = None
+    warehouse_id: int
+    lot_no: str | None = None
+    quantity: Decimal
+    unit_id: int
+    unit_price_fc: Decimal | None = None
+
+
+class InventoryPosting(Protocol):
+    """Cửa duy nhất để chứng từ mua/bán tạo phiếu kho (phase 7 gọi, phase 8 cài)."""
+
+    def create_movement(
+        self,
+        session: Session,
+        *,
+        kind: InventoryMovementKind,
+        source_voucher_id: UUID,
+        branch_id: int,
+        posting_date: date,
+        currency_code: str,
+        exchange_rate: Decimal,
+        lines: Sequence[InventoryMovementLine],
+        user_id: int,
+    ) -> UUID:
+        """Tạo một phiếu kho gắn với chứng từ nguồn; trả `voucher_id` của phiếu."""
+        ...
+
+
+class CommitmentProvider(Protocol):
+    """Số lượng "đã hứa giao" cho cột **Có thể bán** = tồn − đã hứa (U7)."""
+
+    def committed_quantities(
+        self,
+        session: Session,
+        *,
+        item_ids: Sequence[int],
+        branch_id: int,
+        warehouse_id: int | None = None,
+    ) -> Mapping[int, Decimal]:
+        """Tổng đã hứa giao theo `item_id` — dạng batch vì lưới tồn kho hỏi
+        hàng trăm mã một lượt, và N lời gọi lẻ là N truy vấn trên bảng đơn hàng."""
+        ...
+
+
+# ---------------------------------------------------------------- registry
+
+
+class CrossModuleProviders:
+    """Sổ đăng ký bản cài của một tiến trình — đối tượng để test dựng registry riêng.
+
+    Công nợ và "đã hứa giao" là **danh sách**: số dư đầu kỳ, bán hàng, mua hàng
+    cùng là nguồn hợp lệ và kết quả là phép nối. `InventoryPosting` là **một**:
+    chỉ module kho ghi sổ kho, hai bản cài là hai nơi tranh nhau một bảng tồn —
+    đăng ký trùng ném ngay, cùng luật với `PostingDocumentRegistry`.
+    """
+
+    def __init__(self) -> None:
+        self._receivable: list[ReceivableProvider] = []
+        self._payable: list[PayableProvider] = []
+        self._commitment: list[CommitmentProvider] = []
+        self._inventory: InventoryPosting | None = None
+
+    def register_receivable(self, provider: ReceivableProvider) -> None:
+        self._receivable.append(provider)
+
+    def register_payable(self, provider: PayableProvider) -> None:
+        self._payable.append(provider)
+
+    def register_commitment(self, provider: CommitmentProvider) -> None:
+        self._commitment.append(provider)
+
+    def register_inventory_posting(self, implementation: InventoryPosting) -> None:
+        if self._inventory is not None:
+            raise ValueError("InventoryPosting đã có bản cài — chỉ module kho được ghi sổ kho")
+        self._inventory = implementation
+
+    def receivable_providers(self) -> tuple[ReceivableProvider, ...]:
+        return tuple(self._receivable)
+
+    def payable_providers(self) -> tuple[PayableProvider, ...]:
+        return tuple(self._payable)
+
+    def commitment_providers(self) -> tuple[CommitmentProvider, ...]:
+        return tuple(self._commitment)
+
+    def inventory_posting(self) -> InventoryPosting | None:
+        """`None` = chưa có module kho (trước phase 8) — nơi gọi phải từ chối
+        rõ ràng ("chưa bật phân hệ kho") thay vì giả vờ đã ghi."""
+        return self._inventory
+
+
+PROVIDERS: Final[CrossModuleProviders] = CrossModuleProviders()
+"""Registry của tiến trình. Module đăng ký lúc import — cùng chỗ với đăng ký
+mã quyền và loại chứng từ (xem `modules/general_ledger/journal/__init__.py`),
+nên mọi điểm vào đi qua `ket.model_registry` đều thấy đủ bản cài."""

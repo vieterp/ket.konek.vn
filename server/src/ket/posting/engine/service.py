@@ -39,6 +39,7 @@ from ket.kernel.periods.models import AccountingPeriod, FiscalYear
 from ket.posting.balances.recalc_queue import mark_dirty
 from ket.posting.documents.models import Voucher, VoucherStatus
 from ket.posting.documents.state_machine import VoucherAction, transition_to
+from ket.posting.engine.guards import run_guards
 from ket.posting.engine.models import GlPosting, Ledger, PostingDimensionValue
 from ket.posting.engine.prepared import PreparedLine
 from ket.posting.engine.requests import PostingLine, PostingRequest
@@ -67,7 +68,9 @@ class PostingService:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def post(self, request: PostingRequest, *, user_id: int) -> Voucher:
+    def post(
+        self, request: PostingRequest, *, user_id: int, acknowledged_warnings: bool = False
+    ) -> Voucher:
         voucher = self._require_voucher(request.voucher_id)
         period, year = self._share_lock_period(voucher.period_id)
 
@@ -106,6 +109,19 @@ class PostingService:
         )
         if violations:
             raise PostingValidationError("Chứng từ chưa đủ điều kiện ghi sổ", violations=violations)
+
+        # Guard chạy SAU khi bộ kiểm hợp lệ đã sạch (số liệu của chứng từ không
+        # hợp lệ không đáng đọc) và TRƯỚC máy trạng thái + INSERT — xem
+        # `engine/guards.py` về ba mức của FR-SYS-062.
+        guard_blocking, guard_warnings = run_guards(self._session, voucher=voucher, lines=lines)
+        if guard_blocking:
+            raise PostingValidationError(
+                "Chứng từ chưa đủ điều kiện ghi sổ", violations=guard_blocking + guard_warnings
+            )
+        if guard_warnings and not acknowledged_warnings:
+            raise PostingValidationError(
+                "Ghi sổ cần người dùng xác nhận cảnh báo", violations=guard_warnings
+            )
 
         # Máy trạng thái chạy TRƯỚC khi INSERT: chứng từ đã ghi sổ mà bị post
         # lần nữa phải dừng ở đây, không phải ở ràng buộc duy nhất của bảng.

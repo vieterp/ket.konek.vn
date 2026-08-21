@@ -10,3 +10,9 @@ document_type,purpose,account_code
 *,income_summary,911
 *,retained_earnings,421
 *,fx_revaluation,413
+*,borrowings,3411
+*,import_tax,3333
+*,cit,3334
+*,financial_income,515
+*,unexplained_surplus,3381
+*,insurance,3383

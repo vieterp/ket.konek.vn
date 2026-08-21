@@ -21,6 +21,7 @@ from openpyxl import Workbook
 from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.errors import MasterDataNotFoundError
 from ket.kernel.excel.descriptors import template_for
 from ket.kernel.excel.pipeline import run_import
 from ket.kernel.excel.report import ImportMode, ImportReport, MissingReferenceMode
@@ -28,6 +29,7 @@ from ket.kernel.jobs import queue
 from ket.kernel.jobs.builtin import SLOW_TASK
 from ket.kernel.jobs.registry import JobContext
 from ket.kernel.master_data.registry import REGISTRY, CatalogSpec
+from ket.kernel.master_data.service import MasterDataService
 from ket.kernel.persistence.types import AuditValues
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 
@@ -60,13 +62,23 @@ def spec_of(slug: str) -> CatalogSpec:
 
 
 MINIMUM_VALID_CELLS: dict[str, dict[str, object]] = {
-    # Ba danh mục có ràng buộc `CHECK` liên-trường mà một dòng "chỉ mã và tên"
-    # không thỏa. Khai ở đây thay vì nới lỏng phép khẳng định: nếu phase 5 thêm
+    # Danh mục có ràng buộc mà một dòng "chỉ mã và tên" không thỏa. Khai ở đây
+    # thay vì nới lỏng phép khẳng định: nếu phase 5 thêm
     # một danh mục có `CHECK` riêng thì test này đỏ, và người thêm phải nói ra
     # đâu là dòng hợp lệ tối thiểu của nó — đúng thứ người viết tệp mẫu cần biết.
     "partners": {"is_customer": "x"},  # CHECK (is_group OR is_customer OR is_vendor)
     "payment_terms": {"due_days": "0"},  # CHECK (due_days >= 0), NOT NULL
     "items": {"nature": "service"},  # dịch vụ: không cần đơn vị chính, không cần kho
+    # Tham chiếu nhập theo MÃ của danh mục đích (`bank_code`, không `bank_id`).
+    "company_bank_accounts": {"bank_code": "NH_MIN_IMPORT"},  # ngân hàng bắt buộc (6A)
+}
+
+MINIMUM_VALID_TARGETS: dict[str, tuple[tuple[str, str], ...]] = {
+    # Danh mục mà dòng tối thiểu TRỎ SANG danh mục khác qua cột bắt buộc —
+    # `import_source` gieo sẵn bản ghi đích (idempotent) trước khi chạy, vì
+    # lượt nhập mặc định chạy `MissingReferenceMode.ERROR`. Tài khoản ngân
+    # hàng doanh nghiệp (6A) là danh mục đầu tiên có tham chiếu bắt buộc.
+    "company_bank_accounts": (("banks", "NH_MIN_IMPORT"),),
 }
 
 
@@ -138,6 +150,15 @@ def import_source(
     Mỗi lượt có `job_id` riêng và một dòng `jobs` thật: bảng đệm có khóa ngoại
     tới `jobs`, nên một id bịa ra sẽ đổ ở ràng buộc chứ không ở luật đang đo.
     """
+    with unit_of_work(session_factory, scope) as session:
+        for target_slug, target_code in MINIMUM_VALID_TARGETS.get(slug, ()):
+            target_spec = spec_of(target_slug)
+            service = MasterDataService(session, target_spec.model)
+            try:
+                service.resolve_by_code(target_code)
+            except MasterDataNotFoundError:
+                service.create(code=target_code, name=f"Bản ghi đích {target_code}")
+
     with unit_of_work(session_factory, scope) as session:
         job = queue.enqueue(session, job_type=SLOW_TASK, params={}, requested_by=1)
         job_id = job.id

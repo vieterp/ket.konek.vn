@@ -1,6 +1,6 @@
 document_type,purpose,account_code
-*,cash,111
-*,bank,112
+*,cash,1111
+*,bank,1121
 *,vat_input,1331
 *,vat_output,33311
 *,ar_trade,131
@@ -10,3 +10,8 @@ document_type,purpose,account_code
 *,income_summary,911
 *,retained_earnings,421
 *,fx_revaluation,413
+*,borrowings,3411
+*,import_tax,3333
+*,cit,3334
+*,financial_income,515
+*,unexplained_surplus,3381

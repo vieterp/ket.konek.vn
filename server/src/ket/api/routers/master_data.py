@@ -96,6 +96,10 @@ MAX_PAGE_SIZE: Final[int] = 200
 DEFAULT_PAGE_SIZE: Final[int] = 100
 """Đủ cho một màn hình cây mở hết một cấp; client xin thêm khi cần."""
 
+MAX_HYDRATE_IDS: Final[int] = 200
+"""Trần của `ids=` — cùng con số với `MAX_IDS` của `/accounts` (lát 4E): một
+form sửa chứng từ dựng lại vài chục bản ghi, hai trăm đã là rất rộng."""
+
 
 def _register_with_body(
     decorator: Callable[[Callable[..., object]], object],
@@ -167,14 +171,27 @@ def _mount(spec: CatalogSpec) -> None:
         parent_id: Annotated[int | None, Query()] = None,
         subtree_of: Annotated[int | None, Query()] = None,
         flag: Annotated[str | None, Query(description=flag_help)] = None,
+        search: Annotated[str | None, Query(max_length=100)] = None,
+        ids: Annotated[list[int] | None, Query(max_length=MAX_HYDRATE_IDS)] = None,
         limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
         offset: Annotated[int, Query(ge=0)] = 0,
     ) -> BaseModel:
-        """Con trực tiếp của một nút, hoặc cả nhánh dưới một nút.
+        """Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
 
-        Hai chế độ trong một endpoint vì màn hình cây dùng cả hai: mở dần từng
-        cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi cả hai
-        cùng có — nó là câu hỏi hẹp hơn.
+        Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+        từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+        cả hai cùng có — nó là câu hỏi hẹp hơn.
+
+        Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+        nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+        chỗ), cùng hợp đồng với `/accounts`:
+
+        * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+          bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+        * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+          hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+          hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+          là câu hỏi trên toàn danh mục, không phải trên một nhánh.
 
         **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
         đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
@@ -189,7 +206,17 @@ def _mount(spec: CatalogSpec) -> None:
         column = flag_column(spec, flag)
         with unit_of_work(factory, authorized.scope) as session:
             service = service_for(session)
-            if subtree_of is not None:
+            if ids:
+                page = service.by_ids(ids, branch_id=branch_id)
+            elif search is not None and search.strip():
+                page = service.search_page(
+                    search,
+                    branch_id=branch_id,
+                    flag_column=column,
+                    limit=limit,
+                    offset=offset,
+                )
+            elif subtree_of is not None:
                 # Kiểm nút neo **trước** khi liệt kê (sửa sau review H-3). Không
                 # có bước này thì một nút của chi nhánh khác trả về `200` với
                 # danh sách rỗng còn một id không tồn tại trả `404` — đủ để dò

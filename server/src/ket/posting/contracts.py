@@ -26,6 +26,12 @@ from ket.posting.engine.dimensions import (
     PartnerKind,
     PostingDimensions,
 )
+from ket.posting.engine.guards import (
+    GUARD_REGISTRY,
+    GUARD_WARNING_DETAIL,
+    GuardFinding,
+    PostingGuard,
+)
 from ket.posting.engine.models import AMOUNT_PRECISION, AMOUNT_SCALE, Ledger
 from ket.posting.engine.requests import PostingLine, PostingRequest
 from ket.posting.engine.service import PostingService
@@ -33,13 +39,17 @@ from ket.posting.engine.service import PostingService
 __all__ = [
     "AMOUNT_PRECISION",
     "AMOUNT_SCALE",
+    "GUARD_REGISTRY",
+    "GUARD_WARNING_DETAIL",
     "POSTING_DOCUMENT_REGISTRY",
     "EntryKind",
     "ExtendedDimensionValue",
+    "GuardFinding",
     "Ledger",
     "PartnerKind",
     "PostingDimensions",
     "PostingDocumentType",
+    "PostingGuard",
     "PostingLine",
     "PostingRequest",
     "PostingService",

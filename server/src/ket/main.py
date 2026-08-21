@@ -52,6 +52,7 @@ from ket.api.routers.accounts import router as accounts_router
 from ket.api.routers.attachments import ATTACHMENTS_PREFIX
 from ket.api.routers.attachments import router as attachments_router
 from ket.api.routers.auth import router as auth_router
+from ket.api.routers.auto_posting import router as auto_posting_router
 from ket.api.routers.config_packages import CONFIG_PACKAGES_PREFIX
 from ket.api.routers.config_packages import router as config_packages_router
 from ket.api.routers.dimensions import router as dimensions_router
@@ -271,6 +272,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Phase 4 — posting engine: chứng từ nghiệp vụ khác + hành động chứng từ
     # dùng chung (ghi sổ / bỏ ghi sổ / xóa).
     app.include_router(accounts_router)
+    app.include_router(auto_posting_router)
     app.include_router(fiscal_years_router)
     app.include_router(gl_journal_router)
     app.include_router(vouchers_router)

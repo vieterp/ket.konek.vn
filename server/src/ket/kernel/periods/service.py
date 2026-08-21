@@ -44,6 +44,23 @@ OVERLAP_CONSTRAINT = "ex_fiscal_years_no_overlap"
 """Ràng buộc `EXCLUDE` chống chồng lấn niên độ, tạo ở migration `0002`."""
 
 
+def fiscal_year_covering(session: Session, on_date: date) -> FiscalYear | None:
+    """Năm tài chính phủ một ngày — `None` khi chưa có năm nào.
+
+    Tách ra ở lát 6A vì đã có người dùng thứ hai (`/auto-posting/operations`
+    cần chế độ kế toán của năm, cùng câu hỏi mà `/accounts` hỏi từ lát 4E).
+    `ORDER BY start_date DESC` để hai năm chồng lấn (bất biến app canh — nếu
+    vỡ) vẫn cho kết quả xác định: lấy năm bắt đầu muộn nhất phủ ngày này.
+    """
+    return session.execute(
+        select(FiscalYear)
+        .where(FiscalYear.start_date <= on_date)
+        .where(FiscalYear.end_date >= on_date)
+        .order_by(FiscalYear.start_date.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
 def _violates(error: IntegrityError, constraint: str) -> bool:
     """Lỗi ràng buộc này có phải của đúng ràng buộc đang quan tâm không.
 

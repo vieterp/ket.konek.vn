@@ -43,13 +43,14 @@ from ket.kernel.config.accounts_models import (
     ConfigPackage,
     DefaultAccount,
 )
+from ket.kernel.config.auto_posting_models import AutoPostingRule
 from ket.kernel.config.packages import signature_verifier
 from ket.kernel.config.packages.loader import (
     ACCOUNTS_FILE,
     CLOSING_PAIRS_FILE,
     DEFAULT_ACCOUNTS_FILE,
+    OPTIONAL_DATA_FILES,
     PACKAGE_MANIFEST_FILE,
-    STATEMENTS_FILE,
     LoadedPackage,
     load_package_from_texts,
 )
@@ -67,12 +68,13 @@ _DATA_FILES: tuple[str, ...] = (
     DEFAULT_ACCOUNTS_FILE,
     CLOSING_PAIRS_FILE,
 )
-_EXPECTED_ENTRIES = frozenset({*_DATA_FILES, MANIFEST_FILE, SIGNATURE_FILE})
-_EXPECTED_ENTRIES_WITH_STATEMENTS = frozenset({*_EXPECTED_ENTRIES, STATEMENTS_FILE})
-"""`statements.json` là mục **tùy chọn** duy nhất (lát 5B) — vẫn là tập tên cố
-định, phẳng, không thư mục con: hai tập hợp lệ thay vì một, không phải "tên gì
-cũng nhận". Checksum của nó bắt buộc có trong manifest đã ký khi tệp có mặt
-(`signature_verifier.verify_file_checksums` kiểm hai chiều)."""
+_REQUIRED_ENTRIES = frozenset({*_DATA_FILES, MANIFEST_FILE, SIGNATURE_FILE})
+_ALLOWED_ENTRIES = frozenset({*_REQUIRED_ENTRIES, *OPTIONAL_DATA_FILES})
+"""Mục tùy chọn (`statements.json` lát 5B, `auto_posting_rules.csv` lát 6A)
+vẫn là tập tên cố định, phẳng, không thư mục con: bắt buộc ⊆ gói ⊆ cho phép,
+không phải "tên gì cũng nhận". Checksum của tệp tùy chọn bắt buộc có trong
+manifest đã ký khi tệp có mặt (`signature_verifier.verify_file_checksums` kiểm
+hai chiều)."""
 
 MAX_ARCHIVE_BYTES = 5 * 1024 * 1024
 """Trần dung lượng gói `.zip` — fail-closed. Gói cấu hình là văn bản (CSV/JSON),
@@ -96,11 +98,12 @@ def _open_validated_zip(archive_bytes: bytes) -> zipfile.ZipFile:
     names = [info.filename for info in infos]
     if len(names) != len(set(names)):
         raise _reject("Gói .zip chứa tên tệp trùng lặp")
-    if set(names) not in (_EXPECTED_ENTRIES, _EXPECTED_ENTRIES_WITH_STATEMENTS):
+    name_set = set(names)
+    if not (_REQUIRED_ENTRIES <= name_set <= _ALLOWED_ENTRIES):
         raise _reject(
-            "Gói .zip không đúng cấu trúc cho phép — phải đúng sáu tệp của hợp đồng "
-            f"(cộng {STATEMENTS_FILE} nếu gói mang layout BCTC)",
-            expected=",".join(sorted(_EXPECTED_ENTRIES_WITH_STATEMENTS)),
+            "Gói .zip không đúng cấu trúc cho phép — phải đủ sáu tệp bắt buộc của hợp "
+            f"đồng, cộng tối đa các tệp tùy chọn ({', '.join(sorted(OPTIONAL_DATA_FILES))})",
+            expected=",".join(sorted(_ALLOWED_ENTRIES)),
             found=",".join(sorted(names)),
         )
     for info in infos:
@@ -126,7 +129,7 @@ def _read_all(archive: zipfile.ZipFile) -> dict[str, bytes]:
     """
     result: dict[str, bytes] = {}
     present = set(archive.namelist())
-    for name in sorted(_EXPECTED_ENTRIES_WITH_STATEMENTS & present):
+    for name in sorted(_ALLOWED_ENTRIES & present):
         try:
             result[name] = archive.read(name)
         except (zipfile.BadZipFile, zlib.error) as error:
@@ -230,6 +233,20 @@ def _insert_imported_package(session: Session, loaded: LoadedPackage) -> ConfigP
                 target_account=pair_row.target_account,
                 sequence=pair_row.sequence,
                 description=pair_row.description,
+            )
+        )
+    for rule_row in loaded.auto_posting_rules:
+        session.add(
+            AutoPostingRule(
+                package_id=package.id,
+                document_type=rule_row.document_type,
+                operation_code=rule_row.operation_code,
+                operation_name=rule_row.operation_name,
+                debit_purpose=rule_row.debit_purpose,
+                credit_purpose=rule_row.credit_purpose,
+                requires_partner=rule_row.requires_partner,
+                partner_kind=rule_row.partner_kind,
+                display_order=rule_row.display_order,
             )
         )
     for layout in loaded.statements:

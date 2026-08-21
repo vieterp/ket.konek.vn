@@ -1188,3 +1188,113 @@ def test_the_page_size_has_a_hard_ceiling(client: TestClient, editor: dict[str, 
         f"/api/v1/master/{PLAIN}", params={"limit": MAX_PAGE_SIZE + 1}, headers=editor
     )
     assert response.status_code == 422
+
+
+# ------------------------------------------------- tra cứu phẳng (lát 6A)
+
+
+def test_search_matches_code_prefix_or_name_and_skips_inactive(
+    client: TestClient, editor: dict[str, str]
+) -> None:
+    """Trả nợ 3D/4E: ô tra cứu hỏi máy chủ thay vì nạp trọn danh mục qua trần
+    200. Cùng luật khớp với `/accounts`: tiền tố mã HOẶC chứa trong tên; bản
+    ghi ngừng theo dõi không hiện — nó không chọn được cho chứng từ mới."""
+    marker = unique_code("TIM")
+    by_code = create_record(
+        client, editor, PLAIN, {"code": f"{marker}A", "name": "Kho chính"}
+    ).json()
+    by_name = create_record(
+        client, editor, PLAIN, {"code": unique_code("KQ"), "name": f"Kho chứa {marker}"}
+    ).json()
+    retired = create_record(
+        client, editor, PLAIN, {"code": f"{marker}B", "name": "Kho đã nghỉ"}
+    ).json()
+    updated = client.put(
+        f"/api/v1/master/{PLAIN}/{retired['id']}",
+        json={
+            "row_version": retired["row_version"],
+            "code": retired["code"],
+            "name": retired["name"],
+            "is_active": False,
+        },
+        headers=editor,
+    )
+    assert updated.status_code == 200, updated.text
+
+    page = client.get(f"/api/v1/master/{PLAIN}", params={"search": marker}, headers=editor).json()
+    found_ids = {item["id"] for item in page["items"]}
+    assert by_code["id"] in found_ids
+    assert by_name["id"] in found_ids
+    assert retired["id"] not in found_ids
+    assert page["total"] == 2
+
+    # `%` do người dùng gõ là ký tự thường, không phải mẫu LIKE.
+    wildcard = client.get(f"/api/v1/master/{PLAIN}", params={"search": "%"}, headers=editor).json()
+    assert wildcard["items"] == []
+
+
+def test_ids_hydrate_returns_inactive_rows_and_ignores_tree_params(
+    client: TestClient, editor: dict[str, str]
+) -> None:
+    """Đường dựng lại cho form sửa: chứng từ cũ trỏ vào bản ghi đã ngừng vẫn
+    phải hiện được mã/tên — cùng hợp đồng với `ids=` của `/accounts`."""
+    active = create_record(
+        client, editor, PLAIN, {"code": unique_code("HY"), "name": "Kho còn dùng"}
+    ).json()
+    retired = create_record(
+        client, editor, PLAIN, {"code": unique_code("HZ"), "name": "Kho đã nghỉ"}
+    ).json()
+    hidden = client.put(
+        f"/api/v1/master/{PLAIN}/{retired['id']}",
+        json={
+            "row_version": retired["row_version"],
+            "code": retired["code"],
+            "name": retired["name"],
+            "is_active": False,
+        },
+        headers=editor,
+    )
+    assert hidden.status_code == 200, hidden.text
+
+    page = client.get(
+        f"/api/v1/master/{PLAIN}",
+        params={"ids": [active["id"], retired["id"]], "parent_id": 999_999, "search": "khac"},
+        headers=editor,
+    ).json()
+    assert {item["id"] for item in page["items"]} == {active["id"], retired["id"]}
+
+
+def test_search_does_not_leak_other_branches_private_records(
+    client: TestClient,
+    editor: dict[str, str],
+    two_branch_editor: dict[str, str],
+    catalog_branches: list[str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+) -> None:
+    """Bản ghi riêng của chi nhánh B không hiện trong tra cứu của người chỉ
+    thuộc chi nhánh A — `_visible_to` phải áp cho cả hai đường phẳng mới
+    (`search=`, `ids=`), không chỉ đường duyệt cây."""
+    marker = unique_code("RB")
+    ids = branch_ids(session_factory, dataset_alpha, catalog_branches)
+    at_b = {**two_branch_editor, BRANCH_HEADER: str(ids[catalog_branches[1]])}
+    created = create_record(
+        client,
+        at_b,
+        PLAIN,
+        {
+            "code": f"{marker}P",
+            "name": "Kho riêng B",
+            "branch_id": ids[catalog_branches[1]],
+        },
+    )
+    assert created.status_code == 201, created.text
+    private = created.json()
+
+    page = client.get(f"/api/v1/master/{PLAIN}", params={"search": marker}, headers=editor).json()
+    assert private["id"] not in {item["id"] for item in page["items"]}
+
+    hydrate = client.get(
+        f"/api/v1/master/{PLAIN}", params={"ids": [private["id"]]}, headers=editor
+    ).json()
+    assert hydrate["items"] == []

@@ -26,7 +26,7 @@ from ket.kernel.attachments import models as attachment_models
 from ket.kernel.auditing import control_log as control_audit_models
 from ket.kernel.auditing import models as auditing_models
 from ket.kernel.bank_import import profile_models as bank_import_models
-from ket.kernel.config import accounts_models
+from ket.kernel.config import accounts_models, auto_posting_models
 from ket.kernel.config.printing import models as print_template_models
 from ket.kernel.config.reports import models as report_models
 from ket.kernel.config.statements import models as statement_models
@@ -43,7 +43,10 @@ from ket.kernel.periods import models as period_models
 from ket.kernel.persistence.base import ControlBase, DatasetBase
 from ket.kernel.security import auth_models
 from ket.kernel.security import models as security_models
+from ket.modules.bank import models as bank_models
+from ket.modules.cash_book import models as cash_book_models
 from ket.modules.general_ledger.journal import models as gl_journal_models
+from ket.modules.warehousing.treasurer import models as treasurer_models
 
 # Hai gói không có model — import để đăng ký mã quyền (`posting.period.*`,
 # `posting.integrity.*`) và loại job trước khi `provision_dataset` gieo bảng
@@ -72,8 +75,11 @@ __all__ = [
     "attachment_models",
     "auditing_models",
     "auth_models",
+    "auto_posting_models",
     "balance_models",
     "bank_import_models",
+    "bank_models",
+    "cash_book_models",
     "control_audit_models",
     "control_models",
     "currency_models",
@@ -98,5 +104,6 @@ __all__ = [
     "security_models",
     "statement_models",
     "statement_permission_registration",
+    "treasurer_models",
     "voucher_models",
 ]
