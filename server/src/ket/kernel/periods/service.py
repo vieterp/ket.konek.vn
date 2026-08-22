@@ -61,6 +61,22 @@ def fiscal_year_covering(session: Session, on_date: date) -> FiscalYear | None:
     ).scalar_one_or_none()
 
 
+def base_currency_of_period(session: Session, period_id: int) -> str:
+    """Đồng tiền hạch toán của năm chứa một kỳ.
+
+    Chứng từ chỉ mang `period_id`, còn "đồng hạch toán" khai ở năm tài chính —
+    câu hỏi "phiếu này có phải ngoại tệ không" vì thế đi qua hai bảng. Tách ra
+    ở lát 6E-2 vì mẫu in cần đúng câu trả lời ấy để quyết định có in dòng
+    "+ Tỷ giá ngoại tệ" hay không, và bản chép tay thứ hai của cùng câu truy
+    vấn là chỗ để hai đường lệch nhau.
+    """
+    period = session.get(AccountingPeriod, period_id)
+    year = session.get(FiscalYear, period.fiscal_year_id) if period is not None else None
+    if year is None:  # pragma: no cover - FK bảo đảm kỳ luôn thuộc một năm
+        raise PeriodNotFoundError("Kỳ kế toán không thuộc năm tài chính nào", period_id=period_id)
+    return year.base_currency
+
+
 def _violates(error: IntegrityError, constraint: str) -> bool:
     """Lỗi ràng buộc này có phải của đúng ràng buộc đang quan tâm không.
 

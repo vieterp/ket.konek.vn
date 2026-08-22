@@ -33,12 +33,14 @@ from ket.api.routers.printing_schemas import (
     PrintTemplateSummaryResponse,
     VoucherPrintRequest,
 )
+from ket.kernel import formatting as formats
 from ket.kernel.config.accounts_models import ChartOfAccount
 from ket.kernel.config.catalog import (
     MONEY_SCALE_KEY,
     PRINT_ALLOW_DRAFT_KEY,
     PRINT_ALLOW_LOCKED_KEY,
 )
+from ket.kernel.config.printing.context import EMPTY_DETAILS
 from ket.kernel.config.printing.models import PrintTemplate
 from ket.kernel.config.settings_service import value_of
 from ket.kernel.errors import PrintNotAllowedError, VoucherNotFoundError
@@ -49,12 +51,11 @@ from ket.kernel.security.permissions import Action
 from ket.posting.contracts import POSTING_DOCUMENT_REGISTRY, Voucher, VoucherStatus
 from ket.reporting.printing.models import PrintLog
 from ket.reporting.printing.template_service import (
-    VoucherPrintContext,
+    DocumentPrintContext,
     VoucherPrintLine,
-    render_voucher_pdf,
+    render_document_pdf,
     resolve_template,
 )
-from ket.reporting.rendering import formats
 from ket.reporting.rendering.header import load_unit_info, signature_date_line
 
 router = APIRouter(prefix="/api/v1", tags=["printing"])
@@ -149,7 +150,7 @@ def print_voucher(
             dataset_schema=authorized.scope.dataset_schema,
             user_id=authorized.scope.user_id,
         )
-        content = render_voucher_pdf(template, context, options=render_options)
+        content = render_document_pdf(template, context, options=render_options)
         session.add(
             PrintLog(
                 voucher_id=voucher.id,
@@ -230,7 +231,7 @@ def _next_copy_no(session: Session, voucher_id: UUID) -> int:
 
 def _build_context(
     session: Session, voucher: Voucher, *, copy_no: int, title: str, user_id: int
-) -> VoucherPrintContext:
+) -> DocumentPrintContext:
     """Dữ liệu chứng từ → context CHUỖI định dạng sẵn cho mẫu.
 
     Dòng in là ĐỊNH KHOẢN SỔ TÀI CHÍNH quy đổi VND — đọc qua chính
@@ -240,6 +241,11 @@ def _build_context(
     """
     document_type = POSTING_DOCUMENT_REGISTRY.get(voucher.document_type)
     request = document_type.build_request(session, voucher.id)
+    details = (
+        EMPTY_DETAILS
+        if document_type.print_details is None
+        else document_type.print_details(session, voucher.id, user_id)
+    )
     scale_value = value_of(session, key=MONEY_SCALE_KEY, user_id=user_id)
     scale = scale_value if isinstance(scale_value, int) else 2
     codes = _account_codes(session, {line.account_id for line in request.financial_lines})
@@ -261,7 +267,7 @@ def _build_context(
             )
         )
     today = datetime.now(UTC).astimezone().date()
-    return VoucherPrintContext(
+    return DocumentPrintContext(
         title=title,
         voucher_no=voucher.voucher_no,
         document_date=formats.format_date(voucher.document_date),
@@ -274,6 +280,7 @@ def _build_context(
         total_credit=formats.format_money(total_credit, blank_zero=False),
         signature_date_line=signature_date_line(today),
         unit=load_unit_info(session),
+        details=details,
     )
 
 

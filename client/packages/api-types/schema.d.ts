@@ -596,6 +596,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cash-book/count-sheets/{sheet_id}/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Print Count Sheet
+         * @description In biên bản kiểm kê quỹ theo mẫu 08a-TT (FR-QUY-030) — trả nợ lát 6B.
+         *
+         *     Đứng ở router của module chứ không ở `routers/printing.py`: biên bản **không
+         *     phải chứng từ** (không có dòng `vouchers`), nên nó không có `document_type`
+         *     trong registry của posting, không có mã quyền `.print`, và **không ghi
+         *     `print_log`** — sổ đếm lần in gắn khóa ngoại tới `vouchers` và cảnh báo in
+         *     lại của FR-RPT-011/FR-QUY-022 nói về CHỨNG TỪ. Quyền là `count_sheet.view`:
+         *     ai đọc được biên bản thì in được nó, đúng như đọc màn hình.
+         *
+         *     Vẫn dùng chung `resolve_template` + `render_document_pdf` với chứng từ, nên
+         *     mẫu vẫn là dữ liệu sửa được (FR-RPT-008) và vẫn chạy trong sandbox RT-01.
+         */
+        post: operations["print_count_sheet_api_v1_cash_book_count_sheets__sheet_id__print_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cash-book/open-invoices": {
         parameters: {
             query?: never;
@@ -13803,6 +13833,46 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CountSheetOut"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    print_count_sheet_api_v1_cash_book_count_sheets__sheet_id__print_post: {
+        parameters: {
+            query?: {
+                template_code?: string | null;
+            };
+            header?: never;
+            path: {
+                sheet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description PDF biên bản kiểm kê quỹ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description Không có biên bản / mẫu in */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {

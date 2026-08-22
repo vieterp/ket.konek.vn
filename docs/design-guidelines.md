@@ -461,3 +461,23 @@ Logo/cỡ chữ/số lẻ đọc từ settings (`report.*`, `format.*`) — logo
 một-bước ở màn Thiết lập. Mọi lần in ghi `print_log` (`copy_no` nối tiếp, cảnh
 báo in lại); nháp in được mang watermark BẢN NHÁP trừ khi đơn vị tắt
 `print.allow_draft_vouchers` (FR-RPT-011).
+
+**Trường riêng của từng loại chứng từ** (lát 6E-2) không nằm ở tầng in: module
+sở hữu chứng từ khai `PostingDocumentType.print_details`, trả một
+`DocumentPrintDetails` (`kernel/config/printing/context.py`) gồm sáu vùng có
+thật trên biểu mẫu giấy — khối "Nợ/Có" góc phải, thân "Nhãn: giá trị", dòng
+"Số tiền … (Viết bằng chữ)", bảng chi tiết, khối chân trang. Thêm phân hệ =
+thêm một hàm ở module, **không** sửa `routers/printing.py` dùng chung. Mọi giá
+trị phải là chuỗi đã định dạng bằng `kernel/formatting.py`; số đọc thành chữ
+dùng `kernel/money_words.py`. Bản in KHÔNG phải chứng từ đi cùng đường: biên
+bản kiểm kê quỹ dựng `DocumentPrintContext` với `lines` rỗng và nội dung ở
+`details.tables`, in qua endpoint của module, không ghi `print_log`.
+
+Mẫu builtin khai ở `kernel/config/printing/data/builtin_print_templates.json`
+(+ tệp `.html.j2` cùng thư mục) và **chỉ được gieo lại ở bước
+`_refresh_builtin_data` của migration cuối chuỗi** — thêm mẫu mới mà không dời
+bước đó về migration mới nhất thì dữ liệu kế toán đang chạy sẽ không bao giờ
+thấy mẫu ấy. Mẫu theo thông tư ghi rõ số hiệu ("Mẫu số 01 - TT"); bản in mà
+thông tư **không** có biểu mẫu (ủy nhiệm chi, giấy báo có) tuyệt đối không
+mượn số hiệu mẫu — đơn vị cần đúng mẫu ngân hàng mình thì thêm một dòng
+`print_templates` (FR-BNK-004).

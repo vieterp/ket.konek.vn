@@ -42,6 +42,7 @@ from ket.kernel.contracts import PartnerKind
 from ket.kernel.errors import PostingValidationError, PostingViolation
 from ket.kernel.money import convert_currency
 from ket.kernel.periods.models import AccountingPeriod, FiscalYear
+from ket.kernel.periods.service import base_currency_of_period
 from ket.kernel.protocols import (
     PROVIDERS,
     OpenInvoice,
@@ -513,11 +514,7 @@ def _find_row_targets(
 
 
 def _base_currency(session: Session, voucher: Voucher) -> str:
-    period = session.get(AccountingPeriod, voucher.period_id)
-    year = session.get(FiscalYear, period.fiscal_year_id) if period is not None else None
-    if year is None:  # pragma: no cover - FK bảo đảm
-        raise RuntimeError(f"Chứng từ {voucher.id} trỏ vào kỳ không có năm tài chính")
-    return year.base_currency
+    return base_currency_of_period(session, voucher.period_id)
 
 
 def _fx_account_id(session: Session, voucher: Voucher, purpose: str) -> int:

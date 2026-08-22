@@ -13,16 +13,16 @@ import pytest
 from jinja2.exceptions import SecurityError
 from pypdf import PdfReader
 
+from ket.kernel import formatting as formats
 from ket.kernel.config.printing.models import PrintTemplate
 from ket.kernel.config.printing.seed import load_builtin_print_templates
 from ket.kernel.numbering.models import ResetRule
 from ket.kernel.numbering.service import NumberingRule, _expand_year_tokens
 from ket.reporting.printing.template_service import (
-    VoucherPrintContext,
+    DocumentPrintContext,
     VoucherPrintLine,
-    render_voucher_pdf,
+    render_document_pdf,
 )
-from ket.reporting.rendering import formats
 from ket.reporting.rendering.environment import make_asset_fetcher
 from ket.reporting.rendering.header import UnitInfo
 from ket.reporting.rendering.options import LogoAsset, RenderOptions
@@ -76,8 +76,8 @@ class TestPerRenderAssets:
             fetcher("asset:logo")
 
 
-def _context(*, draft: bool, copy_line: str | None = None) -> VoucherPrintContext:
-    return VoucherPrintContext(
+def _context(*, draft: bool, copy_line: str | None = None) -> DocumentPrintContext:
+    return DocumentPrintContext(
         title="Phiếu kế toán",
         voucher_no="GLE26-00042",
         document_date="01/03/2026",
@@ -121,14 +121,14 @@ def _pdf_text(content: bytes) -> str:
 
 class TestVoucherTemplateRendering:
     def test_posted_voucher_renders_without_watermark(self) -> None:
-        content = render_voucher_pdf(_builtin_template(), _context(draft=False))
+        content = render_document_pdf(_builtin_template(), _context(draft=False))
         text = _pdf_text(content)
         assert "GLE26-00042" in text
         assert "123.000" in text
         assert "BẢN NHÁP" not in text
 
     def test_draft_carries_the_watermark_and_reprint_carries_the_copy_line(self) -> None:
-        content = render_voucher_pdf(
+        content = render_document_pdf(
             _builtin_template(), _context(draft=True, copy_line="In lần 3")
         )
         text = _pdf_text(content)
@@ -144,7 +144,7 @@ class TestVoucherTemplateRendering:
             b"\xc0\xf0\x1f\x00\x05\x05\x02\x00_\xc8\xf1\xd2\x00\x00\x00\x00IEND"
             b"\xaeB`\x82"
         )
-        content = render_voucher_pdf(
+        content = render_document_pdf(
             _builtin_template(),
             _context(draft=False),
             options=RenderOptions(logo=LogoAsset(content=png, media_type="image/png")),
@@ -163,7 +163,7 @@ class TestVoucherTemplateRendering:
             is_builtin=False,
         )
         with pytest.raises(SecurityError):
-            render_voucher_pdf(hostile, _context(draft=False))
+            render_document_pdf(hostile, _context(draft=False))
 
     def test_css_extra_cannot_reach_the_filesystem(self) -> None:
         """`css_extra` là CSS không tin cậy — `url()` đi qua fetcher allowlist
@@ -179,7 +179,7 @@ class TestVoucherTemplateRendering:
             is_default=False,
             is_builtin=False,
         )
-        content = render_voucher_pdf(hostile, _context(draft=False))
+        content = render_document_pdf(hostile, _context(draft=False))
         assert content.startswith(b"%PDF")
         assert b"root:" not in content
 

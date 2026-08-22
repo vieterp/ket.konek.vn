@@ -1,7 +1,7 @@
 """Render mẫu in chứng từ (FR-RPT-008) — pha CHỮ đã xong trước khi vào đây.
 
 Gói này KHÔNG đọc chứng từ (C5 cấm reporting→posting): tầng API dựng
-`VoucherPrintContext` từ dữ liệu posting rồi đưa sang — mọi giá trị đã là
+`DocumentPrintContext` từ dữ liệu posting rồi đưa sang — mọi giá trị đã là
 CHUỖI định dạng sẵn, mẫu chỉ đổ khuôn (cùng nguyên tắc `report_table`).
 
 RT-01: một `SandboxedEnvironment` cho MỌI mẫu (builtin lẫn người dùng sửa),
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from weasyprint import CSS, HTML
 from weasyprint.text.fonts import FontConfiguration
 
+from ket.kernel.config.printing.context import EMPTY_DETAILS, DocumentPrintDetails
 from ket.kernel.config.printing.models import PrintTemplate
 from ket.kernel.errors import PrintTemplateNotFoundError
 from ket.reporting.rendering.environment import (
@@ -47,8 +48,22 @@ class VoucherPrintLine:
 
 
 @dataclass(frozen=True)
-class VoucherPrintContext:
-    """Toàn bộ dữ liệu một bản in chứng từ — hợp đồng giữa tầng API và mẫu."""
+class DocumentPrintContext:
+    """Toàn bộ dữ liệu một bản in — hợp đồng giữa tầng API và mẫu.
+
+    Tổng quát hóa ở lát 6E-2 theo hai hướng, mỗi hướng có người dùng thật ngay
+    trong lát:
+
+    * `details` mang phần riêng từng loại chứng từ (01-TT cần "Họ và tên người
+      nộp tiền", ủy nhiệm chi cần TK người thụ hưởng) — module điền qua
+      `PostingDocumentType.print_details`;
+    * bản in **không phải chứng từ** cũng đi đường này: biên bản kiểm kê quỹ
+      (08a-TT) không có dòng nào trong `vouchers`, nên `lines`/`total_*` để
+      rỗng và toàn bộ nội dung nằm ở `details.tables`.
+
+    Tên biến đưa vào mẫu giữ nguyên như lát 5D nên mẫu `PHIEU-KE-TOAN` đã gieo
+    trong DB (người dùng có thể đã sửa — FR-RPT-008) vẫn render y hệt.
+    """
 
     title: str
     voucher_no: str
@@ -66,6 +81,7 @@ class VoucherPrintContext:
     total_credit: str
     signature_date_line: str
     unit: UnitInfo
+    details: DocumentPrintDetails = EMPTY_DETAILS
 
 
 def resolve_template(
@@ -96,15 +112,16 @@ def resolve_template(
     return template
 
 
-def render_voucher_pdf(
+def render_document_pdf(
     template: PrintTemplate,
-    context: VoucherPrintContext,
+    context: DocumentPrintContext,
     *,
     options: RenderOptions = DEFAULT_RENDER_OPTIONS,
 ) -> bytes:
-    """Một chứng từ → PDF theo mẫu — sandbox + allowlist (RT-01); logo + cỡ
+    """Một bản in → PDF theo mẫu — sandbox + allowlist (RT-01); logo + cỡ
     chữ theo cấu hình (FR-RPT-010) đi cùng đường với bản in báo cáo."""
     environment = create_print_environment()
+    details = context.details
     html_text = environment.from_string(template.html_template).render(
         title=context.title,
         voucher_no=context.voucher_no,
@@ -118,6 +135,12 @@ def render_voucher_pdf(
         total_credit=context.total_credit,
         signature_date_line=context.signature_date_line,
         unit=context.unit,
+        header_fields=details.header_fields,
+        fields=details.fields,
+        amount=details.amount,
+        amount_in_words=details.amount_in_words,
+        tables=details.tables,
+        notes=details.notes,
         logo_url=f"asset:{LOGO_ASSET_NAME}" if options.logo is not None else None,
     )
     fetcher = make_asset_fetcher(

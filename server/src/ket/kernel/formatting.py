@@ -1,8 +1,13 @@
-"""Đổi giá trị ô thành chữ cho bản in PDF (quy ước số Việt Nam).
+"""Đổi giá trị thành chữ theo quy ước số Việt Nam — dùng cho mọi bản in.
 
-Chỉ TRÌNH BÀY — mọi phép cộng đã xong ở `grouping.py` bằng `Decimal`. XLSX
+Chỉ TRÌNH BÀY — mọi phép cộng đã xong bằng `Decimal` trước khi tới đây. XLSX
 không đi qua đây: nó giữ giá trị số + `num_format` để Excel tự định dạng
 (FR-RPT-012), người dùng kiểm lại được bằng công thức.
+
+Ở **kernel** chứ không ở `reporting` (chuyển ở lát 6E-2): mẫu in chứng từ lấy
+trường riêng từng loại từ chính module sở hữu chứng từ (`print_details`), mà
+module không import ngược lên `reporting` được. Hàm ở đây thuần túy — không
+session, không cấu hình — nên đứng ở kernel là đúng chỗ, không phải nhượng bộ.
 """
 
 from __future__ import annotations

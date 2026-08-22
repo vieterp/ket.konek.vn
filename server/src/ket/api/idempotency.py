@@ -74,6 +74,11 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         # để ĐẾM (`copy_no` + cảnh báo), không phải một lần gửi lại cần khử.
         # Một khóa idempotency ở đây sẽ trả bản PDF cũ và nói dối số lần in.
         "/api/v1/vouchers/{voucher_id}/print",
+        # In biên bản kiểm kê quỹ (lát 6E-2): KHÔNG ghi gì cả — không cả một
+        # dòng `print_log` (biên bản không phải chứng từ, sổ đếm lần in gắn
+        # khóa ngoại tới `vouchers`). Là POST chỉ vì đứng cùng họ với nút In
+        # chứng từ và trả về tệp nhị phân.
+        "/api/v1/cash-book/count-sheets/{sheet_id}/print",
         # Nút một-bước gán logo (lát 5E, FR-RPT-010): gửi lại cùng tệp ghi lại
         # cùng content_hash và cùng hai giá trị settings — bản thân thao tác
         # idempotent theo nội dung, không có bản ghi nào bị nhân đôi (kho blob

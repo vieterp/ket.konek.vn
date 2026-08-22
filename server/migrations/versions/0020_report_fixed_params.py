@@ -22,13 +22,12 @@ lát này mọi báo cáo chỉ đòi `reporting.report.view`, nên báo cáo đ
 là đường đọc `bank_statement_lines` đầu tiên không đi qua quyền ngân hàng).
 `NULL` = không cổng phụ, đúng thế đứng cũ của bộ sổ tổng hợp.
 
-Cuối cùng là bước dữ liệu `_refresh_builtin_data` CHUYỂN TỪ 0017 sang (doctrine
-lát 6B, giữ nguyên): `refresh_builtin_reports` đọc dữ liệu builtin đóng gói
-HIỆN TẠI, gieo lại definition và probe SQL từng dataset — nên nó chỉ chạy đúng
-ở migration MỚI NHẤT của chuỗi. Lát này thêm 6 dataset builtin và ghi cột
-`fixed_params` vừa tạo bên trên, nên bước phải nằm ở đây chứ không ở 0017.
-Migration tương lai thêm cột mà dataset builtin đọc phải dời tiếp bước này về
-cuối chuỗi.
+Bước dữ liệu `_refresh_builtin_data` từng ở đây (chuyển 0017 → 0020 ở lát 6E-1)
+đã CHUYỂN TIẾP sang `0021`: `refresh_builtin_reports` đọc dữ liệu builtin đóng
+gói HIỆN TẠI, gieo lại definition và probe SQL từng dataset, nên nó chỉ chạy
+đúng ở migration MỚI NHẤT của chuỗi. Sáu dataset builtin thêm ở lát này vẫn
+được gieo — chỉ là ở bước cuối chuỗi, một migration sau. Migration tương lai
+thêm cột mà dataset builtin đọc phải dời tiếp bước đó về cuối chuỗi.
 
 `downgrade()` drop cột — chưa có bản cài phát hành.
 """
@@ -41,8 +40,6 @@ import sqlalchemy as sa
 from alembic import context, op
 from sqlalchemy.dialects import postgresql
 
-from ket.kernel.config.printing.seed import ensure_builtin_print_templates
-from ket.kernel.config.reports.seed import refresh_builtin_reports
 from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 
 revision: str = "0020"
@@ -54,7 +51,6 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     _add_fixed_params()
     _add_required_permission_module()
-    _refresh_builtin_data()
 
 
 def _target_schema() -> str:
@@ -88,18 +84,6 @@ def _add_required_permission_module() -> None:
         sa.Column("required_permission_module", sa.String(length=50), nullable=True),
         schema=_target_schema(),
     )
-
-
-def _refresh_builtin_data() -> None:
-    """Làm mới metadata báo cáo + mẫu in builtin — CHUYỂN TỪ 0017 (xem docstring
-    đầu tệp). Chỉ chạy online, cùng lý do với bản gốc: bước dữ liệu đọc-rồi-ghi
-    không diễn đạt được thành SQL tĩnh của `upgrade --sql`."""
-    if context.is_offline_mode():
-        return
-    schema = _target_schema()
-    connection = op.get_bind()
-    refresh_builtin_reports(connection, schema)
-    ensure_builtin_print_templates(connection, schema)
 
 
 def downgrade() -> None:

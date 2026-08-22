@@ -16634,6 +16634,66 @@
         ]
       }
     },
+    "/api/v1/cash-book/count-sheets/{sheet_id}/print": {
+      "post": {
+        "description": "In biên bản kiểm kê quỹ theo mẫu 08a-TT (FR-QUY-030) — trả nợ lát 6B.\n\nĐứng ở router của module chứ không ở `routers/printing.py`: biên bản **không\nphải chứng từ** (không có dòng `vouchers`), nên nó không có `document_type`\ntrong registry của posting, không có mã quyền `.print`, và **không ghi\n`print_log`** — sổ đếm lần in gắn khóa ngoại tới `vouchers` và cảnh báo in\nlại của FR-RPT-011/FR-QUY-022 nói về CHỨNG TỪ. Quyền là `count_sheet.view`:\nai đọc được biên bản thì in được nó, đúng như đọc màn hình.\n\nVẫn dùng chung `resolve_template` + `render_document_pdf` với chứng từ, nên\nmẫu vẫn là dữ liệu sửa được (FR-RPT-008) và vẫn chạy trong sandbox RT-01.",
+        "operationId": "print_count_sheet_api_v1_cash_book_count_sheets__sheet_id__print_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "template_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 50,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Template Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {}
+            },
+            "description": "PDF biên bản kiểm kê quỹ"
+          },
+          "404": {
+            "description": "Không có biên bản / mẫu in"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Print Count Sheet",
+        "tags": [
+          "cash-book"
+        ]
+      }
+    },
     "/api/v1/cash-book/open-invoices": {
       "get": {
         "description": "Chứng từ công nợ còn nợ của một đối tác cho picker đối trừ (`docs/srs/03` §4).\n\nPhía phải thu đòi quyền xem phiếu thu, phải trả đòi quyền xem phiếu chi —\ndanh sách này tồn tại để lập đúng loại phiếu đó. `side` phải KHỚP loại đối\ntác (phải thu ↔ khách hàng, phải trả ↔ NCC): cổng quyền kiểm theo chiều,\nnên một cặp lệch chiều là đường vòng qua chính cổng đó — provider đã khóa\nchiều ở tầng dữ liệu (sửa H-1 review 6B), đây là lớp chặn sớm có thông điệp.",

@@ -9,7 +9,7 @@ nào, dựng định khoản ra sao và cộng/gỡ đối trừ khi nào.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Final, Literal
 from uuid import UUID
 
@@ -24,10 +24,12 @@ from ket.api.dependencies import (
     require_permission,
 )
 from ket.api.idempotency import idempotency_key_dependency
+from ket.api.render_options import build_render_options
 from ket.kernel.config.catalog import SAVE_ALSO_POSTS_KEY
 from ket.kernel.config.settings_service import value_of
 from ket.kernel.contracts import PartnerKind
 from ket.kernel.errors import BranchNotInScopeError, SettlementSideMismatchError
+from ket.kernel.formatting import format_date
 from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
@@ -44,6 +46,7 @@ from ket.modules.cash_book.models import (
     CashVoucherKind,
     CashVoucherLine,
 )
+from ket.modules.cash_book.print_details import build_count_sheet_print_details
 from ket.modules.cash_book.schemas import (
     CashSettlementOut,
     CashVoucherIn,
@@ -60,6 +63,12 @@ from ket.modules.cash_book.schemas import (
 from ket.modules.cash_book.service import CashVoucherService
 from ket.modules.cash_book.settlement_service import open_invoices
 from ket.posting.documents.models import Voucher
+from ket.reporting.printing.template_service import (
+    DocumentPrintContext,
+    render_document_pdf,
+    resolve_template,
+)
+from ket.reporting.rendering.header import load_unit_info, signature_date_line
 
 router = APIRouter(prefix="/api/v1/cash-book", tags=["cash-book"])
 
@@ -90,6 +99,17 @@ CountSheetKey = Annotated[str, Depends(idempotency_key_dependency(COUNT_SHEET_RO
 AdjustmentKey = Annotated[str, Depends(idempotency_key_dependency(ADJUSTMENT_ROUTE))]
 
 MAX_PAGE_SIZE: Final[int] = 200
+
+PDF_MEDIA_TYPE: Final[str] = "application/pdf"
+
+COUNT_SHEET_DOCUMENT_TYPE: Final[str] = "KKQ"
+"""Khóa tra mẫu in của biên bản kiểm kê trong `print_templates.document_type`.
+
+KHÔNG phải một loại chứng từ: mã này không có trong registry của posting (biên
+bản không ghi sổ), nên nó cũng không xuất hiện ở `GET /print-templates` — hộp
+chọn mẫu bên đó chỉ liệt kê loại chứng từ người gọi in được. Cột dùng chung
+`document_type` vì mẫu in tra theo "bản in loại gì", và biên bản kiểm kê là một
+loại bản in."""
 
 
 def _require_branch_in_scope(authorized: AuthorizedRequest, branch_id: int) -> None:
@@ -360,6 +380,74 @@ def delete_count_sheet(
 ) -> None:
     with unit_of_work(factory, authorized.scope) as session:
         CashCountSheetService(session).delete(sheet_id)
+
+
+@router.post(
+    "/count-sheets/{sheet_id}/print",
+    response_class=Response,
+    responses={
+        200: {"content": {PDF_MEDIA_TYPE: {}}, "description": "PDF biên bản kiểm kê quỹ"},
+        404: {"description": "Không có biên bản / mẫu in"},
+    },
+)
+def print_count_sheet(
+    sheet_id: UUID,
+    authorized: CountSheetReader,
+    factory: SessionFactory,
+    settings: AppSettings,
+    template_code: Annotated[str | None, Query(max_length=50)] = None,
+) -> Response:
+    """In biên bản kiểm kê quỹ theo mẫu 08a-TT (FR-QUY-030) — trả nợ lát 6B.
+
+    Đứng ở router của module chứ không ở `routers/printing.py`: biên bản **không
+    phải chứng từ** (không có dòng `vouchers`), nên nó không có `document_type`
+    trong registry của posting, không có mã quyền `.print`, và **không ghi
+    `print_log`** — sổ đếm lần in gắn khóa ngoại tới `vouchers` và cảnh báo in
+    lại của FR-RPT-011/FR-QUY-022 nói về CHỨNG TỪ. Quyền là `count_sheet.view`:
+    ai đọc được biên bản thì in được nó, đúng như đọc màn hình.
+
+    Vẫn dùng chung `resolve_template` + `render_document_pdf` với chứng từ, nên
+    mẫu vẫn là dữ liệu sửa được (FR-RPT-008) và vẫn chạy trong sandbox RT-01.
+    """
+    with unit_of_work(factory, authorized.scope) as session:
+        sheet = CashCountSheetService(session).require(sheet_id)
+        _require_branch_in_scope(authorized, sheet.branch_id)
+        template = resolve_template(
+            session, document_type=COUNT_SHEET_DOCUMENT_TYPE, template_code=template_code
+        )
+        details = build_count_sheet_print_details(session, sheet_id)
+        today = datetime.now(UTC).astimezone().date()
+        context = DocumentPrintContext(
+            title=template.name,
+            voucher_no="",
+            document_date=format_date(sheet.count_date),
+            posting_date=format_date(sheet.count_date),
+            description=sheet.note,
+            draft=False,
+            copy_line=None,
+            lines=(),
+            total_debit="",
+            total_credit="",
+            signature_date_line=signature_date_line(today),
+            unit=load_unit_info(session),
+            details=details,
+        )
+        render_options = build_render_options(
+            session,
+            settings=settings,
+            dataset_schema=authorized.scope.dataset_schema,
+            user_id=authorized.scope.user_id,
+        )
+        content = render_document_pdf(template, context, options=render_options)
+    filename = f"bien-ban-kiem-ke-quy-{sheet.count_date.isoformat()}.pdf"
+    return Response(
+        content=content,
+        media_type=PDF_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.post(
