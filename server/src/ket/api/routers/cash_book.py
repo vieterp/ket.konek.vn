@@ -36,6 +36,7 @@ from ket.kernel.security.permissions import Action, permission_code
 from ket.modules.cash_book import (
     CASH_PERMISSION_MODULE,
     COUNT_SHEET_PERMISSION_CODE,
+    COUNT_SHEET_PRINT_CODE,
     PAYMENT_PERMISSION_CODE,
     RECEIPT_PERMISSION_CODE,
 )
@@ -101,15 +102,6 @@ AdjustmentKey = Annotated[str, Depends(idempotency_key_dependency(ADJUSTMENT_ROU
 MAX_PAGE_SIZE: Final[int] = 200
 
 PDF_MEDIA_TYPE: Final[str] = "application/pdf"
-
-COUNT_SHEET_DOCUMENT_TYPE: Final[str] = "KKQ"
-"""Khóa tra mẫu in của biên bản kiểm kê trong `print_templates.document_type`.
-
-KHÔNG phải một loại chứng từ: mã này không có trong registry của posting (biên
-bản không ghi sổ), nên nó cũng không xuất hiện ở `GET /print-templates` — hộp
-chọn mẫu bên đó chỉ liệt kê loại chứng từ người gọi in được. Cột dùng chung
-`document_type` vì mẫu in tra theo "bản in loại gì", và biên bản kiểm kê là một
-loại bản in."""
 
 
 def _require_branch_in_scope(authorized: AuthorizedRequest, branch_id: int) -> None:
@@ -411,9 +403,12 @@ def print_count_sheet(
     """
     with unit_of_work(factory, authorized.scope) as session:
         sheet = CashCountSheetService(session).require(sheet_id)
+        # Lớp phòng thủ THỨ HAI, không phải cổng chính (review 6E-2, L-1): RLS
+        # đã lọc biên bản ngoài phạm vi nên `require` ném 404 trước khi tới đây.
+        # Giữ lại để ngày một đường đọc mới quên bật RLS thì vẫn có người chặn.
         _require_branch_in_scope(authorized, sheet.branch_id)
         template = resolve_template(
-            session, document_type=COUNT_SHEET_DOCUMENT_TYPE, template_code=template_code
+            session, document_type=COUNT_SHEET_PRINT_CODE, template_code=template_code
         )
         details = build_count_sheet_print_details(session, sheet_id)
         today = datetime.now(UTC).astimezone().date()
@@ -439,7 +434,9 @@ def print_count_sheet(
             user_id=authorized.scope.user_id,
         )
         content = render_document_pdf(template, context, options=render_options)
-    filename = f"bien-ban-kiem-ke-quy-{sheet.count_date.isoformat()}.pdf"
+    # Kèm 6 ký tự đầu của id: hai biên bản cùng ngày trên cùng TK quỹ là hợp lệ
+    # và không được tải về trùng tên tệp (review 6E-2, L-2).
+    filename = f"bien-ban-kiem-ke-quy-{sheet.count_date.isoformat()}-{sheet.id.hex[:6]}.pdf"
     return Response(
         content=content,
         media_type=PDF_MEDIA_TYPE,

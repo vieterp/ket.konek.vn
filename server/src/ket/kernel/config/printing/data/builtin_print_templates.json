@@ -1,5 +1,5 @@
 {
-  "__doc__": "Mẫu in builtin. Phase 5 gieo Phiếu kế toán (GLE) chứng minh đường FR-RPT-008/011; lát 6E-2 thêm bốn chứng từ tiền của phase 6 cùng biên bản kiểm kê quỹ. Tất cả đều package_id NULL — hình dạng 01-TT/02-TT/08a-TT không phụ thuộc hệ thống tài khoản nên không thuộc gói TT99 hay TT133; mẫu ràng buộc theo thông tư (kèm package_scheme) sẽ vào gói cấu hình khi thật sự có mẫu khác nhau giữa hai chế độ. Ủy nhiệm chi và giấy báo có KHÔNG có biểu mẫu trong TT99 Phụ lục I: hai mẫu ở đây là bản in nội bộ, mẫu nộp ngân hàng do từng ngân hàng phát hành (FR-BNK-004 — thêm dòng print_templates, không sửa mã).",
+  "__doc__": "Mẫu in builtin. Phase 5 gieo Phiếu kế toán (GLE) chứng minh đường FR-RPT-008/011; lát 6E-2 thêm sáu chứng từ tiền của phase 6 (PT/PC theo mẫu thông tư; UNC/BC/SEC/CTNB là bản in nội bộ) cùng biên bản kiểm kê quỹ. Tất cả đều package_id NULL — hình dạng 01-TT/02-TT/08a-TT không phụ thuộc hệ thống tài khoản nên không thuộc gói TT99 hay TT133; mẫu ràng buộc theo thông tư (kèm package_scheme) sẽ vào gói cấu hình khi thật sự có mẫu khác nhau giữa hai chế độ. Ủy nhiệm chi và giấy báo có KHÔNG có biểu mẫu trong TT99 Phụ lục I: hai mẫu ở đây là bản in nội bộ, mẫu nộp ngân hàng do từng ngân hàng phát hành (FR-BNK-004 — thêm dòng print_templates, không sửa mã).",
   "templates": [
     {
       "document_type": "GLE",
@@ -34,6 +34,20 @@
       "code": "GIAY-BAO-CO",
       "name": "Giấy báo có",
       "html_file": "giay-bao-co.html.j2",
+      "is_default": true
+    },
+    {
+      "document_type": "SEC",
+      "code": "SEC-CHUYEN-KHOAN",
+      "name": "Séc chuyển khoản",
+      "html_file": "sec-chuyen-khoan.html.j2",
+      "is_default": true
+    },
+    {
+      "document_type": "CTNB",
+      "code": "CHUYEN-TIEN-NOI-BO",
+      "name": "Giấy chuyển tiền nội bộ",
+      "html_file": "chuyen-tien-noi-bo.html.j2",
       "is_default": true
     },
     {

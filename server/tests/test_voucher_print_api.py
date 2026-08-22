@@ -48,7 +48,7 @@ def _printer_codes() -> list[str]:
     ]
     codes += [
         permission_code("bank", name, action)
-        for name in ("credit_advice", "payment_order")
+        for name in ("credit_advice", "payment_order", "cheque", "internal_transfer")
         for action in (Action.VIEW, Action.CREATE, Action.PRINT)
     ]
     codes += [
@@ -87,6 +87,17 @@ def vnd_account(
 ) -> int:
     return ensure_company_bank_account(
         session_factory, dataset_alpha, context, code="0031-BANK-PRINT"
+    )
+
+
+@pytest.fixture(scope="module")
+def second_vnd_account(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef, context: PostingContext
+) -> int:
+    """TK ngân hàng thứ hai — chuyển tiền nội bộ cần hai tài khoản của CHÍNH
+    đơn vị."""
+    return ensure_company_bank_account(
+        session_factory, dataset_alpha, context, code="0032-BANK-PRINT"
     )
 
 
@@ -133,6 +144,12 @@ def printer_headers(
         test_password,
         branch_codes=[context.branch_code],
     )
+
+
+def _print_ok(client: TestClient, headers: dict[str, str], voucher_id: str) -> bytes:
+    response = client.post(f"/api/v1/vouchers/{voucher_id}/print", json={}, headers=headers)
+    assert response.status_code == 200, response.text
+    return response.content
 
 
 def _pdf_text(content: bytes) -> str:
@@ -259,6 +276,326 @@ def test_payment_order_print_shows_the_partner_bank_account(
     assert "Mẫu số" not in text
 
 
+def test_receipt_amount_is_the_money_that_entered_the_till_not_the_line_total(
+    client: TestClient,
+    printer_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+    customer: int,
+) -> None:
+    """FR-QUY-007: chiết khấu thanh toán `Nợ 635/Có 131` nằm CHUNG phiếu thu.
+
+    Dòng chiết khấu không phải tiền người nộp đưa, nên ô "Số tiền" và dòng
+    "(Viết bằng chữ)" — dòng mà người nộp KÝ VÀO — phải đọc số thật vào két.
+    Cộng cả dòng không chạm quỹ là tờ giấy có chữ ký nói một số, sổ quỹ nói số
+    khác (review 6E-2, H-1).
+    """
+    voucher = _post(
+        client,
+        printer_headers,
+        "/api/v1/cash-book/vouchers",
+        {
+            "kind": 0,
+            "operation_code": "thu-no-khach-hang",
+            "cash_account_id": accounts["111"],
+            "branch_id": context.branch_id,
+            "document_date": "2026-02-18",
+            "posting_date": "2026-02-18",
+            "currency_code": "VND",
+            "exchange_rate": "1",
+            "description": "thu nợ có chiết khấu thanh toán",
+            "partner_kind": 0,
+            "partner_id": customer,
+            "lines": [
+                {
+                    "debit_account_id": accounts["111"],
+                    "credit_account_id": accounts["131"],
+                    "amount_fc": "9500000",
+                    "partner_kind": 0,
+                    "partner_id": customer,
+                },
+                {
+                    "debit_account_id": accounts["635"],
+                    "credit_account_id": accounts["131"],
+                    "amount_fc": "500000",
+                    "partner_kind": 0,
+                    "partner_id": customer,
+                },
+            ],
+        },
+    )
+    response = client.post(
+        f"/api/v1/vouchers/{voucher['id']}/print", json={}, headers=printer_headers
+    )
+    assert response.status_code == 200, response.text
+
+    text = _pdf_text(response.content)
+    assert "9.500.000" in text
+    assert "Chín triệu năm trăm nghìn đồng chẵn" in text
+    # Tổng mọi dòng là 10.000.000 — con số KHÔNG được xuất hiện ở ô số tiền.
+    assert "Mười triệu đồng chẵn" not in text
+    # Khối "Nợ/Có" liệt kê ĐỦ tài khoản đã dùng và không lặp mã: hai dòng cùng
+    # ghi Có 131 chỉ in "131" một lần.
+    credit_line = next(line for line in text.splitlines() if line.startswith("Có:"))
+    assert credit_line.count("131") == 1, credit_line
+    debit_line = next(line for line in text.splitlines() if line.startswith("Nợ:"))
+    assert "635" in debit_line, debit_line
+
+
+def test_receipt_in_foreign_currency_prints_the_rate_block_matching_the_ledger(
+    client: TestClient,
+    printer_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Khối "+ Tỷ giá ngoại tệ / + Số tiền quy đổi" chỉ in cho chứng từ NGOẠI
+    TỆ, và số quy đổi phải cộng theo TỪNG DÒNG như `PostingService` — quy đổi
+    trên số tổng lệch đúng phần làm tròn."""
+    voucher = _post(
+        client,
+        printer_headers,
+        "/api/v1/cash-book/vouchers",
+        {
+            "kind": 0,
+            "operation_code": "thu-khac",
+            "cash_account_id": accounts["111"],
+            "branch_id": context.branch_id,
+            "document_date": "2026-02-20",
+            "posting_date": "2026-02-20",
+            "currency_code": "USD",
+            "exchange_rate": "25000.005",
+            "lines": [
+                {
+                    "debit_account_id": accounts["111"],
+                    "credit_account_id": accounts["3381"],
+                    "amount_fc": "1.01",
+                }
+            ]
+            * 3,
+        },
+    )
+    response = client.post(
+        f"/api/v1/vouchers/{voucher['id']}/print", json={}, headers=printer_headers
+    )
+    assert response.status_code == 200, response.text
+
+    text = _pdf_text(response.content)
+    assert "Tỷ giá ngoại tệ" in text
+    assert "25.000,0050" in text
+    # 3 × round(1,01 × 25000,005) = 3 × 25.250,01 = 75.750,03.
+    # Quy đổi trên số tổng (3,03 × 25000,005) cho 75.750,02 — lệch một xu.
+    assert "75.750,03" in text
+    assert "75.750,02" not in text
+    # Ngoại tệ đọc theo mã ISO, không đọc thành "đồng".
+    assert "USD" in text
+    assert "đồng chẵn" not in text
+
+
+def test_vnd_voucher_has_no_exchange_rate_block(
+    client: TestClient,
+    printer_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Chứng từ đồng hạch toán không có gì để quy đổi — in hai dòng ấy là bày
+    thêm ô trống cho người đọc phải giải thích."""
+    voucher = _post(
+        client,
+        printer_headers,
+        "/api/v1/cash-book/vouchers",
+        {
+            "kind": 1,
+            "operation_code": "chi-khac",
+            "cash_account_id": accounts["111"],
+            "branch_id": context.branch_id,
+            "document_date": "2026-02-21",
+            "posting_date": "2026-02-21",
+            "currency_code": "VND",
+            "exchange_rate": "1",
+            "description": "chi mua văn phòng phẩm",
+            "payer_receiver_name": "Nguyễn Văn An",
+            "lines": [
+                {
+                    "debit_account_id": accounts["3381"],
+                    "credit_account_id": accounts["111"],
+                    "amount_fc": "250000",
+                }
+            ],
+        },
+    )
+    response = client.post(
+        f"/api/v1/vouchers/{voucher['id']}/print", json={}, headers=printer_headers
+    )
+    assert response.status_code == 200, response.text
+
+    text = _pdf_text(response.content)
+    assert "Mẫu số 02 - TT" in text
+    # Nhãn của phiếu CHI, không phải phiếu thu (đột biến đảo nhãn phải chết ở đây).
+    assert "Họ và tên người nhận tiền" in text
+    assert "Họ và tên người nộp tiền" not in text
+    assert "Tỷ giá ngoại tệ" not in text
+    assert "Số tiền quy đổi" not in text
+
+
+def test_draft_with_an_incomplete_line_still_prints(
+    client: TestClient,
+    printer_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Dòng thiếu một bên là trạng thái HỢP LỆ của bản nháp; FR-RPT-011 hứa
+    nháp in được. Bản in bỏ bảng định khoản chứ không trả lỗi nói về ghi sổ
+    (review 6E-2, H-2)."""
+    voucher = _post(
+        client,
+        printer_headers,
+        "/api/v1/cash-book/vouchers",
+        {
+            "kind": 0,
+            "operation_code": "thu-khac",
+            "cash_account_id": accounts["111"],
+            "branch_id": context.branch_id,
+            "document_date": "2026-02-22",
+            "posting_date": "2026-02-22",
+            "currency_code": "VND",
+            "exchange_rate": "1",
+            "description": "chờ kế toán điền tài khoản đối ứng",
+            "payer_receiver_name": "Lê Thị Hoa",
+            "lines": [
+                {
+                    "debit_account_id": accounts["111"],
+                    "credit_account_id": None,
+                    "amount_fc": "700000",
+                }
+            ],
+        },
+    )
+    response = client.post(
+        f"/api/v1/vouchers/{voucher['id']}/print", json={}, headers=printer_headers
+    )
+    assert response.status_code == 200, response.text
+
+    text = _pdf_text(response.content)
+    assert "BẢN NHÁP" in text
+    assert "Lê Thị Hoa" in text
+    assert "Bảy trăm nghìn đồng chẵn" in text
+    # Không có bảng định khoản vì chưa dịch được thành bút toán.
+    assert "Cộng" not in text
+
+
+def test_credit_advice_and_internal_transfer_name_the_direction_correctly(
+    client: TestClient,
+    printer_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+    vnd_account: int,
+    second_vnd_account: int,
+) -> None:
+    """Giấy báo có là tiền VÀO nên tài khoản của đơn vị là bên THỤ HƯỞNG; chuyển
+    tiền nội bộ không có người thụ hưởng nào cả (tiền không rời doanh nghiệp) và
+    số tiền in ra là số RỜI tài khoản nguồn, không phải 0 do hai vế triệt tiêu."""
+    advice = _post(
+        client,
+        printer_headers,
+        "/api/v1/bank/vouchers",
+        {
+            "kind": 0,
+            "operation_code": "thu-khac",
+            "bank_account_id": vnd_account,
+            "branch_id": context.branch_id,
+            "document_date": "2026-02-24",
+            "posting_date": "2026-02-24",
+            "currency_code": "VND",
+            "exchange_rate": "1",
+            "description": "khách chuyển khoản",
+            "beneficiary_name": "Công ty CP Sao Mai",
+            "lines": [
+                {
+                    "debit_account_id": accounts["112"],
+                    "credit_account_id": accounts["3381"],
+                    "amount_fc": "4000000",
+                }
+            ],
+        },
+    )
+    text = _pdf_text(
+        _print_ok(client, printer_headers, advice["id"]),
+    )
+    assert "Đơn vị thụ hưởng: Công ty thử" in text.replace("\n", " ") or "Đơn vị thụ hưởng" in text
+    assert "Người chuyển tiền" in text
+    assert "Đơn vị trả tiền" not in text
+    assert "Bốn triệu đồng chẵn" in text
+
+    transfer = _post(
+        client,
+        printer_headers,
+        "/api/v1/bank/vouchers",
+        {
+            "kind": 3,
+            "bank_account_id": vnd_account,
+            "counter_bank_account_id": second_vnd_account,
+            "branch_id": context.branch_id,
+            "document_date": "2026-02-25",
+            "posting_date": "2026-02-25",
+            "currency_code": "VND",
+            "exchange_rate": "1",
+            "description": "điều chuyển vốn giữa hai tài khoản",
+            "lines": [
+                {
+                    "debit_account_id": accounts["112"],
+                    "credit_account_id": accounts["112"],
+                    "amount_fc": "6000000",
+                }
+            ],
+        },
+    )
+    text = _pdf_text(_print_ok(client, printer_headers, transfer["id"]))
+    assert "Chuyển đến tài khoản" in text
+    assert "Sáu triệu đồng chẵn" in text
+    assert "Không đồng chẵn" not in text
+    assert "thụ hưởng" not in text.lower()
+
+
+def test_cheque_print_shows_the_cheque_number(
+    client: TestClient,
+    printer_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+    vnd_account: int,
+) -> None:
+    """Séc có mẫu riêng và khối "Séc số … ngày …" — bốn loại chứng từ tiền gửi
+    đều in được, không loại nào để nút In rơi vào 404."""
+    voucher = _post(
+        client,
+        printer_headers,
+        "/api/v1/bank/vouchers",
+        {
+            "kind": 2,
+            "operation_code": "chi-khac",
+            "bank_account_id": vnd_account,
+            "branch_id": context.branch_id,
+            "document_date": "2026-02-26",
+            "posting_date": "2026-02-26",
+            "currency_code": "VND",
+            "exchange_rate": "1",
+            "description": "rút séc trả nhà cung cấp",
+            "cheque_no": "AB1234567",
+            "cheque_date": "2026-02-26",
+            "lines": [
+                {
+                    "debit_account_id": accounts["3381"],
+                    "credit_account_id": accounts["112"],
+                    "amount_fc": "3000000",
+                }
+            ],
+        },
+    )
+    text = _pdf_text(_print_ok(client, printer_headers, voucher["id"]))
+    assert "AB1234567" in text
+    assert "26/02/2026" in text
+    assert "Ba triệu đồng chẵn" in text
+
+
 def test_count_sheet_print_follows_form_08att_sign_direction(
     client: TestClient,
     printer_headers: dict[str, str],
@@ -374,7 +711,7 @@ def test_count_sheet_print_needs_the_count_sheet_permission(
     receipt_only = ensure_role(
         session_factory,
         dataset_alpha,
-        "chi_phieu_thu",
+        "chi_phieu_thu_in",
         [permission_code("cash_book", "receipt", action) for action in (Action.VIEW, Action.PRINT)],
     )
     headers = actor(
@@ -394,10 +731,17 @@ def test_count_sheet_print_needs_the_count_sheet_permission(
 def test_count_sheet_template_stays_out_of_the_voucher_template_list(
     client: TestClient, printer_headers: dict[str, str]
 ) -> None:
-    """`KKQ` không phải loại chứng từ: hộp chọn mẫu của nút In chỉ liệt kê mẫu
-    của các loại chứng từ người gọi in được, nên biên bản không lọt vào."""
+    """Hộp chọn mẫu trộn HAI nguồn mã: loại chứng từ của posting (quyền
+    `.print`) và bản in không phải chứng từ (`PRINT_SUBJECT_REGISTRY`, quyền
+    `view` của phân hệ). Thiếu nguồn thứ hai thì mẫu biên bản kiểm kê tồn tại
+    và in được nhưng không tra được (review 6E-2, M-3)."""
     response = client.get("/api/v1/print-templates", headers=printer_headers)
     assert response.status_code == 200, response.text
     types = {row["document_type"] for row in response.json()["templates"]}
-    assert {"PT", "PC", "UNC", "BC"} <= types
-    assert "KKQ" not in types
+    assert {"PT", "PC", "UNC", "BC", "SEC", "CTNB", "KKQ"} <= types
+
+    by_type = client.get(
+        "/api/v1/print-templates", params={"document_type": "KKQ"}, headers=printer_headers
+    )
+    assert by_type.status_code == 200, by_type.text
+    assert [row["code"] for row in by_type.json()["templates"]] == ["BIEN-BAN-KIEM-KE-QUY-08aTT"]

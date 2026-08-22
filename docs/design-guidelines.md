@@ -465,7 +465,23 @@ báo in lại); nháp in được mang watermark BẢN NHÁP trừ khi đơn v�
 **Trường riêng của từng loại chứng từ** (lát 6E-2) không nằm ở tầng in: module
 sở hữu chứng từ khai `PostingDocumentType.print_details`, trả một
 `DocumentPrintDetails` (`kernel/config/printing/context.py`) gồm sáu vùng có
-thật trên biểu mẫu giấy — khối "Nợ/Có" góc phải, thân "Nhãn: giá trị", dòng
+thật trên biểu mẫu giấy
+
+**Số tiền in trên chứng từ tiền là số THẬT vào/ra tài khoản tiền**, không phải
+tổng mọi dòng: dùng `voucher_fields.money_side_amounts` (review 6E-2, H-1).
+Một phiếu thu được phép mang dòng không chạm quỹ — FR-QUY-007 khai đúng ca đó
+(chiết khấu thanh toán `Nợ 635/Có 131` nằm chung phiếu) — và ô "Số tiền …
+(Viết bằng chữ)" là ô người nộp tiền KÝ VÀO. Cùng luật cho chứng từ tiền gửi
+(dòng chạm 112x; chuyển tiền nội bộ lấy số rời tài khoản nguồn).
+
+**Bản nháp chưa đủ định khoản vẫn in được**: `build_request` là bộ kiểm của
+đường GHI SỔ, không phải điều kiện của đường IN — bản in bỏ bảng định khoản
+thay vì trả lỗi nói về ghi sổ (FR-RPT-011, review 6E-2 H-2).
+
+Bản in **không phải chứng từ** khai ở `kernel/config/printing/subjects.py`
+(mã bản in → mã quyền `view` của phân hệ sở hữu); `GET /print-templates` trộn
+hai registry nên mẫu của chúng vẫn tra được, và biên bản kiểm kê quỹ không cần
+một mã quyền `.print` thứ hai. — khối "Nợ/Có" góc phải, thân "Nhãn: giá trị", dòng
 "Số tiền … (Viết bằng chữ)", bảng chi tiết, khối chân trang. Thêm phân hệ =
 thêm một hàm ở module, **không** sửa `routers/printing.py` dùng chung. Mọi giá
 trị phải là chuỗi đã định dạng bằng `kernel/formatting.py`; số đọc thành chữ

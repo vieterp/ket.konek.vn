@@ -13,7 +13,8 @@ Hàm nhận **giá trị trần** (mã tiền tệ, `period_id`, tỷ giá) ch�
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
+from dataclasses import dataclass
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -32,15 +33,61 @@ RATE_DECIMALS = 4
 bố, và giữ nguyên phần mà bút toán đã dùng thay vì làm tròn cho gọn mắt."""
 
 
-def debit_credit_fields(
-    session: Session, pairs: Sequence[tuple[int | None, int | None]]
-) -> tuple[PrintField, ...]:
-    """Khối "Nợ:/Có:" từ các cặp `(debit_account_id, credit_account_id)`.
+@dataclass(frozen=True)
+class MoneyLine:
+    """Một dòng định khoản rút gọn, đủ cho mọi phép tính của bản in.
+
+    Module có kiểu dòng riêng (`CashVoucherLine`, `BankVoucherLine`) mà kernel
+    không được biết; ba trường này là tất cả những gì tờ giấy cần. Đưa CÙNG một
+    danh sách vào mọi hàm dưới đây để khối "Nợ/Có", dòng "Số tiền" và khối
+    ngoại tệ không bao giờ nói về hai tập dòng khác nhau.
+    """
+
+    debit_account_id: int | None
+    credit_account_id: int | None
+    amount_fc: Decimal
+
+
+def money_side_amounts(
+    lines: Sequence[MoneyLine], *, account_ids: Collection[int]
+) -> tuple[Decimal, ...]:
+    """Số tiền nguyên tệ của những dòng CHẠM tài khoản tiền, mang dấu.
+
+    Vào quỹ/tài khoản (`debit`) là dương, ra là âm. Dòng không chạm tài khoản
+    tiền **không góp gì** — và đó là toàn bộ lý do hàm này tồn tại (review 6E-2,
+    H-1): `posting_mapper` cố ý cho phép dòng như vậy, còn FR-QUY-007 khai đúng
+    một nghiệp vụ chính thống dùng nó (chiết khấu thanh toán `Nợ 635/Có 131`
+    nằm chung phiếu thu). Cộng cả những dòng ấy vào ô "Số tiền" thì tờ phiếu có
+    chữ ký đọc số lớn hơn số thật vào két, trong khi sổ quỹ
+    (`treasurer_source._cash_side_totals`) ghi đúng — hai con số cho một sự
+    việc, và bản sai là bản có chữ ký người nộp tiền.
+
+    `account_ids` là **tập** vì hai phân hệ trả lời câu "tài khoản tiền là cái
+    nào" theo hai cách: phiếu thu/chi có đúng một TK quỹ trên thân phiếu, còn
+    chứng từ tiền gửi nhận diện theo tiền tố số hiệu 112x (một chứng từ có thể
+    chạm hai tài khoản ngân hàng). Dòng chạm cả hai bên trong tập tự triệt
+    tiêu — đúng như sổ quỹ ghi số RÒNG cho phiếu hai chiều (lát 6C).
+    """
+    amounts: list[Decimal] = []
+    for line in lines:
+        signed = Decimal(0)
+        if line.debit_account_id in account_ids:
+            signed += line.amount_fc
+        if line.credit_account_id in account_ids:
+            signed -= line.amount_fc
+        if signed != 0:
+            amounts.append(signed)
+    return tuple(amounts)
+
+
+def debit_credit_fields(session: Session, lines: Sequence[MoneyLine]) -> tuple[PrintField, ...]:
+    """Khối "Nợ:/Có:" từ các dòng định khoản.
 
     Tờ giấy chỉ có một cặp; phần mềm cho nhiều dòng, nên ô liệt kê các tài
     khoản đã dùng theo thứ tự dòng, bỏ trùng ("1111, 1121" chứ không "1111,
     1111"). Dòng nháp còn thiếu một bên chỉ đơn giản không đóng góp mã nào.
     """
+    pairs = [(line.debit_account_id, line.credit_account_id) for line in lines]
     account_ids = {account_id for pair in pairs for account_id in pair if account_id is not None}
     if not account_ids:
         return ()
@@ -95,15 +142,31 @@ def foreign_currency_notes(
     "Số tiền quy đổi" cộng theo TỪNG DÒNG đã quy đổi, đúng như `PostingService`
     làm (`convert_currency` mỗi dòng rồi mới cộng): quy đổi trên số tổng lệch
     số đã ghi sổ đúng bằng phần làm tròn, và bản in nói khác sổ là bản in sai.
+
+    `amounts_fc` là kết quả của `money_side_amounts` — mang dấu, và chỉ gồm
+    dòng chạm tài khoản tiền. In trị tuyệt đối vì tờ phiếu đã nói chiều bằng
+    chính tên của nó (phiếu THU hay phiếu CHI).
     """
     if currency_code == base_currency_of_period(session, period_id):
         return ()
     scale_value = value_of(session, key=MONEY_SCALE_KEY, user_id=user_id)
     scale = scale_value if isinstance(scale_value, int) else 2
-    converted = sum(
-        (convert_currency(amount, exchange_rate, scale) for amount in amounts_fc), Decimal(0)
+    converted = abs(
+        sum(
+            (
+                convert_currency(abs(amount), exchange_rate, scale) * _sign(amount)
+                for amount in amounts_fc
+            ),
+            Decimal(0),
+        )
     )
     return (
         PrintField("Tỷ giá ngoại tệ", format_quantity(exchange_rate, decimals=RATE_DECIMALS)),
         PrintField("Số tiền quy đổi", format_money(converted, blank_zero=False)),
     )
+
+
+def _sign(amount: Decimal) -> int:
+    """Dấu của một số tiền mang dấu — quy đổi làm trên TRỊ TUYỆT ĐỐI rồi mới
+    gắn dấu lại, để làm tròn của dòng ra và dòng vào đối xứng nhau."""
+    return -1 if amount < 0 else 1

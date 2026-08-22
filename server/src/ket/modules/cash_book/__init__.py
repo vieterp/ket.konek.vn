@@ -21,6 +21,12 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from ket.kernel.config.printing.context import DocumentPrintDetails
+from ket.kernel.config.printing.subjects import (
+    REGISTRY as PRINT_SUBJECT_REGISTRY,
+)
+from ket.kernel.config.printing.subjects import (
+    PrintSubject,
+)
 from ket.kernel.security.permissions import (
     REGISTRY as PERMISSION_REGISTRY,
 )
@@ -28,6 +34,7 @@ from ket.kernel.security.permissions import (
     VOUCHER_ACTIONS,
     Action,
     DocumentType,
+    permission_code,
 )
 from ket.modules.cash_book.guards import CashBalanceGuard
 from ket.posting.contracts import (
@@ -118,6 +125,19 @@ for _code, _permission_name, _title in (
             print_details=_print_details,
         )
     )
+
+COUNT_SHEET_PRINT_CODE = "KKQ"
+"""Mã bản in của biên bản kiểm kê quỹ trong `print_templates.document_type`."""
+
+PRINT_SUBJECT_REGISTRY.register(
+    PrintSubject(
+        code=COUNT_SHEET_PRINT_CODE,
+        title="Bảng kiểm kê quỹ",
+        view_permission=permission_code(
+            CASH_PERMISSION_MODULE, COUNT_SHEET_PERMISSION_CODE, Action.VIEW
+        ),
+    )
+)
 
 GUARD_REGISTRY.register(CashBalanceGuard())
 

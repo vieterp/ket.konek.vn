@@ -31,9 +31,11 @@ from ket.kernel.config.printing.context import (
     PrintTableColumn,
 )
 from ket.kernel.config.printing.voucher_fields import (
+    MoneyLine,
     currency_unit,
     debit_credit_fields,
     foreign_currency_notes,
+    money_side_amounts,
 )
 from ket.kernel.contracts import PartnerKind
 from ket.kernel.formatting import format_date, format_money
@@ -72,7 +74,14 @@ def build_print_details(session: Session, voucher_id: UUID, user_id: int) -> Doc
         _RECEIPT_LABELS if body.kind == CashVoucherKind.RECEIPT else _PAYMENT_LABELS
     )
     counterpart = _counterpart(session, body)
-    total_fc = sum((line.amount_fc for line in lines), Decimal(0))
+    money_lines = tuple(
+        MoneyLine(line.debit_account_id, line.credit_account_id, line.amount_fc) for line in lines
+    )
+    # Số tiền của tờ phiếu là số THẬT vào/ra két, không phải tổng mọi dòng
+    # (review H-1): FR-QUY-007 cho chiết khấu thanh toán `Nợ 635/Có 131` nằm
+    # chung phiếu thu, và dòng đó không phải tiền người nộp đưa.
+    cash_amounts = money_side_amounts(money_lines, account_ids={body.cash_account_id})
+    total_fc = abs(sum(cash_amounts, Decimal(0)))
 
     fields = [
         PrintField(name_label, body.payer_receiver_name or counterpart.name),
@@ -82,9 +91,7 @@ def build_print_details(session: Session, voucher_id: UUID, user_id: int) -> Doc
     if body.attachment_count:
         fields.append(PrintField("Kèm theo", f"{body.attachment_count} chứng từ gốc"))
     return DocumentPrintDetails(
-        header_fields=debit_credit_fields(
-            session, [(line.debit_account_id, line.credit_account_id) for line in lines]
-        ),
+        header_fields=debit_credit_fields(session, money_lines),
         fields=tuple(fields),
         amount=f"{format_money(total_fc, blank_zero=False)} {voucher.currency_code}",
         amount_in_words=amount_in_words(total_fc, unit=currency_unit(voucher.currency_code)),
@@ -93,7 +100,7 @@ def build_print_details(session: Session, voucher_id: UUID, user_id: int) -> Doc
             currency_code=voucher.currency_code,
             period_id=voucher.period_id,
             exchange_rate=voucher.exchange_rate,
-            amounts_fc=[line.amount_fc for line in lines],
+            amounts_fc=cash_amounts,
             user_id=user_id,
         ),
     )

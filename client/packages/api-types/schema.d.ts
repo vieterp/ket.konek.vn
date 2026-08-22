@@ -6528,6 +6528,13 @@ export interface paths {
          *
          *     Không nêu `document_type` thì trả mẫu của những loại người gọi in được —
          *     cùng luật danh-sách-trộn-không-vòng-qua-phân-quyền với `list_vouchers`.
+         *
+         *     Hai nguồn mã, một cột: loại chứng từ của posting (quyền `.print`) và **bản
+         *     in không phải chứng từ** (`PRINT_SUBJECT_REGISTRY`, quyền `view` của phân
+         *     hệ sở hữu — xem `kernel/config/printing/subjects.py`). Thiếu nguồn thứ hai
+         *     thì mẫu biên bản kiểm kê tồn tại và in được nhưng không tra được, và tham
+         *     số `?template_code=` của nút In chỉ dùng được nếu đọc mã trong DB (review
+         *     6E-2, M-3).
          */
         get: operations["list_print_templates_api_v1_print_templates_get"];
         put?: never;

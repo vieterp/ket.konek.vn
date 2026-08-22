@@ -30994,7 +30994,7 @@
     },
     "/api/v1/print-templates": {
       "get": {
-        "description": "Mẫu in đã đăng ký — hộp chọn mẫu của nút In.\n\nKhông nêu `document_type` thì trả mẫu của những loại người gọi in được —\ncùng luật danh-sách-trộn-không-vòng-qua-phân-quyền với `list_vouchers`.",
+        "description": "Mẫu in đã đăng ký — hộp chọn mẫu của nút In.\n\nKhông nêu `document_type` thì trả mẫu của những loại người gọi in được —\ncùng luật danh-sách-trộn-không-vòng-qua-phân-quyền với `list_vouchers`.\n\nHai nguồn mã, một cột: loại chứng từ của posting (quyền `.print`) và **bản\nin không phải chứng từ** (`PRINT_SUBJECT_REGISTRY`, quyền `view` của phân\nhệ sở hữu — xem `kernel/config/printing/subjects.py`). Thiếu nguồn thứ hai\nthì mẫu biên bản kiểm kê tồn tại và in được nhưng không tra được, và tham\nsố `?template_code=` của nút In chỉ dùng được nếu đọc mã trong DB (review\n6E-2, M-3).",
         "operationId": "list_print_templates_api_v1_print_templates_get",
         "parameters": [
           {

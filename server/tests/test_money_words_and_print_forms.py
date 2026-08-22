@@ -315,6 +315,11 @@ class TestBuiltinManifest:
             ("PC", "PHIEU-CHI-02TT"),
             ("UNC", "UY-NHIEM-CHI"),
             ("BC", "GIAY-BAO-CO"),
+            # Séc và chuyển tiền nội bộ (review 6E-2, M-2): hai loại còn lại của
+            # phân hệ ngân hàng có quyền `.print`, nên thiếu mẫu là nút In luôn
+            # 404 và nhánh nhãn của chúng thành mã không đường tới.
+            ("SEC", "SEC-CHUYEN-KHOAN"),
+            ("CTNB", "CHUYEN-TIEN-NOI-BO"),
             ("KKQ", "BIEN-BAN-KIEM-KE-QUY-08aTT"),
         }
         assert set(by_key) == expected

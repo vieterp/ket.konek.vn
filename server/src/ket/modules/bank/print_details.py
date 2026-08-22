@@ -14,6 +14,7 @@ có đó là người chuyển tiền đến. Nhãn đổi theo loại; dữ li�
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
@@ -21,11 +22,14 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ket.kernel.config.accounts_models import ChartOfAccount
 from ket.kernel.config.printing.context import DocumentPrintDetails, PrintField
 from ket.kernel.config.printing.voucher_fields import (
+    MoneyLine,
     currency_unit,
     debit_credit_fields,
     foreign_currency_notes,
+    money_side_amounts,
 )
 from ket.kernel.contracts import PartnerKind
 from ket.kernel.formatting import format_date, format_money
@@ -34,6 +38,7 @@ from ket.kernel.master_data.models.company_bank_account import CompanyBankAccoun
 from ket.kernel.master_data.models.employee import Employee
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.money_words import amount_in_words
+from ket.modules.bank.balance_service import DEPOSIT_ACCOUNT_CODE_PREFIX
 from ket.modules.bank.models import BankVoucher, BankVoucherKind, BankVoucherLine
 from ket.posting.contracts import Voucher
 
@@ -70,7 +75,11 @@ def build_print_details(session: Session, voucher_id: UUID, user_id: int) -> Doc
         .scalars()
         .all()
     )
-    total_fc = sum((line.amount_fc for line in lines), Decimal(0))
+    money_lines = tuple(
+        MoneyLine(line.debit_account_id, line.credit_account_id, line.amount_fc) for line in lines
+    )
+    money_amounts = _money_amounts(session, body, money_lines)
+    total_fc = abs(sum(money_amounts, Decimal(0)))
     own = _account_info(session, body.bank_account_id)
 
     fields = [
@@ -83,9 +92,7 @@ def build_print_details(session: Session, voucher_id: UUID, user_id: int) -> Doc
     if body.reference_no:
         fields.append(PrintField("Số tham chiếu", body.reference_no))
     return DocumentPrintDetails(
-        header_fields=debit_credit_fields(
-            session, [(line.debit_account_id, line.credit_account_id) for line in lines]
-        ),
+        header_fields=debit_credit_fields(session, money_lines),
         fields=tuple(fields),
         amount=f"{format_money(total_fc, blank_zero=False)} {voucher.currency_code}",
         amount_in_words=amount_in_words(total_fc, unit=currency_unit(voucher.currency_code)),
@@ -94,10 +101,48 @@ def build_print_details(session: Session, voucher_id: UUID, user_id: int) -> Doc
             currency_code=voucher.currency_code,
             period_id=voucher.period_id,
             exchange_rate=voucher.exchange_rate,
-            amounts_fc=[line.amount_fc for line in lines],
+            amounts_fc=money_amounts,
             user_id=user_id,
         ),
     )
+
+
+def _money_amounts(
+    session: Session, body: BankVoucher, lines: Sequence[MoneyLine]
+) -> tuple[Decimal, ...]:
+    """Số tiền nguyên tệ THẬT vào/ra tài khoản ngân hàng, mang dấu (review H-1).
+
+    Một ủy nhiệm chi kèm dòng phí ngân hàng hạch toán thẳng vào 642 thì số tiền
+    chuyển đi vẫn là số của riêng dòng chạm 112x — cộng cả dòng phí vào ô "Số
+    tiền" là tờ giấy nói ngân hàng trích nhiều hơn thực tế.
+
+    Phía tiền nhận diện theo **tiền tố số hiệu** `112`, không theo
+    `bank_account_id`: cột ấy trỏ danh mục tài khoản ngân hàng, còn dòng định
+    khoản mang TK kế toán — hai không gian id khác nhau. Chuyển tiền nội bộ
+    chạm 112 ở CẢ HAI bên (tiền không rời doanh nghiệp) nên số ròng bằng 0; số
+    đáng in là số RỜI tài khoản nguồn, tức bên Có — cùng luật quy chủ mà
+    `balance_service.deposit_owner_account` khai cho sổ.
+    """
+    account_ids = _deposit_account_ids(session, lines)
+    if body.kind == BankVoucherKind.INTERNAL_TRANSFER:
+        return tuple(-line.amount_fc for line in lines if line.credit_account_id in account_ids)
+    return money_side_amounts(lines, account_ids=account_ids)
+
+
+def _deposit_account_ids(session: Session, lines: Sequence[MoneyLine]) -> frozenset[int]:
+    """Những TK trên chứng từ có số hiệu bắt đầu bằng `112`."""
+    candidates = {
+        account_id
+        for line in lines
+        for account_id in (line.debit_account_id, line.credit_account_id)
+        if account_id is not None
+    }
+    if not candidates:
+        return frozenset()
+    rows = session.execute(
+        select(ChartOfAccount.id, ChartOfAccount.code).where(ChartOfAccount.id.in_(candidates))
+    ).all()
+    return frozenset(row.id for row in rows if row.code.startswith(DEPOSIT_ACCOUNT_CODE_PREFIX))
 
 
 def _pays_out(kind: int) -> bool:
