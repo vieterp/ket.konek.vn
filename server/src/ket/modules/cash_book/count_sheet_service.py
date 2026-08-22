@@ -28,8 +28,7 @@ from ket.kernel.errors import (
     CountSheetNotFoundError,
 )
 from ket.kernel.periods.service import fiscal_year_covering
-from ket.modules.cash_book.balance_service import cash_balance_as_of
-from ket.modules.cash_book.guards import CASH_ON_HAND_PREFIX
+from ket.modules.cash_book.balance_service import CASH_ON_HAND_PREFIX, cash_balance_as_of
 from ket.modules.cash_book.models import (
     CashCountSheet,
     CashCountSheetLine,

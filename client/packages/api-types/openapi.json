@@ -677,6 +677,65 @@
         "title": "AutoPostingOperationsResponse",
         "type": "object"
       },
+      "BankAccountCard": {
+        "description": "Thẻ một tài khoản ngân hàng doanh nghiệp.\n\n`balance_fc` là số dư NGUYÊN TỆ của chính tài khoản đó (FR-BNK-041 đòi hiện\nđồng thời hai trục); `balance` là số quy đổi để cộng chung một hàng thẻ.",
+        "properties": {
+          "balance": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance",
+            "type": "string"
+          },
+          "balance_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance Fc",
+            "type": "string"
+          },
+          "bank_account_code": {
+            "title": "Bank Account Code",
+            "type": "string"
+          },
+          "bank_account_id": {
+            "title": "Bank Account Id",
+            "type": "integer"
+          },
+          "bank_account_name": {
+            "title": "Bank Account Name",
+            "type": "string"
+          },
+          "bank_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Name"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "source": {
+            "const": "bank",
+            "default": "bank",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_account_id",
+          "bank_account_code",
+          "bank_account_name",
+          "bank_name",
+          "currency_code",
+          "balance_fc",
+          "balance"
+        ],
+        "title": "BankAccountCard",
+        "type": "object"
+      },
       "BankExtendedDimensionIn": {
         "additionalProperties": false,
         "properties": {
@@ -3087,6 +3146,47 @@
         "title": "BranchUpdateRequest",
         "type": "object"
       },
+      "CashAccountCard": {
+        "description": "Thẻ một tài khoản quỹ tiền mặt.",
+        "properties": {
+          "account_code": {
+            "title": "Account Code",
+            "type": "string"
+          },
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "account_name": {
+            "title": "Account Name",
+            "type": "string"
+          },
+          "balance": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance",
+            "type": "string"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "source": {
+            "const": "cash",
+            "default": "cash",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "account_code",
+          "account_name",
+          "currency_code",
+          "balance"
+        ],
+        "title": "CashAccountCard",
+        "type": "object"
+      },
       "CashSettlementIn": {
         "additionalProperties": false,
         "description": "Một dòng đối trừ: chứng từ công nợ + số nguyên tệ người dùng nhập (\"Số thu\").\n\nChỉ nhận `amount_fc` — số VND và chênh lệch tỷ giá do server tính từ tỷ giá\nphiếu và tỷ giá ghi nhận nợ (FR-SYS-066), không nhận từ client.",
@@ -4045,6 +4145,150 @@
           "row_version"
         ],
         "title": "CashVoucherUpdate",
+        "type": "object"
+      },
+      "CashflowOverviewResponse": {
+        "description": "Hàng thẻ của màn hình \"Tiền vào tiền ra\" (U-Quỹ).\n\nThẻ chỉ gồm phần người dùng có quyền XEM: thiếu quyền quỹ thì `cash_accounts`\nrỗng, thiếu quyền ngân hàng thì `bank_accounts` rỗng — không phải 403 cho cả\nmàn hình, vì một thủ quỹ chỉ xem quỹ vẫn phải mở được trang. Thiếu CẢ HAI\nmới là 403 (chặn ở dependency của endpoint).\n\n`unassigned_deposit` = phần số dư TK 112 KHÔNG gắn được tài khoản ngân hàng\nnào (bút toán GLE gõ thẳng vào 112x — xem `bank/balance_service`). Hiện\nthành một con số riêng thay vì bị giấu hoặc bị chia bừa cho các thẻ: tổng\nthẻ ngân hàng + số này = tổng TK 112 trên bảng cân đối, và người dùng nhìn\nra ngay vì sao hai nơi lệch nhau (ghi chú M-3 của review 6D).",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "bank_accounts": {
+            "items": {
+              "$ref": "#/components/schemas/BankAccountCard"
+            },
+            "title": "Bank Accounts",
+            "type": "array"
+          },
+          "cash_accounts": {
+            "items": {
+              "$ref": "#/components/schemas/CashAccountCard"
+            },
+            "title": "Cash Accounts",
+            "type": "array"
+          },
+          "ledger": {
+            "title": "Ledger",
+            "type": "integer"
+          },
+          "unassigned_deposit": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unassigned Deposit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of",
+          "ledger",
+          "cash_accounts",
+          "bank_accounts",
+          "unassigned_deposit"
+        ],
+        "title": "CashflowOverviewResponse",
+        "type": "object"
+      },
+      "CashflowTransaction": {
+        "description": "Một dòng trên lưới giao dịch, đã hợp nhất hai module.\n\n`amount` dương = tiền VÀO, âm = tiền RA — một cột dấu thay vì hai cột\nthu/chi: lưới đổi theo thẻ đang chọn nên chiều luôn xét trên đúng tài khoản\ncủa thẻ đó.",
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "partner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Name"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "cash",
+              "bank"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "voucher_id": {
+            "format": "uuid",
+            "title": "Voucher Id",
+            "type": "string"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "voucher_id",
+          "voucher_no",
+          "document_type",
+          "source",
+          "posting_date",
+          "document_date",
+          "description",
+          "partner_name",
+          "amount",
+          "status"
+        ],
+        "title": "CashflowTransaction",
+        "type": "object"
+      },
+      "CashflowTransactionsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CashflowTransaction"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "CashflowTransactionsResponse",
         "type": "object"
       },
       "ChangePasswordRequest": {
@@ -13974,10 +14218,15 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
-          "items"
+          "items",
+          "total"
         ],
         "title": "TreasurerCashBookResponse",
         "type": "object"
@@ -16622,6 +16871,233 @@
         "summary": "Update Cash Voucher",
         "tags": [
           "cash-book"
+        ]
+      }
+    },
+    "/api/v1/cashflow/overview": {
+      "get": {
+        "description": "Hàng thẻ: quỹ tiền mặt + từng tài khoản ngân hàng, kèm số dư tới `as_of`.\n\nCộng trên đúng những chi nhánh người dùng thấy (`scope.branch_ids` — cùng\ntập mà RLS áp), nên hai người ở hai chi nhánh mở cùng màn hình thấy hai con\nsố khác nhau, và cả hai đều đúng với phạm vi của họ.",
+        "operationId": "cashflow_overview_api_v1_cashflow_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ledger",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Ledger",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashflowOverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Cashflow Overview",
+        "tags": [
+          "cashflow"
+        ]
+      }
+    },
+    "/api/v1/cashflow/transactions": {
+      "get": {
+        "description": "Lưới giao dịch của MỘT thẻ (quỹ hoặc một tài khoản ngân hàng).\n\n`amount` là phát sinh RÒNG trên đúng tài khoản của thẻ đang chọn: dương =\ntiền vào, âm = tiền ra. Tính từ `gl_postings` chứ không từ thân chứng từ —\ncùng nguồn với thẻ số dư, nên tổng lưới và số dư thẻ không thể cãi nhau.",
+        "operationId": "cashflow_transactions_api_v1_cashflow_transactions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": true,
+            "schema": {
+              "enum": [
+                "cash",
+                "bank"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cash_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cash Account Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bank_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bank Account Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ledger",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Ledger",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashflowTransactionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Cashflow Transactions",
+        "tags": [
+          "cashflow"
         ]
       }
     },
@@ -31563,7 +32039,7 @@
     },
     "/api/v1/treasurer/cash-book": {
       "get": {
-        "description": "Sổ quỹ tiền mặt của thủ quỹ (FR-WHK-005) — dòng theo ngày ghi sổ.",
+        "description": "Sổ quỹ tiền mặt của thủ quỹ (FR-WHK-005) — dòng theo ngày ghi sổ.\n\nPhân trang bắt buộc (nợ lát 6C): sổ quỹ một năm là hàng chục nghìn dòng.\nBản in đầy đủ kèm số tồn lũy kế đi qua báo cáo `S07-DN`, không qua endpoint\nnày.",
         "operationId": "treasurer_cash_book_api_v1_treasurer_cash_book_get",
         "parameters": [
           {
@@ -31614,6 +32090,29 @@
                 }
               ],
               "title": "To Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],

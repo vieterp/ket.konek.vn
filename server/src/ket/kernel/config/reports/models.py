@@ -178,3 +178,18 @@ class ReportDefinition(DatasetBase, Audited):
     package_id: Mapped[int | None] = mapped_column(
         ForeignKey("config_packages.id", ondelete="RESTRICT"), nullable=True
     )
+    fixed_params: Mapped[SpecDocument] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    """Tham số GHIM của báo cáo này — `{tên: giá trị}` cho tham số đã khai
+    trong `param_set_code`, người dùng không nhập và không đổi được.
+
+    Đây là thứ cho phép hai mẫu sổ khác nhau về ĐÚNG một tham số dùng chung
+    một dataset: `S03a1-DN` (Nhật ký thu tiền) và `S03a2-DN` (Nhật ký chi
+    tiền) là cùng câu SQL với `direction` ghim khác nhau. Kiểu và nhãn vẫn do
+    `ParamSpec` trong param set khai — ghim là ghim GIÁ TRỊ, không phải đường
+    khai tham số thứ hai; nhờ vậy kiểm kiểu, dòng thuật lại tham số (BR-RPT-03)
+    và catalog dùng chung một cỗ máy.
+
+    Cùng doctrine "thắng tường minh" với `ledger_scope` (BR-RPT-04): client gửi
+    giá trị khác cho tham số đã ghim là LỖI, không phải thứ bị lặng lẽ ghi đè."""

@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from datetime import date
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ket.kernel.errors import TreasurerVoucherStateError
@@ -90,19 +90,43 @@ def cash_book_rows(
     cash_account_id: int | None,
     from_date: date | None,
     to_date: date | None,
-) -> Sequence[TreasurerCashBookEntry]:
-    """Sổ quỹ tiền mặt của thủ quỹ (FR-WHK-005) — dòng thô theo ngày ghi sổ.
+    limit: int | None = None,
+    offset: int = 0,
+) -> tuple[Sequence[TreasurerCashBookEntry], int]:
+    """Sổ quỹ tiền mặt của thủ quỹ (FR-WHK-005) — dòng thô theo ngày ghi sổ,
+    kèm TỔNG số dòng khớp bộ lọc.
 
-    Số dư lũy kế là việc của tầng đọc (client cộng dồn trên trang, báo cáo
-    metadata ở lát 6E) — service trả dữ liệu, không trả cách trình bày.
+    Số dư lũy kế là việc của tầng đọc; bản in có số tồn lũy kế là báo cáo
+    metadata `S07-DN` (lát 6E-1) — service trả dữ liệu, không trả cách trình
+    bày.
+
+    Phân trang (nợ 6C bàn giao): sổ quỹ của một năm là hàng chục nghìn dòng,
+    trả trọn bộ là một câu trả lời không có trần. `limit=None` giữ nguyên hành
+    vi cũ cho người gọi trong tiến trình (không có ai ngoài API lúc này, nhưng
+    mặc định KHÔNG-phân-trang ở tầng service là thứ để người gọi chọn, không
+    phải thứ service tự áp).
+
+    `total` đếm trước khi cắt trang — thanh phân trang cần tổng, và đếm bằng
+    chính bộ lọc của câu chính nên hai con số không thể lệch nhau.
     """
-    query = select(TreasurerCashBookEntry).order_by(
-        TreasurerCashBookEntry.book_date, TreasurerCashBookEntry.id
-    )
+    conditions = []
     if cash_account_id is not None:
-        query = query.where(TreasurerCashBookEntry.cash_account_id == cash_account_id)
+        conditions.append(TreasurerCashBookEntry.cash_account_id == cash_account_id)
     if from_date is not None:
-        query = query.where(TreasurerCashBookEntry.book_date >= from_date)
+        conditions.append(TreasurerCashBookEntry.book_date >= from_date)
     if to_date is not None:
-        query = query.where(TreasurerCashBookEntry.book_date <= to_date)
-    return session.execute(query).scalars().all()
+        conditions.append(TreasurerCashBookEntry.book_date <= to_date)
+
+    total = session.execute(
+        select(func.count()).select_from(TreasurerCashBookEntry).where(*conditions)
+    ).scalar_one()
+
+    query = (
+        select(TreasurerCashBookEntry)
+        .where(*conditions)
+        .order_by(TreasurerCashBookEntry.book_date, TreasurerCashBookEntry.id)
+        .offset(offset)
+    )
+    if limit is not None:
+        query = query.limit(limit)
+    return session.execute(query).scalars().all(), total

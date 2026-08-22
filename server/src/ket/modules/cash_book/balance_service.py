@@ -14,6 +14,8 @@ chứng từ/biên bản.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
@@ -24,6 +26,24 @@ from ket.kernel.config.accounts_models import ChartOfAccount
 from ket.kernel.periods.service import fiscal_year_covering
 from ket.posting.engine.models import GlPosting
 from ket.posting.opening_balances.models import OpeningBalance
+
+CASH_ACCOUNT_CODE_PREFIXES = ("111", "112")
+"""Nhóm TK tiền mặt/tiền gửi — soi theo TIỀN TỐ số hiệu, không theo danh sách id.
+
+Đây là literal số hiệu TK **có chủ đích**, đúng loại mà doctrine "không
+hard-code hệ TK" (SRS 19 §9 #1) cho phép đặt tên ở một hằng: điều kiện kích
+hoạt của cảnh báo chi-quá-tồn do CHÍNH SRS định nghĩa bằng số hiệu ("Số dư TK
+111x/112x < 0" — `docs/srs/01` §8.2), và nhóm 111/112 = tiền là bất biến chung
+của cả TT99 lẫn TT133 — không phải một đích hạch toán cấu hình được như 641/642.
+Nếu một chế độ kế toán tương lai đổi nhóm TK tiền, chỗ sửa là MỘT hằng này.
+
+Ở `balance_service` chứ không ở `guards` (nơi nó ra đời ở lát 6B): guards
+import balance_service, nên hằng phải nằm ở đáy đồ thị phụ thuộc để cả hai —
+và `cash_balances_as_of` của lát 6E-1 — dùng chung mà không tạo vòng import."""
+
+CASH_ON_HAND_PREFIX = CASH_ACCOUNT_CODE_PREFIXES[0]
+"""Riêng tiền mặt tại quỹ (111x) — kiểm kê quỹ chỉ áp cho két tiền, không áp
+cho tài khoản ngân hàng."""
 
 ZERO = Decimal(0)
 
@@ -117,6 +137,97 @@ def cash_balance_floor_from(
         running += Decimal(net)
         floor = min(floor, running)
     return floor
+
+
+@dataclass(frozen=True)
+class CashAccountBalance:
+    """Số dư một số hiệu TK quỹ, cộng trên nhiều chi nhánh."""
+
+    account_id: int
+    account_code: str
+    account_name: str
+    balance: Decimal
+
+
+def cash_balances_as_of(
+    session: Session,
+    *,
+    ledger: int,
+    branch_ids: Sequence[int],
+    as_of: date,
+) -> tuple[CashAccountBalance, ...]:
+    """Số dư MỌI tài khoản quỹ tiền mặt hết ngày `as_of`, cộng trên `branch_ids`.
+
+    Thẻ tài khoản của màn hình "Tiền vào tiền ra" (BFF `/cashflow/overview`)
+    đọc hàm này. Khác `cash_balance_as_of` ở hai chỗ, và cả hai đều là nhu cầu
+    của màn hình chứ không phải của guard: cộng NHIỀU chi nhánh trong phạm vi
+    người dùng (guard xét đúng chi nhánh của phiếu), và trả MỌI tài khoản một
+    lượt thay vì hỏi từng mã (một truy vấn thay vì N).
+
+    Cùng phép toán, cùng trục gộp **theo số hiệu TK** với `cash_balance_as_of`
+    (quyết định 4F) — hai đường phải cho cùng con số cho cùng một tài khoản
+    trong cùng một chi nhánh, và test ghim đúng điều đó.
+
+    `account_id` trả về là id NHỎ NHẤT của số hiệu đó: nó chỉ dùng để client
+    gọi tiếp `/cashflow/transactions`, còn danh tính hiển thị là số hiệu.
+    """
+    year = fiscal_year_covering(session, as_of)
+    if year is None or not branch_ids:
+        return ()
+    branches = tuple(branch_ids)
+    cash_accounts = select(ChartOfAccount.id).where(
+        ChartOfAccount.code.like(f"{CASH_ON_HAND_PREFIX}%")
+    )
+
+    opening = (
+        select(
+            OpeningBalance.account_id.label("account_id"),
+            (func.sum(OpeningBalance.debit - OpeningBalance.credit)).label("net"),
+        )
+        .where(
+            OpeningBalance.fiscal_year_id == year.id,
+            OpeningBalance.ledger == ledger,
+            OpeningBalance.branch_id.in_(branches),
+            OpeningBalance.account_id.in_(cash_accounts),
+        )
+        .group_by(OpeningBalance.account_id)
+    )
+    movement = (
+        select(
+            GlPosting.account_id.label("account_id"),
+            (func.sum(GlPosting.debit - GlPosting.credit)).label("net"),
+        )
+        .where(
+            GlPosting.ledger == ledger,
+            GlPosting.branch_id.in_(branches),
+            GlPosting.account_id.in_(cash_accounts),
+            GlPosting.posting_date >= year.start_date,
+            GlPosting.posting_date <= as_of,
+        )
+        .group_by(GlPosting.account_id)
+    )
+    combined = opening.union_all(movement).subquery()
+
+    rows = session.execute(
+        select(
+            func.min(ChartOfAccount.id).label("account_id"),
+            ChartOfAccount.code,
+            func.min(ChartOfAccount.name).label("name"),
+            func.coalesce(func.sum(combined.c.net), 0).label("balance"),
+        )
+        .join(combined, combined.c.account_id == ChartOfAccount.id)
+        .group_by(ChartOfAccount.code)
+        .order_by(ChartOfAccount.code)
+    ).all()
+    return tuple(
+        CashAccountBalance(
+            account_id=row.account_id,
+            account_code=row.code,
+            account_name=row.name,
+            balance=Decimal(row.balance),
+        )
+        for row in rows
+    )
 
 
 def _opening_net(

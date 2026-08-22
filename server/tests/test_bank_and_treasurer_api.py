@@ -390,5 +390,19 @@ def test_treasurer_role_books_queue_but_cannot_touch_accounting_vouchers(
         book = client.get("/api/v1/treasurer/cash-book", headers=treasurer_headers)
         assert book.status_code == 200
         assert voucher_id in {row["voucher_id"] for row in book.json()["items"]}
+
+        # Phân trang (nợ 6C trả ở lát 6E-1): sổ quỹ một năm là hàng chục nghìn
+        # dòng nên endpoint không được trả trọn bộ. `total` đếm TRƯỚC khi cắt
+        # trang, nếu không thanh phân trang của màn hình thủ quỹ vô nghĩa.
+        paged = client.get(
+            "/api/v1/treasurer/cash-book",
+            params={"limit": 1},
+            headers=treasurer_headers,
+        )
+        assert paged.status_code == 200, paged.text
+        body = paged.json()
+        assert len(body["items"]) == 1
+        assert body["total"] >= 1
+        assert body["total"] == book.json()["total"]
     finally:
         _set_treasurer_enabled(session_factory, dataset_alpha, context, False)

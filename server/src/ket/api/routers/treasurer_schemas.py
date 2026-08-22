@@ -80,3 +80,6 @@ class TreasurerCashBookRowOut(BaseModel):
 
 class TreasurerCashBookResponse(BaseModel):
     items: tuple[TreasurerCashBookRowOut, ...]
+    total: int
+    """Tổng số dòng khớp bộ lọc, trước khi cắt trang — thanh phân trang của
+    màn hình thủ quỹ (U6) cần biết còn bao nhiêu trang phía sau."""

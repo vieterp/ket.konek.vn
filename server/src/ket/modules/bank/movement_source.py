@@ -7,8 +7,9 @@ qua **chứng từ tiền gửi đã ghi sổ** — thứ `gl_postings` một m�
 được, vì chiều TK ngân hàng sống trên thân `bank_vouchers` (FR-BNK-002).
 
 Cách tính: dòng sổ (`gl_postings`) của chứng từ tiền gửi, lọc bên tiền gửi
-theo tiền tố 112 (`MONEY_ACCOUNT_CODE_PREFIXES` — doctrine mapper 6C), quy về
-TK ngân hàng:
+theo tiền tố 112 (`DEPOSIT_ACCOUNT_CODE_PREFIX` — doctrine mapper 6C), quy về
+TK ngân hàng bằng `balance_service.deposit_owner_account()` — luật quy chủ ở
+ĐÚNG một chỗ, dùng chung với thẻ tài khoản của màn hình "Tiền vào tiền ra":
 
 * BC/UNC/SEC — mọi dòng 112x thuộc `bank_account_id` của thân chứng từ (một
   chứng từ một tài khoản; dòng phí lẫn trong chứng từ tự trừ vào net, đúng số
@@ -25,19 +26,18 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import case, func, literal, select
+from sqlalchemy import func, literal, select
 from sqlalchemy.orm import Session
 
 from ket.kernel.config.accounts_models import ChartOfAccount
 from ket.kernel.periods.models import AccountingPeriod
 from ket.kernel.protocols import PROVIDERS, BankAccountMovement
-from ket.modules.bank.models import BankVoucher, BankVoucherKind
-from ket.modules.bank.posting_mapper import MONEY_ACCOUNT_CODE_PREFIXES
+from ket.modules.bank.balance_service import (
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+    deposit_owner_account,
+)
+from ket.modules.bank.models import BankVoucher
 from ket.posting.engine.models import GlPosting
-
-DEPOSIT_ACCOUNT_CODE_PREFIX = MONEY_ACCOUNT_CODE_PREFIXES[1]
-"""Chỉ nhóm 112: dòng 111x trên chứng từ tiền gửi (nộp/rút tiền mặt) thuộc về
-quỹ, không thuộc TK ngân hàng nào."""
 
 
 class BankDepositMovementSource:
@@ -49,13 +49,7 @@ class BankDepositMovementSource:
         period_ids = select(AccountingPeriod.id).where(
             AccountingPeriod.fiscal_year_id == fiscal_year_id
         )
-        owner_account = case(
-            (
-                (BankVoucher.kind == BankVoucherKind.INTERNAL_TRANSFER) & (GlPosting.debit > 0),
-                BankVoucher.counter_bank_account_id,
-            ),
-            else_=BankVoucher.bank_account_id,
-        ).label("bank_account_id")
+        owner_account = deposit_owner_account().label("bank_account_id")
         rows = session.execute(
             select(
                 GlPosting.account_id,

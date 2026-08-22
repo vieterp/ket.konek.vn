@@ -144,6 +144,7 @@ def estimate_report_rows(session: Session, *, code: str, raw_params: Mapping[str
         raw_params,
         spec=resolved.param_set_spec,
         ledger_scope=resolved.definition.ledger_scope,
+        fixed_params=resolved.definition.fixed_params,
     )
     return count_dataset_rows(
         session,
@@ -175,6 +176,7 @@ def render_report(
         raw_params,
         spec=resolved.param_set_spec,
         ledger_scope=resolved.definition.ledger_scope,
+        fixed_params=resolved.definition.fixed_params,
     )
     param_lines = _param_lines_with_branches(session, bound)
     rows: Iterator[Mapping[str, object]] = execute_dataset(
@@ -238,6 +240,7 @@ def preview_report(
         raw_params,
         spec=resolved.param_set_spec,
         ledger_scope=resolved.definition.ledger_scope,
+        fixed_params=resolved.definition.fixed_params,
     )
     param_lines = _param_lines_with_branches(session, bound)
     rows = execute_dataset(

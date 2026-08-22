@@ -11,23 +11,27 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from types import MappingProxyType
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    create_model,
+)
 
 from ket.kernel.config.reports.models import LedgerScope
-from ket.kernel.config.reports.spec import ParamSetSpec, ParamSpec
+from ket.kernel.config.reports.spec import (
+    PARAM_KIND_TYPES,
+    ParamSetSpec,
+    ParamSpec,
+    coerce_param_value,
+)
 from ket.kernel.contracts import Ledger
 from ket.kernel.errors import ReportParamsInvalidError
-
-_KIND_TYPES: dict[str, type] = {
-    "date": date,
-    "int": int,
-    "text": str,
-    "bool": bool,
-    "decimal": Decimal,
-}
 
 _LEDGER_LABELS = {Ledger.FINANCIAL: "Sổ tài chính", Ledger.MANAGEMENT: "Sổ quản trị"}
 
@@ -83,10 +87,55 @@ class _BaseReportParams(BaseModel):
 
 
 def _extra_field(param: ParamSpec) -> tuple[Any, Any]:
-    base = _KIND_TYPES[param.kind]
+    base = PARAM_KIND_TYPES[param.kind]
     if param.required:
         return (base, Field())
     return (base | None, Field(default=None))
+
+
+def _same_value(sent: object, param: ParamSpec, pinned: object) -> bool:
+    """Client có gửi ĐÚNG giá trị đã ghim không? Gửi rác kiểu sai thì trả True
+    để lượt kiểm chính báo lỗi kiểu — thông báo "sai kiểu" đúng hơn "đã ghim"
+    khi người gửi còn chưa gửi được thứ so sánh nổi."""
+    try:
+        return bool(TypeAdapter(PARAM_KIND_TYPES[param.kind]).validate_python(sent) == pinned)
+    except ValidationError:
+        return True
+
+
+def _apply_fixed_params(
+    raw: Mapping[str, object],
+    *,
+    spec: ParamSetSpec,
+    fixed_params: Mapping[str, object],
+) -> dict[str, object]:
+    """Ghim giá trị tham số của definition vào đầu vào lượt render.
+
+    Cùng doctrine "thắng TƯỜNG MINH" với `_apply_ledger_scope`: client gửi giá
+    trị khác cho một tham số đã ghim là lỗi chứ không phải thứ bị lặng lẽ ghi
+    đè — người dùng phải thấy được rằng thứ họ gửi không có tác dụng.
+    """
+    if not fixed_params:
+        return dict(raw)
+    declared = {param.name: param for param in spec.params}
+    merged = dict(raw)
+    for name, value in fixed_params.items():
+        param = declared.get(name)
+        if param is None:  # pragma: no cover - loader/seed đã chặn từ dữ liệu
+            raise ReportParamsInvalidError(
+                f"Báo cáo ghim tham số {name!r} không khai trong bộ tham số", param=name
+            )
+        pinned = coerce_param_value(value, param=param, where="Tham số ghim của báo cáo")
+        if (
+            name in merged
+            and merged[name] is not None
+            and not _same_value(merged[name], param, pinned)
+        ):
+            raise ReportParamsInvalidError(
+                f"Báo cáo này ghim cố định {param.label!r} — bỏ tham số {name!r}", param=name
+            )
+        merged[name] = pinned
+    return merged
 
 
 def validate_params(
@@ -94,8 +143,10 @@ def validate_params(
     *,
     spec: ParamSetSpec,
     ledger_scope: str,
+    fixed_params: Mapping[str, object] = MappingProxyType({}),
 ) -> BoundParams:
     """Kiểm và ràng tham số một lượt render (FR-RPT-002, BR-RPT-04)."""
+    raw = _apply_fixed_params(raw, spec=spec, fixed_params=fixed_params)
     fields: dict[str, Any] = {param.name: _extra_field(param) for param in spec.params}
     model_type = create_model("ReportParams", __base__=_BaseReportParams, **fields)
     try:

@@ -666,6 +666,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cashflow/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cashflow Overview
+         * @description Hàng thẻ: quỹ tiền mặt + từng tài khoản ngân hàng, kèm số dư tới `as_of`.
+         *
+         *     Cộng trên đúng những chi nhánh người dùng thấy (`scope.branch_ids` — cùng
+         *     tập mà RLS áp), nên hai người ở hai chi nhánh mở cùng màn hình thấy hai con
+         *     số khác nhau, và cả hai đều đúng với phạm vi của họ.
+         */
+        get: operations["cashflow_overview_api_v1_cashflow_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cashflow/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cashflow Transactions
+         * @description Lưới giao dịch của MỘT thẻ (quỹ hoặc một tài khoản ngân hàng).
+         *
+         *     `amount` là phát sinh RÒNG trên đúng tài khoản của thẻ đang chọn: dương =
+         *     tiền vào, âm = tiền ra. Tính từ `gl_postings` chứ không từ thân chứng từ —
+         *     cùng nguồn với thẻ số dư, nên tổng lưới và số dư thẻ không thể cãi nhau.
+         */
+        get: operations["cashflow_transactions_api_v1_cashflow_transactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config-packages": {
         parameters: {
             query?: never;
@@ -6987,6 +7035,10 @@ export interface paths {
         /**
          * Treasurer Cash Book
          * @description Sổ quỹ tiền mặt của thủ quỹ (FR-WHK-005) — dòng theo ngày ghi sổ.
+         *
+         *     Phân trang bắt buộc (nợ lát 6C): sổ quỹ một năm là hàng chục nghìn dòng.
+         *     Bản in đầy đủ kèm số tồn lũy kế đi qua báo cáo `S07-DN`, không qua endpoint
+         *     này.
          */
         get: operations["treasurer_cash_book_api_v1_treasurer_cash_book_get"];
         put?: never;
@@ -7501,6 +7553,35 @@ export interface components {
             items: components["schemas"]["AutoPostingOperationResponse"][];
             /** Package Id */
             package_id: number;
+        };
+        /**
+         * BankAccountCard
+         * @description Thẻ một tài khoản ngân hàng doanh nghiệp.
+         *
+         *     `balance_fc` là số dư NGUYÊN TỆ của chính tài khoản đó (FR-BNK-041 đòi hiện
+         *     đồng thời hai trục); `balance` là số quy đổi để cộng chung một hàng thẻ.
+         */
+        BankAccountCard: {
+            /** Balance */
+            balance: string;
+            /** Balance Fc */
+            balance_fc: string;
+            /** Bank Account Code */
+            bank_account_code: string;
+            /** Bank Account Id */
+            bank_account_id: number;
+            /** Bank Account Name */
+            bank_account_name: string;
+            /** Bank Name */
+            bank_name: string | null;
+            /** Currency Code */
+            currency_code: string;
+            /**
+             * Source
+             * @default bank
+             * @constant
+             */
+            source: "bank";
         };
         /** BankExtendedDimensionIn */
         BankExtendedDimensionIn: {
@@ -8296,6 +8377,28 @@ export interface components {
             row_version: number;
         };
         /**
+         * CashAccountCard
+         * @description Thẻ một tài khoản quỹ tiền mặt.
+         */
+        CashAccountCard: {
+            /** Account Code */
+            account_code: string;
+            /** Account Id */
+            account_id: number;
+            /** Account Name */
+            account_name: string;
+            /** Balance */
+            balance: string;
+            /** Currency Code */
+            currency_code: string;
+            /**
+             * Source
+             * @default cash
+             * @constant
+             */
+            source: "cash";
+        };
+        /**
          * CashSettlementIn
          * @description Một dòng đối trừ: chứng từ công nợ + số nguyên tệ người dùng nhập ("Số thu").
          *
@@ -8605,6 +8708,85 @@ export interface components {
              * @default []
              */
             settlements: components["schemas"]["CashSettlementIn"][];
+        };
+        /**
+         * CashflowOverviewResponse
+         * @description Hàng thẻ của màn hình "Tiền vào tiền ra" (U-Quỹ).
+         *
+         *     Thẻ chỉ gồm phần người dùng có quyền XEM: thiếu quyền quỹ thì `cash_accounts`
+         *     rỗng, thiếu quyền ngân hàng thì `bank_accounts` rỗng — không phải 403 cho cả
+         *     màn hình, vì một thủ quỹ chỉ xem quỹ vẫn phải mở được trang. Thiếu CẢ HAI
+         *     mới là 403 (chặn ở dependency của endpoint).
+         *
+         *     `unassigned_deposit` = phần số dư TK 112 KHÔNG gắn được tài khoản ngân hàng
+         *     nào (bút toán GLE gõ thẳng vào 112x — xem `bank/balance_service`). Hiện
+         *     thành một con số riêng thay vì bị giấu hoặc bị chia bừa cho các thẻ: tổng
+         *     thẻ ngân hàng + số này = tổng TK 112 trên bảng cân đối, và người dùng nhìn
+         *     ra ngay vì sao hai nơi lệch nhau (ghi chú M-3 của review 6D).
+         */
+        CashflowOverviewResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Bank Accounts */
+            bank_accounts: components["schemas"]["BankAccountCard"][];
+            /** Cash Accounts */
+            cash_accounts: components["schemas"]["CashAccountCard"][];
+            /** Ledger */
+            ledger: number;
+            /** Unassigned Deposit */
+            unassigned_deposit: string;
+        };
+        /**
+         * CashflowTransaction
+         * @description Một dòng trên lưới giao dịch, đã hợp nhất hai module.
+         *
+         *     `amount` dương = tiền VÀO, âm = tiền RA — một cột dấu thay vì hai cột
+         *     thu/chi: lưới đổi theo thẻ đang chọn nên chiều luôn xét trên đúng tài khoản
+         *     của thẻ đó.
+         */
+        CashflowTransaction: {
+            /** Amount */
+            amount: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Document Type */
+            document_type: string;
+            /** Partner Name */
+            partner_name: string | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "cash" | "bank";
+            /** Status */
+            status: number;
+            /**
+             * Voucher Id
+             * Format: uuid
+             */
+            voucher_id: string;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /** CashflowTransactionsResponse */
+        CashflowTransactionsResponse: {
+            /** Items */
+            items: components["schemas"]["CashflowTransaction"][];
+            /** Total */
+            total: number;
         };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
@@ -12265,6 +12447,8 @@ export interface components {
         TreasurerCashBookResponse: {
             /** Items */
             items: components["schemas"]["TreasurerCashBookRowOut"][];
+            /** Total */
+            total: number;
         };
         /**
          * TreasurerCashBookRowOut
@@ -13754,6 +13938,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CashVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cashflow_overview_api_v1_cashflow_overview_get: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+                ledger?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashflowOverviewResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cashflow_transactions_api_v1_cashflow_transactions_get: {
+        parameters: {
+            query: {
+                source: "cash" | "bank";
+                cash_account_id?: number | null;
+                bank_account_id?: number | null;
+                from_date?: string | null;
+                to_date?: string | null;
+                status?: number | null;
+                ledger?: number;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashflowTransactionsResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -23558,6 +23813,8 @@ export interface operations {
                 cash_account_id?: number | null;
                 from_date?: string | null;
                 to_date?: string | null;
+                limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;

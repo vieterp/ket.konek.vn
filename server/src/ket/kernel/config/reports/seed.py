@@ -20,8 +20,10 @@ kết quả**. Chạy lúc gieo (dataset rỗng) nên miễn phí.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
+from types import MappingProxyType
 from typing import Final
 
 import structlog
@@ -36,7 +38,7 @@ from ket.kernel.config.reports.models import (
     ReportParamSet,
 )
 from ket.kernel.config.reports.scope import assert_placeholders_allowed, compose_scoped_query
-from ket.kernel.config.reports.spec import LayoutSpec, ParamSpec
+from ket.kernel.config.reports.spec import LayoutSpec, ParamSpec, coerce_param_value
 from ket.kernel.errors import ReportDatasetInvalidError
 from ket.kernel.persistence.seeding import bind_seed_schema
 
@@ -218,6 +220,7 @@ def _seed_definitions(connection: Connection, loaded: LoadedReports) -> int:
                 package_id=(
                     package_ids[entry.package_scheme] if entry.package_scheme is not None else None
                 ),
+                fixed_params=entry.fixed_params,
             )
         )
         added += 1
@@ -262,7 +265,7 @@ def _probe_definitions(connection: Connection, loaded: LoadedReports) -> None:
         layout_spec = loaded.layout_specs[definition.layout_code]
         params = loaded.param_set_specs[definition.param_set_code].params
         composed = compose_scoped_query(dataset, layout_spec)
-        binds = _probe_binds(entry.allowed_params, params)
+        binds = _probe_binds(entry.allowed_params, params, definition.fixed_params)
         result = connection.execute(
             text(f"SELECT probe.* FROM (\n{composed}\n) AS probe LIMIT 0"),  # noqa: S608 — composed từ compose_scoped_query trên dữ liệu builtin đóng gói
             binds,
@@ -272,9 +275,15 @@ def _probe_definitions(connection: Connection, loaded: LoadedReports) -> None:
 
 
 def _probe_binds(
-    allowed_params: tuple[str, ...], params: tuple[ParamSpec, ...]
+    allowed_params: tuple[str, ...],
+    params: tuple[ParamSpec, ...],
+    fixed_params: Mapping[str, object] = MappingProxyType({}),
 ) -> dict[str, object]:
-    kinds = {param.name: param.kind for param in params}
+    """Bind giả cho probe. Tham số GHIM bind giá trị THẬT chứ không giá trị
+    giả: một giá trị ghim mà SQL không nuốt nổi (sai kiểu trong `CAST`, không
+    thuộc tập enum câu lệnh so khớp) phải nổ ở đây, không phải ở lượt render
+    đầu tiên của người dùng."""
+    by_name = {param.name: param for param in params}
     binds: dict[str, object] = {}
     for name in allowed_params:
         if name == "branch_ids":
@@ -283,8 +292,13 @@ def _probe_binds(
             binds[name] = 0
         elif name in ("from_date", "to_date"):
             binds[name] = date(2000, 1, 1)
+        elif name in fixed_params:
+            param = by_name[name]
+            binds[name] = coerce_param_value(
+                fixed_params[name], param=param, where="Probe báo cáo builtin"
+            )
         else:
-            binds[name] = _PROBE_DUMMIES[kinds[name]]
+            binds[name] = _PROBE_DUMMIES[by_name[name].kind]
     binds["branch_ids"] = None
     binds.setdefault("ledger", 0)
     return binds
