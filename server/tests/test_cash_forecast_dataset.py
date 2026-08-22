@@ -22,6 +22,7 @@ from conftest import api_test_client
 from ket.api.dependencies import BRANCH_HEADER
 from ket.kernel.contracts import PartnerKind
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
 from ket.posting.opening_balances.models import OpeningDetailKind
 from ket.settings import Settings
@@ -48,7 +49,17 @@ def context(session_factory: sessionmaker[Session], dataset_alpha: DatasetRef) -
 
 @pytest.fixture(scope="module")
 def viewer_role(session_factory: sessionmaker[Session], dataset_alpha: DatasetRef) -> str:
-    return ensure_role(session_factory, dataset_alpha, VIEWER_ROLE, ["reporting.report.view"])
+    # `reporting.report.view` một mình KHÔNG còn đủ cho báo cáo phân hệ (lát
+    # 6E-1, `report_definitions.required_permission_module`): quyền báo cáo trả
+    # lời "được dùng chức năng báo cáo không", không trả lời "được đọc dữ liệu
+    # quỹ không". Dự báo dòng tiền đọc công nợ của phân hệ quỹ nên đòi thêm một
+    # quyền xem chứng từ quỹ.
+    return ensure_role(
+        session_factory,
+        dataset_alpha,
+        VIEWER_ROLE,
+        ["reporting.report.view", permission_code("cash_book", "receipt", Action.VIEW)],
+    )
 
 
 def _cell_values(row: dict[str, object]) -> list[object]:

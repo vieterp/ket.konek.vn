@@ -32,25 +32,14 @@ from ket.kernel.config.catalog import (
 )
 from ket.kernel.config.settings_service import value_of
 from ket.kernel.errors import PostingViolation
-from ket.modules.cash_book.balance_service import cash_balance_floor_from
+from ket.modules.cash_book.balance_service import (
+    CASH_ACCOUNT_CODE_PREFIXES,
+    cash_balance_floor_from,
+)
 from ket.posting.contracts import GuardFinding, Voucher
 from ket.posting.engine.prepared import PreparedLine
 
 CASH_BALANCE_NEGATIVE_CODE = "cash.balance_negative"
-
-CASH_ACCOUNT_CODE_PREFIXES = ("111", "112")
-"""Nhóm TK tiền mặt/tiền gửi — soi theo TIỀN TỐ số hiệu, không theo danh sách id.
-
-Đây là literal số hiệu TK **có chủ đích**, đúng loại mà doctrine "không
-hard-code hệ TK" (SRS 19 §9 #1) cho phép đặt tên ở một hằng: điều kiện kích
-hoạt của cảnh báo này do CHÍNH SRS định nghĩa bằng số hiệu ("Số dư TK
-111x/112x < 0" — `docs/srs/01` §8.2), và nhóm 111/112 = tiền là bất biến chung
-của cả TT99 lẫn TT133 — không phải một đích hạch toán cấu hình được như 641/642.
-Nếu một chế độ kế toán tương lai đổi nhóm TK tiền, chỗ sửa là MỘT hằng này."""
-
-CASH_ON_HAND_PREFIX = CASH_ACCOUNT_CODE_PREFIXES[0]
-"""Riêng tiền mặt tại quỹ (111x) — kiểm kê quỹ chỉ áp cho két tiền, không áp
-cho tài khoản ngân hàng."""
 
 
 class CashBalanceGuard:

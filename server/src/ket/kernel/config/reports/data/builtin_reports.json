@@ -4,7 +4,13 @@
     {
       "code": "gl_ledger",
       "sql_file": "gl_ledger.sql",
-      "allowed_params": ["from_date", "to_date", "ledger", "branch_ids", "account_code"],
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "account_code"
+      ],
       "supports_branch": true,
       "supports_ledger": true,
       "description": "Dòng phát sinh chi tiết theo tài khoản (Sổ Cái S03b)"
@@ -12,7 +18,12 @@
     {
       "code": "gl_journal",
       "sql_file": "gl_journal.sql",
-      "allowed_params": ["from_date", "to_date", "ledger", "branch_ids"],
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids"
+      ],
       "supports_branch": false,
       "supports_ledger": true,
       "description": "Dòng phát sinh theo trình tự thời gian, STT liên tục (Sổ Nhật ký chung S03a)"
@@ -20,7 +31,13 @@
     {
       "code": "gl_detail",
       "sql_file": "gl_detail.sql",
-      "allowed_params": ["from_date", "to_date", "ledger", "branch_ids", "account_code"],
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "account_code"
+      ],
       "supports_branch": false,
       "supports_ledger": false,
       "description": "Sổ chi tiết tài khoản: dư đầu kỳ + phát sinh + số dư lũy kế sau từng dòng (S38/S19)"
@@ -28,7 +45,12 @@
     {
       "code": "trial_balance",
       "sql_file": "trial_balance.sql",
-      "allowed_params": ["from_date", "to_date", "ledger", "branch_ids"],
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids"
+      ],
       "supports_branch": false,
       "supports_ledger": false,
       "description": "Bảng cân đối số phát sinh: dư đầu/phát sinh/dư cuối tách hai bên theo tài khoản (S06/F01)"
@@ -36,10 +58,94 @@
     {
       "code": "cash_forecast",
       "sql_file": "cash_forecast.sql",
-      "allowed_params": ["from_date", "to_date", "ledger", "branch_ids"],
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids"
+      ],
       "supports_branch": false,
       "supports_ledger": false,
       "description": "Dự báo dòng tiền: công nợ phải thu/phải trả còn nợ theo hạn thanh toán (FR-QUY-032)"
+    },
+    {
+      "code": "treasurer_cash_book",
+      "sql_file": "treasurer_cash_book.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "branch_ids",
+        "cash_account_code"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Sổ quỹ tiền mặt của thủ quỹ (S07-DN) — nguồn `treasurer_cash_book`, ngày là ngày ghi sổ quỹ"
+    },
+    {
+      "code": "money_account_ledger",
+      "sql_file": "money_account_ledger.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "account_prefix",
+        "account_code"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Sổ chi tiết một tài khoản tiền kèm số tồn lũy kế; account_prefix ghim 111 (S07a-DN) hoặc 112 (S08-DN)"
+    },
+    {
+      "code": "cash_journal",
+      "sql_file": "cash_journal.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "direction"
+      ],
+      "supports_branch": true,
+      "supports_ledger": true,
+      "description": "Nhật ký chuyên dùng thu/chi tiền; direction ghim 'thu' (S03a1-DN) hoặc 'chi' (S03a2-DN)"
+    },
+    {
+      "code": "treasurer_ledger_diff",
+      "sql_file": "treasurer_ledger_diff.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "branch_ids",
+        "cash_account_code"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Chênh lệch sổ quỹ thủ quỹ ↔ sổ kế toán TK tiền mặt (FR-WHK-023, BR-WHK-03)"
+    },
+    {
+      "code": "bank_reconciliation",
+      "sql_file": "bank_reconciliation.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "bank_account_id"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Đối chiếu sao kê ngân hàng với chứng từ tiền gửi đã ghi sổ (docs/srs/04 §4.3)"
+    },
+    {
+      "code": "bank_balance_summary",
+      "sql_file": "bank_balance_summary.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "bank_account_id"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Bảng kê số dư ngân hàng theo từng TK ngân hàng và loại tiền (FR-BNK-041)"
     }
   ],
   "param_sets": [
@@ -57,7 +163,12 @@
         ]
       }
     },
-    { "code": "gl_journal_params", "spec": { "params": [] } },
+    {
+      "code": "gl_journal_params",
+      "spec": {
+        "params": []
+      }
+    },
     {
       "code": "gl_detail_params",
       "spec": {
@@ -72,8 +183,109 @@
         ]
       }
     },
-    { "code": "trial_balance_params", "spec": { "params": [] } },
-    { "code": "cash_forecast_params", "spec": { "params": [] } }
+    {
+      "code": "trial_balance_params",
+      "spec": {
+        "params": []
+      }
+    },
+    {
+      "code": "cash_forecast_params",
+      "spec": {
+        "params": []
+      }
+    },
+    {
+      "code": "treasurer_cash_book_params",
+      "spec": {
+        "params": [
+          {
+            "name": "cash_account_code",
+            "kind": "text",
+            "label": "Tài khoản quỹ",
+            "label_en": "Cash account",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "money_account_ledger_params",
+      "spec": {
+        "params": [
+          {
+            "name": "account_prefix",
+            "kind": "text",
+            "label": "Nhóm tài khoản tiền",
+            "label_en": "Money account group",
+            "required": true
+          },
+          {
+            "name": "account_code",
+            "kind": "text",
+            "label": "Tài khoản",
+            "label_en": "Account",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "cash_journal_params",
+      "spec": {
+        "params": [
+          {
+            "name": "direction",
+            "kind": "text",
+            "label": "Chiều tiền",
+            "label_en": "Money direction",
+            "required": true
+          }
+        ]
+      }
+    },
+    {
+      "code": "treasurer_ledger_diff_params",
+      "spec": {
+        "params": [
+          {
+            "name": "cash_account_code",
+            "kind": "text",
+            "label": "Tài khoản quỹ",
+            "label_en": "Cash account",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "bank_reconciliation_params",
+      "spec": {
+        "params": [
+          {
+            "name": "bank_account_id",
+            "kind": "int",
+            "label": "Tài khoản ngân hàng",
+            "label_en": "Bank account",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "bank_balance_summary_params",
+      "spec": {
+        "params": [
+          {
+            "name": "bank_account_id",
+            "kind": "int",
+            "label": "Tài khoản ngân hàng",
+            "label_en": "Bank account",
+            "required": false
+          }
+        ]
+      }
+    }
   ],
   "layouts": [
     {
@@ -81,20 +293,79 @@
       "kind": "grouped",
       "spec": {
         "columns": [
-          { "key": "posting_date", "label": "Ngày ghi sổ", "label_en": "Posting date", "type": "date", "width": 9 },
-          { "key": "voucher_no", "label": "Số chứng từ", "label_en": "Voucher no.", "type": "text", "width": 11 },
-          { "key": "document_date", "label": "Ngày chứng từ", "label_en": "Document date", "type": "date", "width": 9 },
-          { "key": "description", "label": "Diễn giải", "label_en": "Description", "type": "text" },
-          { "key": "corresponding_account", "label": "TK đối ứng", "label_en": "Corresp. acct", "type": "text", "align": "center", "width": 9 },
-          { "key": "debit", "label": "Nợ", "label_en": "Debit", "type": "money", "width": 13 },
-          { "key": "credit", "label": "Có", "label_en": "Credit", "type": "money", "width": 13 }
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "description",
+            "label": "Diễn giải",
+            "label_en": "Description",
+            "type": "text"
+          },
+          {
+            "key": "corresponding_account",
+            "label": "TK đối ứng",
+            "label_en": "Corresp. acct",
+            "type": "text",
+            "align": "center",
+            "width": 9
+          },
+          {
+            "key": "debit",
+            "label": "Nợ",
+            "label_en": "Debit",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "credit",
+            "label": "Có",
+            "label_en": "Credit",
+            "type": "money",
+            "width": 13
+          }
         ],
         "group_by": [
-          { "key": "account_code", "heading_keys": ["account_code", "account_name"] }
+          {
+            "key": "account_code",
+            "heading_keys": [
+              "account_code",
+              "account_name"
+            ]
+          }
         ],
-        "totals": ["debit", "credit"],
-        "sort": ["account_code", "posting_date", "voucher_no", "branch_id", "line_no"],
-        "page": { "orientation": "portrait" }
+        "totals": [
+          "debit",
+          "credit"
+        ],
+        "sort": [
+          "account_code",
+          "posting_date",
+          "voucher_no",
+          "branch_id",
+          "line_no"
+        ],
+        "page": {
+          "orientation": "portrait"
+        }
       }
     },
     {
@@ -102,18 +373,74 @@
       "kind": "table",
       "spec": {
         "columns": [
-          { "key": "stt", "label": "STT dòng", "label_en": "Line no.", "type": "text", "align": "center", "width": 6 },
-          { "key": "posting_date", "label": "Ngày ghi sổ", "label_en": "Posting date", "type": "date", "width": 9 },
-          { "key": "voucher_no", "label": "Số chứng từ", "label_en": "Voucher no.", "type": "text", "width": 11 },
-          { "key": "document_date", "label": "Ngày chứng từ", "label_en": "Document date", "type": "date", "width": 9 },
-          { "key": "description", "label": "Diễn giải", "label_en": "Description", "type": "text" },
-          { "key": "account_code", "label": "Số hiệu TK", "label_en": "Account", "type": "text", "align": "center", "width": 8 },
-          { "key": "debit", "label": "Nợ", "label_en": "Debit", "type": "money", "width": 13 },
-          { "key": "credit", "label": "Có", "label_en": "Credit", "type": "money", "width": 13 }
+          {
+            "key": "stt",
+            "label": "STT dòng",
+            "label_en": "Line no.",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "description",
+            "label": "Diễn giải",
+            "label_en": "Description",
+            "type": "text"
+          },
+          {
+            "key": "account_code",
+            "label": "Số hiệu TK",
+            "label_en": "Account",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "debit",
+            "label": "Nợ",
+            "label_en": "Debit",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "credit",
+            "label": "Có",
+            "label_en": "Credit",
+            "type": "money",
+            "width": 13
+          }
         ],
-        "totals": ["debit", "credit"],
-        "sort": ["stt"],
-        "page": { "orientation": "portrait" }
+        "totals": [
+          "debit",
+          "credit"
+        ],
+        "sort": [
+          "stt"
+        ],
+        "page": {
+          "orientation": "portrait"
+        }
       }
     },
     {
@@ -121,22 +448,91 @@
       "kind": "grouped",
       "spec": {
         "columns": [
-          { "key": "posting_date", "label": "Ngày ghi sổ", "label_en": "Posting date", "type": "date", "width": 8 },
-          { "key": "voucher_no", "label": "Số chứng từ", "label_en": "Voucher no.", "type": "text", "width": 10 },
-          { "key": "document_date", "label": "Ngày chứng từ", "label_en": "Document date", "type": "date", "width": 8 },
-          { "key": "description", "label": "Diễn giải", "label_en": "Description", "type": "text" },
-          { "key": "corresponding_account", "label": "TK đối ứng", "label_en": "Corresp. acct", "type": "text", "align": "center", "width": 7 },
-          { "key": "debit", "label": "PS Nợ", "label_en": "Debit", "type": "money", "width": 11 },
-          { "key": "credit", "label": "PS Có", "label_en": "Credit", "type": "money", "width": 11 },
-          { "key": "balance_debit", "label": "Dư Nợ", "label_en": "Bal. debit", "type": "money", "width": 11 },
-          { "key": "balance_credit", "label": "Dư Có", "label_en": "Bal. credit", "type": "money", "width": 11 }
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "description",
+            "label": "Diễn giải",
+            "label_en": "Description",
+            "type": "text"
+          },
+          {
+            "key": "corresponding_account",
+            "label": "TK đối ứng",
+            "label_en": "Corresp. acct",
+            "type": "text",
+            "align": "center",
+            "width": 7
+          },
+          {
+            "key": "debit",
+            "label": "PS Nợ",
+            "label_en": "Debit",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "credit",
+            "label": "PS Có",
+            "label_en": "Credit",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "balance_debit",
+            "label": "Dư Nợ",
+            "label_en": "Bal. debit",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "balance_credit",
+            "label": "Dư Có",
+            "label_en": "Bal. credit",
+            "type": "money",
+            "width": 11
+          }
         ],
         "group_by": [
-          { "key": "account_code", "heading_keys": ["account_code", "account_name"] }
+          {
+            "key": "account_code",
+            "heading_keys": [
+              "account_code",
+              "account_name"
+            ]
+          }
         ],
-        "totals": ["debit", "credit"],
-        "sort": ["account_code", "sort_seq", "rn"],
-        "page": { "orientation": "landscape" }
+        "totals": [
+          "debit",
+          "credit"
+        ],
+        "sort": [
+          "account_code",
+          "sort_seq",
+          "rn"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
       }
     },
     {
@@ -144,14 +540,62 @@
       "kind": "table",
       "spec": {
         "columns": [
-          { "key": "account_code", "label": "Số hiệu TK", "label_en": "Account", "type": "text", "align": "center", "width": 8 },
-          { "key": "account_name", "label": "Tên tài khoản", "label_en": "Account name", "type": "text" },
-          { "key": "opening_debit", "label": "Dư đầu kỳ Nợ", "label_en": "Opening debit", "type": "money", "width": 11 },
-          { "key": "opening_credit", "label": "Dư đầu kỳ Có", "label_en": "Opening credit", "type": "money", "width": 11 },
-          { "key": "period_debit", "label": "PS trong kỳ Nợ", "label_en": "Period debit", "type": "money", "width": 11 },
-          { "key": "period_credit", "label": "PS trong kỳ Có", "label_en": "Period credit", "type": "money", "width": 11 },
-          { "key": "closing_debit", "label": "Dư cuối kỳ Nợ", "label_en": "Closing debit", "type": "money", "width": 11 },
-          { "key": "closing_credit", "label": "Dư cuối kỳ Có", "label_en": "Closing credit", "type": "money", "width": 11 }
+          {
+            "key": "account_code",
+            "label": "Số hiệu TK",
+            "label_en": "Account",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "account_name",
+            "label": "Tên tài khoản",
+            "label_en": "Account name",
+            "type": "text"
+          },
+          {
+            "key": "opening_debit",
+            "label": "Dư đầu kỳ Nợ",
+            "label_en": "Opening debit",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "opening_credit",
+            "label": "Dư đầu kỳ Có",
+            "label_en": "Opening credit",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "period_debit",
+            "label": "PS trong kỳ Nợ",
+            "label_en": "Period debit",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "period_credit",
+            "label": "PS trong kỳ Có",
+            "label_en": "Period credit",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "closing_debit",
+            "label": "Dư cuối kỳ Nợ",
+            "label_en": "Closing debit",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "closing_credit",
+            "label": "Dư cuối kỳ Có",
+            "label_en": "Closing credit",
+            "type": "money",
+            "width": 11
+          }
         ],
         "totals": [
           "opening_debit",
@@ -161,8 +605,12 @@
           "closing_debit",
           "closing_credit"
         ],
-        "sort": ["account_code"],
-        "page": { "orientation": "landscape" }
+        "sort": [
+          "account_code"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
       }
     },
     {
@@ -170,20 +618,802 @@
       "kind": "table",
       "spec": {
         "columns": [
-          { "key": "direction", "label": "Dòng", "label_en": "Direction", "type": "text", "align": "center", "width": 6 },
-          { "key": "partner_code", "label": "Mã đối tác", "label_en": "Partner code", "type": "text", "width": 10 },
-          { "key": "partner_name", "label": "Tên đối tác", "label_en": "Partner name", "type": "text" },
-          { "key": "invoice_no", "label": "Số chứng từ", "label_en": "Invoice no.", "type": "text", "width": 10 },
-          { "key": "invoice_date", "label": "Ngày chứng từ", "label_en": "Invoice date", "type": "date", "width": 9 },
-          { "key": "due_date", "label": "Hạn thanh toán", "label_en": "Due date", "type": "date", "width": 9 },
-          { "key": "bucket", "label": "Mốc", "label_en": "Bucket", "type": "text", "align": "center", "width": 8 },
-          { "key": "currency_code", "label": "Loại tiền", "label_en": "Currency", "type": "text", "align": "center", "width": 6 },
-          { "key": "remaining_fc", "label": "Còn nợ nguyên tệ", "label_en": "Remaining (FC)", "type": "money", "width": 12 },
-          { "key": "remaining", "label": "Còn nợ quy đổi", "label_en": "Remaining (VND)", "type": "money", "width": 12 }
+          {
+            "key": "direction",
+            "label": "Dòng",
+            "label_en": "Direction",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "partner_code",
+            "label": "Mã đối tác",
+            "label_en": "Partner code",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "partner_name",
+            "label": "Tên đối tác",
+            "label_en": "Partner name",
+            "type": "text"
+          },
+          {
+            "key": "invoice_no",
+            "label": "Số chứng từ",
+            "label_en": "Invoice no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "invoice_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Invoice date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "bucket",
+            "label": "Mốc",
+            "label_en": "Bucket",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "currency_code",
+            "label": "Loại tiền",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "remaining_fc",
+            "label": "Còn nợ nguyên tệ",
+            "label_en": "Remaining (FC)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "remaining",
+            "label": "Còn nợ quy đổi",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 12
+          }
         ],
-        "totals": ["remaining"],
-        "sort": ["direction", "due_date"],
-        "page": { "orientation": "landscape" }
+        "totals": [
+          "remaining"
+        ],
+        "sort": [
+          "direction",
+          "due_date"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "treasurer-cash-book",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "book_date",
+            "label": "Ngày, tháng ghi sổ",
+            "label_en": "Book date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày, tháng chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "receipt_no",
+            "label": "Số hiệu CT thu",
+            "label_en": "Receipt no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "payment_no",
+            "label": "Số hiệu CT chi",
+            "label_en": "Payment no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "description",
+            "label": "Diễn giải",
+            "label_en": "Description",
+            "type": "text"
+          },
+          {
+            "key": "receipt_amount",
+            "label": "Thu",
+            "label_en": "Receipt",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "payment_amount",
+            "label": "Chi",
+            "label_en": "Payment",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "balance",
+            "label": "Tồn",
+            "label_en": "Balance",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "account_code",
+            "heading_keys": [
+              "account_code",
+              "account_name"
+            ]
+          }
+        ],
+        "totals": [
+          "receipt_amount",
+          "payment_amount"
+        ],
+        "sort": [
+          "account_code",
+          "sort_seq",
+          "rn"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "cash-detail-book",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "posting_date",
+            "label": "Ngày, tháng ghi sổ",
+            "label_en": "Book date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày, tháng chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số hiệu chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "description",
+            "label": "Diễn giải",
+            "label_en": "Description",
+            "type": "text"
+          },
+          {
+            "key": "corresponding_account",
+            "label": "TK đối ứng",
+            "label_en": "Counter account",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "debit",
+            "label": "Số phát sinh Nợ",
+            "label_en": "Debit",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "credit",
+            "label": "Số phát sinh Có",
+            "label_en": "Credit",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "balance",
+            "label": "Số tồn",
+            "label_en": "Balance",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "account_code",
+            "heading_keys": [
+              "account_code",
+              "account_name"
+            ]
+          }
+        ],
+        "totals": [
+          "debit",
+          "credit"
+        ],
+        "sort": [
+          "account_code",
+          "sort_seq",
+          "rn"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "deposit-book",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "posting_date",
+            "label": "Ngày, tháng ghi sổ",
+            "label_en": "Book date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày, tháng chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số hiệu chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "description",
+            "label": "Diễn giải",
+            "label_en": "Description",
+            "type": "text"
+          },
+          {
+            "key": "corresponding_account",
+            "label": "TK đối ứng",
+            "label_en": "Counter account",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "debit",
+            "label": "Thu (gửi vào)",
+            "label_en": "Debit",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "credit",
+            "label": "Chi (rút ra)",
+            "label_en": "Credit",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "balance",
+            "label": "Số tồn",
+            "label_en": "Balance",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "money_account_code",
+            "heading_keys": [
+              "money_account_code",
+              "money_account_name"
+            ]
+          },
+          {
+            "key": "account_code",
+            "heading_keys": [
+              "account_code",
+              "account_name"
+            ]
+          }
+        ],
+        "totals": [
+          "debit",
+          "credit"
+        ],
+        "sort": [
+          "money_account_code",
+          "account_code",
+          "sort_seq",
+          "rn"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "cash-journal-in",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          {
+            "key": "posting_date",
+            "label": "Ngày, tháng ghi sổ",
+            "label_en": "Book date",
+            "type": "date",
+            "width": 10
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số hiệu chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày, tháng chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 10
+          },
+          {
+            "key": "description",
+            "label": "Diễn giải",
+            "label_en": "Description",
+            "type": "text"
+          },
+          {
+            "key": "money_account_code",
+            "label": "TK tiền",
+            "label_en": "Money account",
+            "type": "text",
+            "align": "center",
+            "width": 7
+          },
+          {
+            "key": "money_amount",
+            "label": "Ghi Nợ TK tiền",
+            "label_en": "Money amount",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "other_account_code",
+            "label": "Tài khoản khác — Số hiệu",
+            "label_en": "Other account",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "other_amount",
+            "label": "Tài khoản khác — Số tiền",
+            "label_en": "Other amount",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "totals": [
+          "money_amount",
+          "other_amount"
+        ],
+        "sort": [
+          "posting_date",
+          "voucher_no",
+          "voucher_id",
+          "line_no",
+          "posting_id"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "cash-journal-out",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          {
+            "key": "posting_date",
+            "label": "Ngày, tháng ghi sổ",
+            "label_en": "Book date",
+            "type": "date",
+            "width": 10
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số hiệu chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày, tháng chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 10
+          },
+          {
+            "key": "description",
+            "label": "Diễn giải",
+            "label_en": "Description",
+            "type": "text"
+          },
+          {
+            "key": "money_account_code",
+            "label": "TK tiền",
+            "label_en": "Money account",
+            "type": "text",
+            "align": "center",
+            "width": 7
+          },
+          {
+            "key": "money_amount",
+            "label": "Ghi Có TK tiền",
+            "label_en": "Money amount",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "other_account_code",
+            "label": "Tài khoản khác — Số hiệu",
+            "label_en": "Other account",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "other_amount",
+            "label": "Tài khoản khác — Số tiền",
+            "label_en": "Other amount",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "totals": [
+          "money_amount",
+          "other_amount"
+        ],
+        "sort": [
+          "posting_date",
+          "voucher_no",
+          "voucher_id",
+          "line_no",
+          "posting_id"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "treasurer-ledger-diff",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "voucher_no",
+            "label": "Số phiếu",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày hạch toán",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 10
+          },
+          {
+            "key": "book_date",
+            "label": "Ngày ghi sổ quỹ",
+            "label_en": "Book date",
+            "type": "date",
+            "width": 10
+          },
+          {
+            "key": "description",
+            "label": "Diễn giải",
+            "label_en": "Description",
+            "type": "text"
+          },
+          {
+            "key": "ledger_net",
+            "label": "Sổ kế toán",
+            "label_en": "Ledger",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "book_net",
+            "label": "Sổ quỹ",
+            "label_en": "Cash book",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "difference",
+            "label": "Chênh lệch",
+            "label_en": "Difference",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "reason",
+            "label": "Nguyên nhân",
+            "label_en": "Reason",
+            "type": "text",
+            "width": 22
+          }
+        ],
+        "group_by": [
+          {
+            "key": "account_code",
+            "heading_keys": [
+              "account_code",
+              "account_name"
+            ]
+          }
+        ],
+        "totals": [
+          "ledger_net",
+          "book_net",
+          "difference"
+        ],
+        "sort": [
+          "account_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "bank-reconciliation",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "status",
+            "label": "Tình trạng",
+            "label_en": "Status",
+            "type": "text",
+            "width": 18
+          },
+          {
+            "key": "statement_date",
+            "label": "Ngày sao kê",
+            "label_en": "Statement date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "statement_reference",
+            "label": "Số tham chiếu",
+            "label_en": "Reference",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "statement_description",
+            "label": "Diễn giải sao kê",
+            "label_en": "Statement description",
+            "type": "text"
+          },
+          {
+            "key": "statement_receipt",
+            "label": "Sao kê thu",
+            "label_en": "Statement receipt",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "statement_payment",
+            "label": "Sao kê chi",
+            "label_en": "Statement payment",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày hạch toán",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "voucher_net",
+            "label": "Chứng từ (ròng)",
+            "label_en": "Voucher net",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "difference",
+            "label": "Chênh lệch",
+            "label_en": "Difference",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "bank_account_code",
+            "heading_keys": [
+              "bank_account_code",
+              "bank_account_name",
+              "bank_name"
+            ]
+          }
+        ],
+        "totals": [
+          "statement_receipt",
+          "statement_payment",
+          "voucher_net",
+          "difference"
+        ],
+        "sort": [
+          "bank_account_code",
+          "group_seq",
+          "statement_date",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "bank-balance-summary",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          {
+            "key": "bank_account_code",
+            "label": "Số hiệu TK",
+            "label_en": "Account no.",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "bank_account_name",
+            "label": "Tên tài khoản",
+            "label_en": "Account name",
+            "type": "text"
+          },
+          {
+            "key": "bank_name",
+            "label": "Ngân hàng",
+            "label_en": "Bank",
+            "type": "text",
+            "width": 16
+          },
+          {
+            "key": "currency_code",
+            "label": "Loại tiền",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "opening_fc",
+            "label": "Đầu kỳ (nguyên tệ)",
+            "label_en": "Opening (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "opening",
+            "label": "Đầu kỳ (quy đổi)",
+            "label_en": "Opening",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "receipt_fc",
+            "label": "Thu (nguyên tệ)",
+            "label_en": "Receipt (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "receipt",
+            "label": "Thu (quy đổi)",
+            "label_en": "Receipt",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "payment_fc",
+            "label": "Chi (nguyên tệ)",
+            "label_en": "Payment (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "payment",
+            "label": "Chi (quy đổi)",
+            "label_en": "Payment",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "closing_fc",
+            "label": "Cuối kỳ (nguyên tệ)",
+            "label_en": "Closing (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "closing",
+            "label": "Cuối kỳ (quy đổi)",
+            "label_en": "Closing",
+            "type": "money",
+            "width": 11
+          }
+        ],
+        "totals": [
+          "opening",
+          "receipt",
+          "payment",
+          "closing"
+        ],
+        "sort": [
+          "bank_account_code",
+          "currency_code"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
       }
     }
   ],
@@ -294,7 +1524,124 @@
       "layout_code": "cash-forecast",
       "param_set_code": "cash_forecast_params",
       "ledger_scope": "both",
-      "package_scheme": null
+      "package_scheme": null,
+      "required_permission_module": "cash_book"
+    },
+    {
+      "code": "S07-DN",
+      "name": "Sổ quỹ tiền mặt (Mẫu số S07-DN)",
+      "name_en": "Cash fund book (Form S07-DN)",
+      "category": "quy-tien-mat",
+      "module": "warehousing",
+      "dataset_code": "treasurer_cash_book",
+      "layout_code": "treasurer-cash-book",
+      "param_set_code": "treasurer_cash_book_params",
+      "ledger_scope": "financial",
+      "package_scheme": "TT99",
+      "required_permission_module": "treasurer"
+    },
+    {
+      "code": "S07a-DN",
+      "name": "Sổ kế toán chi tiết quỹ tiền mặt (Mẫu số S07a-DN)",
+      "name_en": "Cash fund detail ledger (Form S07a-DN)",
+      "category": "quy-tien-mat",
+      "module": "cash_book",
+      "dataset_code": "money_account_ledger",
+      "layout_code": "cash-detail-book",
+      "param_set_code": "money_account_ledger_params",
+      "ledger_scope": "both",
+      "fixed_params": {
+        "account_prefix": "111"
+      },
+      "package_scheme": "TT99",
+      "required_permission_module": "cash_book"
+    },
+    {
+      "code": "S08-DN",
+      "name": "Sổ tiền gửi không kỳ hạn (Mẫu số S08-DN)",
+      "name_en": "Demand deposit book (Form S08-DN)",
+      "category": "ngan-hang",
+      "module": "bank",
+      "dataset_code": "money_account_ledger",
+      "layout_code": "deposit-book",
+      "param_set_code": "money_account_ledger_params",
+      "ledger_scope": "both",
+      "fixed_params": {
+        "account_prefix": "112"
+      },
+      "package_scheme": "TT99",
+      "required_permission_module": "bank"
+    },
+    {
+      "code": "S03a1-DN",
+      "name": "Sổ Nhật ký thu tiền (Mẫu số S03a1-DN)",
+      "name_en": "Cash receipts journal (Form S03a1-DN)",
+      "category": "quy-tien-mat",
+      "module": "cash_book",
+      "dataset_code": "cash_journal",
+      "layout_code": "cash-journal-in",
+      "param_set_code": "cash_journal_params",
+      "ledger_scope": "both",
+      "fixed_params": {
+        "direction": "thu"
+      },
+      "package_scheme": "TT99",
+      "required_permission_module": "cash_book"
+    },
+    {
+      "code": "S03a2-DN",
+      "name": "Sổ Nhật ký chi tiền (Mẫu số S03a2-DN)",
+      "name_en": "Cash payments journal (Form S03a2-DN)",
+      "category": "quy-tien-mat",
+      "module": "cash_book",
+      "dataset_code": "cash_journal",
+      "layout_code": "cash-journal-out",
+      "param_set_code": "cash_journal_params",
+      "ledger_scope": "both",
+      "fixed_params": {
+        "direction": "chi"
+      },
+      "package_scheme": "TT99",
+      "required_permission_module": "cash_book"
+    },
+    {
+      "code": "chenh-lech-so-quy-so-ke-toan",
+      "name": "Chênh lệch sổ quỹ và sổ kế toán",
+      "name_en": "Cash book vs ledger differences",
+      "category": "quy-tien-mat",
+      "module": "warehousing",
+      "dataset_code": "treasurer_ledger_diff",
+      "layout_code": "treasurer-ledger-diff",
+      "param_set_code": "treasurer_ledger_diff_params",
+      "ledger_scope": "financial",
+      "package_scheme": null,
+      "required_permission_module": "treasurer"
+    },
+    {
+      "code": "doi-chieu-ngan-hang",
+      "name": "Đối chiếu ngân hàng",
+      "name_en": "Bank reconciliation",
+      "category": "ngan-hang",
+      "module": "bank",
+      "dataset_code": "bank_reconciliation",
+      "layout_code": "bank-reconciliation",
+      "param_set_code": "bank_reconciliation_params",
+      "ledger_scope": "financial",
+      "package_scheme": null,
+      "required_permission_module": "bank"
+    },
+    {
+      "code": "bang-ke-so-du-ngan-hang",
+      "name": "Bảng kê số dư ngân hàng",
+      "name_en": "Bank balance summary",
+      "category": "ngan-hang",
+      "module": "bank",
+      "dataset_code": "bank_balance_summary",
+      "layout_code": "bank-balance-summary",
+      "param_set_code": "bank_balance_summary_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "bank"
     }
   ]
 }

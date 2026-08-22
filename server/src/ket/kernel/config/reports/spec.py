@@ -17,9 +17,18 @@ không có đường nối chuỗi tự do nào (chống SQL injection tầng me
 from __future__ import annotations
 
 import re
+from datetime import date
+from decimal import Decimal
 from typing import Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+)
 
 from ket.kernel.config.reports.models import SpecDocument
 from ket.kernel.errors import ReportSpecInvalidError
@@ -118,6 +127,36 @@ class ParamSpec(_SpecModel):
 
 class ParamSetSpec(_SpecModel):
     params: tuple[ParamSpec, ...] = ()
+
+
+PARAM_KIND_TYPES: Final[dict[str, type]] = {
+    "date": date,
+    "int": int,
+    "text": str,
+    "bool": bool,
+    "decimal": Decimal,
+}
+"""`ParamSpec.kind` → kiểu Python. Ở cạnh `ParamSpec` (nơi khai `kind`) để
+tầng kiểm tham số lúc render và tầng kiểm dữ liệu builtin dùng CHUNG một bảng
+— hai bảng song song là đường để một kiểu mới được thêm ở một nơi và im lặng
+vắng mặt ở nơi kia."""
+
+
+def coerce_param_value(value: object, *, param: ParamSpec, where: str) -> object:
+    """Ép + kiểm một giá trị tham số theo `param.kind`, hoặc ném lỗi cấu hình.
+
+    Dùng cho tham số GHIM (`ReportDefinition.fixed_params`), nơi giá trị đến từ
+    JSON dữ liệu builtin chứ không từ model Pydantic động của lượt render:
+    `"2026-01-31"` phải thành `date`, `"12.50"` thành `Decimal`. Cùng một cỗ
+    máy Pydantic nên luật ép kiểu khớp đúng đường render.
+    """
+    try:
+        return TypeAdapter(PARAM_KIND_TYPES[param.kind]).validate_python(value)
+    except ValidationError as exc:
+        raise ReportSpecInvalidError(
+            f"{where}: tham số ghim {param.name!r} không đúng kiểu {param.kind!r}: "
+            f"{exc.errors()[0]['msg']}"
+        ) from exc
 
 
 def parse_layout_spec(raw: SpecDocument, *, layout_code: str) -> LayoutSpec:

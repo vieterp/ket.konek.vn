@@ -56,6 +56,7 @@ from ket.api.routers.auto_posting import router as auto_posting_router
 from ket.api.routers.bank import router as bank_router
 from ket.api.routers.bank_statements import router as bank_statements_router
 from ket.api.routers.cash_book import router as cash_book_router
+from ket.api.routers.cashflow import router as cashflow_router
 from ket.api.routers.config_packages import CONFIG_PACKAGES_PREFIX
 from ket.api.routers.config_packages import router as config_packages_router
 from ket.api.routers.dimensions import router as dimensions_router
@@ -283,6 +284,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(bank_router)
     app.include_router(bank_statements_router)
     app.include_router(treasurer_router)
+    # BFF chỉ-đọc gộp quỹ + ngân hàng cho màn hình "Tiền vào tiền ra" (lát
+    # 6E-1). Sau hai router module vì nó là lớp ĐỌC dựng trên chúng, không
+    # phải một phân hệ thứ ba.
+    app.include_router(cashflow_router)
     app.include_router(vouchers_router)
     app.include_router(ledger_router)
     app.include_router(opening_balances_router)

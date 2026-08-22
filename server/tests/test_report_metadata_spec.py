@@ -177,10 +177,40 @@ class TestBuiltinManifest:
             placeholders = sql_placeholders(loaded.sql_by_dataset[entry.code])
             assert placeholders <= frozenset(entry.allowed_params)
 
-    def test_builtin_dataset_count_stays_under_phase_cap(self) -> None:
-        """Trần ≤5 dataset cho 10 báo cáo đầu (phase-05 §Chiến lược quy mô)."""
+    def test_builtin_dataset_count_stays_under_project_cap(self) -> None:
+        """Trần **≤30 dataset phủ ~155 báo cáo** (plan.md / phase-05 §Chiến lược
+        quy mô: "Vượt 40 thì dừng và xem lại thiết kế").
+
+        Con số này thay cho trần ≤5 của thời phase 5 — trần đó là cách diễn đạt
+        CÙNG một mục tiêu khi mới có 10 báo cáo đầu ("3 dataset × nhiều layout",
+        không phải một dataset một báo cáo), và nó hết dùng được ngay khi phân
+        hệ đầu tiên đăng ký bộ báo cáo của mình. Điều cần canh là mục tiêu đo
+        được của dự án, không phải cái mốc tạm.
+        """
         loaded = load_builtin_reports()
-        assert len(loaded.manifest.datasets) <= 5
+        assert len(loaded.manifest.datasets) <= 30
+
+    def test_look_alike_forms_share_one_dataset(self) -> None:
+        """Mẫu sổ chỉ khác nhau một tham số phải dùng CHUNG dataset.
+
+        Đây mới là bất biến mà trần đếm ở trên tồn tại để bảo vệ, và nó kiểm
+        được thẳng thay vì gián tiếp qua một con số: `S07a-DN`/`S08-DN` là cùng
+        sổ chi tiết một tài khoản tiền (khác nhóm TK), `S03a1-DN`/`S03a2-DN` là
+        cùng nhật ký chuyên dùng (khác chiều tiền). Tách chúng thành hai dataset
+        là nhân đôi một câu SQL — chính thứ `fixed_params` sinh ra để tránh.
+        """
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        for left, right, param in (
+            ("S07a-DN", "S08-DN", "account_prefix"),
+            ("S03a1-DN", "S03a2-DN", "direction"),
+        ):
+            assert by_code[left].dataset_code == by_code[right].dataset_code
+            assert by_code[left].param_set_code == by_code[right].param_set_code
+            # Cùng dataset thì phải khác nhau ở ĐÚNG tham số ghim, nếu không hai
+            # mã mẫu khác nhau sẽ in ra cùng một tờ giấy.
+            assert by_code[left].fixed_params[param] != by_code[right].fixed_params[param]
+            assert by_code[left].layout_code != by_code[right].layout_code
 
     def test_scheme_bound_definitions_declare_known_scheme(self) -> None:
         loaded = load_builtin_reports()

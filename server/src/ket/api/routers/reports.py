@@ -49,16 +49,19 @@ from ket.kernel.config.catalog import (
     REPORT_PDF_JOB_THRESHOLD_KEY,
     REPORT_XLSX_JOB_THRESHOLD_KEY,
 )
+from ket.kernel.config.reports.models import ReportDefinition
 from ket.kernel.config.settings_service import value_of
 from ket.kernel.errors import (
     AttachmentContentMissingError,
     AttachmentStorageNotConfiguredError,
     JobNotFoundError,
+    PermissionDeniedError,
     ReportRenderNotReadyError,
 )
 from ket.kernel.jobs import queue
 from ket.kernel.jobs.models import JobStatus
 from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.security.permissions import module_view_codes
 from ket.reporting.engine import REPORT_EXPORT, REPORT_VIEW
 from ket.reporting.engine.engine import (
     estimate_report_rows,
@@ -75,6 +78,38 @@ ReportViewer = Annotated[AuthorizedRequest, Depends(require_permission(REPORT_VI
 ReportExporter = Annotated[AuthorizedRequest, Depends(require_permission(REPORT_EXPORT))]
 
 
+def _require_module_access(authorized: AuthorizedRequest, definition: ReportDefinition) -> None:
+    """Cổng quyền PHỤ theo phân hệ của báo cáo (review 6E-1 H-1b).
+
+    `reporting.report.view` trả lời "được dùng chức năng báo cáo không", KHÔNG
+    trả lời "được đọc dữ liệu phân hệ này không". Trước lát 6E-1 hai câu hỏi đó
+    trùng nhau vì mọi báo cáo đều đọc sổ tổng hợp; từ khi báo cáo phân hệ xuất
+    hiện thì không còn — `doi-chieu-ngan-hang` đọc `bank_statement_lines`, thứ
+    mà `/api/v1/bank/statements` đòi quyền ngân hàng mới cho xem.
+
+    Luật: **có ít nhất một** mã `view` của phân hệ (giống `_may_see_cash` của
+    BFF dòng tiền) — người chỉ được cấp quyền xem phiếu thu vẫn đọc được sổ quỹ.
+    `required_permission_module IS NULL` = không cổng phụ.
+    """
+    module = definition.required_permission_module
+    if module is None:
+        return
+    codes = module_view_codes(module)
+    if not any(authorized.access.has(code) for code in codes):
+        raise PermissionDeniedError(
+            f"Tài khoản không có quyền xem dữ liệu phân hệ {module!r}",
+            permission=min(codes),
+        )
+
+
+def _may_open(authorized: AuthorizedRequest, definition: ReportDefinition) -> bool:
+    """`_require_module_access` ở dạng trả lời thay vì dạng chặn."""
+    module = definition.required_permission_module
+    if module is None:
+        return True
+    return any(authorized.access.has(code) for code in module_view_codes(module))
+
+
 @router.get("", response_model=ReportListResponse)
 def get_reports(
     authorized: ReportViewer,
@@ -85,8 +120,13 @@ def get_reports(
     """Danh mục báo cáo đã đăng ký trong dữ liệu kế toán này (FR-RPT-001)."""
     with unit_of_work(factory, authorized.scope) as session:
         definitions = list_definitions(session, category=category, module=module)
+        # Danh mục chỉ hiện báo cáo người dùng MỞ ĐƯỢC — cùng nguyên tắc
+        # `Access.has` ("màn hình chỉ hiện việc người dùng bấm được"). Lọc ở
+        # đây không phải cổng an ninh (cổng nằm ở `_require_module_access` của
+        # từng cửa); nó chỉ để danh mục không mời người ta bấm vào một 403.
+        visible = [item for item in definitions if _may_open(authorized, item)]
         return ReportListResponse(
-            reports=[ReportSummaryResponse.model_validate(item) for item in definitions]
+            reports=[ReportSummaryResponse.model_validate(item) for item in visible]
         )
 
 
@@ -100,6 +140,12 @@ def get_report_params(
     (FR-RPT-002; bộ chuẩn là hợp đồng cố định, xem `reports_schemas`)."""
     with unit_of_work(factory, authorized.scope) as session:
         definition, spec = resolve_definition(session, code=code)
+        _require_module_access(authorized, definition)
+        # Tham số ĐÃ GHIM không phải ô nhập (review 6E-1 M-2): client dựng form
+        # từ đây, và vẽ một ô "Chiều tiền" bắt buộc cho Sổ Nhật ký thu tiền là
+        # vẽ một ô mà mọi giá trị khác `thu` đều 422 — giá trị đã nằm trong
+        # chính danh tính của mẫu sổ.
+        pinned = frozenset(definition.fixed_params)
         # `model_validate` thay vì gọi constructor: `ledger_scope` trong DB là
         # chuỗi tự do, để pydantic tự kiểm nó thuộc đúng bộ Literal của schema.
         return ReportParamsResponse.model_validate(
@@ -116,6 +162,7 @@ def get_report_params(
                         required=param.required,
                     )
                     for param in spec.params
+                    if param.name not in pinned
                 ],
             }
         )
@@ -142,6 +189,7 @@ def preview(
             user_id=authorized.scope.user_id,
             include_logo=False,
         )
+        _require_module_access(authorized, resolve_definition(session, code=code)[0])
         result = preview_report(session, code=code, raw_params=body.params, options=options)
         return ReportPreviewResponse(
             code=result.code,
@@ -210,6 +258,7 @@ def render(
     render đồng bộ giữ transaction + RAM suốt lượt chạy).
     """
     with unit_of_work(factory, authorized.scope) as session:
+        _require_module_access(authorized, resolve_definition(session, code=code)[0])
         estimated = estimate_report_rows(session, code=code, raw_params=body.params)
         threshold_key = (
             REPORT_PDF_JOB_THRESHOLD_KEY if body.format == "pdf" else REPORT_XLSX_JOB_THRESHOLD_KEY

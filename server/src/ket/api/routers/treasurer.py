@@ -50,6 +50,8 @@ TREASURER_POST = permission_code(TREASURER_PERMISSION_MODULE, TREASURER_CASH_BOO
 TreasurerReader = Annotated[AuthorizedRequest, Depends(require_permission(TREASURER_VIEW))]
 TreasurerBooker = Annotated[AuthorizedRequest, Depends(require_permission(TREASURER_POST))]
 
+MAX_PAGE_SIZE: Final[int] = 200
+
 BOOK_ROUTE: Final[str] = "POST /api/v1/treasurer/queue/actions/book"
 BookKey = Annotated[str, Depends(idempotency_key_dependency(BOOK_ROUTE))]
 
@@ -113,15 +115,25 @@ def treasurer_cash_book(
     cash_account_id: Annotated[int | None, Query()] = None,
     from_date: Annotated[date | None, Query()] = None,
     to_date: Annotated[date | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> TreasurerCashBookResponse:
-    """Sổ quỹ tiền mặt của thủ quỹ (FR-WHK-005) — dòng theo ngày ghi sổ."""
+    """Sổ quỹ tiền mặt của thủ quỹ (FR-WHK-005) — dòng theo ngày ghi sổ.
+
+    Phân trang bắt buộc (nợ lát 6C): sổ quỹ một năm là hàng chục nghìn dòng.
+    Bản in đầy đủ kèm số tồn lũy kế đi qua báo cáo `S07-DN`, không qua endpoint
+    này.
+    """
     with unit_of_work(factory, authorized.scope) as session:
-        rows = cash_book_rows(
+        rows, total = cash_book_rows(
             session,
             cash_account_id=cash_account_id,
             from_date=from_date,
             to_date=to_date,
+            limit=limit,
+            offset=offset,
         )
         return TreasurerCashBookResponse(
-            items=tuple(TreasurerCashBookRowOut.model_validate(row) for row in rows)
+            items=tuple(TreasurerCashBookRowOut.model_validate(row) for row in rows),
+            total=total,
         )

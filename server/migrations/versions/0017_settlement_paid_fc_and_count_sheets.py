@@ -19,13 +19,12 @@ Hai việc:
    `branch_id`, đi qua cha — cùng lập luận `cash_voucher_lines` ở 0015, miễn
    trừ khai trong `tests/test_rls_policy_coverage.py`.
 
-Cuối cùng là bước dữ liệu `_refresh_builtin_data` CHUYỂN TỪ 0014 sang (bài học
-hạ tầng lát 6B): `refresh_builtin_reports` đọc dữ liệu builtin đóng gói HIỆN
-TẠI và probe SQL của từng dataset — dataset `cash_forecast` (mới ở lát này)
-tham chiếu chính cột `paid_amount_fc` vừa thêm ở trên, nên bước này chỉ chạy
-được ở migration MỚI NHẤT. Migration tương lai thêm cột mà dataset builtin
-tham chiếu phải dời tiếp bước này về cuối chuỗi — vẫn hợp lệ chừng nào chưa có
-bản phát hành (xem docstring `refresh_builtin_reports` về doctrine sau đó).
+Bước dữ liệu `_refresh_builtin_data` từng ở đây (chuyển 0014 → 0017 ở lát 6B)
+nay ĐÃ DỜI TIẾP sang `0020` — nó đọc dữ liệu builtin đóng gói HIỆN TẠI và probe
+SQL từng dataset nên chỉ chạy đúng ở migration MỚI NHẤT của chuỗi, và 0020 vừa
+thêm cột `report_definitions.fixed_params` mà đường gieo lại ghi vào. Doctrine
+không đổi: migration tương lai thêm cột mà dataset builtin đọc phải dời tiếp
+bước này về cuối chuỗi (xem docstring `refresh_builtin_reports`).
 
 `downgrade()` drop hai bảng và cột — chưa có bản cài phát hành.
 """
@@ -37,8 +36,6 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import context, op
 
-from ket.kernel.config.printing.seed import ensure_builtin_print_templates
-from ket.kernel.config.reports.seed import refresh_builtin_reports
 from ket.kernel.datasets.naming import role_name_for_schema
 from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 from ket.kernel.security.grants import grant_read_write
@@ -59,7 +56,6 @@ def upgrade() -> None:
     _create_cash_count_sheets()
     _create_cash_count_sheet_lines()
     _apply_security()
-    _refresh_builtin_data()
 
 
 def _target_schema() -> str:
@@ -74,18 +70,6 @@ def _target_schema() -> str:
 
 def _dataset_grantee() -> str:
     return role_name_for_schema(_target_schema())
-
-
-def _refresh_builtin_data() -> None:
-    """Làm mới metadata báo cáo + mẫu in builtin — CHUYỂN TỪ 0014 (xem
-    docstring đầu tệp). Chỉ chạy online, cùng lý do với bản gốc: bước dữ liệu
-    đọc-rồi-ghi không diễn đạt được thành SQL tĩnh của `upgrade --sql`."""
-    if context.is_offline_mode():
-        return
-    schema = _target_schema()
-    connection = op.get_bind()
-    refresh_builtin_reports(connection, schema)
-    ensure_builtin_print_templates(connection, schema)
 
 
 def _add_paid_amount_fc() -> None:

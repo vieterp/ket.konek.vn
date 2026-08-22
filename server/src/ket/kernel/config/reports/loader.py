@@ -28,11 +28,13 @@ from ket.kernel.config.reports.spec import (
     STANDARD_PARAMS,
     LayoutSpec,
     ParamSetSpec,
+    coerce_param_value,
     parse_layout_spec,
     parse_param_set_spec,
 )
 from ket.kernel.errors import ReportDatasetInvalidError, ReportSpecInvalidError
 from ket.kernel.periods.models import AccountingScheme
+from ket.kernel.security.permissions import module_view_codes
 
 _DATA_ROOT: Final = resources.files("ket.kernel.config.reports").joinpath("data")
 
@@ -80,6 +82,16 @@ class DefinitionEntry(_ManifestModel):
     layout_code: str
     param_set_code: str
     ledger_scope: str = LedgerScope.BOTH
+
+    required_permission_module: str | None = Field(default=None, max_length=CATEGORY_MAX_LENGTH)
+    """Phân hệ quyền phải có ít nhất một mã `view` — xem
+    `ReportDefinition.required_permission_module`. Kiểm ở
+    `_assert_permission_module_known`."""
+
+    fixed_params: dict[str, object] = Field(default_factory=dict)
+    """Tham số ghim `{tên: giá trị}` — xem `ReportDefinition.fixed_params`. Tên
+    phải là tham số đã khai trong `param_set_code` và giá trị phải đúng kiểu
+    `ParamSpec.kind`; cả hai kiểm ở `_assert_definitions_wired`."""
 
     package_scheme: str | None = None
     """`TT99`/`TT133` — báo cáo theo mẫu thông tư thuộc gói cấu hình builtin
@@ -223,6 +235,59 @@ def _assert_definitions_wired(
                     f"allowed_params của dataset {dataset.code!r}",
                     report_code=definition.code,
                 )
+        _assert_fixed_params_wired(definition, param_spec)
+        _assert_permission_module_known(definition)
+    _assert_no_unprovided_allowed_params(manifest, datasets, param_set_specs)
+
+
+def _assert_fixed_params_wired(definition: DefinitionEntry, param_spec: ParamSetSpec) -> None:
+    """Tham số ghim phải TRỎ vào một tham số đã khai và mang đúng kiểu của nó.
+
+    Ghim một tên không khai ở đâu cả là ô nhập ma: SQL nhận bind mà màn hình
+    không có nhãn, và không cỗ máy nào kiểm được kiểu. Ghim tham số thuộc bộ
+    CHUẨN cũng bị chặn — `from_date`/`to_date`/`branch_ids` là hợp đồng chung
+    FR-RPT-002, còn `ledger` đã có `ledger_scope` làm đúng việc đó.
+    """
+    declared = {param.name: param for param in param_spec.params}
+    for name, value in definition.fixed_params.items():
+        if name in STANDARD_PARAMS:
+            raise ReportSpecInvalidError(
+                f"Báo cáo {definition.code!r}: không ghim được tham số thuộc bộ chuẩn "
+                f"{name!r} (sổ tài chính/quản trị dùng `ledger_scope`)",
+                report_code=definition.code,
+            )
+        param = declared.get(name)
+        if param is None:
+            raise ReportSpecInvalidError(
+                f"Báo cáo {definition.code!r}: ghim tham số {name!r} không khai trong bộ "
+                f"tham số {definition.param_set_code!r}",
+                report_code=definition.code,
+            )
+        coerce_param_value(value, param=param, where=f"Báo cáo {definition.code!r}")
+
+
+def _assert_permission_module_known(definition: DefinitionEntry) -> None:
+    """Phân hệ quyền phải là phân hệ CÓ THẬT và có mã `view`.
+
+    Gõ nhầm tên phân hệ ở đây là lỗi mở-toang lặng lẽ: tập mã rỗng thì cổng
+    không chặn được ai, và không có gì kêu. Bắt lúc nạp dữ liệu builtin.
+    """
+    module = definition.required_permission_module
+    if module is None:
+        return
+    if not module_view_codes(module):
+        raise ReportSpecInvalidError(
+            f"Báo cáo {definition.code!r} đòi phân hệ quyền {module!r} không có mã "
+            "`view` nào đăng ký",
+            report_code=definition.code,
+        )
+
+
+def _assert_no_unprovided_allowed_params(
+    manifest: ReportManifest,
+    datasets: dict[str, DatasetEntry],
+    param_set_specs: dict[str, ParamSetSpec],
+) -> None:
     # Chiều ngược: mọi `allowed_params` ngoài bộ chuẩn phải được ÍT NHẤT một bộ
     # tham số (của một definition dùng dataset đó) cung cấp — gộp theo dataset
     # chứ không kiểm trong vòng lặp definition, vì một dataset nhiều definition
