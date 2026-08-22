@@ -465,7 +465,11 @@ báo in lại); nháp in được mang watermark BẢN NHÁP trừ khi đơn v�
 **Trường riêng của từng loại chứng từ** (lát 6E-2) không nằm ở tầng in: module
 sở hữu chứng từ khai `PostingDocumentType.print_details`, trả một
 `DocumentPrintDetails` (`kernel/config/printing/context.py`) gồm sáu vùng có
-thật trên biểu mẫu giấy
+thật trên biểu mẫu giấy — khối "Nợ/Có" góc phải, thân "Nhãn: giá trị", dòng
+"Số tiền … (Viết bằng chữ)", bảng chi tiết, khối chân trang. Thêm phân hệ =
+thêm một hàm ở module, **không** sửa `routers/printing.py` dùng chung. Mọi giá
+trị phải là chuỗi đã định dạng bằng `kernel/formatting.py`; số đọc thành chữ
+dùng `kernel/money_words.py`.
 
 **Số tiền in trên chứng từ tiền là số THẬT vào/ra tài khoản tiền**, không phải
 tổng mọi dòng: dùng `voucher_fields.money_side_amounts` (review 6E-2, H-1).
@@ -481,13 +485,9 @@ thay vì trả lỗi nói về ghi sổ (FR-RPT-011, review 6E-2 H-2).
 Bản in **không phải chứng từ** khai ở `kernel/config/printing/subjects.py`
 (mã bản in → mã quyền `view` của phân hệ sở hữu); `GET /print-templates` trộn
 hai registry nên mẫu của chúng vẫn tra được, và biên bản kiểm kê quỹ không cần
-một mã quyền `.print` thứ hai. — khối "Nợ/Có" góc phải, thân "Nhãn: giá trị", dòng
-"Số tiền … (Viết bằng chữ)", bảng chi tiết, khối chân trang. Thêm phân hệ =
-thêm một hàm ở module, **không** sửa `routers/printing.py` dùng chung. Mọi giá
-trị phải là chuỗi đã định dạng bằng `kernel/formatting.py`; số đọc thành chữ
-dùng `kernel/money_words.py`. Bản in KHÔNG phải chứng từ đi cùng đường: biên
-bản kiểm kê quỹ dựng `DocumentPrintContext` với `lines` rỗng và nội dung ở
-`details.tables`, in qua endpoint của module, không ghi `print_log`.
+một mã quyền `.print` thứ hai — bản in ấy chỉ chép lại thứ người ta đã đọc
+được trên màn hình. Nó dựng `DocumentPrintContext` với `lines` rỗng và nội
+dung ở `details.tables`, in qua endpoint của module, không ghi `print_log`.
 
 Mẫu builtin khai ở `kernel/config/printing/data/builtin_print_templates.json`
 (+ tệp `.html.j2` cùng thư mục) và **chỉ được gieo lại ở bước

@@ -67,6 +67,14 @@ def money_side_amounts(
     chứng từ tiền gửi nhận diện theo tiền tố số hiệu 112x (một chứng từ có thể
     chạm hai tài khoản ngân hàng). Dòng chạm cả hai bên trong tập tự triệt
     tiêu — đúng như sổ quỹ ghi số RÒNG cho phiếu hai chiều (lát 6C).
+
+    **Không dòng nào chạm tài khoản tiền thì trả về TOÀN BỘ dòng**, không trả
+    về rỗng (review pre-landing 6E-2): rỗng nghĩa là ô "Số tiền" in ra `0` trên
+    một tờ giấy có chỗ ký — im lặng và sai, tệ hơn hẳn con số thừa mà H-1 sinh
+    ra. Hình dạng hợp lệ rơi vào nhánh này có thật: bản nháp chưa điền bên quỹ,
+    dòng ghi tiểu khoản `1111` trong khi thân phiếu khai `111`, chứng từ tiền
+    gửi không dòng nào chạm 112. Ở đó không có câu trả lời "phía tiền" nào để
+    nói, nên tổng số tiền người dùng đã gõ là câu trả lời trung thực nhất.
     """
     amounts: list[Decimal] = []
     for line in lines:
@@ -77,7 +85,7 @@ def money_side_amounts(
             signed -= line.amount_fc
         if signed != 0:
             amounts.append(signed)
-    return tuple(amounts)
+    return tuple(amounts) or tuple(line.amount_fc for line in lines)
 
 
 def debit_credit_fields(session: Session, lines: Sequence[MoneyLine]) -> tuple[PrintField, ...]:
@@ -152,21 +160,9 @@ def foreign_currency_notes(
     scale_value = value_of(session, key=MONEY_SCALE_KEY, user_id=user_id)
     scale = scale_value if isinstance(scale_value, int) else 2
     converted = abs(
-        sum(
-            (
-                convert_currency(abs(amount), exchange_rate, scale) * _sign(amount)
-                for amount in amounts_fc
-            ),
-            Decimal(0),
-        )
+        sum((convert_currency(amount, exchange_rate, scale) for amount in amounts_fc), Decimal(0))
     )
     return (
         PrintField("Tỷ giá ngoại tệ", format_quantity(exchange_rate, decimals=RATE_DECIMALS)),
         PrintField("Số tiền quy đổi", format_money(converted, blank_zero=False)),
     )
-
-
-def _sign(amount: Decimal) -> int:
-    """Dấu của một số tiền mang dấu — quy đổi làm trên TRỊ TUYỆT ĐỐI rồi mới
-    gắn dấu lại, để làm tròn của dòng ra và dòng vào đối xứng nhau."""
-    return -1 if amount < 0 else 1

@@ -118,14 +118,24 @@ def _money_amounts(
 
     Phía tiền nhận diện theo **tiền tố số hiệu** `112`, không theo
     `bank_account_id`: cột ấy trỏ danh mục tài khoản ngân hàng, còn dòng định
-    khoản mang TK kế toán — hai không gian id khác nhau. Chuyển tiền nội bộ
-    chạm 112 ở CẢ HAI bên (tiền không rời doanh nghiệp) nên số ròng bằng 0; số
-    đáng in là số RỜI tài khoản nguồn, tức bên Có — cùng luật quy chủ mà
-    `balance_service.deposit_owner_account` khai cho sổ.
+    khoản mang TK kế toán — hai không gian id khác nhau.
+
+    Chuyển tiền nội bộ chạm 112 ở CẢ HAI bên (tiền không rời doanh nghiệp) nên
+    số ròng bằng 0. Số đáng in là số **ĐẾN** tài khoản đích, tức bên **Nợ** —
+    cùng luật quy chủ mà `balance_service.deposit_owner_account` khai cho sổ
+    ("chuyển nội bộ thì dòng Nợ thuộc TK đích"). Không lấy bên Có: một lệnh
+    chuyển kèm dòng phí ngân hàng (`Nợ 642/Có 1121`) có HAI dòng ghi Có 112x,
+    và cộng cả hai là tờ giấy nói đã chuyển đi nhiều hơn số tài khoản đích nhận
+    (review pre-landing 6E-2). Bên Nợ cũng là bên đúng khi tiền đến từ tài khoản
+    không phải 112 (`Nợ 1121/Có 113`).
+
+    Không dòng nào chạm 112 thì `money_side_amounts` trả toàn bộ dòng — thà in
+    tổng người dùng đã gõ còn hơn in `0` trên tờ giấy có chỗ ký.
     """
     account_ids = _deposit_account_ids(session, lines)
     if body.kind == BankVoucherKind.INTERNAL_TRANSFER:
-        return tuple(-line.amount_fc for line in lines if line.credit_account_id in account_ids)
+        arriving = tuple(line.amount_fc for line in lines if line.debit_account_id in account_ids)
+        return arriving or tuple(line.amount_fc for line in lines)
     return money_side_amounts(lines, account_ids=account_ids)
 
 

@@ -11,12 +11,12 @@ from __future__ import annotations
 import io
 from collections.abc import Iterator
 from decimal import Decimal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from pypdf import PdfReader
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from bank_support import ensure_company_bank_account, seed_bank_package_data
@@ -30,6 +30,7 @@ from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
+from ket.modules.cash_book.models import CashVoucherLine
 from ket.settings import Settings
 from posting_support import PostingContext, posting_scope, seed_posting_context
 
@@ -483,6 +484,65 @@ def test_draft_with_an_incomplete_line_still_prints(
     assert "Cộng" not in text
 
 
+def test_a_posted_voucher_with_broken_lines_still_refuses_to_print(
+    client: TestClient,
+    printer_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Khoan dung CHỈ dành cho bản nháp.
+
+    Chứng từ đã ghi sổ mà không dựng nổi định khoản là dữ liệu hỏng, không phải
+    "chưa điền xong" — ở đó lỗi phải nổ chứ không được in một tờ giấy thiếu
+    bảng định khoản như thể mọi thứ bình thường. Dựng ca này bằng cách ghi sổ
+    xong rồi xóa bên Có thẳng dưới DB (đường API không cho, đúng như thiết kế).
+    """
+    voucher = _post(
+        client,
+        printer_headers,
+        "/api/v1/cash-book/vouchers",
+        {
+            "kind": 0,
+            "operation_code": "thu-khac",
+            "cash_account_id": accounts["111"],
+            "branch_id": context.branch_id,
+            "document_date": "2026-03-03",
+            "posting_date": "2026-03-03",
+            "currency_code": "VND",
+            "exchange_rate": "1",
+            "description": "phiếu bị hỏng dòng sau khi ghi sổ",
+            "lines": [
+                {
+                    "debit_account_id": accounts["111"],
+                    "credit_account_id": accounts["3381"],
+                    "amount_fc": "300000",
+                }
+            ],
+        },
+    )
+    posted = client.post(
+        f"/api/v1/vouchers/{voucher['id']}/actions/post",
+        json={},
+        headers={**printer_headers, IDEMPOTENCY_HEADER: uuid4().hex},
+    )
+    assert posted.status_code == 200, posted.text
+
+    scope = posting_scope(dataset_alpha, context, user_id=1)
+    with unit_of_work(session_factory, scope) as session:
+        line = session.scalars(
+            select(CashVoucherLine).where(CashVoucherLine.voucher_id == UUID(voucher["id"]))
+        ).one()
+        line.credit_account_id = None
+
+    refused = client.post(
+        f"/api/v1/vouchers/{voucher['id']}/print", json={}, headers=printer_headers
+    )
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["error_code"] == "posting.invalid"
+
+
 def test_credit_advice_and_internal_transfer_name_the_direction_correctly(
     client: TestClient,
     printer_headers: dict[str, str],
@@ -594,6 +654,162 @@ def test_cheque_print_shows_the_cheque_number(
     assert "AB1234567" in text
     assert "26/02/2026" in text
     assert "Ba triệu đồng chẵn" in text
+
+
+def test_amount_never_prints_zero_when_no_line_touches_the_money_account(
+    client: TestClient,
+    printer_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Heuristic "phía tiền" phải có phương án lui (review pre-landing 6E-2).
+
+    Bản nháp chưa điền bên quỹ là hình dạng HỢP LỆ (`models.py`), và ở đó không
+    có dòng nào chạm TK quỹ để mà lọc. In `0` vào ô có chỗ ký là lỗi im — tệ
+    hơn con số thừa mà H-1 sinh ra, vì không ai nhìn thấy nó sai.
+    """
+    voucher = _post(
+        client,
+        printer_headers,
+        "/api/v1/cash-book/vouchers",
+        {
+            "kind": 0,
+            "operation_code": "thu-khac",
+            "cash_account_id": accounts["111"],
+            "branch_id": context.branch_id,
+            "document_date": "2026-02-27",
+            "posting_date": "2026-02-27",
+            "currency_code": "VND",
+            "exchange_rate": "1",
+            "description": "chờ điền tài khoản quỹ",
+            "payer_receiver_name": "Phạm Thị Mai",
+            "lines": [
+                {
+                    "debit_account_id": None,
+                    "credit_account_id": accounts["3381"],
+                    "amount_fc": "800000",
+                }
+            ],
+        },
+    )
+    text = _pdf_text(_print_ok(client, printer_headers, voucher["id"]))
+    assert "Tám trăm nghìn đồng chẵn" in text
+    assert "Không đồng chẵn" not in text
+    assert "800.000" in text
+
+
+def test_internal_transfer_amount_is_what_the_destination_receives(
+    client: TestClient,
+    printer_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+    vnd_account: int,
+    second_vnd_account: int,
+) -> None:
+    """Chuyển nội bộ chạm 112 cả hai bên nên số ròng bằng 0; số đáng in là số
+    ĐẾN tài khoản đích (bên Nợ). Lấy bên Có sẽ cộng luôn dòng phí ngân hàng —
+    tờ giấy nói đã chuyển đi nhiều hơn số tài khoản đích nhận (review
+    pre-landing 6E-2)."""
+    voucher = _post(
+        client,
+        printer_headers,
+        "/api/v1/bank/vouchers",
+        {
+            "kind": 3,
+            "bank_account_id": vnd_account,
+            "counter_bank_account_id": second_vnd_account,
+            "branch_id": context.branch_id,
+            "document_date": "2026-02-28",
+            "posting_date": "2026-02-28",
+            "currency_code": "VND",
+            "exchange_rate": "1",
+            "description": "điều chuyển vốn kèm phí ngân hàng",
+            "lines": [
+                {
+                    "debit_account_id": accounts["112"],
+                    "credit_account_id": accounts["112"],
+                    "amount_fc": "6000000",
+                },
+                {
+                    "debit_account_id": accounts["635"],
+                    "credit_account_id": accounts["112"],
+                    "amount_fc": "11000",
+                },
+            ],
+        },
+    )
+    text = _pdf_text(_print_ok(client, printer_headers, voucher["id"]))
+    assert "Sáu triệu đồng chẵn" in text
+    # 6.011.000 = số chuyển + phí; tài khoản đích chỉ nhận 6.000.000.
+    assert "Sáu triệu không trăm mười một nghìn đồng chẵn" not in text
+    assert "Không đồng chẵn" not in text
+
+    # Lệnh chuyển mà KHÔNG dòng nào ghi Nợ 112x (tiền sang tài khoản trung
+    # gian): phương án lui phải đỡ, không để tờ giấy in `0`.
+    odd = _post(
+        client,
+        printer_headers,
+        "/api/v1/bank/vouchers",
+        {
+            "kind": 3,
+            "bank_account_id": vnd_account,
+            "counter_bank_account_id": second_vnd_account,
+            "branch_id": context.branch_id,
+            "document_date": "2026-03-02",
+            "posting_date": "2026-03-02",
+            "currency_code": "VND",
+            "exchange_rate": "1",
+            "description": "chuyển qua tài khoản trung gian",
+            "lines": [
+                {
+                    "debit_account_id": accounts["1381"],
+                    "credit_account_id": accounts["112"],
+                    "amount_fc": "1500000",
+                }
+            ],
+        },
+    )
+    text = _pdf_text(_print_ok(client, printer_headers, odd["id"]))
+    assert "Một triệu năm trăm nghìn đồng chẵn" in text
+    assert "Không đồng chẵn" not in text
+
+
+def test_bank_voucher_without_a_deposit_line_still_prints_its_amount(
+    client: TestClient,
+    printer_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+    vnd_account: int,
+) -> None:
+    """Chứng từ tiền gửi mà không dòng nào chạm 112 (tiền đang chuyển 113, hoặc
+    kế toán gõ tài khoản khác): không có "phía tiền" nào để nói, nên in tổng
+    người dùng đã gõ chứ không in `0`."""
+    voucher = _post(
+        client,
+        printer_headers,
+        "/api/v1/bank/vouchers",
+        {
+            "kind": 1,
+            "operation_code": "chi-khac",
+            "bank_account_id": vnd_account,
+            "branch_id": context.branch_id,
+            "document_date": "2026-03-01",
+            "posting_date": "2026-03-01",
+            "currency_code": "VND",
+            "exchange_rate": "1",
+            "description": "chuyển qua tài khoản trung gian",
+            "lines": [
+                {
+                    "debit_account_id": accounts["3381"],
+                    "credit_account_id": accounts["1381"],
+                    "amount_fc": "2500000",
+                }
+            ],
+        },
+    )
+    text = _pdf_text(_print_ok(client, printer_headers, voucher["id"]))
+    assert "Hai triệu năm trăm nghìn đồng chẵn" in text
+    assert "Không đồng chẵn" not in text
 
 
 def test_count_sheet_print_follows_form_08att_sign_direction(
