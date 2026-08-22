@@ -12,9 +12,12 @@ SQL với `direction` khác nhau. Ba nhóm bất biến:
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from ket.kernel.config.reports.loader import DefinitionEntry, _assert_fixed_params_wired
+from ket.kernel.config.reports.seed import _probe_binds
 from ket.kernel.config.reports.spec import ParamSetSpec, ParamSpec
 from ket.kernel.errors import ReportParamsInvalidError, ReportSpecInvalidError
 from ket.reporting.engine.params import validate_params
@@ -58,6 +61,36 @@ class TestManifestValidation:
         _assert_fixed_params_wired(_definition({"direction": "thu", "threshold": 5}), _SPEC)
 
 
+class TestSeedProbe:
+    def test_the_probe_binds_the_real_pinned_value_not_a_dummy(self) -> None:
+        """Probe lúc gieo phải bind GIÁ TRỊ THẬT của tham số ghim.
+
+        Giá trị giả (`""` cho `text`) chỉ chứng minh câu SQL chạy được, không
+        chứng minh nó chạy được với chính giá trị mà báo cáo sẽ luôn dùng — một
+        giá trị ghim mà SQL không nuốt nổi (sai kiểu trong `CAST`, ngoài tập
+        enum câu lệnh so khớp) phải nổ lúc gieo, không lúc render đầu tiên.
+        Review 6E-1: đột biến "probe bỏ qua fixed_params" sống vì không test nào
+        canh cơ chế này.
+        """
+        binds = _probe_binds(
+            ("from_date", "to_date", "direction"),
+            (_DIRECTION,),
+            {"direction": "chi"},
+        )
+        assert binds["direction"] == "chi"
+
+    def test_without_a_pin_the_probe_falls_back_to_a_typed_dummy(self) -> None:
+        binds = _probe_binds(("from_date", "to_date", "direction"), (_DIRECTION,))
+        assert binds["direction"] == ""
+
+    def test_the_probe_coerces_a_pinned_value_to_its_declared_kind(self) -> None:
+        # Giá trị ghim đến từ JSON nên `date` là chuỗi; bind phải là `date` thật,
+        # nếu không PostgreSQL đoán kiểu và bỏ lọt lỗi ép kiểu.
+        cutoff = ParamSpec(name="cutoff", kind="date", label="Mốc", required=True)
+        binds = _probe_binds(("cutoff",), (cutoff,), {"cutoff": "2026-01-31"})
+        assert binds["cutoff"] == date(2026, 1, 31)
+
+
 class TestRenderTime:
     def test_the_pinned_value_reaches_the_sql_binds(self) -> None:
         bound = validate_params(
@@ -79,6 +112,23 @@ class TestRenderTime:
             fixed_params={"direction": "thu"},
         )
         assert any("Chiều tiền: thu" in line for line in bound.echo_lines)
+
+    def test_a_wrong_typed_client_value_is_refused_not_swallowed(self) -> None:
+        """Review 6E-1 M-3: bản đầu trả `True` cho giá trị sai kiểu rồi ghi đè
+        nó bằng giá trị ghim, nên `direction=7` lặng lẽ thành 200 — đúng thứ
+        doctrine "thắng TƯỜNG MINH" sinh ra để chặn."""
+        for rubbish in (7, True, ["chi"]):
+            with pytest.raises(ReportParamsInvalidError):
+                validate_params(
+                    {
+                        "from_date": "2026-01-01",
+                        "to_date": "2026-01-31",
+                        "direction": rubbish,
+                    },
+                    spec=_SPEC,
+                    ledger_scope="both",
+                    fixed_params={"direction": "thu"},
+                )
 
     def test_a_conflicting_client_value_is_refused_not_overridden(self) -> None:
         with pytest.raises(ReportParamsInvalidError, match="ghim cố định"):

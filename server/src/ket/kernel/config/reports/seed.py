@@ -221,6 +221,7 @@ def _seed_definitions(connection: Connection, loaded: LoadedReports) -> int:
                     package_ids[entry.package_scheme] if entry.package_scheme is not None else None
                 ),
                 fixed_params=entry.fixed_params,
+                required_permission_module=entry.required_permission_module,
             )
         )
         added += 1

@@ -6,7 +6,7 @@ Create Date: 2026-08-22
 
 Chạy **một lần cho mỗi schema dataset** như `0001`..`0019`, bằng `ket_owner`.
 
-Một cột: `report_definitions.fixed_params` JSONB NOT NULL DEFAULT `{}` — giá
+Hai cột. (1) `report_definitions.fixed_params` JSONB NOT NULL DEFAULT `{}` — giá
 trị GHIM cho tham số đã khai trong bộ tham số của báo cáo (xem docstring
 `ReportDefinition.fixed_params`). Đây là thứ cho hai mẫu sổ khác nhau đúng một
 tham số dùng CHUNG một dataset: `S03a1-DN` (Sổ Nhật ký thu tiền) và `S03a2-DN`
@@ -15,6 +15,12 @@ dùng lại y hệt cho `S03a3-DN`/`S03a4-DN` (nhật ký mua/bán hàng).
 
 `{}` là mặc định đúng tuyệt đối cho dòng cũ: trước lát này không báo cáo nào
 ghim tham số nào, nên không có giá trị nào phải đoán.
+
+(2) `report_definitions.required_permission_module` TEXT NULL — phân hệ mà
+người đọc phải có ít nhất một quyền `view` trong đó (review 6E-1 H-1b: trước
+lát này mọi báo cáo chỉ đòi `reporting.report.view`, nên báo cáo đối chiếu sẽ
+là đường đọc `bank_statement_lines` đầu tiên không đi qua quyền ngân hàng).
+`NULL` = không cổng phụ, đúng thế đứng cũ của bộ sổ tổng hợp.
 
 Cuối cùng là bước dữ liệu `_refresh_builtin_data` CHUYỂN TỪ 0017 sang (doctrine
 lát 6B, giữ nguyên): `refresh_builtin_reports` đọc dữ liệu builtin đóng gói
@@ -47,6 +53,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     _add_fixed_params()
+    _add_required_permission_module()
     _refresh_builtin_data()
 
 
@@ -73,6 +80,16 @@ def _add_fixed_params() -> None:
     )
 
 
+def _add_required_permission_module() -> None:
+    """Cổng quyền phụ của một báo cáo (review 6E-1 H-1b). `NULL` = không cổng —
+    đúng thế đứng của mọi báo cáo trước lát này, nên dòng cũ không phải đoán."""
+    op.add_column(
+        "report_definitions",
+        sa.Column("required_permission_module", sa.String(length=50), nullable=True),
+        schema=_target_schema(),
+    )
+
+
 def _refresh_builtin_data() -> None:
     """Làm mới metadata báo cáo + mẫu in builtin — CHUYỂN TỪ 0017 (xem docstring
     đầu tệp). Chỉ chạy online, cùng lý do với bản gốc: bước dữ liệu đọc-rồi-ghi
@@ -86,4 +103,5 @@ def _refresh_builtin_data() -> None:
 
 
 def downgrade() -> None:
+    op.drop_column("report_definitions", "required_permission_module", schema=_target_schema())
     op.drop_column("report_definitions", "fixed_params", schema=_target_schema())

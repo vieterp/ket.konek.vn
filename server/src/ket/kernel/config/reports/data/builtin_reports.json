@@ -1524,7 +1524,8 @@
       "layout_code": "cash-forecast",
       "param_set_code": "cash_forecast_params",
       "ledger_scope": "both",
-      "package_scheme": null
+      "package_scheme": null,
+      "required_permission_module": "cash_book"
     },
     {
       "code": "S07-DN",
@@ -1535,8 +1536,9 @@
       "dataset_code": "treasurer_cash_book",
       "layout_code": "treasurer-cash-book",
       "param_set_code": "treasurer_cash_book_params",
-      "ledger_scope": "both",
-      "package_scheme": "TT99"
+      "ledger_scope": "financial",
+      "package_scheme": "TT99",
+      "required_permission_module": "treasurer"
     },
     {
       "code": "S07a-DN",
@@ -1551,7 +1553,8 @@
       "fixed_params": {
         "account_prefix": "111"
       },
-      "package_scheme": "TT99"
+      "package_scheme": "TT99",
+      "required_permission_module": "cash_book"
     },
     {
       "code": "S08-DN",
@@ -1566,7 +1569,8 @@
       "fixed_params": {
         "account_prefix": "112"
       },
-      "package_scheme": "TT99"
+      "package_scheme": "TT99",
+      "required_permission_module": "bank"
     },
     {
       "code": "S03a1-DN",
@@ -1581,7 +1585,8 @@
       "fixed_params": {
         "direction": "thu"
       },
-      "package_scheme": "TT99"
+      "package_scheme": "TT99",
+      "required_permission_module": "cash_book"
     },
     {
       "code": "S03a2-DN",
@@ -1596,7 +1601,8 @@
       "fixed_params": {
         "direction": "chi"
       },
-      "package_scheme": "TT99"
+      "package_scheme": "TT99",
+      "required_permission_module": "cash_book"
     },
     {
       "code": "chenh-lech-so-quy-so-ke-toan",
@@ -1607,8 +1613,9 @@
       "dataset_code": "treasurer_ledger_diff",
       "layout_code": "treasurer-ledger-diff",
       "param_set_code": "treasurer_ledger_diff_params",
-      "ledger_scope": "both",
-      "package_scheme": null
+      "ledger_scope": "financial",
+      "package_scheme": null,
+      "required_permission_module": "treasurer"
     },
     {
       "code": "doi-chieu-ngan-hang",
@@ -1619,8 +1626,9 @@
       "dataset_code": "bank_reconciliation",
       "layout_code": "bank-reconciliation",
       "param_set_code": "bank_reconciliation_params",
-      "ledger_scope": "both",
-      "package_scheme": null
+      "ledger_scope": "financial",
+      "package_scheme": null,
+      "required_permission_module": "bank"
     },
     {
       "code": "bang-ke-so-du-ngan-hang",
@@ -1632,7 +1640,8 @@
       "layout_code": "bank-balance-summary",
       "param_set_code": "bank_balance_summary_params",
       "ledger_scope": "both",
-      "package_scheme": null
+      "package_scheme": null,
+      "required_permission_module": "bank"
     }
   ]
 }

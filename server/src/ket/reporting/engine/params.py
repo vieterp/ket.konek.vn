@@ -94,13 +94,18 @@ def _extra_field(param: ParamSpec) -> tuple[Any, Any]:
 
 
 def _same_value(sent: object, param: ParamSpec, pinned: object) -> bool:
-    """Client có gửi ĐÚNG giá trị đã ghim không? Gửi rác kiểu sai thì trả True
-    để lượt kiểm chính báo lỗi kiểu — thông báo "sai kiểu" đúng hơn "đã ghim"
-    khi người gửi còn chưa gửi được thứ so sánh nổi."""
+    """Client có gửi ĐÚNG giá trị đã ghim không?
+
+    Giá trị **sai kiểu** trả `False` chứ không `True` (review 6E-1 M-3): bản
+    đầu trả `True` với lý do "để lượt kiểm chính báo lỗi kiểu", nhưng ngay sau
+    đó `merged[name] = pinned` GHI ĐÈ giá trị rác nên lượt kiểm chính không bao
+    giờ thấy nó — `direction=7` lặng lẽ thành `200`. Đó đúng là thứ doctrine
+    "thắng TƯỜNG MINH" sinh ra để chặn: người gửi sai phải biết mình gửi sai.
+    """
     try:
         return bool(TypeAdapter(PARAM_KIND_TYPES[param.kind]).validate_python(sent) == pinned)
     except ValidationError:
-        return True
+        return False
 
 
 def _apply_fixed_params(

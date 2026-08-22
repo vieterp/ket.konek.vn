@@ -19,12 +19,17 @@
 -- thuộc tài khoản ĐÍCH (`counter_bank_account_id`) — một chứng từ CTNB đứng
 -- trên sổ của cả hai tài khoản, mỗi bên một chiều.
 --
--- Phát sinh 112x KHÔNG đi qua chứng từ tiền gửi (bút toán GLE gõ thẳng) không
--- quy được chủ: nó vào nhóm `money_account_code IS NULL` — đúng sự thật là
--- không ai biết nó thuộc tài khoản ngân hàng nào, cùng lối "không bịa chủ" của
--- carry-forward 6D. Nhóm đó hiện trên sổ dưới tên "(chưa gắn tài khoản ngân
--- hàng)" thay vì bị giấu: giấu là cách chắc chắn để tổng sổ chi tiết lệch tổng
--- Sổ Cái mà không ai thấy vì sao.
+-- Phát sinh 112x KHÔNG quy được về một tài khoản ngân hàng nào rơi vào nhóm
+-- `(chưa gắn)`. Hai nguồn, không phải một (review 6E-1 H-3):
+--   * bút toán GLE gõ thẳng vào 112x;
+--   * **chứng từ QUỸ chạm 112** — gói builtin khai sẵn `PT rut-tgnh-nhap-quy`
+--     (rút tiền gửi về nhập quỹ) và chiều ngược bằng phiếu chi. Chúng là
+--     `cash_vouchers`, không có `bank_vouchers` để bám, và `cash_vouchers`
+--     chưa có cột TK ngân hàng.
+-- Nộp/rút tiền mặt ↔ ngân hàng là nghiệp vụ HẰNG TUẦN, nên nhóm này không phải
+-- ca hiếm: số dư S08-DN sẽ lệch sao kê đúng bằng các khoản đó. Nhóm hiện ra
+-- thay vì bị giấu, và nợ "thêm `bank_account_id` cho chứng từ quỹ" đã ghi bàn
+-- giao 6E-1 → 6G. Không bịa chủ, cùng lối carry-forward 6D.
 --
 -- Số dư đầu kỳ = dư đầu năm (`opening_balances` của năm chứa :from_date, đã
 -- mang sẵn `bank_account_id` từ 0019) + phát sinh từ đầu năm tới trước
@@ -44,6 +49,13 @@ WITH fy AS (
     SELECT id, start_date
     FROM fiscal_years
     WHERE :from_date >= start_date AND :from_date <= end_date
+    -- Cùng phép chọn xác định với `periods.service.fiscal_year_covering`
+    -- (review 6E-1 M-6): `fiscal_years` KHÔNG có ràng buộc DB chống chồng lấn,
+    -- và `JOIN fy ON TRUE` với hai năm cùng phủ một ngày sẽ nhân đôi nhánh
+    -- phát sinh của số dư đầu kỳ — cho kết quả khác thẻ số dư BFF trên cùng
+    -- dữ liệu. Hai cài đặt của một khái niệm phải chọn giống nhau.
+    ORDER BY start_date DESC
+    LIMIT 1
 ),
 -- Quy chủ tài khoản ngân hàng cho MỌI dòng phát sinh trên TK tiền, một lần,
 -- dùng lại cho cả nhánh số dư đầu kỳ lẫn nhánh dòng trong kỳ.
@@ -69,6 +81,10 @@ postings AS (
       AND (CAST(:branch_ids AS INTEGER[]) IS NULL OR p.branch_id = ANY(:branch_ids))
       AND coa.code LIKE :account_prefix || '%'
       AND (CAST(:account_code AS TEXT) IS NULL OR coa.code = :account_code)
+      -- Cận trên NGÀY cho CTE dùng chung (review 6E-1 M-5): thiếu nó thì in sổ
+      -- MỘT tháng vẫn quét + vật chất hóa mọi dòng 111/112 từ ngày mở sổ, vì
+      -- CTE được tham chiếu hai lần nên PostgreSQL materialize.
+      AND p.posting_date <= :to_date
 ),
 opening_source AS (
     SELECT ob.account_id,

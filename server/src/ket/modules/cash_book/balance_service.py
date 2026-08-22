@@ -143,7 +143,6 @@ def cash_balance_floor_from(
 class CashAccountBalance:
     """Số dư một số hiệu TK quỹ, cộng trên nhiều chi nhánh."""
 
-    account_id: int
     account_code: str
     account_name: str
     balance: Decimal
@@ -168,8 +167,10 @@ def cash_balances_as_of(
     (quyết định 4F) — hai đường phải cho cùng con số cho cùng một tài khoản
     trong cùng một chi nhánh, và test ghim đúng điều đó.
 
-    `account_id` trả về là id NHỎ NHẤT của số hiệu đó: nó chỉ dùng để client
-    gọi tiếp `/cashflow/transactions`, còn danh tính hiển thị là số hiệu.
+    KHÔNG trả `account_id` (review 6E-1 M-4): gộp theo mã rồi phát một "id đại
+    diện" là mời người gọi lọc theo id trên một con số cộng từ NHIỀU id — đúng
+    ca mà chính docstring này viện dẫn làm lý do gộp theo mã. Khóa drill-down
+    là số hiệu.
     """
     year = fiscal_year_covering(session, as_of)
     if year is None or not branch_ids:
@@ -210,7 +211,6 @@ def cash_balances_as_of(
 
     rows = session.execute(
         select(
-            func.min(ChartOfAccount.id).label("account_id"),
             ChartOfAccount.code,
             func.min(ChartOfAccount.name).label("name"),
             func.coalesce(func.sum(combined.c.net), 0).label("balance"),
@@ -221,7 +221,6 @@ def cash_balances_as_of(
     ).all()
     return tuple(
         CashAccountBalance(
-            account_id=row.account_id,
             account_code=row.code,
             account_name=row.name,
             balance=Decimal(row.balance),

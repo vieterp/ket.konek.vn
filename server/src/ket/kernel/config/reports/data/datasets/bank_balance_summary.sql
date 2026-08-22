@@ -5,9 +5,19 @@
 -- Cùng luật quy chủ tài khoản ngân hàng với `money_account_ledger.sql` và
 -- `BankDepositMovementSource` (kernel Protocol `DepositMovementSource`, 6D):
 -- chủ là `bank_vouchers.bank_account_id`, riêng chuyển tiền nội bộ
--- (`kind = 3`) thì dòng ghi Nợ thuộc tài khoản ĐÍCH. Phát sinh 112x gõ thẳng
--- bằng bút toán GLE không quy được chủ và ở lại nhóm "(chưa gắn)" — không bịa
--- chủ, cùng lối carry-forward 6D.
+-- (`kind = 3`) thì dòng ghi Nợ thuộc tài khoản ĐÍCH.
+--
+-- Phát sinh 112x KHÔNG quy được về một tài khoản ngân hàng nào rơi vào nhóm
+-- `(chưa gắn)`. Hai nguồn, không phải một (review 6E-1 H-3):
+--   * bút toán GLE gõ thẳng vào 112x;
+--   * **chứng từ QUỸ chạm 112** — gói builtin khai sẵn `PT rut-tgnh-nhap-quy`
+--     (rút tiền gửi về nhập quỹ) và chiều ngược bằng phiếu chi. Chúng là
+--     `cash_vouchers`, không có `bank_vouchers` để bám, và `cash_vouchers`
+--     chưa có cột TK ngân hàng.
+-- Nộp/rút tiền mặt ↔ ngân hàng là nghiệp vụ HẰNG TUẦN, nên nhóm này không phải
+-- ca hiếm: số dư S08-DN sẽ lệch sao kê đúng bằng các khoản đó. Nhóm hiện ra
+-- thay vì bị giấu, và nợ "thêm `bank_account_id` cho chứng từ quỹ" đã ghi bàn
+-- giao 6E-1 → 6G. Không bịa chủ, cùng lối carry-forward 6D.
 --
 -- Số dư đầu kỳ = dư đầu năm (`opening_balances`, cột `bank_account_id` có từ
 -- 0019) + phát sinh từ đầu năm tới TRƯỚC :from_date. Cùng phép toán với
@@ -25,6 +35,13 @@ WITH fy AS (
     SELECT id, start_date
     FROM fiscal_years
     WHERE :from_date >= start_date AND :from_date <= end_date
+    -- Cùng phép chọn xác định với `periods.service.fiscal_year_covering`
+    -- (review 6E-1 M-6): `fiscal_years` KHÔNG có ràng buộc DB chống chồng lấn,
+    -- và `JOIN fy ON TRUE` với hai năm cùng phủ một ngày sẽ nhân đôi nhánh
+    -- phát sinh của số dư đầu kỳ — cho kết quả khác thẻ số dư BFF trên cùng
+    -- dữ liệu. Hai cài đặt của một khái niệm phải chọn giống nhau.
+    ORDER BY start_date DESC
+    LIMIT 1
 ),
 postings AS (
     SELECT p.posting_date,

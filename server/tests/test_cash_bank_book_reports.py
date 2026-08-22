@@ -17,7 +17,7 @@ biến:
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -35,6 +35,7 @@ from ket.kernel.config.catalog import TREASURER_ENABLED_KEY
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.models import Setting
+from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
 from ket.modules.bank.models import BankStatement, BankStatementLine, BankVoucherKind
 from ket.modules.bank.reconciliation import match_line
@@ -57,6 +58,10 @@ REPORT_ROLE = "xem_so_quy_ngan_hang"
 OCT_05 = date(2026, 10, 5)
 OCT_06 = date(2026, 10, 6)
 OCT_31 = date(2026, 10, 31)
+# Cặp khớp bắc qua ranh giới kỳ (H-2): chứng từ cuối tháng 11, sao kê về đầu
+# tháng 12 — đúng cửa sổ ±3 ngày mà auto-match của 6D chấp nhận.
+EDGE_VOUCHER_DATE = date(2026, 11, 29)
+EDGE_STATEMENT_DATE = date(2026, 12, 2)
 BANK_ACCOUNT_CODE = "RPT-BOOK-001"
 
 RECEIPT_AMOUNT = Decimal("520000")
@@ -259,7 +264,47 @@ def _cash_payload(
 
 @pytest.fixture(scope="module")
 def report_role(session_factory: sessionmaker[Session], dataset_alpha: DatasetRef) -> str:
-    return ensure_role(session_factory, dataset_alpha, REPORT_ROLE, ["reporting.report.view"])
+    """Quyền báo cáo **và** quyền xem dữ liệu ba phân hệ liên quan.
+
+    Trước bản vá H-1b một mình `reporting.report.view` mở được cả sổ quỹ lẫn
+    bảng đối chiếu ngân hàng — chính fixture cũ là bằng chứng của lỗ hổng.
+    """
+    return ensure_role(
+        session_factory,
+        dataset_alpha,
+        REPORT_ROLE,
+        [
+            "reporting.report.view",
+            permission_code("cash_book", "receipt", Action.VIEW),
+            permission_code("bank", "credit_advice", Action.VIEW),
+            permission_code("treasurer", "cash_book", Action.VIEW),
+        ],
+    )
+
+
+@pytest.fixture
+def headers_for_reports(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    test_password: str,
+    context: PostingContext,
+    report_role: str,
+) -> dict[str, str]:
+    return {
+        **actor(
+            client,
+            session_factory,
+            dataset_alpha,
+            user_factory,
+            report_role,
+            "bao_cao_params",
+            test_password,
+            branch_codes=[context.branch_code],
+        ),
+        BRANCH_HEADER: str(context.branch_id),
+    }
 
 
 Preview = Callable[..., "PreviewResult"]
@@ -372,12 +417,23 @@ class TestPinnedFormsShareADataset:
     def test_cash_journals_split_by_the_pinned_direction(
         self, preview: Preview, books: dict[str, UUID]
     ) -> None:
-        receipts = preview("S03a1-DN").all_text()
-        payments = preview("S03a2-DN").all_text()
-        assert "Sổ quỹ — thu" in receipts
-        assert "Sổ quỹ — chi" not in receipts
-        assert "Sổ quỹ — chi" in payments
-        assert "Sổ quỹ — thu" not in payments
+        receipts = preview("S03a1-DN")
+        payments = preview("S03a2-DN")
+        assert "Sổ quỹ — thu" in receipts.all_text()
+        assert "Sổ quỹ — chi" not in receipts.all_text()
+        assert "Sổ quỹ — chi" in payments.all_text()
+        assert "Sổ quỹ — thu" not in payments.all_text()
+
+        # Cột tiền phải mang ĐÚNG chiều của sổ (review 6E-1 L-3: đột biến "luôn
+        # lấy `p.debit`" sống — Sổ Nhật ký chi tiền sẽ in toàn số 0 mà test vẫn
+        # xanh). Nhật ký thu đọc bên Nợ TK tiền, nhật ký chi đọc bên Có.
+        receipt_row = next(row for row in receipts.rows if row["description"] == "Sổ quỹ — thu")
+        assert receipts.money(receipt_row, "money_amount") == RECEIPT_AMOUNT
+        assert receipts.money(receipt_row, "other_amount") == RECEIPT_AMOUNT
+        assert receipt_row["money_account_code"] == "111"
+
+        payment_row = next(row for row in payments.rows if row["description"] == "Sổ quỹ — chi")
+        assert payments.money(payment_row, "money_amount") == PAYMENT_AMOUNT
 
     def test_a_pinned_param_cannot_be_overridden_from_the_request(
         self,
@@ -418,6 +474,68 @@ class TestPinnedFormsShareADataset:
         assert response.status_code == 422, response.text
 
 
+class TestModulePermissionGate:
+    """Review 6E-1 H-1b — `reporting.report.view` trả lời "được dùng chức năng
+    báo cáo không", KHÔNG trả lời "được đọc dữ liệu phân hệ này không"."""
+
+    def test_report_view_alone_cannot_open_a_module_report(
+        self,
+        client: TestClient,
+        session_factory: sessionmaker[Session],
+        dataset_alpha: DatasetRef,
+        user_factory: UserFactory,
+        test_password: str,
+        context: PostingContext,
+        books: dict[str, UUID],
+    ) -> None:
+        bare = ensure_role(
+            session_factory, dataset_alpha, "chi_xem_bao_cao", ["reporting.report.view"]
+        )
+        headers = {
+            **actor(
+                client,
+                session_factory,
+                dataset_alpha,
+                user_factory,
+                bare,
+                "bao_cao_tran",
+                test_password,
+                branch_codes=[context.branch_code],
+            ),
+            BRANCH_HEADER: str(context.branch_id),
+        }
+        body = {"params": {"from_date": OCT_05.isoformat(), "to_date": OCT_31.isoformat()}}
+        for code in ("doi-chieu-ngan-hang", "S07a-DN", "S07-DN"):
+            refused = client.post(f"/api/v1/reports/{code}/preview", json=body, headers=headers)
+            assert refused.status_code == 403, f"{code}: {refused.text}"
+
+        # Bộ sổ tổng hợp giữ nguyên thế đứng cũ (`NULL` = không cổng phụ).
+        allowed = client.post("/api/v1/reports/S03a-DN/preview", json=body, headers=headers)
+        assert allowed.status_code == 200, allowed.text
+
+        # Và danh mục không mời người ta bấm vào một 403.
+        listed = client.get("/api/v1/reports", headers=headers)
+        assert listed.status_code == 200
+        codes = {item["code"] for item in listed.json()["reports"]}
+        assert "doi-chieu-ngan-hang" not in codes
+        assert "S03a-DN" in codes
+
+    def test_a_pinned_param_is_not_offered_as_an_input_field(
+        self, client: TestClient, headers_for_reports: dict[str, str]
+    ) -> None:
+        """Review 6E-1 M-2: client dựng form từ `/params`; một ô "Chiều tiền"
+        bắt buộc cho Sổ Nhật ký THU là ô mà mọi giá trị khác `thu` đều 422."""
+        response = client.get("/api/v1/reports/S03a1-DN/params", headers=headers_for_reports)
+        assert response.status_code == 200, response.text
+        assert [param["name"] for param in response.json()["params"]] == []
+
+        deposit = client.get("/api/v1/reports/S07a-DN/params", headers=headers_for_reports)
+        assert deposit.status_code == 200
+        names = [param["name"] for param in deposit.json()["params"]]
+        assert "account_prefix" not in names, "tham số ghim không phải ô nhập"
+        assert "account_code" in names, "tham số thật vẫn phải còn"
+
+
 class TestTreasurerBooks:
     def test_the_treasurer_book_holds_only_what_the_treasurer_booked(
         self, preview: Preview, books: dict[str, UUID]
@@ -443,6 +561,37 @@ class TestTreasurerBooks:
         # Phiếu đã khớp trọn vẹn không thuộc báo cáo chênh lệch.
         assert not [row for row in result.rows if row["description"] == "Sổ quỹ — thu"]
 
+    def test_a_draft_voucher_never_enters_the_difference_report(
+        self,
+        preview: Preview,
+        session_factory: sessionmaker[Session],
+        dataset_alpha: DatasetRef,
+        context: PostingContext,
+        accounts: dict[str, int],
+        books: dict[str, UUID],
+    ) -> None:
+        """Review 6E-1 H-4: phiếu mới lập chưa ghi sổ từng lọt vào đây kèm lý do
+        "Kế toán đã ghi sổ, thủ quỹ chưa ghi sổ quỹ" — khẳng định sai một việc
+        chưa xảy ra, và đọc như một lời buộc tội thủ quỹ."""
+        scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+        with unit_of_work(session_factory, scope) as session:
+            draft = CashVoucherService(session).create(
+                _cash_payload(
+                    context,
+                    accounts,
+                    kind=CashVoucherKind.PAYMENT,
+                    operation_code="chi-khac",
+                    debit=accounts["642"],
+                    credit=accounts["111"],
+                    amount=Decimal("999000"),
+                    description="Phiếu nháp chưa ghi sổ",
+                ),
+                user_id=ACTOR_ID,
+            )
+        rows = preview("chenh-lech-so-quy-so-ke-toan").rows
+        assert draft.voucher_no not in {row["voucher_no"] for row in rows}
+        assert all(row["description"] != "Phiếu nháp chưa ghi sổ" for row in rows)
+
 
 class TestBankBooks:
     def test_reconciliation_separates_matched_and_both_kinds_of_gap(
@@ -464,6 +613,88 @@ class TestBankBooks:
         assert result.money(orphan, "difference") == UNMATCHED_STATEMENT_AMOUNT
         assert not orphan["voucher_no"]
 
+    def test_a_matched_pair_across_the_period_edge_makes_no_phantom_difference(
+        self,
+        preview: Preview,
+        session_factory: sessionmaker[Session],
+        dataset_alpha: DatasetRef,
+        context: PostingContext,
+        accounts: dict[str, int],
+        bank_account_id: int,
+        books: dict[str, UUID],
+    ) -> None:
+        """Review 6E-1 H-2: auto-match của 6D cố ý chấp nhận lệch ±3 ngày, nên
+        cặp đã khớp bắc qua ngày cuối kỳ là chuyện thường tháng. Cắt ngày ở vế
+        đối ứng làm chính cặp đó hiện thành HAI dòng lệch giả — mỗi kỳ một dòng
+        — mà tổng cả năm vẫn đúng nên không ai tra ra."""
+        scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+        amount = Decimal("444000")
+        with unit_of_work(session_factory, scope) as session:
+            bank = BankVoucherService(session)
+            advice = bank.create(
+                BankVoucherIn(
+                    kind=BankVoucherKind.CREDIT_ADVICE,
+                    operation_code="thu-khac",
+                    bank_account_id=bank_account_id,
+                    branch_id=context.branch_id,
+                    document_date=EDGE_VOUCHER_DATE,
+                    posting_date=EDGE_VOUCHER_DATE,
+                    currency_code="VND",
+                    exchange_rate=Decimal(1),
+                    description="Báo có bắc qua ranh giới kỳ",
+                    lines=(
+                        BankVoucherLineIn(
+                            debit_account_id=accounts["112"],
+                            credit_account_id=accounts["3381"],
+                            amount_fc=amount,
+                        ),
+                    ),
+                ),
+                user_id=ACTOR_ID,
+            )
+            bank.post(advice.id, user_id=ACTOR_ID)
+            statement = BankStatement(
+                bank_account_id=bank_account_id,
+                statement_date=EDGE_STATEMENT_DATE,
+                imported_by=ACTOR_ID,
+            )
+            session.add(statement)
+            session.flush()
+            line = BankStatementLine(
+                statement_id=statement.id,
+                bank_account_id=bank_account_id,
+                line_no=1,
+                txn_date=EDGE_STATEMENT_DATE,
+                reference_no="SK-BIENKY",
+                description="Dòng sao kê về muộn 3 ngày",
+                debit=Decimal(0),
+                credit=amount,
+            )
+            session.add(line)
+            session.flush()
+            match_line(session, line_id=line.id, voucher_id=advice.id)
+
+        # Kỳ chỉ chứa DÒNG SAO KÊ (chứng từ nằm ở kỳ trước).
+        statement_side = preview(
+            "doi-chieu-ngan-hang",
+            from_date=EDGE_STATEMENT_DATE.isoformat(),
+            to_date=(EDGE_STATEMENT_DATE + timedelta(days=5)).isoformat(),
+        )
+        matched = [row for row in statement_side.rows if row["statement_reference"] == "SK-BIENKY"]
+        assert matched, "dòng sao kê phải có mặt trong kỳ chứa nó"
+        assert matched[0]["status"] == "Đã khớp"
+        assert statement_side.money(matched[0], "difference") == Decimal(0)
+
+        # Kỳ chỉ chứa CHỨNG TỪ (dòng sao kê về muộn, nằm ở kỳ sau).
+        voucher_side = preview(
+            "doi-chieu-ngan-hang",
+            from_date=(EDGE_VOUCHER_DATE - timedelta(days=1)).isoformat(),
+            to_date=EDGE_VOUCHER_DATE.isoformat(),
+        )
+        assert advice.voucher_no not in {row["voucher_no"] for row in voucher_side.rows}, (
+            "chứng từ ĐÃ khớp không phải 'chứng từ chưa có trên sao kê'"
+        )
+
     def test_balance_summary_closes_with_opening_plus_movement(
         self, preview: Preview, books: dict[str, UUID]
     ) -> None:
@@ -476,4 +707,7 @@ class TestBankBooks:
         payment = result.money(row, "payment")
         closing = result.money(row, "closing")
         assert closing == opening + receipt - payment
+        # Không chỉ là hằng đúng theo cấu tạo (review 6E-1: xóa nhánh dư đầu năm
+        # mà test vẫn xanh): ghim CHÍNH con số phát sinh và số dư cuối kỳ.
         assert receipt == ADVICE_AMOUNT
+        assert closing == opening + ADVICE_AMOUNT

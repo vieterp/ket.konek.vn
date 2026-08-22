@@ -8383,8 +8383,6 @@ export interface components {
         CashAccountCard: {
             /** Account Code */
             account_code: string;
-            /** Account Id */
-            account_id: number;
             /** Account Name */
             account_name: string;
             /** Balance */
@@ -8719,10 +8717,12 @@ export interface components {
          *     mới là 403 (chặn ở dependency của endpoint).
          *
          *     `unassigned_deposit` = phần số dư TK 112 KHÔNG gắn được tài khoản ngân hàng
-         *     nào (bút toán GLE gõ thẳng vào 112x — xem `bank/balance_service`). Hiện
-         *     thành một con số riêng thay vì bị giấu hoặc bị chia bừa cho các thẻ: tổng
-         *     thẻ ngân hàng + số này = tổng TK 112 trên bảng cân đối, và người dùng nhìn
-         *     ra ngay vì sao hai nơi lệch nhau (ghi chú M-3 của review 6D).
+         *     nào. Hai nguồn (review 6E-1 H-3): bút toán GLE gõ thẳng vào 112x, **và
+         *     chứng từ quỹ chạm 112** (nộp tiền mặt vào ngân hàng / rút tiền gửi về nhập
+         *     quỹ — `cash_vouchers` chưa có cột TK ngân hàng). Hiện thành một con số
+         *     riêng thay vì bị giấu hoặc bị chia bừa cho các thẻ: tổng thẻ ngân hàng +
+         *     số này = tổng TK 112 trên bảng cân đối, và người dùng nhìn ra ngay vì sao
+         *     hai nơi lệch nhau (ghi chú M-3 của review 6D).
          */
         CashflowOverviewResponse: {
             /**
@@ -13987,7 +13987,7 @@ export interface operations {
         parameters: {
             query: {
                 source: "cash" | "bank";
-                cash_account_id?: number | null;
+                cash_account_code?: string | null;
                 bank_account_id?: number | null;
                 from_date?: string | null;
                 to_date?: string | null;

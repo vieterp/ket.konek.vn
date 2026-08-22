@@ -34,6 +34,7 @@ from ket.kernel.config.reports.spec import (
 )
 from ket.kernel.errors import ReportDatasetInvalidError, ReportSpecInvalidError
 from ket.kernel.periods.models import AccountingScheme
+from ket.kernel.security.permissions import module_view_codes
 
 _DATA_ROOT: Final = resources.files("ket.kernel.config.reports").joinpath("data")
 
@@ -81,6 +82,11 @@ class DefinitionEntry(_ManifestModel):
     layout_code: str
     param_set_code: str
     ledger_scope: str = LedgerScope.BOTH
+
+    required_permission_module: str | None = Field(default=None, max_length=CATEGORY_MAX_LENGTH)
+    """Phân hệ quyền phải có ít nhất một mã `view` — xem
+    `ReportDefinition.required_permission_module`. Kiểm ở
+    `_assert_permission_module_known`."""
 
     fixed_params: dict[str, object] = Field(default_factory=dict)
     """Tham số ghim `{tên: giá trị}` — xem `ReportDefinition.fixed_params`. Tên
@@ -230,6 +236,7 @@ def _assert_definitions_wired(
                     report_code=definition.code,
                 )
         _assert_fixed_params_wired(definition, param_spec)
+        _assert_permission_module_known(definition)
     _assert_no_unprovided_allowed_params(manifest, datasets, param_set_specs)
 
 
@@ -257,6 +264,23 @@ def _assert_fixed_params_wired(definition: DefinitionEntry, param_spec: ParamSet
                 report_code=definition.code,
             )
         coerce_param_value(value, param=param, where=f"Báo cáo {definition.code!r}")
+
+
+def _assert_permission_module_known(definition: DefinitionEntry) -> None:
+    """Phân hệ quyền phải là phân hệ CÓ THẬT và có mã `view`.
+
+    Gõ nhầm tên phân hệ ở đây là lỗi mở-toang lặng lẽ: tập mã rỗng thì cổng
+    không chặn được ai, và không có gì kêu. Bắt lúc nạp dữ liệu builtin.
+    """
+    module = definition.required_permission_module
+    if module is None:
+        return
+    if not module_view_codes(module):
+        raise ReportSpecInvalidError(
+            f"Báo cáo {definition.code!r} đòi phân hệ quyền {module!r} không có mã "
+            "`view` nào đăng ký",
+            report_code=definition.code,
+        )
 
 
 def _assert_no_unprovided_allowed_params(

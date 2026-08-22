@@ -3153,10 +3153,6 @@
             "title": "Account Code",
             "type": "string"
           },
-          "account_id": {
-            "title": "Account Id",
-            "type": "integer"
-          },
           "account_name": {
             "title": "Account Name",
             "type": "string"
@@ -3178,7 +3174,6 @@
           }
         },
         "required": [
-          "account_id",
           "account_code",
           "account_name",
           "currency_code",
@@ -4148,7 +4143,7 @@
         "type": "object"
       },
       "CashflowOverviewResponse": {
-        "description": "Hàng thẻ của màn hình \"Tiền vào tiền ra\" (U-Quỹ).\n\nThẻ chỉ gồm phần người dùng có quyền XEM: thiếu quyền quỹ thì `cash_accounts`\nrỗng, thiếu quyền ngân hàng thì `bank_accounts` rỗng — không phải 403 cho cả\nmàn hình, vì một thủ quỹ chỉ xem quỹ vẫn phải mở được trang. Thiếu CẢ HAI\nmới là 403 (chặn ở dependency của endpoint).\n\n`unassigned_deposit` = phần số dư TK 112 KHÔNG gắn được tài khoản ngân hàng\nnào (bút toán GLE gõ thẳng vào 112x — xem `bank/balance_service`). Hiện\nthành một con số riêng thay vì bị giấu hoặc bị chia bừa cho các thẻ: tổng\nthẻ ngân hàng + số này = tổng TK 112 trên bảng cân đối, và người dùng nhìn\nra ngay vì sao hai nơi lệch nhau (ghi chú M-3 của review 6D).",
+        "description": "Hàng thẻ của màn hình \"Tiền vào tiền ra\" (U-Quỹ).\n\nThẻ chỉ gồm phần người dùng có quyền XEM: thiếu quyền quỹ thì `cash_accounts`\nrỗng, thiếu quyền ngân hàng thì `bank_accounts` rỗng — không phải 403 cho cả\nmàn hình, vì một thủ quỹ chỉ xem quỹ vẫn phải mở được trang. Thiếu CẢ HAI\nmới là 403 (chặn ở dependency của endpoint).\n\n`unassigned_deposit` = phần số dư TK 112 KHÔNG gắn được tài khoản ngân hàng\nnào. Hai nguồn (review 6E-1 H-3): bút toán GLE gõ thẳng vào 112x, **và\nchứng từ quỹ chạm 112** (nộp tiền mặt vào ngân hàng / rút tiền gửi về nhập\nquỹ — `cash_vouchers` chưa có cột TK ngân hàng). Hiện thành một con số\nriêng thay vì bị giấu hoặc bị chia bừa cho các thẻ: tổng thẻ ngân hàng +\nsố này = tổng TK 112 trên bảng cân đối, và người dùng nhìn ra ngay vì sao\nhai nơi lệch nhau (ghi chú M-3 của review 6D).",
         "properties": {
           "as_of": {
             "format": "date",
@@ -15146,7 +15141,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.19.0"
+    "version": "0.20.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -16957,18 +16952,19 @@
           },
           {
             "in": "query",
-            "name": "cash_account_id",
+            "name": "cash_account_code",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "maxLength": 20,
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cash Account Id"
+              "title": "Cash Account Code"
             }
           },
           {

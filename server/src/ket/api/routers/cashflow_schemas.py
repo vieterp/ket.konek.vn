@@ -18,8 +18,13 @@ class CashAccountCard(BaseModel):
     """Thẻ một tài khoản quỹ tiền mặt."""
 
     source: Literal["cash"] = "cash"
-    account_id: int
     account_code: str
+    """Danh tính của thẻ, và khóa để mở lưới giao dịch
+    (`/transactions?cash_account_code=`). KHÔNG có `account_id` trong hợp đồng
+    này (review 6E-1 M-4): số dư gộp theo SỐ HIỆU vì cùng một "1111" ở hai gói
+    cấu hình là hai `id`, nên một "id đại diện" là khái niệm chỉ đúng chừng nào
+    dataset chưa đổi gói — và là thứ client sẽ ghim vào rồi khó gỡ."""
+
     account_name: str
     currency_code: str
     balance: Decimal
@@ -51,10 +56,12 @@ class CashflowOverviewResponse(BaseModel):
     mới là 403 (chặn ở dependency của endpoint).
 
     `unassigned_deposit` = phần số dư TK 112 KHÔNG gắn được tài khoản ngân hàng
-    nào (bút toán GLE gõ thẳng vào 112x — xem `bank/balance_service`). Hiện
-    thành một con số riêng thay vì bị giấu hoặc bị chia bừa cho các thẻ: tổng
-    thẻ ngân hàng + số này = tổng TK 112 trên bảng cân đối, và người dùng nhìn
-    ra ngay vì sao hai nơi lệch nhau (ghi chú M-3 của review 6D).
+    nào. Hai nguồn (review 6E-1 H-3): bút toán GLE gõ thẳng vào 112x, **và
+    chứng từ quỹ chạm 112** (nộp tiền mặt vào ngân hàng / rút tiền gửi về nhập
+    quỹ — `cash_vouchers` chưa có cột TK ngân hàng). Hiện thành một con số
+    riêng thay vì bị giấu hoặc bị chia bừa cho các thẻ: tổng thẻ ngân hàng +
+    số này = tổng TK 112 trên bảng cân đối, và người dùng nhìn ra ngay vì sao
+    hai nơi lệch nhau (ghi chú M-3 của review 6D).
     """
 
     as_of: date

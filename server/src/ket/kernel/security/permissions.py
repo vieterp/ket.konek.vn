@@ -148,6 +148,27 @@ khái niệm **của hệ phân quyền**, và cả danh mục lẫn chiều ph�
 REGISTRY: Final[PermissionRegistry] = PermissionRegistry()
 """Registry của tiến trình. Module nghiệp vụ đăng ký loại của mình lúc import."""
 
+
+def module_view_codes(module: str, *, registry: PermissionRegistry = REGISTRY) -> frozenset[str]:
+    """Mọi mã quyền **xem** của một phân hệ (`cash_book` → phiếu thu, phiếu chi…).
+
+    Dùng cho cổng "được đọc dữ liệu phân hệ này không" ở những chỗ không gắn với
+    MỘT loại chứng từ cụ thể: BFF dòng tiền và báo cáo phân hệ. Luật là **có ít
+    nhất một** mã trong tập này, không phải có đủ: người chỉ được cấp quyền xem
+    phiếu thu vẫn có quyền chính đáng với sổ quỹ — sổ là hệ quả của những phiếu
+    họ đọc được.
+
+    Tập rỗng nghĩa là phân hệ chưa đăng ký loại chứng từ nào; nơi gọi tự quyết
+    định coi đó là "không cổng" hay "chặn hết" — hai câu trả lời đều đúng tùy
+    ngữ cảnh, nên hàm này không chọn hộ.
+    """
+    return frozenset(
+        permission_code(document_type.module, document_type.code, Action.VIEW)
+        for document_type in registry.document_types()
+        if document_type.module == module and Action.VIEW in document_type.actions
+    )
+
+
 REGISTRY.register(
     DocumentType(
         module=SYSTEM_MODULE,

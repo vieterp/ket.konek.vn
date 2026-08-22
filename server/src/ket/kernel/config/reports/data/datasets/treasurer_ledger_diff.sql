@@ -45,6 +45,17 @@ WITH cash_ledger AS (
       AND (CAST(:cash_account_code AS TEXT) IS NULL OR coa.code = :cash_account_code)
       AND v.posting_date >= :from_date
       AND v.posting_date <= :to_date
+      -- Chỉ phiếu ĐÃ GHI SỔ, **hoặc** phiếu có dòng sổ quỹ (review 6E-1 H-4).
+      -- Phiếu mới lập/đã hủy chưa có `gl_postings` nên `ledger_net = 0`, và
+      -- `treasurer_status` mặc định 0 — lọt vào đây thì báo cáo gán cho nó lý
+      -- do "Kế toán đã ghi sổ, thủ quỹ chưa ghi sổ quỹ": khẳng định sai một
+      -- việc chưa xảy ra, và với người dùng thật nó đọc như một lời buộc tội
+      -- thủ quỹ. Vế thứ hai giữ lại ca BẤT THƯỜNG thật (có dòng sổ quỹ mà
+      -- phiếu không còn ghi sổ), thứ mà check toàn vẹn thứ 8 cũng canh.
+      AND (
+            v.status = 2
+         OR EXISTS (SELECT 1 FROM treasurer_cash_book t WHERE t.voucher_id = cv.id)
+      )
     GROUP BY cv.id, v.voucher_no, v.posting_date, v.description, v.status,
              cv.treasurer_status, cv.cash_account_id, coa.code, coa.name
 ),
@@ -86,8 +97,8 @@ FULL JOIN book b
        ON b.voucher_id = c.voucher_id
       AND b.cash_account_id = c.cash_account_id
 LEFT JOIN chart_of_accounts bcoa ON bcoa.id = b.cash_account_id
--- Chỉ dòng có chuyện: lệch số, hoặc một bên vắng mặt. Phiếu khớp trọn vẹn
--- không thuộc báo cáo chênh lệch.
+-- Chỉ dòng có chuyện. "Một bên vắng mặt" chỉ đáng kể khi bên còn lại KHÁC 0:
+-- hai vế cùng bằng 0 thì không có chênh lệch nào để báo, và một dòng
+-- `difference = 0` nằm trong báo cáo tên là *chênh lệch* chỉ làm nhiễu đúng
+-- lúc cần đọc nhất (review 6E-1 H-4).
 WHERE COALESCE(c.ledger_net, 0) <> COALESCE(b.book_net, 0)
-   OR c.voucher_id IS NULL
-   OR b.voucher_id IS NULL

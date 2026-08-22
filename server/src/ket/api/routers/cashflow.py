@@ -161,7 +161,6 @@ def cashflow_overview(
         if _may_see_cash(authorized):
             cash_cards = tuple(
                 CashAccountCard(
-                    account_id=row.account_id,
                     account_code=row.account_code,
                     account_name=row.account_name,
                     currency_code=base_currency or "",
@@ -289,7 +288,7 @@ def cashflow_transactions(
     authorized: CashflowReader,
     factory: SessionFactory,
     source: Annotated[CashflowSource, Query()],
-    cash_account_id: Annotated[int | None, Query()] = None,
+    cash_account_code: Annotated[str | None, Query(max_length=20)] = None,
     bank_account_id: Annotated[int | None, Query()] = None,
     from_date: Annotated[date | None, Query()] = None,
     to_date: Annotated[date | None, Query()] = None,
@@ -318,7 +317,7 @@ def cashflow_transactions(
         query = _transactions_query(
             source=source,
             ledger=ledger,
-            cash_account_id=cash_account_id,
+            cash_account_code=cash_account_code,
             bank_account_id=bank_account_id,
             from_date=from_date,
             to_date=to_date,
@@ -354,7 +353,7 @@ def _transactions_query(
     *,
     source: CashflowSource,
     ledger: int,
-    cash_account_id: int | None,
+    cash_account_code: str | None,
     bank_account_id: int | None,
     from_date: date | None,
     to_date: date | None,
@@ -391,12 +390,21 @@ def _transactions_query(
             )
             .outerjoin(Partner, Partner.id == CashVoucher.partner_id)
         )
-        if cash_account_id is not None:
-            query = query.where(CashVoucher.cash_account_id == cash_account_id)
-        else:
-            query = query.join(
-                ChartOfAccount, ChartOfAccount.id == CashVoucher.cash_account_id
-            ).where(ChartOfAccount.code.like(literal(f"{CASH_ON_HAND_PREFIX}%")))
+        # Lọc theo SỐ HIỆU TK, cùng trục gộp với thẻ số dư (review 6E-1 M-4).
+        # Thẻ gộp theo mã vì cùng một "1111" ở hai gói cấu hình là hai `id`;
+        # nếu lưới lọc theo `id` thì sau khi dataset đổi gói, thẻ cộng cả hai id
+        # còn lưới chỉ mở được một — tổng lưới ≠ số dư thẻ và không ai giải
+        # thích được vì sao. Trục gộp và khóa drill-down phải là MỘT.
+        #
+        # Tiền tố `111` áp cho CẢ hai nhánh (review 6E-1 L-1): không chỗ nào
+        # ràng `cash_vouchers.cash_account_id` phải là 111x lúc tạo, nên thiếu
+        # nó thì một phiếu quỹ lỡ khai TK 112 sẽ để người CHỈ có quyền quỹ đọc
+        # được dòng tiền của tài khoản ngân hàng.
+        query = query.join(ChartOfAccount, ChartOfAccount.id == CashVoucher.cash_account_id).where(
+            ChartOfAccount.code.like(literal(f"{CASH_ON_HAND_PREFIX}%"))
+        )
+        if cash_account_code is not None:
+            query = query.where(ChartOfAccount.code == cash_account_code)
     else:
         owner = deposit_owner_account()
         deposit_accounts = select(ChartOfAccount.id).where(

@@ -85,11 +85,17 @@ def deposit_balances_as_of(
     `bank_account_id` có từ migration 0019) + phát sinh của chứng từ tiền gửi
     từ đầu năm tới hết `as_of`.
 
-    Phát sinh 112x KHÔNG đi qua chứng từ tiền gửi (bút toán GLE gõ thẳng) không
-    quy được chủ nên KHÔNG có mặt ở đây — cùng lối "không bịa chủ" của
-    carry-forward 6D. Nó vẫn nằm trong tổng TK 112 của bảng cân đối; chênh giữa
-    "tổng thẻ ngân hàng" và "tổng TK 112" chính là phần chưa gắn, và màn hình
-    hiển thị nó thành một thẻ riêng thay vì giấu (ghi chú M-3 của review 6D).
+    Phát sinh 112x KHÔNG quy được về một tài khoản ngân hàng nào thì KHÔNG có
+    mặt ở đây. Hai nguồn, không phải một (review 6E-1 H-3): bút toán GLE gõ
+    thẳng vào 112x, **và chứng từ QUỸ chạm 112** — gói builtin khai sẵn
+    `PT rut-tgnh-nhap-quy` cùng chiều ngược bằng phiếu chi, chúng là
+    `cash_vouchers` nên không có `bank_vouchers` để bám. Nộp/rút tiền mặt ↔
+    ngân hàng là nghiệp vụ hằng tuần, nên đây không phải ca hiếm.
+
+    Phần đó vẫn nằm trong tổng TK 112 của bảng cân đối; chênh giữa "tổng thẻ
+    ngân hàng" và "tổng TK 112" chính là phần chưa gắn, và màn hình hiển thị nó
+    thành một con số riêng thay vì giấu (ghi chú M-3 của review 6D). Nợ "thêm
+    `bank_account_id` cho chứng từ quỹ" ghi bàn giao 6E-1 → 6G.
 
     Chưa có năm tài chính phủ `as_of` thì trả rỗng — cùng hướng mặc định với
     `cash_balance_as_of`.
@@ -116,6 +122,12 @@ def deposit_balances_as_of(
             OpeningBalance.ledger == ledger,
             OpeningBalance.branch_id.in_(branches),
             OpeningBalance.bank_account_id.is_not(None),
+            # Lọc 112 y như `bank_balance_summary.sql` (review 6E-1 M-8): CHECK
+            # của bảng ràng `bank_account_id IS NOT NULL` với NHÓM số dư, không
+            # ràng với số hiệu TK — không có gì cấm một dòng nhóm-1 trỏ TK
+            # ngoài 112. Thiếu mệnh đề này thì thẻ BFF và bảng kê số dư cho hai
+            # con số cho cùng một tài khoản.
+            OpeningBalance.account_id.in_(deposit_accounts),
         )
         .group_by(OpeningBalance.bank_account_id, OpeningBalance.currency_code)
     ).all()

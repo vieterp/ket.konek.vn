@@ -46,6 +46,16 @@ WITH accounts AS (
     LEFT JOIN banks b ON b.id = cba.bank_id
     WHERE CAST(:bank_account_id AS INTEGER) IS NULL OR cba.id = :bank_account_id
 ),
+-- Chứng từ ĐÃ được ghép với một dòng sao kê BẤT KỲ — không giới hạn ngày, cùng
+-- lý do với `voucher_movements` bên dưới (H-2). "Chứng từ chưa có trên sao kê"
+-- phải nghĩa là chưa ai ghép nó, không phải "dòng sao kê ghép với nó rơi ra
+-- ngoài cửa sổ đang xem".
+matched_voucher_ids AS (
+    SELECT DISTINCT l.matched_voucher_id AS voucher_id, l.bank_account_id
+    FROM bank_statement_lines l
+    JOIN accounts a ON a.id = l.bank_account_id
+    WHERE l.matched_voucher_id IS NOT NULL
+),
 statement_lines AS (
     SELECT l.id,
            l.bank_account_id,
@@ -62,10 +72,18 @@ statement_lines AS (
 ),
 -- Phát sinh ròng nguyên tệ trên TK tiền gửi của từng chứng từ ngân hàng ĐÃ
 -- ghi sổ, quy chủ theo chiều dòng cho chuyển tiền nội bộ.
+--
+-- **Không lọc ngày ở đây.** Khớp là quan hệ 1-1 trên `matched_voucher_id`, chứ
+-- không phải một phép so trong cửa sổ: auto-match của 6D cố ý chấp nhận lệch
+-- ±3 ngày, nên một cặp đã khớp bắc qua ngày 30/31 là chuyện thường tháng. Cắt
+-- ngày ở CTE này sẽ làm chính cặp đó hiện thành HAI dòng lệch giả — một dòng
+-- "Đã khớp" không tìm thấy chứng từ ở kỳ sau, một dòng "chứng từ chưa có trên
+-- sao kê" ở kỳ trước — mà tổng cả năm vẫn đúng, nên không ai tra ra (review
+-- 6E-1 H-2). Cửa sổ ngày chỉ áp cho nhóm 3 (chứng từ CHƯA khớp), bên dưới.
 voucher_movements AS (
     SELECT p.voucher_id,
            CASE
-               WHEN bv.kind = 3 AND p.debit_fc > 0 THEN bv.counter_bank_account_id
+               WHEN bv.kind = 3 AND p.debit > 0 THEN bv.counter_bank_account_id
                ELSE bv.bank_account_id
            END                                   AS bank_account_id,
            v.voucher_no,
@@ -80,8 +98,6 @@ voucher_movements AS (
     WHERE p.ledger = 0
       AND coa.code LIKE '112%'
       AND v.status = 2
-      AND v.posting_date >= :from_date
-      AND v.posting_date <= :to_date
     GROUP BY p.voucher_id, 2, v.voucher_no, v.posting_date, v.description, bv.reference_no
 ),
 movements AS (
@@ -91,11 +107,26 @@ movements AS (
     WHERE m.net_fc <> 0
 )
 -- 1. Dòng sao kê đã ghép với chứng từ.
+--
+-- **Chứng từ nằm NGOÀI phạm vi người đọc là ca có thật, không phải lỗi dữ
+-- liệu** (review 6E-1 H-1): `bank_statement_lines` không mang chiều chi nhánh
+-- (danh mục + sao kê ở mức TÀI KHOẢN ngân hàng), còn vế chứng từ thì luôn bị
+-- RLS thu hẹp. Người chỉ thuộc chi nhánh B mở báo cáo sẽ thấy dòng sao kê của
+-- một chứng từ chi nhánh A mà họ không được đọc.
+--
+-- Khi ấy KHÔNG được in `difference` bằng số: `m.net_fc` vắng mặt vì phạm vi
+-- chứ không vì thiếu chứng từ, nên `credit - debit - 0` sẽ là một con số lệch
+-- BỊA — và hai người đọc cùng báo cáo, cùng kỳ, ra hai con số khác nhau. Một
+-- bảng đối chiếu mà số phụ thuộc người mở thì không dùng làm bằng chứng được.
+-- Dòng đó mang nhãn riêng và `difference` NULL: nói đúng thứ mình biết.
 SELECT a.bank_account_code,
        a.bank_account_name,
        a.bank_name,
        0                                   AS group_seq,
-       'Đã khớp'                           AS status,
+       CASE WHEN m.voucher_id IS NULL
+            THEN 'Đã khớp với chứng từ ngoài phạm vi'
+            ELSE 'Đã khớp'
+       END                                 AS status,
        s.txn_date                          AS statement_date,
        s.reference_no                      AS statement_reference,
        s.description                       AS statement_description,
@@ -104,7 +135,10 @@ SELECT a.bank_account_code,
        m.voucher_no,
        m.posting_date,
        m.net_fc                            AS voucher_net,
-       s.credit - s.debit - COALESCE(m.net_fc, 0) AS difference
+       CASE WHEN m.voucher_id IS NULL
+            THEN CAST(NULL AS NUMERIC)
+            ELSE s.credit - s.debit - m.net_fc
+       END                                 AS difference
 FROM statement_lines s
 JOIN accounts a ON a.id = s.bank_account_id
 LEFT JOIN movements m
@@ -148,9 +182,12 @@ SELECT a.bank_account_code,
        -m.net_fc                           AS difference
 FROM movements m
 JOIN accounts a ON a.id = m.bank_account_id
-WHERE NOT EXISTS (
+-- Cửa sổ ngày áp ở ĐÂY (chứng từ chưa khớp), không ở CTE — xem H-2 bên trên.
+WHERE m.posting_date >= :from_date
+  AND m.posting_date <= :to_date
+  AND NOT EXISTS (
         SELECT 1
-        FROM statement_lines s
-        WHERE s.matched_voucher_id = m.voucher_id
-          AND s.bank_account_id = m.bank_account_id
+        FROM matched_voucher_ids mv
+        WHERE mv.voucher_id = m.voucher_id
+          AND mv.bank_account_id = m.bank_account_id
       )

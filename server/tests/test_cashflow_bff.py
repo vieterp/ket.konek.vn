@@ -166,6 +166,42 @@ def seeded(
     return {"cash": cash_amount, "bank": bank_amount}
 
 
+@pytest.fixture(scope="module")
+def extra_cash_receipt(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    seeded: dict[str, Decimal],
+) -> None:
+    """Dòng quỹ thứ hai — để khẳng định về `total` không rỗng nghĩa."""
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        service = CashVoucherService(session)
+        second = service.create(
+            CashVoucherIn(
+                kind=CashVoucherKind.RECEIPT,
+                operation_code="thu-khac",
+                cash_account_id=accounts["111"],
+                branch_id=context.branch_id,
+                document_date=SEP_11,
+                posting_date=SEP_11,
+                currency_code="VND",
+                exchange_rate=Decimal(1),
+                description="BFF thu quỹ lần hai",
+                lines=(
+                    CashVoucherLineIn(
+                        debit_account_id=accounts["111"],
+                        credit_account_id=accounts["3381"],
+                        amount_fc=Decimal("120000"),
+                    ),
+                ),
+            ),
+            user_id=ACTOR_ID,
+        )
+        service.post(second.id, user_id=ACTOR_ID)
+
+
 Headers = Callable[[str, str], dict[str, str]]
 
 
@@ -261,6 +297,54 @@ def test_a_cash_only_user_never_sees_bank_money(
     assert refused.status_code == 403, refused.text
 
 
+def test_a_bank_only_user_never_sees_cash_money(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    headers_for: Headers,
+    seeded: dict[str, Decimal],
+) -> None:
+    """Chiều đối xứng của cổng quyền (review 6E-1: đột biến M1/M2 sống vì chỉ
+    có chiều cash-only được canh)."""
+    role = ensure_role(session_factory, dataset_alpha, "cashflow_chi_ngan_hang", _bank_codes())
+    headers = headers_for(role, "cf_bank")
+
+    overview = client.get(
+        "/api/v1/cashflow/overview",
+        params={"as_of": SEP_11.isoformat()},
+        headers=headers,
+    )
+    assert overview.status_code == 200, overview.text
+    body = overview.json()
+    assert body["bank_accounts"], "người có quyền ngân hàng phải thấy thẻ ngân hàng"
+    assert body["cash_accounts"] == []
+
+    refused = client.get(
+        "/api/v1/cashflow/transactions", params={"source": "cash"}, headers=headers
+    )
+    assert refused.status_code == 403, refused.text
+
+
+def test_the_unassigned_bucket_is_the_gap_between_cards_and_account_112(
+    client: TestClient,
+    headers_for: Headers,
+    both_role: str,
+    seeded: dict[str, Decimal],
+) -> None:
+    """`unassigned_deposit` = tổng TK 112 − tổng thẻ (review 6E-1: đột biến M3
+    — bỏ phép trừ — sống). Fixture này không có phát sinh 112 nào ngoài chứng
+    từ ngân hàng, nên phần chưa gắn phải bằng 0 chứ không bằng tổng thẻ."""
+    response = client.get(
+        "/api/v1/cashflow/overview",
+        params={"as_of": SEP_11.isoformat()},
+        headers=headers_for(both_role, "cf_gap"),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["bank_accounts"], "cần có thẻ thì khẳng định mới phân biệt được"
+    assert Decimal(body["unassigned_deposit"]) == 0
+
+
 def test_a_user_with_neither_permission_is_refused(
     client: TestClient,
     session_factory: sessionmaker[Session],
@@ -286,7 +370,7 @@ def test_transactions_carry_the_sign_of_the_selected_account(
         "/api/v1/cashflow/transactions",
         params={
             "source": "cash",
-            "cash_account_id": accounts["111"],
+            "cash_account_code": "111",
             "from_date": SEP_10.isoformat(),
             "to_date": SEP_11.isoformat(),
         },
@@ -317,27 +401,38 @@ def test_transactions_carry_the_sign_of_the_selected_account(
     assert all(row["description"] != "BFF thu quỹ" for row in bank_rows)
 
 
-def test_transactions_report_a_total_for_the_pager(
+def test_transactions_count_the_total_before_cutting_the_page(
     client: TestClient,
     headers_for: Headers,
     both_role: str,
     seeded: dict[str, Decimal],
+    extra_cash_receipt: None,
     accounts: dict[str, int],
 ) -> None:
+    """`total` phải đếm TRƯỚC khi cắt trang.
+
+    Cần ÍT NHẤT hai dòng để khẳng định có nghĩa: với đúng một dòng thì
+    "đếm-sau-khi-cắt" cũng trả 1 và test xanh giả (review 6E-1 M-7).
+    """
     headers = headers_for(both_role, "cf_page")
     params = {
         "source": "cash",
-        "cash_account_id": accounts["111"],
+        "cash_account_code": "111",
         "from_date": SEP_10.isoformat(),
         "to_date": SEP_11.isoformat(),
-        "limit": 1,
     }
-    response = client.get("/api/v1/cashflow/transactions", params=params, headers=headers)
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert len(body["items"]) <= 1
-    # `total` đếm TRƯỚC khi cắt trang, nếu không thanh phân trang vô nghĩa.
-    assert body["total"] >= 1
+    full = client.get("/api/v1/cashflow/transactions", params=params, headers=headers)
+    assert full.status_code == 200, full.text
+    total = full.json()["total"]
+    assert total >= 2, "fixture phải có ≥2 dòng thì khẳng định mới có nghĩa"
+
+    paged = client.get(
+        "/api/v1/cashflow/transactions", params={**params, "limit": 1}, headers=headers
+    )
+    assert paged.status_code == 200, paged.text
+    body = paged.json()
+    assert len(body["items"]) == 1
+    assert body["total"] == total
 
 
 def test_card_balance_agrees_with_the_guard_balance(

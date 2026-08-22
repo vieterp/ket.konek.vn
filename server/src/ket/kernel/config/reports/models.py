@@ -178,6 +178,24 @@ class ReportDefinition(DatasetBase, Audited):
     package_id: Mapped[int | None] = mapped_column(
         ForeignKey("config_packages.id", ondelete="RESTRICT"), nullable=True
     )
+    required_permission_module: Mapped[str | None] = mapped_column(
+        String(CATEGORY_MAX_LENGTH), nullable=True
+    )
+    """Phân hệ mà người đọc phải có ÍT NHẤT MỘT quyền xem trong đó, hoặc `NULL`
+    = không cổng phụ (chỉ cần `reporting.report.view`).
+
+    Vì sao là một cột dữ liệu chứ không suy từ `module`: hai trục không trùng
+    nhau. `module` là chỗ ĐỂ BÁO CÁO trên danh mục màn hình (`warehousing` cho
+    sổ quỹ thủ quỹ), còn phân hệ quyền của chính dữ liệu đó là `treasurer`.
+    Suy một trục từ trục kia sẽ hoặc chặn nhầm, hoặc mở nhầm — và chỗ nó mở
+    nhầm là chỗ không ai nhìn thấy.
+
+    Lý do tồn tại (review 6E-1 H-1b): trước lát này mọi báo cáo chỉ đòi
+    `reporting.report.view`, nên `doi-chieu-ngan-hang` sẽ là đường đọc
+    `bank_statement_lines` ĐẦU TIÊN không đi qua quyền ngân hàng. Bộ sổ tổng
+    hợp (`general_ledger`) giữ `NULL` — thế đứng cũ, đổi nó là việc riêng có
+    phạm vi riêng, không phải việc kèm của lát này."""
+
     fixed_params: Mapped[SpecDocument] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )

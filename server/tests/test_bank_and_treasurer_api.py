@@ -387,13 +387,38 @@ def test_treasurer_role_books_queue_but_cannot_touch_accounting_vouchers(
         assert replay.status_code == 200
         assert replay.json()["booked_count"] == 1
 
+        # Phiếu THỨ HAI, cũng ghi sổ quỹ — để khẳng định về phân trang bên dưới
+        # phân biệt được "đếm trước khi cắt trang" với "đếm sau": với đúng một
+        # dòng thì hai cách cài đặt cho cùng con số (review 6E-1 M-7).
+        second = client.post(
+            "/api/v1/cash-book/vouchers",
+            json={**receipt_body, "description": "phiếu thứ hai cho phân trang"},
+            headers={**cashier, IDEMPOTENCY_HEADER: uuid4().hex},
+        )
+        assert second.status_code == 201, second.text
+        second_id = second.json()["id"]
+        assert (
+            client.post(
+                f"/api/v1/vouchers/{second_id}/actions/post",
+                headers={**cashier, IDEMPOTENCY_HEADER: uuid4().hex},
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post(
+                "/api/v1/treasurer/queue/actions/book",
+                json={"voucher_ids": [second_id], "book_date_mode": "posting_date"},
+                headers={**treasurer_headers, IDEMPOTENCY_HEADER: uuid4().hex},
+            ).status_code
+            == 200
+        )
+
         book = client.get("/api/v1/treasurer/cash-book", headers=treasurer_headers)
         assert book.status_code == 200
-        assert voucher_id in {row["voucher_id"] for row in book.json()["items"]}
+        assert {voucher_id, second_id} <= {row["voucher_id"] for row in book.json()["items"]}
 
         # Phân trang (nợ 6C trả ở lát 6E-1): sổ quỹ một năm là hàng chục nghìn
-        # dòng nên endpoint không được trả trọn bộ. `total` đếm TRƯỚC khi cắt
-        # trang, nếu không thanh phân trang của màn hình thủ quỹ vô nghĩa.
+        # dòng nên endpoint không được trả trọn bộ.
         paged = client.get(
             "/api/v1/treasurer/cash-book",
             params={"limit": 1},
@@ -402,7 +427,9 @@ def test_treasurer_role_books_queue_but_cannot_touch_accounting_vouchers(
         assert paged.status_code == 200, paged.text
         body = paged.json()
         assert len(body["items"]) == 1
-        assert body["total"] >= 1
+        # Đếm TRƯỚC khi cắt trang: `total` của trang 1 dòng phải bằng tổng của
+        # lượt không phân trang, và phải LỚN HƠN số dòng trả về.
         assert body["total"] == book.json()["total"]
+        assert body["total"] > len(body["items"])
     finally:
         _set_treasurer_enabled(session_factory, dataset_alpha, context, False)
