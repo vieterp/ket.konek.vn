@@ -20,6 +20,13 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ket.kernel.config.printing.context import DocumentPrintDetails
+from ket.kernel.config.printing.subjects import (
+    REGISTRY as PRINT_SUBJECT_REGISTRY,
+)
+from ket.kernel.config.printing.subjects import (
+    PrintSubject,
+)
 from ket.kernel.security.permissions import (
     REGISTRY as PERMISSION_REGISTRY,
 )
@@ -27,6 +34,7 @@ from ket.kernel.security.permissions import (
     VOUCHER_ACTIONS,
     Action,
     DocumentType,
+    permission_code,
 )
 from ket.modules.cash_book.guards import CashBalanceGuard
 from ket.posting.contracts import (
@@ -92,6 +100,14 @@ def _before_delete(session: Session, voucher_id: UUID, user_id: int) -> None:
     CashVoucherService(session).release_usage(voucher_id)
 
 
+def _print_details(session: Session, voucher_id: UUID, user_id: int) -> DocumentPrintDetails:
+    """Trường riêng của 01-TT/02-TT trên bản in (lát 6E-2) — import cục bộ
+    cùng lối `_build_posting_request`."""
+    from ket.modules.cash_book.print_details import build_print_details
+
+    return build_print_details(session, voucher_id, user_id)
+
+
 for _code, _permission_name, _title in (
     ("PT", RECEIPT_PERMISSION_CODE, "Phiếu thu tiền mặt"),
     ("PC", PAYMENT_PERMISSION_CODE, "Phiếu chi tiền mặt"),
@@ -106,8 +122,22 @@ for _code, _permission_name, _title in (
             after_post=_after_post,
             after_unpost=_after_unpost,
             before_delete=_before_delete,
+            print_details=_print_details,
         )
     )
+
+COUNT_SHEET_PRINT_CODE = "KKQ"
+"""Mã bản in của biên bản kiểm kê quỹ trong `print_templates.document_type`."""
+
+PRINT_SUBJECT_REGISTRY.register(
+    PrintSubject(
+        code=COUNT_SHEET_PRINT_CODE,
+        title="Bảng kiểm kê quỹ",
+        view_permission=permission_code(
+            CASH_PERMISSION_MODULE, COUNT_SHEET_PERMISSION_CODE, Action.VIEW
+        ),
+    )
+)
 
 GUARD_REGISTRY.register(CashBalanceGuard())
 

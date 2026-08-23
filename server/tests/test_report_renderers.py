@@ -14,9 +14,10 @@ import pytest
 from jinja2.exceptions import SecurityError
 from pypdf import PdfReader
 
+from ket.kernel import formatting as formats
 from ket.kernel.config.reports.spec import parse_layout_spec
 from ket.reporting.engine.grouping import group_rows
-from ket.reporting.rendering import formats, pdf_renderer
+from ket.reporting.rendering import pdf_renderer
 from ket.reporting.rendering.environment import (
     _ALLOWED_ASSETS,
     _ASSETS_ROOT,

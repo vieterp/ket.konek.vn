@@ -1,0 +1,111 @@
+{#- Ủy nhiệm chi — bản in NỘI BỘ.
+
+    Khác phiếu thu/chi: TT99 Phụ lục I **không có** biểu mẫu ủy nhiệm chi, nên
+    mẫu này KHÔNG mang dòng "Mẫu số … Ban hành theo Thông tư…" — in một số hiệu
+    mẫu không có trong thông tư là nói dối về nguồn gốc tờ giấy. Ủy nhiệm chi
+    nộp cho ngân hàng đi theo mẫu của từng ngân hàng (FR-BNK-004): đơn vị thêm
+    một dòng `print_templates` cho ngân hàng của mình, mẫu là DỮ LIỆU.
+
+    Chạy trong `SandboxedEnvironment` autoescape (RT-01); giá trị đã định dạng
+    sẵn, phần riêng do `modules/bank/print_details.py` điền.
+-#}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>{{ title }} {{ voucher_no }}</title>
+</head>
+<body class="page-portrait">
+  {% if draft %}<div class="print-watermark">BẢN NHÁP — CHƯA GHI SỔ</div>{% endif %}
+  <div class="voucher-header">
+    <div class="voucher-unit">
+      {% if logo_url %}<img class="unit-logo" src="{{ logo_url }}" alt="">{% endif %}
+      <div class="unit-name">{{ unit.name }}</div>
+      {% if unit.address %}<div>Địa chỉ: {{ unit.address }}</div>{% endif %}
+      {% if unit.tax_code %}<div>MST: {{ unit.tax_code }}</div>{% endif %}
+    </div>
+  </div>
+
+  <h1 class="report-title">{{ title }}</h1>
+  <div class="voucher-date">Ngày {{ document_date }}</div>
+  <div class="voucher-ref">
+    <div>Số: {{ voucher_no }}</div>
+    {% for entry in header_fields %}<div>{{ entry.label }}: {{ entry.value }}</div>{% endfor %}
+    <div>Ngày hạch toán: {{ posting_date }}</div>
+    {% if copy_line %}<div class="print-copy-note">{{ copy_line }}</div>{% endif %}
+  </div>
+
+  <div class="voucher-fields">
+    {% for entry in fields %}
+    <p>{{ entry.label }}: <span class="field-value">{{ entry.value }}</span></p>
+    {% endfor %}
+    {% if amount %}
+    <p>Số tiền: <span class="field-value">{{ amount }}</span></p>
+    <p class="amount-words">(Viết bằng chữ): <span class="field-value">{{ amount_in_words }}</span></p>
+    {% endif %}
+  </div>
+
+  {% if lines | length > 2 %}
+  <table class="report-table">
+    <colgroup>
+      <col style="width: 6%">
+      <col style="width: 12%">
+      <col>
+      <col style="width: 16%">
+      <col style="width: 16%">
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="cell-text">STT</th>
+        <th class="cell-text">Tài khoản</th>
+        <th class="cell-text">Diễn giải</th>
+        <th class="cell-money">Nợ</th>
+        <th class="cell-money">Có</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+      <tr>
+        <td class="cell-text cell-center">{{ line.line_no }}</td>
+        <td class="cell-text cell-center">{{ line.account_code }}</td>
+        <td class="cell-text">{{ line.description }}</td>
+        <td class="cell-money">{{ line.debit }}</td>
+        <td class="cell-money">{{ line.credit }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="grand-total">
+        <td class="cell-left" colspan="3">Cộng</td>
+        <td class="cell-money">{{ total_debit }}</td>
+        <td class="cell-money">{{ total_credit }}</td>
+      </tr>
+    </tbody>
+  </table>
+  {% endif %}
+
+  <div class="signature-date">{{ signature_date_line }}</div>
+  <div class="signature-block">
+    <div class="signature">
+      <div class="role">Người lập phiếu</div>
+      <div class="note">(Ký, họ tên)</div>
+      <div class="gap"></div>
+    </div>
+    <div class="signature">
+      <div class="role">Kế toán trưởng</div>
+      <div class="note">(Ký, họ tên)</div>
+      <div class="gap"></div>
+    </div>
+    <div class="signature">
+      <div class="role">Chủ tài khoản</div>
+      <div class="note">(Ký, họ tên, đóng dấu)</div>
+      <div class="gap"></div>
+    </div>
+  </div>
+
+  <div class="voucher-notes">
+    {% for entry in notes %}
+    <p>+ {{ entry.label }}: <span class="field-value">{{ entry.value }}</span></p>
+    {% endfor %}
+    <p class="hint">(Bản in nội bộ để lưu hồ sơ và đối chiếu; lệnh chi nộp ngân hàng theo mẫu của ngân hàng phục vụ)</p>
+  </div>
+</body>
+</html>

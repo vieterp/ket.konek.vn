@@ -15141,7 +15141,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.20.0"
+    "version": "0.21.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -16629,6 +16629,66 @@
           }
         },
         "summary": "Create Count Sheet Adjustment",
+        "tags": [
+          "cash-book"
+        ]
+      }
+    },
+    "/api/v1/cash-book/count-sheets/{sheet_id}/print": {
+      "post": {
+        "description": "In biên bản kiểm kê quỹ theo mẫu 08a-TT (FR-QUY-030) — trả nợ lát 6B.\n\nĐứng ở router của module chứ không ở `routers/printing.py`: biên bản **không\nphải chứng từ** (không có dòng `vouchers`), nên nó không có `document_type`\ntrong registry của posting, không có mã quyền `.print`, và **không ghi\n`print_log`** — sổ đếm lần in gắn khóa ngoại tới `vouchers` và cảnh báo in\nlại của FR-RPT-011/FR-QUY-022 nói về CHỨNG TỪ. Quyền là `count_sheet.view`:\nai đọc được biên bản thì in được nó, đúng như đọc màn hình.\n\nVẫn dùng chung `resolve_template` + `render_document_pdf` với chứng từ, nên\nmẫu vẫn là dữ liệu sửa được (FR-RPT-008) và vẫn chạy trong sandbox RT-01.",
+        "operationId": "print_count_sheet_api_v1_cash_book_count_sheets__sheet_id__print_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "template_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 50,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Template Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {}
+            },
+            "description": "PDF biên bản kiểm kê quỹ"
+          },
+          "404": {
+            "description": "Không có biên bản / mẫu in"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Print Count Sheet",
         "tags": [
           "cash-book"
         ]
@@ -30934,7 +30994,7 @@
     },
     "/api/v1/print-templates": {
       "get": {
-        "description": "Mẫu in đã đăng ký — hộp chọn mẫu của nút In.\n\nKhông nêu `document_type` thì trả mẫu của những loại người gọi in được —\ncùng luật danh-sách-trộn-không-vòng-qua-phân-quyền với `list_vouchers`.",
+        "description": "Mẫu in đã đăng ký — hộp chọn mẫu của nút In.\n\nKhông nêu `document_type` thì trả mẫu của những loại người gọi in được —\ncùng luật danh-sách-trộn-không-vòng-qua-phân-quyền với `list_vouchers`.\n\nHai nguồn mã, một cột: loại chứng từ của posting (quyền `.print`) và **bản\nin không phải chứng từ** (`PRINT_SUBJECT_REGISTRY`, quyền `view` của phân\nhệ sở hữu — xem `kernel/config/printing/subjects.py`). Thiếu nguồn thứ hai\nthì mẫu biên bản kiểm kê tồn tại và in được nhưng không tra được, và tham\nsố `?template_code=` của nút In chỉ dùng được nếu đọc mã trong DB (review\n6E-2, M-3).",
         "operationId": "list_print_templates_api_v1_print_templates_get",
         "parameters": [
           {

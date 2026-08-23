@@ -176,6 +176,64 @@ td.cell-left {
   font-size: 9pt;
 }
 
+/* --- biểu mẫu chứng từ (01-TT, 02-TT, 08a-TT…, lát 6E-2) ------------------- *
+ * Bố cục của tờ chứng từ khác tờ báo cáo: đơn vị bên trái CÂN với khối "Mẫu
+ * số" bên phải, khối "Nợ/Có/Số" nép phải dưới tiêu đề, và thân là các dòng
+ * "Nhãn: …………" chứ không phải bảng. Đặt ở stylesheet CHUNG chứ không rải vào
+ * `css_extra` từng mẫu: năm mẫu dùng chung một bố cục, và CSS của mẫu là dữ
+ * liệu người dùng sửa được — bố cục gốc không nên sống ở chỗ sửa nhầm được. */
+.voucher-header {
+  display: table;
+  width: 100%;
+}
+.voucher-header .voucher-unit,
+.voucher-header .form-code {
+  display: table-cell;
+  vertical-align: top;
+  font-size: 9pt;
+  line-height: 1.35;
+}
+.voucher-header .form-code {
+  text-align: right;
+  width: 62mm;
+}
+.voucher-header .form-code .code {
+  font-weight: 700;
+}
+.voucher-header .form-code .note {
+  font-style: italic;
+  font-size: 7.5pt;
+  color: #64748b;
+}
+.voucher-date {
+  text-align: center;
+  font-style: italic;
+  margin-bottom: 2mm;
+}
+.voucher-ref {
+  text-align: right;
+  margin-bottom: 4mm;
+  line-height: 1.5;
+}
+.voucher-fields p {
+  margin: 1.6mm 0;
+}
+.voucher-fields .field-value {
+  border-bottom: 0.4pt dotted #94a3b8;
+  padding: 0 1mm;
+}
+.voucher-fields .amount-words {
+  font-style: italic;
+}
+.voucher-notes {
+  margin-top: 8mm;
+  line-height: 1.6;
+}
+.voucher-notes .hint {
+  font-style: italic;
+  color: #64748b;
+}
+
 /* Kiểm soát in chứng từ (FR-RPT-011, lát 5D) */
 .print-watermark {
   position: fixed;

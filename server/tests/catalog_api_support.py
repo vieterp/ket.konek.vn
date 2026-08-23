@@ -70,10 +70,31 @@ def ensure_role(
     code: str,
     permissions: list[str],
 ) -> str:
-    """Vai trò với đúng bộ mã quyền đã cho; gọi lại lần hai không tạo trùng."""
+    """Vai trò với đúng bộ mã quyền đã cho; gọi lại lần hai không tạo trùng.
+
+    Vai trò đã tồn tại mà bộ quyền LỆCH thì ném ngay (review 6E-2, M-1): hai
+    tệp test dùng chung một mã vai trò với hai bộ quyền khác nhau làm bộ test
+    phụ thuộc thứ tự tệp — tệp chạy trước thắng, và tệp chạy sau khẳng định 403
+    vì một lý do khác lý do nó viết ra. Im lặng bỏ qua là cách lỗi đó sống sót
+    tới ngày ai đó đổi tên tệp.
+    """
     scope = RequestScope(dataset_schema=dataset.schema_name, user_id=1, branch_ids=())
     with unit_of_work(session_factory, scope) as session:
-        if session.scalar(select(Role.id).where(Role.code == code)) is None:
+        existing_id = session.scalar(select(Role.id).where(Role.code == code))
+        if existing_id is not None:
+            granted = set(
+                session.scalars(
+                    select(Permission.code)
+                    .join(RolePermission, RolePermission.permission_id == Permission.id)
+                    .where(RolePermission.role_id == existing_id)
+                ).all()
+            )
+            assert granted == set(permissions), (
+                f"vai trò {code!r} đã tồn tại với bộ quyền khác: "
+                f"thiếu {sorted(set(permissions) - granted)}, thừa {sorted(granted - set(permissions))}. "
+                "Đổi mã vai trò của tệp test này — dùng chung mã làm bộ test phụ thuộc thứ tự."
+            )
+        else:
             role = Role(code=code, name=f"Vai trò {code}")
             session.add(role)
             session.flush()

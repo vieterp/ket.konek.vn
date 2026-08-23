@@ -2,7 +2,7 @@
 
 Tách hai pha có chủ đích:
 
-* **Pha chữ** (`presentation.py` + `formats.py`, dùng chung với preview JSON
+* **Pha chữ** (`presentation.py` + `kernel/formatting.py`, dùng chung preview JSON
   của lát 5D): mọi giá trị thành chuỗi TRƯỚC khi vào template — template chỉ
   đổ khuôn, autoescape lo phần còn lại.
 * **Pha giấy** (WeasyPrint): nhận HTML + `print_base.css` (tokens Konek) +

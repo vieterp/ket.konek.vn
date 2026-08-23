@@ -33,15 +33,24 @@ from ket.api.routers.printing_schemas import (
     PrintTemplateSummaryResponse,
     VoucherPrintRequest,
 )
+from ket.kernel import formatting as formats
 from ket.kernel.config.accounts_models import ChartOfAccount
 from ket.kernel.config.catalog import (
     MONEY_SCALE_KEY,
     PRINT_ALLOW_DRAFT_KEY,
     PRINT_ALLOW_LOCKED_KEY,
 )
+from ket.kernel.config.printing.context import EMPTY_DETAILS
 from ket.kernel.config.printing.models import PrintTemplate
+from ket.kernel.config.printing.subjects import (
+    REGISTRY as PRINT_SUBJECT_REGISTRY,
+)
 from ket.kernel.config.settings_service import value_of
-from ket.kernel.errors import PrintNotAllowedError, VoucherNotFoundError
+from ket.kernel.errors import (
+    PostingValidationError,
+    PrintNotAllowedError,
+    VoucherNotFoundError,
+)
 from ket.kernel.money import convert_currency
 from ket.kernel.periods.models import AccountingPeriod
 from ket.kernel.persistence.unit_of_work import unit_of_work
@@ -49,12 +58,11 @@ from ket.kernel.security.permissions import Action
 from ket.posting.contracts import POSTING_DOCUMENT_REGISTRY, Voucher, VoucherStatus
 from ket.reporting.printing.models import PrintLog
 from ket.reporting.printing.template_service import (
-    VoucherPrintContext,
+    DocumentPrintContext,
     VoucherPrintLine,
-    render_voucher_pdf,
+    render_document_pdf,
     resolve_template,
 )
-from ket.reporting.rendering import formats
 from ket.reporting.rendering.header import load_unit_info, signature_date_line
 
 router = APIRouter(prefix="/api/v1", tags=["printing"])
@@ -72,17 +80,29 @@ def list_print_templates(
 
     Không nêu `document_type` thì trả mẫu của những loại người gọi in được —
     cùng luật danh-sách-trộn-không-vòng-qua-phân-quyền với `list_vouchers`.
+
+    Hai nguồn mã, một cột: loại chứng từ của posting (quyền `.print`) và **bản
+    in không phải chứng từ** (`PRINT_SUBJECT_REGISTRY`, quyền `view` của phân
+    hệ sở hữu — xem `kernel/config/printing/subjects.py`). Thiếu nguồn thứ hai
+    thì mẫu biên bản kiểm kê tồn tại và in được nhưng không tra được, và tham
+    số `?template_code=` của nút In chỉ dùng được nếu đọc mã trong DB (review
+    6E-2, M-3).
     """
     if document_type is not None:
         allowed_types = [document_type]
-        authorized.access.require(
-            POSTING_DOCUMENT_REGISTRY.get(document_type).permission(Action.PRINT)
-        )
+        authorized.access.require(_required_permission(document_type))
     else:
         allowed_types = [
             code
             for code in POSTING_DOCUMENT_REGISTRY.codes()
             if authorized.access.has(POSTING_DOCUMENT_REGISTRY.get(code).permission(Action.PRINT))
+        ]
+        allowed_types += [
+            subject.code
+            for subject in (
+                PRINT_SUBJECT_REGISTRY.get(code) for code in PRINT_SUBJECT_REGISTRY.codes()
+            )
+            if subject is not None and authorized.access.has(subject.view_permission)
         ]
         if not allowed_types:
             return PrintTemplateListResponse(templates=[])
@@ -149,7 +169,7 @@ def print_voucher(
             dataset_schema=authorized.scope.dataset_schema,
             user_id=authorized.scope.user_id,
         )
-        content = render_voucher_pdf(template, context, options=render_options)
+        content = render_document_pdf(template, context, options=render_options)
         session.add(
             PrintLog(
                 voucher_id=voucher.id,
@@ -170,6 +190,18 @@ def print_voucher(
             "X-Print-Reprint": "true" if copy_no > 1 else "false",
         },
     )
+
+
+def _required_permission(document_type: str) -> str:
+    """Mã quyền canh danh sách mẫu của một mã bản in.
+
+    Mã lạ đi tiếp vào `POSTING_DOCUMENT_REGISTRY.get` để giữ nguyên thông điệp
+    "loại chứng từ chưa đăng ký" — mã sai vẫn phải nói là mã sai.
+    """
+    subject = PRINT_SUBJECT_REGISTRY.get(document_type)
+    if subject is not None:
+        return subject.view_permission
+    return POSTING_DOCUMENT_REGISTRY.get(document_type).permission(Action.PRINT)
 
 
 def _safe_file_stem(value: str) -> str:
@@ -230,23 +262,44 @@ def _next_copy_no(session: Session, voucher_id: UUID) -> int:
 
 def _build_context(
     session: Session, voucher: Voucher, *, copy_no: int, title: str, user_id: int
-) -> VoucherPrintContext:
+) -> DocumentPrintContext:
     """Dữ liệu chứng từ → context CHUỖI định dạng sẵn cho mẫu.
 
     Dòng in là ĐỊNH KHOẢN SỔ TÀI CHÍNH quy đổi VND — đọc qua chính
     `build_request` mà nút Ghi sổ dùng, và quy đổi bằng đúng `money.scale` mà
     đường ghi sổ dùng, nên bản in nháp và dòng sẽ lên sổ là một bộ số (không
     có đường "in một đằng, ghi một nẻo").
+
+    **Bản nháp chưa đủ định khoản vẫn in được** (review 6E-2, H-2): dòng còn
+    thiếu bên Nợ hoặc bên Có là trạng thái HỢP LỆ của bản nháp (xem
+    `cash_book/models.py`), mà `build_request` là bộ kiểm của đường GHI SỔ nên
+    nó từ chối. Bản in bỏ bảng định khoản trong đúng ca đó — phần thân tờ phiếu
+    (người nộp, lý do, số tiền, chữ) do module dựng, không đi qua `build_request`
+    — thay vì trả một thông điệp nói về ghi sổ cho người chỉ muốn cầm tờ giấy đi
+    lấy chữ ký. Chứng từ ĐÃ ghi sổ mà dựng định khoản hỏng là chuyện khác hẳn:
+    ở đó lỗi vẫn nổ.
     """
     document_type = POSTING_DOCUMENT_REGISTRY.get(voucher.document_type)
-    request = document_type.build_request(session, voucher.id)
+    details = (
+        EMPTY_DETAILS
+        if document_type.print_details is None
+        else document_type.print_details(session, voucher.id, user_id)
+    )
+    draft = voucher.status == VoucherStatus.DA_CAT
+    try:
+        request = document_type.build_request(session, voucher.id)
+    except PostingValidationError:
+        if not draft:
+            raise
+        request = None
     scale_value = value_of(session, key=MONEY_SCALE_KEY, user_id=user_id)
     scale = scale_value if isinstance(scale_value, int) else 2
-    codes = _account_codes(session, {line.account_id for line in request.financial_lines})
+    financial_lines = () if request is None else request.financial_lines
+    codes = _account_codes(session, {line.account_id for line in financial_lines})
     lines = []
     total_debit = Decimal(0)
     total_credit = Decimal(0)
-    for index, line in enumerate(request.financial_lines, start=1):
+    for index, line in enumerate(financial_lines, start=1):
         debit = convert_currency(line.debit_fc, line.rate, scale)
         credit = convert_currency(line.credit_fc, line.rate, scale)
         total_debit += debit
@@ -261,19 +314,20 @@ def _build_context(
             )
         )
     today = datetime.now(UTC).astimezone().date()
-    return VoucherPrintContext(
+    return DocumentPrintContext(
         title=title,
         voucher_no=voucher.voucher_no,
         document_date=formats.format_date(voucher.document_date),
         posting_date=formats.format_date(voucher.posting_date),
         description=voucher.description,
-        draft=voucher.status == VoucherStatus.DA_CAT,
+        draft=draft,
         copy_line=f"In lần {copy_no}" if copy_no > 1 else None,
         lines=tuple(lines),
         total_debit=formats.format_money(total_debit, blank_zero=False),
         total_credit=formats.format_money(total_credit, blank_zero=False),
         signature_date_line=signature_date_line(today),
         unit=load_unit_info(session),
+        details=details,
     )
 
 

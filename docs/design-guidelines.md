@@ -461,3 +461,39 @@ Logo/cỡ chữ/số lẻ đọc từ settings (`report.*`, `format.*`) — logo
 một-bước ở màn Thiết lập. Mọi lần in ghi `print_log` (`copy_no` nối tiếp, cảnh
 báo in lại); nháp in được mang watermark BẢN NHÁP trừ khi đơn vị tắt
 `print.allow_draft_vouchers` (FR-RPT-011).
+
+**Trường riêng của từng loại chứng từ** (lát 6E-2) không nằm ở tầng in: module
+sở hữu chứng từ khai `PostingDocumentType.print_details`, trả một
+`DocumentPrintDetails` (`kernel/config/printing/context.py`) gồm sáu vùng có
+thật trên biểu mẫu giấy — khối "Nợ/Có" góc phải, thân "Nhãn: giá trị", dòng
+"Số tiền … (Viết bằng chữ)", bảng chi tiết, khối chân trang. Thêm phân hệ =
+thêm một hàm ở module, **không** sửa `routers/printing.py` dùng chung. Mọi giá
+trị phải là chuỗi đã định dạng bằng `kernel/formatting.py`; số đọc thành chữ
+dùng `kernel/money_words.py`.
+
+**Số tiền in trên chứng từ tiền là số THẬT vào/ra tài khoản tiền**, không phải
+tổng mọi dòng: dùng `voucher_fields.money_side_amounts` (review 6E-2, H-1).
+Một phiếu thu được phép mang dòng không chạm quỹ — FR-QUY-007 khai đúng ca đó
+(chiết khấu thanh toán `Nợ 635/Có 131` nằm chung phiếu) — và ô "Số tiền …
+(Viết bằng chữ)" là ô người nộp tiền KÝ VÀO. Cùng luật cho chứng từ tiền gửi
+(dòng chạm 112x; chuyển tiền nội bộ lấy số rời tài khoản nguồn).
+
+**Bản nháp chưa đủ định khoản vẫn in được**: `build_request` là bộ kiểm của
+đường GHI SỔ, không phải điều kiện của đường IN — bản in bỏ bảng định khoản
+thay vì trả lỗi nói về ghi sổ (FR-RPT-011, review 6E-2 H-2).
+
+Bản in **không phải chứng từ** khai ở `kernel/config/printing/subjects.py`
+(mã bản in → mã quyền `view` của phân hệ sở hữu); `GET /print-templates` trộn
+hai registry nên mẫu của chúng vẫn tra được, và biên bản kiểm kê quỹ không cần
+một mã quyền `.print` thứ hai — bản in ấy chỉ chép lại thứ người ta đã đọc
+được trên màn hình. Nó dựng `DocumentPrintContext` với `lines` rỗng và nội
+dung ở `details.tables`, in qua endpoint của module, không ghi `print_log`.
+
+Mẫu builtin khai ở `kernel/config/printing/data/builtin_print_templates.json`
+(+ tệp `.html.j2` cùng thư mục) và **chỉ được gieo lại ở bước
+`_refresh_builtin_data` của migration cuối chuỗi** — thêm mẫu mới mà không dời
+bước đó về migration mới nhất thì dữ liệu kế toán đang chạy sẽ không bao giờ
+thấy mẫu ấy. Mẫu theo thông tư ghi rõ số hiệu ("Mẫu số 01 - TT"); bản in mà
+thông tư **không** có biểu mẫu (ủy nhiệm chi, giấy báo có) tuyệt đối không
+mượn số hiệu mẫu — đơn vị cần đúng mẫu ngân hàng mình thì thêm một dòng
+`print_templates` (FR-BNK-004).

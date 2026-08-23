@@ -14,6 +14,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal, TypedDict
 
+from ket.kernel import formatting as formats
 from ket.kernel.config.reports.spec import ColumnSpec, ColumnType, LayoutSpec
 from ket.kernel.errors import ReportDatasetInvalidError
 from ket.reporting.engine.grouping import (
@@ -23,7 +24,6 @@ from ket.reporting.engine.grouping import (
     GroupFooter,
     GroupHeader,
 )
-from ket.reporting.rendering import formats
 
 RowKind = Literal["data", "group_header", "group_footer", "grand_total"]
 

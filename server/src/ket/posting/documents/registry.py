@@ -22,12 +22,19 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ket.kernel.config.printing.context import DocumentPrintDetails
 from ket.kernel.errors import DocumentTypeUnknownError
 from ket.kernel.security.permissions import Action, permission_code
 from ket.posting.engine.requests import PostingRequest
 
 RequestBuilder = Callable[[Session, UUID], PostingRequest]
 """Dựng `PostingRequest` từ chi tiết đã lưu của một chứng từ."""
+
+PrintDetailsBuilder = Callable[[Session, UUID, int], DocumentPrintDetails]
+"""Phần riêng của loại chứng từ trên bản in — cùng lối `RequestBuilder`: chỉ
+module biết "Họ và tên người nộp tiền" nằm ở cột nào. Nhận thêm `user_id` như
+`LifecycleHook`: `money.scale` là tùy chọn có cấp NGƯỜI DÙNG, mà bản in phải
+quy đổi đúng bằng đường ghi sổ của chính người đang in."""
 
 LifecycleHook = Callable[[Session, UUID, int], None]
 """`(session, voucher_id, user_id)` — việc riêng của module quanh một bước
@@ -67,6 +74,12 @@ class PostingDocumentType:
     before_delete: LifecycleHook | None = None
     """Chạy TRƯỚC `VoucherService.delete`, cùng transaction — dọn những gì
     `ON DELETE CASCADE` không tự dọn được (bộ đếm tham chiếu, dấu vết ngoài)."""
+
+    print_details: PrintDetailsBuilder | None = None
+    """Trường riêng của loại này trên bản in (lát 6E-2). `None` = mẫu chỉ dùng
+    phần chung (số, ngày, diễn giải, dòng định khoản) — đúng cho Phiếu kế toán.
+    Có hook thì đường in **không** phải phân nhánh theo mã loại: thêm phân hệ
+    là thêm một hàm ở module, không sửa `routers/printing.py` dùng chung."""
 
     def permission(self, action: Action) -> str:
         return permission_code(self.permission_module, self.permission_name, action)

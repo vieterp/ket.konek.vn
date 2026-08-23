@@ -20,6 +20,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ket.kernel.config.printing.context import DocumentPrintDetails
 from ket.kernel.security.permissions import (
     CATALOG_ACTIONS,
     VOUCHER_ACTIONS,
@@ -109,6 +110,14 @@ def _before_delete(session: Session, voucher_id: UUID, user_id: int) -> None:
     BankVoucherService(session).release_usage(voucher_id)
 
 
+def _print_details(session: Session, voucher_id: UUID, user_id: int) -> DocumentPrintDetails:
+    """Trường riêng của chứng từ tiền gửi trên bản in (lát 6E-2) — import cục
+    bộ cùng lối `_build_posting_request`."""
+    from ket.modules.bank.print_details import build_print_details
+
+    return build_print_details(session, voucher_id, user_id)
+
+
 def _register_deposit_movement_source() -> None:
     """Bản cài `DepositMovementSource` (lát 6D) — carry-forward số dư đầu kỳ
     gọi qua kernel Protocol để giữ nhóm ngân hàng (kind 1) qua năm."""
@@ -150,5 +159,6 @@ for _code, _permission_name, _title in (
             after_post=_after_post,
             after_unpost=_after_unpost,
             before_delete=_before_delete,
+            print_details=_print_details,
         )
     )
