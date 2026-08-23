@@ -220,9 +220,23 @@ jobs:
 
       # Cùng lý do cho macOS (chỉ chạy lúc merge): runner không có sẵn Pango,
       # máy dev thì có qua Homebrew nên khác biệt này chỉ lộ ra trên CI.
+      #
+      # Cài THÔI chưa đủ: Homebrew trên máy Apple Silicon đặt thư viện ở
+      # `/opt/homebrew/lib`, không nằm trong danh sách dyld tìm mặc định
+      # (`$HOME/lib:/usr/local/lib:/lib:/usr/lib`). Máy dev tìm ra là nhờ cấu
+      # hình sẵn có của người dùng, nên khác biệt này chỉ lộ trên runner sạch —
+      # và vì job macOS chỉ chạy lúc MERGE, nó lộ sau khi PR đã xanh.
+      # `DYLD_FALLBACK_LIBRARY_PATH` sống qua `uv run` vì python của uv không
+      # phải nhị phân hệ thống (SIP chỉ tước biến `DYLD_*` cho nhị phân đó).
       - name: Cài Pango cho WeasyPrint (macOS)
         if: runner.os == 'macOS'
-        run: brew install pango
+        run: |
+          brew install pango
+          brew_lib="$(brew --prefix)/lib"
+          echo "DYLD_FALLBACK_LIBRARY_PATH=$brew_lib" >> "$GITHUB_ENV"
+          # In ra để lần sau lỗi thì biết ngay là thiếu thư viện hay sai đường dẫn.
+          echo "kiến trúc: $(uname -m) · thư viện tại: $brew_lib"
+          ls -1 "$brew_lib"/libgobject-2.0*.dylib || echo "KHÔNG THẤY libgobject!"
 
       # Nhóm `db` có job riêng (cần service container, chỉ chạy trên Linux).
       # Loại trừ tường minh chứ không để nó tự bỏ qua: một bộ test "xanh vì
