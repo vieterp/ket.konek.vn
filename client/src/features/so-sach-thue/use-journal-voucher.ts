@@ -35,16 +35,20 @@ export function useCreateJournalVoucher() {
     mutationFn: ({
       body,
       idempotencyKey,
+      acknowledgeWarnings,
     }: {
       readonly body: JournalVoucherIn
       readonly idempotencyKey: string
+      /** Lượt gửi lại sau khi người dùng bấm "Vẫn ghi sổ?" (FR-SYS-062) — chỉ
+       * có tác dụng trên lượt ghi sổ đi kèm khi bật Cất-đồng-thời-ghi-sổ. */
+      readonly acknowledgeWarnings?: boolean
     }) =>
       // `ApiClient.post` nhận thân JSON dạng `Record<string, unknown>` cho MỌI
       // loại request; `JournalVoucherIn` không tự có index signature nên phải
       // ép kiểu ở đúng một dòng — bản thân `body` đã được kiểm kiểu đầy đủ ở
       // nơi dựng nó (`resolveLines` + các trường header).
       client.post<JournalVoucherOut>(
-        '/api/v1/gl/journal-vouchers',
+        `/api/v1/gl/journal-vouchers${acknowledgeWarnings === true ? '?acknowledge_warnings=true' : ''}`,
         body as unknown as Record<string, unknown>,
         { datasetCode, idempotencyKey },
       ),

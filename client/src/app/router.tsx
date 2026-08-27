@@ -42,6 +42,12 @@ import {
   TrialBalancePage,
   VoucherListPage,
 } from '@/features/so-sach-thue'
+import {
+  BankVoucherForm,
+  CashflowPage,
+  CashVoucherForm,
+  CountSheetPage,
+} from '@/features/tien-vao-tien-ra'
 
 const [home, ...groups] = NAVIGATION
 
@@ -85,6 +91,26 @@ const soSachThueRoutes: RouteObject[] = [
   },
 ]
 
+/**
+ * Nhóm 03 (Tiền vào tiền ra), lát 6F-1: màn Giao dịch (hàng thẻ + lưới) với
+ * form phiếu thu/chi và chứng từ ngân hàng, màn Kiểm kê quỹ. `phieu/moi` khai
+ * TRƯỚC `phieu/:id` — cùng luật thứ tự khớp route với nhóm 09.
+ */
+const tienVaoTienRaRoutes: RouteObject[] = [
+  {
+    path: 'tien-vao-tien-ra',
+    children: [
+      { index: true, element: <Navigate to="giao-dich" replace /> },
+      { path: 'giao-dich', element: <CashflowPage /> },
+      { path: 'giao-dich/phieu/moi', element: <CashVoucherForm /> },
+      { path: 'giao-dich/phieu/:id', element: <CashVoucherForm /> },
+      { path: 'giao-dich/ngan-hang/moi', element: <BankVoucherForm /> },
+      { path: 'giao-dich/ngan-hang/:id', element: <BankVoucherForm /> },
+      { path: 'kiem-ke-quy', element: <CountSheetPage /> },
+    ],
+  },
+]
+
 /** Rỗng trong MỌI bản dựng — xem ghi chú đầu tệp. */
 export const devOnlyRoutes: RouteObject[] = __DEV_TOOLS__
   ? [
@@ -103,13 +129,19 @@ const router = createBrowserRouter([
     children: [
       ...(home === undefined ? [] : [{ index: true, element: <PlaceholderPage item={home} /> }]),
       ...groups
-        .filter((item) => item.path !== '/danh-muc-thiet-lap' && item.path !== '/so-sach-thue')
+        .filter(
+          (item) =>
+            item.path !== '/danh-muc-thiet-lap' &&
+            item.path !== '/so-sach-thue' &&
+            item.path !== '/tien-vao-tien-ra',
+        )
         .map((item) => ({
           path: item.path.slice(1),
           element: <PlaceholderPage item={item} />,
         })),
       ...danhMucThietLapRoutes,
       ...soSachThueRoutes,
+      ...tienVaoTienRaRoutes,
       // Đường dẫn lạ (người dùng gõ tay, dấu trang cũ sau khi đổi IA) rơi về
       // trang tổng quan thay vì một trang trắng không lối ra.
       ...(home === undefined ? [] : [{ path: '*', element: <PlaceholderPage item={home} /> }]),

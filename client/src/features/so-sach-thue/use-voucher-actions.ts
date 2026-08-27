@@ -18,6 +18,12 @@ export type VoucherResponse = Schemas['VoucherResponse']
 interface ActionArgs {
   readonly id: string
   readonly idempotencyKey: string
+  /**
+   * Lượt gửi lại SAU khi người dùng bấm "Vẫn ghi sổ?" (FR-SYS-062 mức "Cảnh
+   * báo") — chỉ truyền `true` khi lượt trước bị từ chối mà mọi vi phạm đều
+   * mang `details.warning` (xem `journal-violations.allAcknowledgeableWarnings`).
+   */
+  readonly acknowledgeWarnings?: boolean
 }
 
 export function useVoucherActions() {
@@ -29,11 +35,12 @@ export function useVoucherActions() {
   }
 
   const post = useMutation({
-    mutationFn: ({ id, idempotencyKey }: ActionArgs) =>
-      client.post<VoucherResponse>(`/api/v1/vouchers/${id}/actions/post`, undefined, {
-        datasetCode,
-        idempotencyKey,
-      }),
+    mutationFn: ({ id, idempotencyKey, acknowledgeWarnings }: ActionArgs) =>
+      client.post<VoucherResponse>(
+        `/api/v1/vouchers/${id}/actions/post${acknowledgeWarnings === true ? '?acknowledge_warnings=true' : ''}`,
+        undefined,
+        { datasetCode, idempotencyKey },
+      ),
     onSuccess: invalidate,
   })
 

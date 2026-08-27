@@ -142,6 +142,10 @@ function VoucherFormBody({
   const [rows, setRows] = useState<LineRow[]>(() => [emptyLineRow()])
   const [error, setError] = useState<string | null>(null)
   const [violations, setViolations] = useState<readonly Violation[]>([])
+  // Lệnh vừa bị từ chối — để nút "Vẫn ghi sổ?" (FR-SYS-062) biết gửi lại đúng
+  // lệnh đó kèm `acknowledge_warnings=true`. PUT không có trong đây: sửa phiếu
+  // không ghi sổ nên không có cảnh báo nghiệp vụ để xác nhận.
+  const [failedIntent, setFailedIntent] = useState<'create' | 'post' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [idempotencyKey] = useState(newIdempotencyKey)
 
@@ -183,7 +187,8 @@ function VoucherFormBody({
     actions.unpost.isPending ||
     actions.remove.isPending
 
-  function fail(caught: unknown): void {
+  function fail(caught: unknown, intent: 'create' | 'post' | null = null): void {
+    setFailedIntent(intent)
     if (caught instanceof ApiError) {
       setError(translateErrorCode(t, caught.errorCode))
       setViolations(extractViolations(caught.problem))
@@ -226,9 +231,10 @@ function VoucherFormBody({
   )
   const columns = buildLineColumns(t, accountLookup.maps, visibleDimensionColumns)
 
-  function handleSave(): void {
+  function handleSave(acknowledgeWarnings = false): void {
     setError(null)
     setViolations([])
+    setFailedIntent(null)
 
     if (postingDate.trim() === '') {
       setError(t('gl.form.error.postingDateRequired'))
@@ -278,15 +284,45 @@ function VoucherFormBody({
 
     if (voucher === null) {
       createMutation.mutate(
-        { body: body as unknown as JournalVoucherIn, idempotencyKey },
-        { onSuccess: goToList, onError: fail },
+        { body: body as unknown as JournalVoucherIn, idempotencyKey, acknowledgeWarnings },
+        {
+          onSuccess: goToList,
+          onError: (caught) => {
+            // Chỉ lượt TẠO mới có đường "Vẫn ghi sổ?": cảnh báo FR-SYS-062 chỉ
+            // phát trên lượt ghi sổ đi kèm khi bật Cất-đồng-thời-ghi-sổ.
+            fail(caught, 'create')
+          },
+        },
       )
       return
     }
     updateMutation.mutate({ ...body, row_version: voucher.row_version } as unknown as JournalVoucherUpdate, {
       onSuccess: goToList,
-      onError: fail,
+      onError: (caught) => {
+        fail(caught)
+      },
     })
+  }
+
+  function handleAcknowledge(): void {
+    if (failedIntent === 'create') {
+      handleSave(true)
+      return
+    }
+    if (failedIntent === 'post' && voucher !== null) {
+      setError(null)
+      setViolations([])
+      setFailedIntent(null)
+      actions.post.mutate(
+        { id: voucher.id, idempotencyKey: newIdempotencyKey(), acknowledgeWarnings: true },
+        {
+          onSuccess: goToList,
+          onError: (caught) => {
+            fail(caught, 'post')
+          },
+        },
+      )
+    }
   }
 
   const hasAdvancedValues =
@@ -301,7 +337,14 @@ function VoucherFormBody({
 
   return (
     <div className="flex flex-col gap-4">
-      {error !== null && <JournalViolationsAlert error={error} violations={violations} />}
+      {error !== null && (
+        <JournalViolationsAlert
+          error={error}
+          violations={violations}
+          busy={busy}
+          onAcknowledge={failedIntent === null ? undefined : handleAcknowledge}
+        />
+      )}
 
       <JournalVoucherHeaderFields
         postingDate={postingDate}
@@ -341,11 +384,16 @@ function VoucherFormBody({
       <JournalVoucherActionsFooter
         voucherStatus={voucher?.status ?? null}
         voucherId={voucher?.id ?? null}
+        documentType={voucher?.document_type ?? null}
         readOnly={readOnly}
         busy={busy}
         confirmDelete={confirmDelete}
         onCancel={goToList}
-        onSave={handleSave}
+        // Bọc lại để `onClick` không tuồn MouseEvent vào tham số
+        // `acknowledgeWarnings` của `handleSave`.
+        onSave={() => {
+          handleSave()
+        }}
         onPost={() => {
           if (voucher === null) {
             return
@@ -353,7 +401,12 @@ function VoucherFormBody({
           setError(null)
           actions.post.mutate(
             { id: voucher.id, idempotencyKey: newIdempotencyKey() },
-            { onSuccess: goToList, onError: fail },
+            {
+              onSuccess: goToList,
+              onError: (caught) => {
+                fail(caught, 'post')
+              },
+            },
           )
         }}
         onUnpost={() => {
@@ -363,7 +416,7 @@ function VoucherFormBody({
           setError(null)
           actions.unpost.mutate(
             { id: voucher.id, idempotencyKey: newIdempotencyKey() },
-            { onSuccess: goToList, onError: fail },
+            { onSuccess: goToList, onError: (caught) => { fail(caught) } },
           )
         }}
         onDelete={() => {
@@ -375,7 +428,12 @@ function VoucherFormBody({
             return
           }
           setError(null)
-          actions.remove.mutate(voucher.id, { onSuccess: goToList, onError: fail })
+          actions.remove.mutate(voucher.id, {
+            onSuccess: goToList,
+            onError: (caught) => {
+              fail(caught)
+            },
+          })
         }}
       />
     </div>
