@@ -82,7 +82,12 @@ export function resolvePairLines(
       credit_account_id: credit.id,
       amount_fc: row.amountFc.trim(),
       description: row.description.trim() === '' ? null : row.description.trim(),
-      extended: [],
+      // Vọng lại chiều mở rộng đã lưu — form chưa có ô nhập nhưng PUT thay
+      // trọn bộ (review 6F-1 M-A). Server nhận `{dimension_id, value_id}`.
+      extended: Object.entries(row.extendedDimensions ?? {}).map(([dimensionId, valueId]) => ({
+        dimension_id: Number.parseInt(dimensionId, 10),
+        value_id: valueId,
+      })),
     }
 
     // Chiều của dòng = HỢP của hai bên: chiều nào một trong hai TK khai thì cột

@@ -2,8 +2,8 @@
  * Khối đối trừ công nợ trên form phiếu/chứng từ ngân hàng (`docs/srs/03` §4):
  * chọn đối tác xong, khối này liệt kê chứng từ còn nợ và nhận "Số đối trừ"
  * từng dòng. Số VND và chênh lệch tỷ giá do SERVER tính (FR-SYS-066) — client
- * không cộng trừ gì ngoài một dòng tổng hiển thị để người dùng tự soát
- * BR-QUY-03 (tổng đối trừ = tổng phiếu) trước khi server phán.
+ * không cộng trừ gì cả, kể cả dòng tổng: BR-QUY-03 (tổng đối trừ = tổng phiếu)
+ * do validator server phán kèm thông điệp nghiệp vụ.
  */
 
 import type { ReactElement } from 'react'

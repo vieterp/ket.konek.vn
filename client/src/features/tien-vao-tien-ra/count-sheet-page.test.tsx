@@ -82,6 +82,56 @@ describe('màn kiểm kê quỹ', () => {
     expect(screen.getAllByRole('button', { name: 'Tạo phiếu xử lý chênh lệch' })).toHaveLength(1)
   })
 
+  it('phiếu xử lý chênh gặp cảnh báo: "Vẫn ghi sổ" gửi lại kèm acknowledge_warnings=true', async () => {
+    const fetchMock = mockServer({
+      ...baseRoutes(),
+      '/accounts': ACCOUNTS_ROUTE,
+      [`/cash-book/count-sheets/${SHEET.id}/actions/create-adjustment`]: (_init, url) =>
+        String(url).includes('acknowledge_warnings=true')
+          ? { status: 200, body: { ...SHEET, adjustment_voucher_id: 'aaaaaaaa-0000-0000-0000-0000000000ff' } }
+          : {
+              status: 422,
+              body: {
+                type: 'https://konek.vn/errors/posting.invalid',
+                title: 'posting.invalid',
+                status: 422,
+                detail: 'Chứng từ không hợp lệ',
+                error_code: 'posting.invalid',
+                violations: [
+                  {
+                    code: 'warning.cash_balance',
+                    message: 'Chi quá tồn quỹ.',
+                    details: { warning: 1 },
+                  },
+                ],
+              },
+            },
+      '/cash-book/count-sheets': {
+        status: 200,
+        body: { items: [SHEET], total: 1, page: 1, page_size: 50 },
+      },
+    })
+    const user = userEvent.setup()
+
+    renderFeatureAt('/tien-vao-tien-ra/kiem-ke-quy')
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Tạo phiếu xử lý chênh lệch' }),
+    )
+
+    expect(
+      await screen.findByText('Chứng từ chưa ghi sổ — có cảnh báo cần xác nhận:'),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Vẫn ghi sổ' }))
+
+    await waitFor(() => {
+      const retry = fetchMock.mock.calls.find((entry) =>
+        String(entry[0]).includes('acknowledge_warnings=true'),
+      )
+      expect(retry).toBeDefined()
+    })
+  })
+
   it('drawer lập biên bản: POST đúng thân kèm khóa chống trùng', async () => {
     const fetchMock = mockServer({
       ...baseRoutes(),

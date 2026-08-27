@@ -174,8 +174,12 @@ function VoucherFormBody({
     (operation) => operation.operation_code === operationCode,
   )
 
-  const partnerKind =
-    selectedOperation?.partner_kind ?? (kind === BANK_KIND_CREDIT_ADVICE ? 0 : 1)
+  // Loại đối tượng là STATE, không suy từ danh sách operations (review 6F-1
+  // C-1) — form SỬA lấy từ `voucher.partner_kind`; nghiệp vụ chỉ gợi ý khi
+  // người dùng chọn.
+  const [partnerKind, setPartnerKind] = useState<number>(
+    () => voucher?.partner_kind ?? (kind === BANK_KIND_CREDIT_ADVICE ? 0 : 1),
+  )
   const partnerSlug = partnerKind === 2 ? 'employees' : 'partners'
   const partnerLookup = useMasterSearchLookup(
     partnerSlug,
@@ -282,6 +286,14 @@ function VoucherFormBody({
     if (operation === undefined) {
       return
     }
+    // Nghiệp vụ gợi ý LOẠI đối tượng; đổi loại thì đối tác + số đối trừ đã gõ
+    // không còn nghĩa (review 6F-1 H-1).
+    const suggestedKind = operation.partner_kind ?? (kind === BANK_KIND_CREDIT_ADVICE ? 0 : 1)
+    if (suggestedKind !== partnerKind) {
+      setPartnerKind(suggestedKind)
+      setPartner(null)
+      setSettlementAmounts({})
+    }
     setRows((current) => {
       const first = current[0]
       if (first === undefined || first.debitCode.trim() !== '' || first.creditCode.trim() !== '') {
@@ -366,6 +378,12 @@ function VoucherFormBody({
     }
     if (transfer && counterBankAccount === null) {
       setError(t('cashflow.bank.error.counterAccountRequired'))
+      return
+    }
+    // Lớp báo sớm cho nghiệp vụ đòi đối tác — server vẫn là cổng chính
+    // (review 6F-1 C-1).
+    if (!transfer && (selectedOperation?.requires_partner ?? false) && partner === null) {
+      setError(t('cashflow.form.error.partnerRequired'))
       return
     }
     if (branchId === null) {
@@ -498,7 +516,18 @@ function VoucherFormBody({
         onKindChange={(value) => {
           setKind(value)
           // Nghiệp vụ thuộc TỪNG loại chứng từ — đổi loại là chọn lại từ đầu.
+          // State riêng của loại cũ cũng phải theo: số séc trên chứng từ không
+          // phải séc bị server 422 dù ô đã ẩn (review 6F-1 M-D), số đối trừ đổi
+          // chiều thu↔chi thành dòng vô hình (H-1).
           setOperationCode('')
+          setPartnerKind(value === BANK_KIND_CREDIT_ADVICE ? 0 : 1)
+          setPartner(null)
+          setSettlementAmounts({})
+          setChequeNo('')
+          setChequeDate('')
+          setBeneficiaryName('')
+          setBeneficiaryAccountNo('')
+          setBeneficiaryBankName('')
         }}
         kindLocked={voucher !== null}
         postingDate={postingDate}
@@ -518,7 +547,12 @@ function VoucherFormBody({
         onCounterBankAccountChange={setCounterBankAccount}
         partner={partner}
         partnerOptions={partnerLookup.options}
-        onPartnerChange={setPartner}
+        onPartnerChange={(option) => {
+          setPartner(option)
+          // Đổi đối tác là đổi danh sách hóa đơn — không gửi dòng đối trừ vô
+          // hình của đối tác cũ (review 6F-1 H-1).
+          setSettlementAmounts({})
+        }}
         onPartnerQueryChange={partnerLookup.searchFor}
         partnerRequired={selectedOperation?.requires_partner ?? false}
         description={description}

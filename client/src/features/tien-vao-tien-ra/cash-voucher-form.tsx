@@ -170,10 +170,15 @@ function VoucherFormBody({
     (operation) => operation.operation_code === operationCode,
   )
 
-  // Loại đối tượng: theo nghiệp vụ đã chọn; không gợi ý thì phiếu thu mặc định
-  // khách hàng, phiếu chi mặc định nhà cung cấp (chiều đối trừ BR-QUY).
-  const partnerKind =
-    selectedOperation?.partner_kind ?? (kind === KIND_RECEIPT ? 0 : 1)
+  // Loại đối tượng là STATE, không suy từ danh sách operations (review 6F-1
+  // C-1): form SỬA lấy từ `voucher.partner_kind` — nguồn sự thật đã lưu, sống
+  // sót cả khi operations về chậm lẫn khi nghiệp vụ của phiếu không còn hiệu
+  // lực. Nghiệp vụ chỉ GỢI Ý loại khi người dùng chọn (handleOperationChange);
+  // không gợi ý thì phiếu thu mặc định khách hàng, phiếu chi mặc định NCC
+  // (chiều đối trừ BR-QUY).
+  const [partnerKind, setPartnerKind] = useState<number>(
+    () => voucher?.partner_kind ?? (kind === KIND_RECEIPT ? 0 : 1),
+  )
   const partnerSlug = partnerKind === 2 ? 'employees' : 'partners'
   const partnerLookup = useMasterSearchLookup(
     partnerSlug,
@@ -276,6 +281,15 @@ function VoucherFormBody({
     if (operation === undefined) {
       return
     }
+    // Nghiệp vụ gợi ý LOẠI đối tượng. Đổi loại thì đối tác đã chọn và số đối
+    // trừ đã gõ không còn nghĩa — reset thay vì gửi lên dòng đối trừ vô hình
+    // của đối tác cũ (review 6F-1 H-1).
+    const suggestedKind = operation.partner_kind ?? (kind === KIND_RECEIPT ? 0 : 1)
+    if (suggestedKind !== partnerKind) {
+      setPartnerKind(suggestedKind)
+      setPartner(null)
+      setSettlementAmounts({})
+    }
     // Điền sẵn cặp Nợ/Có vào DÒNG ĐẦU khi nó còn trắng cả hai bên TK — người
     // dùng đã gõ gì thì không ghi đè.
     setRows((current) => {
@@ -365,6 +379,13 @@ function VoucherFormBody({
       setError(t('cashflow.form.error.cashAccountRequired'))
       return
     }
+    // Nghiệp vụ đòi đối tác thì chặn sớm với thông điệp chỉ đúng ô — server
+    // vẫn là cổng chính (`cash.operation_partner_required`), đây là lớp báo
+    // sớm (review 6F-1 C-1).
+    if ((selectedOperation?.requires_partner ?? false) && partner === null) {
+      setError(t('cashflow.form.error.partnerRequired'))
+      return
+    }
     if (branchId === null) {
       setError(t('cashflow.form.branchMissing'))
       return
@@ -398,6 +419,16 @@ function VoucherFormBody({
     }
     if (payerReceiverName.trim() !== '') {
       body.payer_receiver_name = payerReceiverName.trim()
+    }
+    // Form chưa có ô nhập số chứng từ kèm — SỬA phải vọng lại giá trị đã lưu,
+    // vì PUT thay trọn bộ và bản in PT/PC in "kèm theo … chứng từ gốc"
+    // (review 6F-1 M-A).
+    if (
+      voucher !== null &&
+      voucher.attachment_count !== null &&
+      voucher.attachment_count !== undefined
+    ) {
+      body.attachment_count = voucher.attachment_count
     }
     if (description.trim() !== '') {
       body.description = description.trim()
@@ -485,7 +516,12 @@ function VoucherFormBody({
         onCashAccountChange={setCashAccount}
         partner={partner}
         partnerOptions={partnerLookup.options}
-        onPartnerChange={setPartner}
+        onPartnerChange={(option) => {
+          setPartner(option)
+          // Đổi đối tác là đổi danh sách hóa đơn — số đối trừ của đối tác cũ
+          // không được sống ngầm rồi gửi lên server (review 6F-1 H-1).
+          setSettlementAmounts({})
+        }}
         onPartnerQueryChange={partnerLookup.searchFor}
         partnerRequired={selectedOperation?.requires_partner ?? false}
         description={description}

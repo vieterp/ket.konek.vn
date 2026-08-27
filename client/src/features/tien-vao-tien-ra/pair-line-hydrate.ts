@@ -68,5 +68,6 @@ export function buildRowFromPairLine(
     description: line.description ?? '',
     amountFc: line.amount_fc,
     dims,
+    extendedDimensions: line.extended_dimensions ?? null,
   }
 }

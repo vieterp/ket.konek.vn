@@ -32,6 +32,9 @@ export function useVoucherActions() {
 
   function invalidate(): void {
     void queryClient.invalidateQueries({ queryKey: ['vouchers', datasetCode] })
+    // Hook dùng chung cho cả chứng từ GLE lẫn phiếu quỹ/ngân hàng — ghi sổ /
+    // bỏ ghi sổ đổi số dư thẻ và lưới của màn "Tiền vào tiền ra".
+    void queryClient.invalidateQueries({ queryKey: ['cashflow', datasetCode] })
   }
 
   const post = useMutation({

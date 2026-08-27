@@ -18,6 +18,12 @@ export interface PairLineRow {
   readonly amountFc: string
   /** Mã chiều đã gõ, khóa theo `DimensionColumn.key` (dùng chung config với GLE). */
   readonly dims: Readonly<Record<string, string>>
+  /**
+   * Chiều MỞ RỘNG của dòng đã lưu (`{dimension_id: value_id}`) — form chưa có
+   * ô nhập, nhưng PUT thay trọn bộ nên SỬA phải vọng lại y nguyên, không được
+   * wipe lặng lẽ thứ một API client khác đã ghi (review 6F-1 M-A).
+   */
+  readonly extendedDimensions: Readonly<Record<string, number>> | null
 }
 
 export function emptyPairLineRow(): PairLineRow {
@@ -28,6 +34,7 @@ export function emptyPairLineRow(): PairLineRow {
     description: '',
     amountFc: '',
     dims: {},
+    extendedDimensions: null,
   }
 }
 

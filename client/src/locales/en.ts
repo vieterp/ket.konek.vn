@@ -592,6 +592,7 @@ export const en: Record<TranslationKey, string> = {
   'cashflow.form.error.postingDateRequired': 'Posting date is required.',
   'cashflow.form.error.operationRequired': 'Select an operation.',
   'cashflow.form.error.cashAccountRequired': 'Select a cash account.',
+  'cashflow.form.error.partnerRequired': 'This operation requires a partner.',
   'cashflow.line.caption': 'Entry lines',
   'cashflow.line.cellLabel': '{header}, row {row}',
   'cashflow.line.header.debitAccount': 'Debit acc.',

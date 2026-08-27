@@ -52,12 +52,23 @@ function mergeOptions(
   return next
 }
 
+/**
+ * Kết quả tra thêm, gắn SLUG nó thuộc về — đổi slug (partners↔employees) thì
+ * đọc ra coi như trống, id hai bảng trùng dải không trộn được vào nhau
+ * (review 6F-1 M-C; cùng khuôn `ExtraState.postingDate` của use-account-lookup).
+ */
+interface ExtraState {
+  readonly slug: string
+  readonly map: ReadonlyMap<number, LookupOption>
+}
+
 export function useMasterSearchLookup(
   slug: string,
   requiredIds: readonly number[] = [],
 ): MasterSearchLookup {
   const { client, datasetCode } = useSession()
-  const [extra, setExtra] = useState<ReadonlyMap<number, LookupOption>>(new Map())
+  const [extraState, setExtraState] = useState<ExtraState>({ slug, map: new Map() })
+  const extra = extraState.slug === slug ? extraState.map : new Map<number, LookupOption>()
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const seed = useQuery({
@@ -116,7 +127,13 @@ export function useMasterSearchLookup(
             { datasetCode },
           )
           .then((page) => {
-            setExtra((current) => mergeOptions(current, toOptions(page.items)))
+            setExtraState((current) => ({
+              slug,
+              map: mergeOptions(
+                current.slug === slug ? current.map : new Map(),
+                toOptions(page.items),
+              ),
+            }))
           })
           .catch(() => undefined)
       }, SEARCH_DEBOUNCE_MS)

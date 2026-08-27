@@ -596,6 +596,7 @@ export const vi = {
   'cashflow.form.error.postingDateRequired': 'Chưa nhập ngày hạch toán.',
   'cashflow.form.error.operationRequired': 'Chưa chọn nghiệp vụ.',
   'cashflow.form.error.cashAccountRequired': 'Chưa chọn tài khoản quỹ.',
+  'cashflow.form.error.partnerRequired': 'Nghiệp vụ này bắt buộc chọn đối tượng.',
   'cashflow.line.caption': 'Chi tiết định khoản',
   'cashflow.line.cellLabel': '{header}, dòng {row}',
   'cashflow.line.header.debitAccount': 'TK Nợ',
