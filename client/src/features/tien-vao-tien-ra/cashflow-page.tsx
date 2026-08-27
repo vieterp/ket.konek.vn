@@ -58,8 +58,19 @@ export function CashflowPage(): ReactElement {
   // Chưa bấm thẻ nào thì thẻ đầu tiên là ngữ cảnh mặc định — quỹ đứng trước.
   const firstCash = overview.data?.cash_accounts[0]
   const firstBank = overview.data?.bank_accounts[0]
+  // Thẻ đã chọn phải CÒN trong overview mới (nợ L-4 review 6F-1): TK ngân hàng
+  // vừa bị gộp/ngừng theo dõi mà vẫn giữ làm ngữ cảnh là lưới truy vấn một thẻ
+  // ma. Overview đang tải thì giữ lựa chọn — đừng nhảy thẻ giữa chừng.
+  const chosenStillExists =
+    chosen === null
+      ? false
+      : overview.data === undefined
+        ? true
+        : chosen.source === 'cash'
+          ? overview.data.cash_accounts.some((card) => card.account_code === chosen.accountCode)
+          : overview.data.bank_accounts.some((card) => card.bank_account_id === chosen.bankAccountId)
   const selected: SelectedCard | null =
-    chosen ??
+    (chosenStillExists ? chosen : null) ??
     (firstCash !== undefined
       ? { source: 'cash', accountCode: firstCash.account_code }
       : firstBank !== undefined

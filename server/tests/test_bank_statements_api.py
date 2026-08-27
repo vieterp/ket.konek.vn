@@ -21,6 +21,7 @@ from catalog_api_support import UserFactory, actor, ensure_role
 from conftest import api_test_client
 from ket.kernel.bank_import.profile_models import BankStatementProfile, StatementFileKind
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.master_data.models.bank import Bank
 from ket.kernel.master_data.models.company_bank_account import CompanyBankAccount
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
@@ -425,3 +426,67 @@ def test_auto_match_requires_full_branch_scope(
         client.delete(f"/api/v1/bank/statements/{statement_id}", headers=clerk_headers).status_code
         == 204
     )
+
+
+def test_profiles_endpoint_lists_only_the_accounts_bank(
+    client: TestClient,
+    clerk_headers: dict[str, str],
+    viewer_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    bank_account: int,
+    profile_id: int,
+) -> None:
+    """`GET /statements/profiles?bank_account_id=` (lát 6F-2): ô chọn hồ sơ của
+    màn nhập sao kê. Lọc theo ngân hàng CỦA TÀI KHOẢN — hồ sơ ngân hàng khác
+    hiện ra là mời một lượt nhập 422 đoán được trước; và đường tĩnh phải thắng
+    đường `{statement_id}` (khai sau nó là 422 "không phải UUID")."""
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        other_bank = session.scalar(select(Bank).where(Bank.code == "ACB-TEST-6F2"))
+        if other_bank is None:
+            other_bank = Bank(code="ACB-TEST-6F2", name="Ngân hàng khác", path="0.")
+            session.add(other_bank)
+            session.flush()
+            other_bank.path = f"{other_bank.id}."
+        existing = session.scalar(
+            select(BankStatementProfile).where(
+                BankStatementProfile.bank_id == other_bank.id,
+                BankStatementProfile.name == "CSV ngan hang khac",
+            )
+        )
+        if existing is None:
+            session.add(
+                BankStatementProfile(
+                    bank_id=other_bank.id,
+                    name="CSV ngan hang khac",
+                    file_kind=StatementFileKind.CSV,
+                    header_row=1,
+                    date_col="Ngay GD",
+                    date_format="%d/%m/%Y",
+                    debit_col="Ghi no",
+                    credit_col="Ghi co",
+                    ref_col=None,
+                    description_col=None,
+                    decimal_sep=".",
+                    thousand_sep=None,
+                    csv_delimiter=";",
+                )
+            )
+
+    listed = client.get(
+        f"/api/v1/bank/statements/profiles?bank_account_id={bank_account}",
+        headers=viewer_headers,
+    )
+    assert listed.status_code == 200, listed.text
+    items = listed.json()["items"]
+    assert profile_id in [row["id"] for row in items]
+    assert "CSV ngan hang khac" not in [row["name"] for row in items]
+
+    # Tài khoản không tồn tại → lỗi nghiệp vụ đọc được, không phải 500.
+    missing = client.get(
+        "/api/v1/bank/statements/profiles?bank_account_id=999999", headers=clerk_headers
+    )
+    assert missing.status_code == 422
+    assert missing.json()["error_code"] == "bank_statement.import_invalid"

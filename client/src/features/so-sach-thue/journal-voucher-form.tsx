@@ -37,7 +37,7 @@ import { JournalViolationsAlert } from './journal-violations-alert'
 import { extractViolations, type Violation } from './journal-violations'
 import { todayIso } from './local-date'
 import { useAccountLookup } from './use-account-lookup'
-import { useDimensionLookups } from './use-dimension-lookups'
+import { requiredDimensionIdsOf, useDimensionLookups } from './use-dimension-lookups'
 import {
   useCreateJournalVoucher,
   useJournalVoucher,
@@ -155,7 +155,9 @@ function VoucherFormBody({
     postingDate,
     voucher?.lines.map((line) => line.account_id) ?? [],
   )
-  const dimensionLookups = useDimensionLookups()
+  // Cùng lý do với `requiredIds` của TK: danh mục chiều tra server-side (nợ
+  // M-B 6F-1), bản ghi dòng cũ tham chiếu phải được tra bù trước khi dựng lưới.
+  const dimensionLookups = useDimensionLookups(requiredDimensionIdsOf(voucher?.lines ?? []))
   const [hydrated, setHydrated] = useState(false)
 
   // Dựng lại lưới từ chứng từ đã lưu đúng MỘT lần, khi cả bản đồ TK lẫn danh
@@ -253,7 +255,18 @@ function VoucherFormBody({
       return
     }
 
-    const resolved = resolveLines(rows, accountLookup.maps, dimensionLookups.options, t)
+    void submitResolvedLines(branchId, acknowledgeWarnings)
+  }
+
+  // Tách async khỏi `handleSave` vì lượt rà mã chiều có thể phải hỏi server
+  // (hai-lượt-rà, nợ M-B 6F-1): mã ngoài trang seed được tra `search=` rồi rà
+  // lại — mã sai thật thì lượt hai báo đúng lỗi cũ, không có đường lỗi mới.
+  async function submitResolvedLines(branchId: number, acknowledgeWarnings: boolean): Promise<void> {
+    let resolved = resolveLines(rows, accountLookup.maps, dimensionLookups.options, t)
+    if (resolved.missing.length > 0) {
+      const mergedOptions = await dimensionLookups.resolveMissingCodes(resolved.missing)
+      resolved = resolveLines(rows, accountLookup.maps, mergedOptions, t)
+    }
     if (resolved.errors.length > 0) {
       setError(resolved.errors.join(' '))
       return

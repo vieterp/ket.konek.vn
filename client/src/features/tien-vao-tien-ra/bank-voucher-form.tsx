@@ -27,7 +27,10 @@ import { extractViolations, type Violation } from '@/features/so-sach-thue/journ
 import { JournalVoucherActionsFooter } from '@/features/so-sach-thue/journal-voucher-actions-footer'
 import { todayIso } from '@/features/so-sach-thue/local-date'
 import { useAccountLookup } from '@/features/so-sach-thue/use-account-lookup'
-import { useDimensionLookups } from '@/features/so-sach-thue/use-dimension-lookups'
+import {
+  requiredDimensionIdsOf,
+  useDimensionLookups,
+} from '@/features/so-sach-thue/use-dimension-lookups'
 import { useVoucherActions } from '@/features/so-sach-thue/use-voucher-actions'
 
 import {
@@ -200,7 +203,9 @@ function VoucherFormBody({
       ),
     ) ?? []
   const accountLookup = useAccountLookup(postingDate, requiredAccountIds)
-  const dimensionLookups = useDimensionLookups()
+  // Danh mục chiều tra server-side (nợ M-B 6F-1) — id trên dòng cũ tra bù
+  // trước khi dựng lưới, cùng lý do với `requiredAccountIds` của TK.
+  const dimensionLookups = useDimensionLookups(requiredDimensionIdsOf(voucher?.lines ?? []))
   const [hydrated, setHydrated] = useState(false)
 
   if (
@@ -391,7 +396,22 @@ function VoucherFormBody({
       return
     }
 
-    const resolved = resolvePairLines(rows, accountLookup.maps, dimensionLookups.options, t)
+    void submitResolvedLines(branchId, bankAccount.id, acknowledgeWarnings)
+  }
+
+  // Tách async khỏi `handleSave` vì lượt rà mã chiều có thể phải hỏi server
+  // (hai-lượt-rà, nợ M-B 6F-1): mã ngoài trang seed được tra `search=` rồi rà
+  // lại — mã sai thật thì lượt hai báo đúng lỗi cũ, không có đường lỗi mới.
+  async function submitResolvedLines(
+    branchId: number,
+    bankAccountId: number,
+    acknowledgeWarnings: boolean,
+  ): Promise<void> {
+    let resolved = resolvePairLines(rows, accountLookup.maps, dimensionLookups.options, t)
+    if (resolved.missing.length > 0) {
+      const mergedOptions = await dimensionLookups.resolveMissingCodes(resolved.missing)
+      resolved = resolvePairLines(rows, accountLookup.maps, mergedOptions, t)
+    }
     if (resolved.errors.length > 0) {
       setError(resolved.errors.join(' '))
       return
@@ -403,7 +423,7 @@ function VoucherFormBody({
 
     const body: Record<string, unknown> = {
       kind,
-      bank_account_id: bankAccount.id,
+      bank_account_id: bankAccountId,
       branch_id: branchId,
       document_date: documentDate.trim() === '' ? postingDate : documentDate,
       posting_date: postingDate,

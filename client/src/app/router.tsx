@@ -47,6 +47,10 @@ import {
   CashflowPage,
   CashVoucherForm,
   CountSheetPage,
+  ReconciliationDetailPage,
+  ReconciliationPage,
+  TreasurerCashBookPage,
+  TreasurerQueuePage,
 } from '@/features/tien-vao-tien-ra'
 
 const [home, ...groups] = NAVIGATION
@@ -107,6 +111,10 @@ const tienVaoTienRaRoutes: RouteObject[] = [
       { path: 'giao-dich/ngan-hang/moi', element: <BankVoucherForm /> },
       { path: 'giao-dich/ngan-hang/:id', element: <BankVoucherForm /> },
       { path: 'kiem-ke-quy', element: <CountSheetPage /> },
+      { path: 'doi-chieu', element: <ReconciliationPage /> },
+      { path: 'doi-chieu/:id', element: <ReconciliationDetailPage /> },
+      { path: 'thu-quy', element: <TreasurerQueuePage /> },
+      { path: 'thu-quy/so-quy', element: <TreasurerCashBookPage /> },
     ],
   },
 ]

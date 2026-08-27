@@ -459,6 +459,65 @@ describe('form phiếu thu tiền mặt', () => {
       })
     })
   })
+
+  it('mã chiều NGOÀI trang seed: Cất tra server theo mã rồi gửi đúng id (nợ M-B 6F-1)', async () => {
+    const fetchMock = mockServer({
+      ...formRoutes(),
+      // Trang seed chỉ có KH01 — mã KH-XA nằm ngoài trần trang 200, chỉ lượt
+      // tra `search=` mới thấy. Bản cũ nạp-trọn sẽ báo "mã không tra được".
+      '/master/partners': (_init, url) =>
+        url !== undefined && url.includes('search=KH-XA')
+          ? {
+              status: 200,
+              body: { items: [catalogRow(777, 'KH-XA', 'Khách ngoài trang đầu')], total: 1 },
+            }
+          : { status: 200, body: { items: [catalogRow(5, 'KH01', 'Công ty A')], total: 1 } },
+      '/cash-book/open-invoices': { status: 200, body: { items: [] } },
+      '/cash-book/vouchers': { status: 201, body: CREATED_VOUCHER },
+    })
+    const user = userEvent.setup()
+
+    renderFeatureAt('/tien-vao-tien-ra/giao-dich/phieu/moi?kind=0')
+
+    const operationSelect = await screen.findByLabelText('Nghiệp vụ')
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'Thu công nợ khách hàng' })).toBeInTheDocument()
+    })
+    await user.selectOptions(operationSelect, 'thu-cong-no-kh')
+
+    const cashInput = screen.getByLabelText('TK quỹ')
+    await user.type(cashInput, '1111')
+    await user.keyboard('{Enter}')
+    const partnerInput = screen.getByLabelText('Đối tượng (bắt buộc)')
+    await user.type(partnerInput, 'KH01')
+    await user.keyboard('{Enter}')
+
+    const firstCell = await screen.findByLabelText('TK Nợ, dòng 1')
+    await user.click(firstCell)
+    await user.keyboard('{Tab}') // TK Nợ → TK Có
+    await user.keyboard('{Tab}') // TK Có → Diễn giải
+    await user.keyboard('{Tab}') // Diễn giải → Số tiền
+    const amountInput = await screen.findByLabelText('Số tiền, dòng 1')
+    await user.type(amountInput, '1000000')
+    await user.keyboard('{Tab}') // Số tiền → Mã đối tượng
+    const dimInput = await screen.findByLabelText('Mã đối tượng, dòng 1')
+    await user.type(dimInput, 'KH-XA')
+    await user.keyboard('{Tab}')
+
+    await user.click(screen.getByRole('button', { name: 'Cất' }))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find((entry) =>
+        String(entry[0]).endsWith('/cash-book/vouchers'),
+      )
+      expect(call).toBeDefined()
+      const body = parseJsonBody(call?.[1] as RequestInit)
+      expect((body.lines as Record<string, unknown>[])[0]).toMatchObject({
+        partner_id: 777,
+        partner_kind: 0,
+      })
+    })
+  })
 })
 
 describe('form phiếu chi — sửa và đối trừ', () => {

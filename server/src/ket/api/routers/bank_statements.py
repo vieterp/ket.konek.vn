@@ -36,12 +36,15 @@ from ket.api.routers.bank_statements_schemas import (
     BankStatementImportOut,
     BankStatementListResponse,
     BankStatementOut,
+    BankStatementProfileListResponse,
+    BankStatementProfileOut,
     MatchCandidateOut,
     MatchCandidatesResponse,
     MatchRequest,
     ReconciliationResponse,
 )
 from ket.kernel.attachments import storage
+from ket.kernel.bank_import.profile_models import BankStatementProfile
 from ket.kernel.errors import (
     AttachmentStorageNotConfiguredError,
     BankReconciliationScopeError,
@@ -151,6 +154,37 @@ def list_bank_statements(
         )
         return BankStatementListResponse(
             items=tuple(BankStatementOut.model_validate(row) for row in statements)
+        )
+
+
+@router.get("/statements/profiles", response_model=BankStatementProfileListResponse)
+def list_statement_profiles(
+    authorized: StatementViewer,
+    factory: SessionFactory,
+    bank_account_id: Annotated[int, Query(ge=1)],
+) -> BankStatementProfileListResponse:
+    """Hồ sơ định dạng dùng được cho MỘT tài khoản ngân hàng (lát 6F-2).
+
+    Ô chọn hồ sơ của màn nhập sao kê cần danh sách này; lọc theo ngân hàng của
+    tài khoản NGAY Ở ĐÂY vì `import_statement` từ chối hồ sơ khác ngân hàng —
+    đưa client tự ghép `bank_id` là mời một lượt 422 đoán được trước.
+
+    Khai TRƯỚC `/statements/{statement_id}`: FastAPI khớp theo thứ tự, đường
+    tĩnh đứng sau đường UUID sẽ thành 422 "profiles không phải UUID".
+    """
+    with unit_of_work(factory, authorized.scope) as session:
+        account = require_bank_account(session, bank_account_id)
+        profiles = (
+            session.execute(
+                select(BankStatementProfile)
+                .where(BankStatementProfile.bank_id == account.bank_id)
+                .order_by(BankStatementProfile.name)
+            )
+            .scalars()
+            .all()
+        )
+        return BankStatementProfileListResponse(
+            items=tuple(BankStatementProfileOut.model_validate(row) for row in profiles)
         )
 
 

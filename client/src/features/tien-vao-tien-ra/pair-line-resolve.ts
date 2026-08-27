@@ -18,6 +18,7 @@ import {
   DIMENSION_LINE_FIELD,
   PARTNER_KIND_BY_DIMENSION,
 } from '@/features/so-sach-thue/dimension-config'
+import type { MissingDimensionCode } from '@/features/so-sach-thue/journal-line-resolve'
 import type { AccountMaps } from '@/features/so-sach-thue/use-account-lookup'
 
 import type { PairLineRow } from './pair-line-types'
@@ -29,6 +30,12 @@ export type PairLineIn = Schemas['CashVoucherLineIn']
 export interface ResolvePairLinesResult {
   readonly lines: readonly PairLineIn[]
   readonly errors: readonly string[]
+  /**
+   * Mã chiều gõ vào nhưng không có trong bản đồ ĐANG CÓ — danh mục lớn hơn
+   * trang seed 200 dòng (nợ M-B 6F-1). Form tra server các mã này rồi rà lại;
+   * mã sai thật thì lượt rà thứ hai vẫn báo đúng `errors` cũ.
+   */
+  readonly missing: readonly MissingDimensionCode[]
 }
 
 interface SideResolution {
@@ -45,6 +52,7 @@ export function resolvePairLines(
 ): ResolvePairLinesResult {
   const lines: PairLineIn[] = []
   const errors: string[] = []
+  const missing: MissingDimensionCode[] = []
 
   function resolveSide(code: string, rowNumber: string): SideResolution {
     const trimmed = code.trim()
@@ -108,6 +116,11 @@ export function resolvePairLines(
       const options = slug === undefined ? undefined : dimensionOptions[slug]
       const match = options?.find((option) => option.code.toLowerCase() === typed.toLowerCase())
       if (match === undefined) {
+        // `order` không có slug (danh mục thuộc phase 7) — không có gì để tra
+        // bù, lỗi đứng nguyên.
+        if (slug !== undefined) {
+          missing.push({ slug, code: typed })
+        }
         errors.push(
           t('cashflow.line.error.dimensionUnresolved', {
             row: rowNumber,
@@ -135,5 +148,5 @@ export function resolvePairLines(
     }
   })
 
-  return { lines, errors }
+  return { lines, errors, missing }
 }

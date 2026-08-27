@@ -269,6 +269,59 @@ def test_custom_book_date_must_not_precede_posting_date(
     run(work)
 
 
+def test_book_date_must_not_be_in_the_future(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Trần trên ngày ghi sổ quỹ = ngày hiện tại (quyết định user 2026-08-27):
+    sổ quỹ ghi việc ĐÃ làm. Tiêm `today` cố định để test tất định — cả chế độ
+    ngày tùy chọn lẫn chế độ theo-ngày-chứng-từ đều kiểm trên ngày HIỆU LỰC."""
+
+    def work(session: Session) -> object:
+        try:
+            _set_treasurer_enabled(session, True)
+            service = CashVoucherService(session)
+            voucher = service.create(_receipt(context, accounts), user_id=ACTOR_ID)
+            service.post(voucher.id, user_id=ACTOR_ID)
+
+            # Ngày tùy chọn vượt "hôm nay" bị từ chối.
+            with pytest.raises(TreasurerBookDateInvalidError):
+                book_vouchers(
+                    session,
+                    voucher_ids=(voucher.id,),
+                    book_date=JAN_10 + timedelta(days=1),
+                    user_id=TREASURER_ID,
+                    today=JAN_10,
+                )
+            # Chế độ theo-ngày-chứng-từ cũng chịu trần: đồng hồ đứng TRƯỚC ngày
+            # hạch toán thì phiếu phải chờ đến ngày đó (không cần dựng phiếu
+            # ngày tương lai thật — tiêm đồng hồ lùi là đủ và tất định).
+            with pytest.raises(TreasurerBookDateInvalidError):
+                book_vouchers(
+                    session,
+                    voucher_ids=(voucher.id,),
+                    book_date=None,
+                    user_id=TREASURER_ID,
+                    today=JAN_10 - timedelta(days=1),
+                )
+            # Biên: ngày hiệu lực ĐÚNG BẰNG hôm nay là hợp lệ.
+            entries = book_vouchers(
+                session,
+                voucher_ids=(voucher.id,),
+                book_date=None,
+                user_id=TREASURER_ID,
+                today=JAN_10,
+            )
+            assert len(entries) == 1
+            entry = _book_entry_of(session, voucher.id)
+            assert entry is not None
+            assert entry.book_date == JAN_10
+        finally:
+            _set_treasurer_enabled(session, False)
+        return None
+
+    run(work)
+
+
 def test_booking_rejects_drafts_and_duplicates_but_survives_module_toggle_off(
     run: Runner, context: PostingContext, accounts: dict[str, int]
 ) -> None:

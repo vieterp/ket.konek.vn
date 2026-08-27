@@ -19,6 +19,10 @@ import { BankVoucherForm } from './bank-voucher-form'
 import { CashflowPage } from './cashflow-page'
 import { CashVoucherForm } from './cash-voucher-form'
 import { CountSheetPage } from './count-sheet-page'
+import { ReconciliationDetailPage } from './reconciliation-detail-page'
+import { ReconciliationPage } from './reconciliation-page'
+import { TreasurerCashBookPage } from './treasurer-cash-book-page'
+import { TreasurerQueuePage } from './treasurer-queue-page'
 
 export interface RouteReply {
   readonly status: number
@@ -152,6 +156,10 @@ export function renderFeatureAt(path: string): void {
                 <Route path="giao-dich/ngan-hang/moi" element={<BankVoucherForm />} />
                 <Route path="giao-dich/ngan-hang/:id" element={<BankVoucherForm />} />
                 <Route path="kiem-ke-quy" element={<CountSheetPage />} />
+                <Route path="doi-chieu" element={<ReconciliationPage />} />
+                <Route path="doi-chieu/:id" element={<ReconciliationDetailPage />} />
+                <Route path="thu-quy" element={<TreasurerQueuePage />} />
+                <Route path="thu-quy/so-quy" element={<TreasurerCashBookPage />} />
               </Route>
             </Route>
           </Routes>

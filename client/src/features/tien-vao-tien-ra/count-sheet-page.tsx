@@ -139,10 +139,11 @@ export function CountSheetPage(): ReactElement {
           >
             {t('cashflow.count.print')}
           </Button>
+          {/* Parse thay vì so chuỗi '0'/'0.00' — scale serialize đổi thì phép
+              so chuỗi gãy im lặng (nợ L-1 review 6F-1). */}
           {!readOnly &&
             row.adjustment_voucher_id === null &&
-            row.difference !== '0' &&
-            row.difference !== '0.00' && (
+            Number.parseFloat(row.difference) !== 0 && (
               <Button
                 variant="secondary"
                 disabled={adjustment.isPending}

@@ -192,7 +192,13 @@ class CashTreasurerVoucherSource:
         return pending
 
     def book(
-        self, session: Session, *, voucher_id: UUID, book_date: date | None, user_id: int
+        self,
+        session: Session,
+        *,
+        voucher_id: UUID,
+        book_date: date | None,
+        user_id: int,
+        today: date,
     ) -> TreasurerBookEntry:
         # Đọc HEADER trước — `vouchers` có RLS chi nhánh còn `cash_vouchers`
         # (bảng con, 0015) thì không: khóa thân trước là cầm `FOR UPDATE` trên
@@ -240,6 +246,17 @@ class CashTreasurerVoucherSource:
                 voucher_no=voucher.voucher_no,
                 posting_date=voucher.posting_date.isoformat(),
                 book_date=effective_date.isoformat(),
+            )
+        # Trần trên: sổ quỹ ghi việc ĐÃ làm — kể cả chế độ "theo ngày chứng từ"
+        # (phiếu hạch toán ngày tương lai thì chờ đến ngày đó mới ghi sổ quỹ
+        # được). Kiểm ở ĐÂY chứ không ở `_book_entry`: đường tự-ghi khi phân hệ
+        # tắt là bản phản chiếu của việc ghi sổ kế toán, không được chặn nó.
+        if effective_date > today:
+            raise TreasurerBookDateInvalidError(
+                "Ngày ghi sổ quỹ không được ở tương lai — sổ quỹ ghi việc đã làm",
+                voucher_no=voucher.voucher_no,
+                book_date=effective_date.isoformat(),
+                today=today.isoformat(),
             )
         entry = _book_entry(session, voucher, body, book_date=effective_date, user_id=user_id)
         if entry is None:
