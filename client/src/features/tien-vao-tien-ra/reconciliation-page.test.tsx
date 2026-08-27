@@ -148,6 +148,37 @@ describe('màn danh sách sao kê', () => {
     ).toBeInTheDocument()
   })
 
+  it('Hủy rồi mở lại drawer: tệp đã hủy KHÔNG được gửi — phải báo thiếu tệp (review 6F-2 H-1)', async () => {
+    const fetchMock = mockServer({
+      ...pageRoutes(),
+      '/bank/statements/import': { status: 201, body: {} },
+    })
+    const user = userEvent.setup()
+
+    renderFeatureAt('/tien-vao-tien-ra/doi-chieu')
+
+    const accountInput = await screen.findByLabelText('Tài khoản ngân hàng')
+    await user.type(accountInput, 'VCB-001')
+    await user.keyboard('{Enter}')
+
+    // Lượt 1: chọn đủ hồ sơ + tệp rồi HỦY.
+    await user.click(await screen.findByRole('button', { name: 'Nhập sao kê' }))
+    await user.selectOptions(await screen.findByLabelText('Hồ sơ định dạng'), '7')
+    const file = new File(['x'], 'saoke.csv', { type: 'text/csv' })
+    await user.upload(screen.getByLabelText('Tệp sao kê (CSV/Excel)'), file)
+    await user.click(screen.getByRole('button', { name: 'Hủy' }))
+
+    // Lượt 2: mở lại — ô tệp trống thì bấm Nhập phải BÁO, không gửi tệp ma.
+    await user.click(await screen.findByRole('button', { name: 'Nhập sao kê' }))
+    await user.selectOptions(await screen.findByLabelText('Hồ sơ định dạng'), '7')
+    await user.click(screen.getByRole('button', { name: 'Nhập' }))
+
+    expect(await screen.findByText('Chưa chọn tệp sao kê.')).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith('/bank/statements/import')),
+    ).toBeUndefined()
+  })
+
   it('xóa sao kê phải qua bước xác nhận rồi mới DELETE', async () => {
     const fetchMock = mockServer({
       ...pageRoutes(),

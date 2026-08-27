@@ -123,6 +123,14 @@ describe('màn đối chiếu hai khung', () => {
     const matchedRow = await screen.findByRole('button', { name: /đã khớp/ })
     expect(matchedRow.className).toContain('opacity-50')
 
+    // Chiều tiền (review 6F-2 L-1): dòng GHI CÓ (tiền vào) không mang dấu âm,
+    // dòng GHI NỢ (tiền ra) mang dấu âm — tráo credit/debit phải đỏ ở đây.
+    // Nhắm vào SỐ TIỀN (reference REF-1 cũng chứa '-').
+    expect(matchedRow.textContent).toContain('500.000')
+    expect(matchedRow.textContent).not.toContain('-500.000')
+    const openRow = screen.getByRole('button', { name: /chưa khớp/ })
+    expect(openRow.textContent).toContain('-250.000')
+
     expect(await screen.findByText('Phía sổ kế toán còn lệch')).toBeInTheDocument()
     expect(screen.getByText(/UNC26-00009/)).toBeInTheDocument()
   })

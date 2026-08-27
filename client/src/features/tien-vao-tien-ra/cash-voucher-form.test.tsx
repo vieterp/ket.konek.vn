@@ -596,6 +596,83 @@ describe('form phiếu chi — sửa và đối trừ', () => {
     })
   })
 
+  it('sửa phiếu có chiều NHÂN VIÊN trên DÒNG ngoài trang seed: ô hiện mã và PUT giữ id (review 6F-2 M-4)', async () => {
+    // TK 141 khai chiều employee — cột "Mã đối tượng" của dòng phải hiện.
+    const accountsWithAdvance = {
+      status: 200,
+      body: {
+        package_id: 1,
+        items: [
+          ...(ACCOUNTS_ROUTE.body as { items: Record<string, unknown>[] }).items,
+          {
+            id: 41,
+            code: '141',
+            name: 'Tạm ứng',
+            balance_nature: 1,
+            detail_tracking: ['employee'],
+            is_summary: false,
+            is_foreign_currency: false,
+            level: 1,
+            parent_id: null,
+          },
+        ],
+      },
+    }
+    const savedWithEmployeeLine = {
+      ...SAVED_PAYMENT,
+      id: 'aaaaaaaa-0000-0000-0000-000000000043',
+      partner_id: null,
+      partner_kind: null,
+      lines: [
+        {
+          ...SAVED_PAYMENT.lines[0],
+          debit_account_id: 41,
+          partner_kind: 2,
+          partner_id: 999,
+        },
+      ],
+    }
+    const fetchMock = mockServer({
+      ...formRoutes(),
+      '/accounts': accountsWithAdvance,
+      // Trang seed employees TRỐNG — id 999 chỉ tra được qua `ids=` (danh mục
+      // lớn hơn trần trang; đột biến MC2 tắt lượt ids= phải đỏ ở đây, MC3
+      // tráo employees→partners cũng đỏ vì partners không có 999).
+      '/master/employees': (_init, url) =>
+        url !== undefined && url.includes('ids=999')
+          ? { status: 200, body: { items: [catalogRow(999, 'NV-XA', 'Nhân viên xa')], total: 1 } }
+          : { status: 200, body: { items: [], total: 0 } },
+      [`/cash-book/vouchers/${savedWithEmployeeLine.id}`]: {
+        status: 200,
+        body: savedWithEmployeeLine,
+      },
+    })
+    const user = userEvent.setup()
+
+    renderFeatureAt(`/tien-vao-tien-ra/giao-dich/phieu/${savedWithEmployeeLine.id}`)
+
+    // Ô chiều của dòng hiện MÃ tra được từ lượt ids= — không phải ô trống.
+    expect(await screen.findByText('NV-XA')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cất' }))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        (entry) =>
+          String(entry[0]).endsWith(`/cash-book/vouchers/${savedWithEmployeeLine.id}`) &&
+          (entry[1] as RequestInit | undefined)?.method === 'PUT',
+      )
+      expect(call).toBeDefined()
+      const body = parseJsonBody(call?.[1] as RequestInit)
+      // PUT thay-trọn-bộ: hydrate hụt là mất dữ liệu lặng lẽ (họ 4E H-1).
+      expect((body.lines as Record<string, unknown>[])[0]).toMatchObject({
+        debit_account_id: 41,
+        partner_id: 999,
+        partner_kind: 2,
+      })
+    })
+  })
+
   it('đối trừ: dòng gõ rồi xóa trắng không được gửi lên server', async () => {
     const invoice1 = {
       target_kind: 2,

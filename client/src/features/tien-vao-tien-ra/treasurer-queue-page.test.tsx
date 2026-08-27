@@ -123,8 +123,38 @@ describe('màn thủ quỹ — hàng đợi + ghi sổ hàng loạt', () => {
       )
       expect(call).toBeDefined()
       const body = parseJsonBody(call?.[1] as RequestInit)
+      // Chỉ phiếu ĐÃ CHỌN — "dọn code" mất cái filter là cả hàng đợi bị ghi
+      // sổ chỉ vì chọn một phiếu (review 6F-2 M-2, mutation MC7).
+      expect(body.voucher_ids).toEqual([RECEIPT_ID])
       expect(body.book_date_mode).toBe('custom')
       expect(body.book_date).toBe(todayIso())
+    })
+  })
+
+  it('khóa chống trùng ĐỔI sau mỗi lô thành công — lô sau không replay lô trước (review 6F-2 M-3)', async () => {
+    const fetchMock = mockServer({
+      ...pageRoutes(),
+      '/treasurer/queue/actions/book': { status: 200, body: { booked_count: 1 } },
+    })
+    const user = userEvent.setup()
+
+    renderFeatureAt('/tien-vao-tien-ra/thu-quy')
+
+    await user.click(await screen.findByLabelText('Chọn phiếu PT26-00001'))
+    await user.click(screen.getByRole('button', { name: 'Ghi sổ quỹ (1 phiếu)' }))
+    expect(await screen.findByText('Đã ghi sổ quỹ 1 phiếu.')).toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('Chọn phiếu PC26-00002'))
+    await user.click(screen.getByRole('button', { name: 'Ghi sổ quỹ (1 phiếu)' }))
+
+    await waitFor(() => {
+      const keys = fetchMock.mock.calls
+        .filter((entry) => String(entry[0]).endsWith('/treasurer/queue/actions/book'))
+        .map((entry) => new Headers((entry[1] as RequestInit).headers).get(IDEMPOTENCY_HEADER))
+      expect(keys).toHaveLength(2)
+      // Cùng khóa thì execute_once replay booked_count cũ — "Đã ghi N phiếu"
+      // trong khi không phiếu nào được ghi.
+      expect(keys[0]).not.toBe(keys[1])
     })
   })
 

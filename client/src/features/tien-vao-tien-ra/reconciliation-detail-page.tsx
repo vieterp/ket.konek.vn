@@ -6,8 +6,11 @@
  *
  * Khung phải khi KHÔNG chọn dòng nào = báo cáo lệch hai phía tính đến ngày sao
  * kê (`/bank/reconciliation`): chứng từ đã ghi sổ chưa thấy trên sao kê nào.
- * Dòng khớp ngoài phạm vi chi nhánh của người xem mang nhãn riêng (6E-1 H-1)
- * — server đã trả nhãn, client không đoán.
+ * LƯU Ý phạm vi chi nhánh (review 6F-2, M-1): REST API này KHÔNG mang nhãn
+ * ngoài-phạm-vi — dòng khớp với chứng từ ngoài chi nhánh của người xem chỉ
+ * hiện "Đã khớp" thường, và `unmatched_vouchers` bị RLS thu hẹp âm thầm.
+ * Nhãn 6E-1 H-1 sống ở BÁO CÁO metadata `doi-chieu-ngan-hang`, không ở đây;
+ * muốn nhãn trên màn này thì phải thêm trường thật vào API (việc 6G nếu cần).
  */
 
 import type { ReactElement, ReactNode } from 'react'

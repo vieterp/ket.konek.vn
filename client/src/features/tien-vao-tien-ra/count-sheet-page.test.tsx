@@ -67,8 +67,15 @@ describe('màn kiểm kê quỹ', () => {
       '/cash-book/count-sheets': {
         status: 200,
         body: {
-          items: [SHEET, { ...SHEET, id: 'cccccccc-0000-0000-0000-000000000002', difference: '0' }],
-          total: 2,
+          items: [
+            SHEET,
+            { ...SHEET, id: 'cccccccc-0000-0000-0000-000000000002', difference: '0' },
+            // Chênh 0 nhưng serialize scale khác ('0.000' — money.scale là
+            // cấu hình cấp người dùng, 6E-2): so CHUỖI '0'/'0.00' sẽ tưởng
+            // còn chênh và hiện nút (review 6F-2 M-6, mutation MC9 hoàn tác L-1).
+            { ...SHEET, id: 'cccccccc-0000-0000-0000-000000000003', difference: '0.000' },
+          ],
+          total: 3,
           page: 1,
           page_size: 50,
         },
@@ -77,8 +84,8 @@ describe('màn kiểm kê quỹ', () => {
 
     renderFeatureAt('/tien-vao-tien-ra/kiem-ke-quy')
 
-    expect(await screen.findAllByText('1111')).toHaveLength(2)
-    // Chỉ biên bản chênh 500.000 có nút; biên bản chênh 0 thì không.
+    expect(await screen.findAllByText('1111')).toHaveLength(3)
+    // Chỉ biên bản chênh 500.000 có nút; chênh 0 — kể cả dạng '0.00' — thì không.
     expect(screen.getAllByRole('button', { name: 'Tạo phiếu xử lý chênh lệch' })).toHaveLength(1)
   })
 

@@ -78,10 +78,15 @@ describe('sổ quỹ thủ quỹ', () => {
     expect(await screen.findByText('Tổng 120 dòng')).toBeInTheDocument()
     // `dateStyle: 'short'` của vi: '19/8/26'.
     expect(screen.getByText('19/8/26')).toBeInTheDocument()
+    // Trang 1 phải là offset=0 — khẳng định `some(offset=50)` đơn thuần thỏa
+    // được ngay ở trang 1 dưới đột biến lệch-trang (review 6F-2 M-5).
+    expect(requested).toHaveLength(1)
+    expect(requested[0]).toContain('offset=0')
 
     await user.click(screen.getByRole('button', { name: 'Trang sau' }))
     await waitFor(() => {
-      expect(requested.some((url) => url.includes('offset=50'))).toBe(true)
+      expect(requested).toHaveLength(2)
+      expect(requested[1]).toContain('offset=50')
     })
   })
 })

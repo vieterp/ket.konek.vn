@@ -188,9 +188,14 @@ export function ReconciliationPage(): ReactElement {
           />
         )}
 
-        {bankAccount !== null && (
+        {/* Mount CÓ ĐIỀU KIỆN + key theo TK (review 6F-2, H-1): drawer luôn
+            mount mà chỉ `return null` thì `file`/`profileId` sống qua lượt
+            Hủy và cả khi đổi TK — mở lại thấy ô tệp TRỐNG nhưng bấm Nhập gửi
+            tệp đã hủy, tệp của ngân hàng A nhập được vào tài khoản B. Unmount
+            là cách chắc nhất để state chết theo drawer. */}
+        {bankAccount !== null && drawerOpen && (
           <ImportStatementDrawer
-            open={drawerOpen}
+            key={String(bankAccount.id)}
             onClose={() => {
               setDrawerOpen(false)
             }}
@@ -203,11 +208,9 @@ export function ReconciliationPage(): ReactElement {
 }
 
 function ImportStatementDrawer({
-  open,
   onClose,
   bankAccount,
 }: {
-  readonly open: boolean
   readonly onClose: () => void
   readonly bankAccount: LookupOption
 }): ReactElement | null {
@@ -216,12 +219,8 @@ function ImportStatementDrawer({
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const profiles = useStatementProfiles(open ? bankAccount.id : null)
+  const profiles = useStatementProfiles(bankAccount.id)
   const importer = useImportStatement()
-
-  if (!open) {
-    return null
-  }
 
   const profileItems = profiles.data?.items ?? []
 
@@ -238,10 +237,7 @@ function ImportStatementDrawer({
     importer.mutate(
       { bankAccountId: bankAccount.id, profileId: Number.parseInt(profileId, 10), file },
       {
-        onSuccess: () => {
-          setFile(null)
-          onClose()
-        },
+        onSuccess: onClose,
         onError: (caught) => {
           setError(
             caught instanceof ApiError
@@ -255,7 +251,7 @@ function ImportStatementDrawer({
 
   return (
     <Drawer
-      open={open}
+      open
       onClose={onClose}
       title={t('cashflow.recon.import')}
       closeLabel={t('common.close')}
