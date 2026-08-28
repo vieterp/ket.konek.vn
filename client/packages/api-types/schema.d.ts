@@ -439,6 +439,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bank/statements/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Statement Profiles
+         * @description Hồ sơ định dạng dùng được cho MỘT tài khoản ngân hàng (lát 6F-2).
+         *
+         *     Ô chọn hồ sơ của màn nhập sao kê cần danh sách này; lọc theo ngân hàng của
+         *     tài khoản NGAY Ở ĐÂY vì `import_statement` từ chối hồ sơ khác ngân hàng —
+         *     đưa client tự ghép `bank_id` là mời một lượt 422 đoán được trước.
+         *
+         *     Khai TRƯỚC `/statements/{statement_id}`: FastAPI khớp theo thứ tự, đường
+         *     tĩnh đứng sau đường UUID sẽ thành 422 "profiles không phải UUID".
+         */
+        get: operations["list_statement_profiles_api_v1_bank_statements_profiles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/bank/statements/{statement_id}": {
         parameters: {
             query?: never;
@@ -7750,6 +7777,24 @@ export interface components {
              */
             statement_date: string;
         };
+        /** BankStatementProfileListResponse */
+        BankStatementProfileListResponse: {
+            /** Items */
+            items: components["schemas"]["BankStatementProfileOut"][];
+        };
+        /**
+         * BankStatementProfileOut
+         * @description Một hồ sơ định dạng sao kê — chỉ phần ô chọn cần: cách đọc cột là việc
+         *     của server lúc nhập, client không diễn giải.
+         */
+        BankStatementProfileOut: {
+            /** Bank Id */
+            bank_id: number;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
         /**
          * BankVoucherIn
          * @description Thân chứng từ tiền gửi cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).
@@ -13486,6 +13531,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MatchCandidatesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_statement_profiles_api_v1_bank_statements_profiles_get: {
+        parameters: {
+            query: {
+                bank_account_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementProfileListResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

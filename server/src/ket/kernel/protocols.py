@@ -369,11 +369,22 @@ class TreasurerVoucherSource(Protocol):
         ...
 
     def book(
-        self, session: Session, *, voucher_id: UUID, book_date: date | None, user_id: int
+        self,
+        session: Session,
+        *,
+        voucher_id: UUID,
+        book_date: date | None,
+        user_id: int,
+        today: date,
     ) -> TreasurerBookEntry:
-        """Kiểm (đã ghi sổ, đang chờ, BR-WHK-05) + lật trạng thái đã-ghi-sổ-quỹ,
-        trả dữ liệu dòng sổ quỹ để bên sổ ghi. `book_date=None` = theo ngày hạch
-        toán trên chứng từ (FR-WHK-003)."""
+        """Kiểm (đã ghi sổ, đang chờ, BR-WHK-05, ngày ghi sổ không ở tương lai)
+        + lật trạng thái đã-ghi-sổ-quỹ, trả dữ liệu dòng sổ quỹ để bên sổ ghi.
+        `book_date=None` = theo ngày hạch toán trên chứng từ (FR-WHK-003).
+
+        `today` do hàng đợi cấp MỘT lần cho cả lô (đồng hồ thuộc về nơi điều
+        phối; lô bắc qua nửa đêm không được nửa đậu nửa rớt) — sổ quỹ ghi việc
+        ĐÃ làm nên ngày ghi sổ hiệu lực không được vượt quá nó (quyết định user
+        2026-08-27)."""
         ...
 
 

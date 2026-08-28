@@ -15,6 +15,8 @@ export interface Violation {
   readonly message: string
   /** 1-based — khớp số dòng hiện trên lưới. */
   readonly line_no?: number
+  /** Chi tiết mở rộng — guard FR-SYS-062 đánh dấu `warning: 1` ở đây. */
+  readonly details?: Readonly<Record<string, unknown>>
 }
 
 function isViolation(value: unknown): value is Violation {
@@ -31,4 +33,16 @@ export function extractViolations(problem: ProblemDetails): readonly Violation[]
     return []
   }
   return raw.filter(isViolation)
+}
+
+/**
+ * Toàn bộ vi phạm đều là CẢNH BÁO xác nhận được (FR-SYS-062 mức "Cảnh báo")?
+ *
+ * Hợp đồng của `posting/engine/guards.py`: chỉ khi MỌI vi phạm mang
+ * `details.warning` thì gửi lại kèm `acknowledge_warnings=true` mới có nghĩa —
+ * lẫn một vi phạm chặn thì lượt gửi lại vẫn bị từ chối y nguyên, nên client
+ * chỉ hiện lỗi.
+ */
+export function allAcknowledgeableWarnings(violations: readonly Violation[]): boolean {
+  return violations.length > 0 && violations.every((violation) => Boolean(violation.details?.warning))
 }

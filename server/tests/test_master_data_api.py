@@ -1233,6 +1233,40 @@ def test_search_matches_code_prefix_or_name_and_skips_inactive(
     assert wildcard["items"] == []
 
 
+def test_search_exact_code_match_tops_the_page(client: TestClient, editor: dict[str, str]) -> None:
+    """Review 6F-2, H-2: lượt tra bù mã chiều lúc Cất đọc TRANG ĐẦU rồi so mã
+    tuyệt đối — mã ngắn (kiểu `AN`) mà thua các bản ghi TÊN chứa chuỗi đó thì
+    một mã hoàn toàn đúng bị báo "không tra được". Khớp-mã-tuyệt-đối phải xếp
+    đầu trang, bất kể thứ tự mã."""
+    marker = unique_code("EX")
+    exact_code = f"{marker}Z"
+    # 5 bản ghi mã xếp TRƯỚC mã cần tìm, tên chứa đúng chuỗi tìm — không ưu
+    # tiên exact match thì trang limit=5 chỉ toàn chúng.
+    for index in range(5):
+        create_record(
+            client,
+            editor,
+            PLAIN,
+            {"code": f"{marker}A{index}", "name": f"Kho mang tên {exact_code}"},
+        )
+    exact = create_record(client, editor, PLAIN, {"code": exact_code, "name": "Kho đúng mã"}).json()
+
+    page = client.get(
+        f"/api/v1/master/{PLAIN}",
+        params={"search": exact_code, "limit": 5},
+        headers=editor,
+    ).json()
+    assert page["items"][0]["id"] == exact["id"], page["items"]
+
+    # Không phân biệt hoa thường — cùng luật với phép khớp phía client.
+    lowered = client.get(
+        f"/api/v1/master/{PLAIN}",
+        params={"search": exact_code.lower(), "limit": 5},
+        headers=editor,
+    ).json()
+    assert lowered["items"][0]["id"] == exact["id"]
+
+
 def test_ids_hydrate_returns_inactive_rows_and_ignores_tree_params(
     client: TestClient, editor: dict[str, str]
 ) -> None:

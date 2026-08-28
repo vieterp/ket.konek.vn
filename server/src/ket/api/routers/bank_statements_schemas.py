@@ -55,6 +55,21 @@ class BankStatementListResponse(BaseModel):
     items: tuple[BankStatementOut, ...]
 
 
+class BankStatementProfileOut(BaseModel):
+    """Một hồ sơ định dạng sao kê — chỉ phần ô chọn cần: cách đọc cột là việc
+    của server lúc nhập, client không diễn giải."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    bank_id: int
+    name: str
+
+
+class BankStatementProfileListResponse(BaseModel):
+    items: tuple[BankStatementProfileOut, ...]
+
+
 class BankStatementLineOut(BaseModel):
     """Một dòng sao kê + trạng thái khớp (U5: dòng đã khớp mờ đi)."""
 

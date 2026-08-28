@@ -19,6 +19,8 @@ export interface JournalVoucherActionsFooterProps {
   readonly voucherStatus: number | null
   /** `null` khi chứng từ chưa lưu — nút In chỉ có nghĩa với chứng từ đã lưu. */
   readonly voucherId: string | null
+  /** Mã loại chứng từ — để nút In tra danh sách mẫu (hộp chọn mẫu, nợ 6E-2). */
+  readonly documentType?: string | null
   readonly readOnly: boolean
   readonly busy: boolean
   readonly confirmDelete: boolean
@@ -32,6 +34,7 @@ export interface JournalVoucherActionsFooterProps {
 export function JournalVoucherActionsFooter({
   voucherStatus,
   voucherId,
+  documentType = null,
   readOnly,
   busy,
   confirmDelete,
@@ -66,7 +69,7 @@ export function JournalVoucherActionsFooter({
             có chủ đích so với quy ước "footer không tự gọi mutation": in không
             đổi trạng thái chứng từ nên không đụng state busy/lỗi của form. */}
         {voucherId !== null && (
-          <PrintVoucherButton voucherId={voucherId} disabled={busy} />
+          <PrintVoucherButton voucherId={voucherId} disabled={busy} documentType={documentType} />
         )}
       </div>
       <div className="flex gap-2">

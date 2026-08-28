@@ -224,14 +224,23 @@ class MasterDataService[ModelT: MasterDataRow]:
             select(self._model)
             .where(self._visible_to(branch_id))
             .where(self._model.is_active.is_(True))
-            .order_by(self._model.code)
         )
         stripped = term.strip()
         if stripped:
+            # Khớp MÃ TUYỆT ĐỐI (không phân biệt hoa thường) là một vế WHERE
+            # riêng và xếp ĐẦU trang (review 6F-2, H-2): lượt tra bù lúc Cất
+            # chứng từ đọc trang đầu rồi so mã tuyệt đối — mã ngắn kiểu `AN`
+            # mà thua 20 bản ghi tên chứa "an", hoặc gõ thường trong khi mã
+            # lưu hoa (prefix LIKE phân biệt hoa thường), thì một mã HOÀN TOÀN
+            # ĐÚNG bị báo "không tra được".
+            exact_code = func.lower(self._model.code) == stripped.lower()
             statement = statement.where(
-                self._model.code.startswith(stripped, autoescape=True)
+                exact_code
+                | self._model.code.startswith(stripped, autoescape=True)
                 | self._model.name.icontains(stripped, autoescape=True)
-            )
+            ).order_by(exact_code.desc(), self._model.code)
+        else:
+            statement = statement.order_by(self._model.code)
         return self._page(self._with_flag(statement, flag_column), limit=limit, offset=offset)
 
     def by_ids(self, ids: Sequence[int], *, branch_id: int | None = None) -> Page[ModelT]:

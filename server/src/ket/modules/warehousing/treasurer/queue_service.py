@@ -50,11 +50,20 @@ def book_vouchers(
     voucher_ids: Sequence[UUID],
     book_date: date | None,
     user_id: int,
+    today: date | None = None,
 ) -> list[TreasurerBookEntry]:
     """Ghi sổ quỹ hàng loạt (FR-WHK-002/003) — một transaction cho cả lô.
 
     `book_date=None` = theo ngày hạch toán trên từng chứng từ; một ngày cụ thể
-    áp cho cả lô và phải ≥ ngày hạch toán của TỪNG phiếu (BR-WHK-05, nguồn kiểm).
+    áp cho cả lô và phải ≥ ngày hạch toán của TỪNG phiếu (BR-WHK-05, nguồn kiểm)
+    và ≤ `today` — sổ quỹ ghi việc ĐÃ làm, không ghi trước việc chưa làm (quyết
+    định user 2026-08-27; nguồn kiểm trên ngày hiệu lực nên phủ cả chế độ theo
+    ngày chứng từ).
+
+    `today=None` = ngày hiện tại theo đồng hồ máy chủ, tính MỘT lần cho cả lô
+    (lô bắc qua nửa đêm không được nửa đậu nửa rớt). Ngày ĐỊA PHƯƠNG chứ không
+    UTC: hệ chạy LAN cùng múi giờ người dùng (LD-01), lấy UTC là từ chối oan
+    mọi lượt ghi sổ trước 7 giờ sáng. Tham số để test tiêm đồng hồ cố định.
 
     **Không đòi phân hệ bật** (review 6C, M-1): tắt `treasurer.enabled` giữa
     chừng để lại phiếu treo trạng thái chờ; hàng đợi cho thấy chúng thì phải
@@ -74,11 +83,20 @@ def book_vouchers(
         raise RuntimeError("Không có TreasurerVoucherSource trong tiến trình")
     book = TreasurerCashBookImpl()
     entries_by_id: dict[UUID, TreasurerBookEntry] = {}
+    # Ngày ĐỊA PHƯƠNG có chủ đích (DTZ011) — hệ chạy LAN cùng múi giờ người
+    # dùng (LD-01); lấy UTC là từ chối oan mọi lượt ghi sổ trước 7 giờ sáng.
+    clock_today = today if today is not None else date.today()  # noqa: DTZ011
     # Khóa theo thứ tự ỔN ĐỊNH (sort id) chứ không theo thứ tự người gọi đưa:
     # hai lô đồng thời chọn chồng nhau theo hai thứ tự ngược nhau là deadlock
     # 40P01 → 500 (review 6C, LOW-4).
     for voucher_id in sorted(voucher_ids):
-        entry = source.book(session, voucher_id=voucher_id, book_date=book_date, user_id=user_id)
+        entry = source.book(
+            session,
+            voucher_id=voucher_id,
+            book_date=book_date,
+            user_id=user_id,
+            today=clock_today,
+        )
         book.record(session, entry)
         entries_by_id[voucher_id] = entry
     return [entries_by_id[voucher_id] for voucher_id in voucher_ids]

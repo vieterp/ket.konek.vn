@@ -35,6 +35,13 @@ export interface LookupInputProps {
   readonly error?: string | null | undefined
   /** Câu giải thích dưới ô — ví dụ vì sao ô bị khóa (trường chỉ khai lúc tạo). */
   readonly hint?: string | undefined
+  /**
+   * Báo chuỗi đang gõ cho chỗ gọi — dành cho danh mục LỚN mà `options` không
+   * nạp trọn được: chỗ gọi tra server (`search=`) rồi đưa kết quả trở lại qua
+   * `options`; ô vẫn tự lọc tại chỗ trên danh sách đã gộp. Không truyền thì
+   * hành vi giữ nguyên như combobox nạp sẵn.
+   */
+  readonly onQueryChange?: ((query: string) => void) | undefined
 }
 
 const MAX_SUGGESTIONS = 20
@@ -50,6 +57,7 @@ export function LookupInput({
   disabled = false,
   error = null,
   hint,
+  onQueryChange,
 }: LookupInputProps): ReactElement {
   const inputId = useId()
   const listId = useId()
@@ -156,6 +164,7 @@ export function LookupInput({
               setQuery(event.target.value)
               setOpen(true)
               setActiveIndex(0)
+              onQueryChange?.(event.target.value)
             }}
             onFocus={() => {
               setOpen(true)

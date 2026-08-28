@@ -1065,6 +1065,46 @@
         "title": "BankStatementOut",
         "type": "object"
       },
+      "BankStatementProfileListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BankStatementProfileOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BankStatementProfileListResponse",
+        "type": "object"
+      },
+      "BankStatementProfileOut": {
+        "description": "Một hồ sơ định dạng sao kê — chỉ phần ô chọn cần: cách đọc cột là việc\ncủa server lúc nhập, client không diễn giải.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "name"
+        ],
+        "title": "BankStatementProfileOut",
+        "type": "object"
+      },
       "BankVoucherIn": {
         "additionalProperties": false,
         "description": "Thân chứng từ tiền gửi cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).",
@@ -15141,7 +15181,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.21.0"
+    "version": "0.22.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -16080,6 +16120,50 @@
           }
         },
         "summary": "Statement Line Candidates",
+        "tags": [
+          "bank-statements"
+        ]
+      }
+    },
+    "/api/v1/bank/statements/profiles": {
+      "get": {
+        "description": "Hồ sơ định dạng dùng được cho MỘT tài khoản ngân hàng (lát 6F-2).\n\nÔ chọn hồ sơ của màn nhập sao kê cần danh sách này; lọc theo ngân hàng của\ntài khoản NGAY Ở ĐÂY vì `import_statement` từ chối hồ sơ khác ngân hàng —\nđưa client tự ghép `bank_id` là mời một lượt 422 đoán được trước.\n\nKhai TRƯỚC `/statements/{statement_id}`: FastAPI khớp theo thứ tự, đường\ntĩnh đứng sau đường UUID sẽ thành 422 \"profiles không phải UUID\".",
+        "operationId": "list_statement_profiles_api_v1_bank_statements_profiles_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bank_account_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Bank Account Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankStatementProfileListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Statement Profiles",
         "tags": [
           "bank-statements"
         ]

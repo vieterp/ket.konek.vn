@@ -155,11 +155,15 @@ def books(
 
         # Chỉ phiếu THU được thủ quỹ ghi sổ quỹ; phiếu CHI ở lại hàng đợi để
         # báo cáo chênh lệch có đúng một dòng biết trước.
+        # Dữ liệu dựng ở ngày cố định tháng 10/2026 — tiêm đồng hồ ĐÚNG ngày đó:
+        # trần "sổ quỹ không ghi tương lai" so với đồng hồ thật sẽ từ chối oan
+        # (và test này phải chạy được ở mọi năm sau).
         book_vouchers(
             session,
             voucher_ids=[receipt.id],
             book_date=None,
             user_id=ACTOR_ID,
+            today=OCT_05,
         )
 
         bank = BankVoucherService(session)

@@ -29,9 +29,20 @@ export interface AccountMaps {
   readonly byCode: ReadonlyMap<string, Account>
 }
 
+export interface MissingDimensionCode {
+  readonly slug: string
+  readonly code: string
+}
+
 export interface ResolveLinesResult {
   readonly lines: readonly JournalLineIn[]
   readonly errors: readonly string[]
+  /**
+   * Mã chiều gõ vào nhưng không có trong bản đồ ĐANG CÓ — danh mục lớn hơn
+   * trang seed 200 dòng (nợ M-B 6F-1). Form tra server các mã này rồi rà lại;
+   * mã sai thật thì lượt rà thứ hai vẫn báo đúng `errors` cũ.
+   */
+  readonly missing: readonly MissingDimensionCode[]
 }
 
 export function resolveLines(
@@ -42,6 +53,7 @@ export function resolveLines(
 ): ResolveLinesResult {
   const lines: JournalLineIn[] = []
   const errors: string[] = []
+  const missing: MissingDimensionCode[] = []
 
   rows.forEach((row, index) => {
     if (isLineRowEmpty(row)) {
@@ -88,6 +100,11 @@ export function resolveLines(
       const options = slug === undefined ? undefined : dimensionOptions[slug]
       const match = options?.find((option) => option.code.toLowerCase() === typed.toLowerCase())
       if (match === undefined) {
+        // `order` không có slug (danh mục thuộc phase 7) — không có gì để tra
+        // bù, lỗi đứng nguyên.
+        if (slug !== undefined) {
+          missing.push({ slug, code: typed })
+        }
         errors.push(
           t('gl.line.error.dimensionUnresolved', {
             row: rowNumber,
@@ -115,5 +132,5 @@ export function resolveLines(
     }
   })
 
-  return { lines, errors }
+  return { lines, errors, missing }
 }
