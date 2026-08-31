@@ -27,15 +27,13 @@ from decimal import Decimal
 from sqlalchemy import func, literal, select
 from sqlalchemy.orm import Session
 
-from ket.kernel.config.accounts_models import ChartOfAccount
+from ket.kernel.config.accounts_models import (
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+    ChartOfAccount,
+)
 from ket.kernel.periods.service import fiscal_year_covering
-from ket.modules.bank.posting_mapper import MONEY_ACCOUNT_CODE_PREFIXES
 from ket.posting.engine.models import GlPosting
 from ket.posting.opening_balances.models import OpeningBalance
-
-DEPOSIT_ACCOUNT_CODE_PREFIX = MONEY_ACCOUNT_CODE_PREFIXES[1]
-"""Chỉ nhóm 112 — dòng 111x của một chứng từ chạm cả hai nhóm tiền (nộp/rút
-tiền mặt) thuộc quỹ, không thuộc TK ngân hàng nào."""
 
 ZERO = Decimal(0)
 

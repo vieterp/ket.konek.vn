@@ -510,6 +510,24 @@ def _require_bank_account_tracking(rows: list[AccountRow]) -> None:
             file=ACCOUNTS_FILE,
             accounts=", ".join(sorted(missing)),
         )
+    # …và CHỈ tài khoản tiền gửi được khai nó. Hai nửa luật nằm ở hai chỗ:
+    # mapper GÁN chiều theo TIỀN TỐ mã, còn validator ĐÒI theo `detail_tracking`.
+    # Một TK ngoài nhóm 112 khai chiều này vì thế thành TK **không ghi sổ nổi** —
+    # validator đòi, mà không đường ghi nào điền (review pre-landing vòng 2 M-1).
+    # Đường tới thật là gói nhập từ `.zip`, nên phép cấm phải ở loader.
+    stray = [
+        row.code
+        for row in rows
+        if not row.code.startswith(DEPOSIT_ACCOUNT_CODE_PREFIX)
+        and DetailTracking.BANK_ACCOUNT in row.detail_tracking
+    ]
+    if stray:
+        raise _fail(
+            f"Chỉ TK tiền gửi (mã bắt đầu `{DEPOSIT_ACCOUNT_CODE_PREFIX}`) được khai "
+            f"`{DetailTracking.BANK_ACCOUNT}`: {', '.join(sorted(stray))}",
+            file=ACCOUNTS_FILE,
+            accounts=", ".join(sorted(stray)),
+        )
 
 
 def _load_default_accounts(text: str, known_codes: frozenset[str]) -> tuple[DefaultAccountRow, ...]:

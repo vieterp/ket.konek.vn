@@ -33,7 +33,10 @@ from sqlalchemy import ColumnElement, exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ket.kernel.config.accounts_models import ChartOfAccount
+from ket.kernel.config.accounts_models import (
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+    ChartOfAccount,
+)
 from ket.kernel.errors import (
     BankStatementMatchInvalidError,
     BankStatementMatchStateError,
@@ -46,7 +49,6 @@ from ket.modules.bank.models import (
     BankVoucher,
     StatementMatchKind,
 )
-from ket.modules.bank.posting_mapper import MONEY_ACCOUNT_CODE_PREFIXES
 from ket.posting.documents.models import Voucher, VoucherStatus
 from ket.posting.engine.models import GlPosting, Ledger
 
@@ -54,7 +56,7 @@ AUTO_MATCH_DATE_WINDOW_DAYS: Final[int] = 3
 """±3 ngày (`docs/srs/04` §4.3): lệnh chi lập cuối ngày ngân hàng xử lý hôm
 sau, giao dịch cuối tuần vào sổ thứ hai — cùng con số phase file bước 14."""
 
-_DEPOSIT_PREFIX: Final[str] = MONEY_ACCOUNT_CODE_PREFIXES[1]
+_DEPOSIT_PREFIX: Final[str] = DEPOSIT_ACCOUNT_CODE_PREFIX
 
 
 @dataclass(frozen=True)

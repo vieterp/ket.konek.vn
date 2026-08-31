@@ -33,7 +33,10 @@ from ket.api.routers.cashflow_schemas import (
     CashflowTransaction,
     CashflowTransactionsResponse,
 )
-from ket.kernel.config.accounts_models import ChartOfAccount
+from ket.kernel.config.accounts_models import (
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+    ChartOfAccount,
+)
 from ket.kernel.contracts import Ledger
 from ket.kernel.currency.models import Currency
 from ket.kernel.errors import PermissionDeniedError
@@ -50,10 +53,7 @@ from ket.modules.bank import (
     INTERNAL_TRANSFER_PERMISSION_CODE,
     PAYMENT_ORDER_PERMISSION_CODE,
 )
-from ket.modules.bank.balance_service import (
-    DEPOSIT_ACCOUNT_CODE_PREFIX,
-    deposit_balances_as_of,
-)
+from ket.modules.bank.balance_service import deposit_balances_as_of
 from ket.modules.bank.models import BankVoucher
 from ket.modules.cash_book import (
     CASH_PERMISSION_MODULE,

@@ -15,6 +15,8 @@
 --   TK nguồn của mọi chứng từ + TK đích của chuyển nội bộ (nợ 6A).
 -- * `cash_book` (lát 6G-1): thêm chiều `bank_account` trên dòng phiếu quỹ —
 --   cùng danh mục `company_bank_accounts`.
+-- * sao kê ngân hàng (`bank_statements`, nhánh bổ sung ở 6G-1): mỗi sao kê đã
+--   nhập giữ một tham chiếu tới TK ngân hàng của nó.
 --
 -- Bút toán tổng hợp (`gl_journal_lines`) cố ý ĐỨNG NGOÀI bộ đếm, như từ đầu:
 -- nó không gọi `record_use` cho chiều nào cả. Vì thế lượt chuyển số dư đầu năm
@@ -59,6 +61,12 @@ bank_account_refs AS (
         -- năm sau đổ nếu TK biến mất (review pre-landing H-B).
         SELECT bank_account_id FROM cash_voucher_lines
         WHERE bank_account_id IS NOT NULL
+        UNION ALL
+        -- Nhập sao kê cũng `record_use` (`statement_import`) nhưng nhánh này
+        -- thiếu từ lát 6D, nên check ĐỎ ngay lượt nhập sao kê đầu tiên —
+        -- bộ đếm nói 1, phía tham chiếu nói 0 (review pre-landing vòng 2 H-1).
+        -- Lập luận H-B của lát này viện dẫn chính check ấy, nên nó phải đúng.
+        SELECT bank_account_id FROM bank_statements
     ) refs
 ),
 counted AS (

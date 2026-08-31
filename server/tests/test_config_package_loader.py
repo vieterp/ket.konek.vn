@@ -295,3 +295,24 @@ def test_a_summary_deposit_account_needs_no_dimension() -> None:
     )
     loaded = load_package_from_texts(_valid_texts(**{ACCOUNTS_FILE: accounts}))
     assert [row.code for row in loaded.accounts] == ["111", "112", "1121", "131"]
+
+
+def test_a_non_deposit_account_may_not_declare_the_bank_dimension() -> None:
+    """Review pre-landing vòng 2 M-1 — chiều này CHỈ thuộc nhóm 112.
+
+    Mapper gán chiều theo TIỀN TỐ mã, validator đòi theo `detail_tracking`. Một
+    TK ngoài 112 khai chiều ấy vì thế thành TK **không ghi sổ nổi**: validator
+    đòi, mà không đường ghi nào điền — và lỗi chỉ lộ ra khi kế toán đã gõ xong
+    một chứng từ. Gói nhập từ `.zip` là đường tới thật.
+    """
+    accounts = (
+        "code,name,name_en,parent_code,balance_nature,is_summary,is_foreign_currency,"
+        "detail_tracking,is_locked\n"
+        "111,Tiền mặt,,,0,0,0,,1\n"
+        "112,Tiền gửi ngân hàng,,,0,1,0,,1\n"
+        "1121,Tiền gửi VND,,112,0,0,0,bank_account,0\n"
+        "131,Phải thu của khách hàng,,,2,0,0,bank_account,1\n"
+    )
+    with pytest.raises(ConfigPackageDataInvalidError) as refused:
+        load_package_from_texts(_valid_texts(**{ACCOUNTS_FILE: accounts}))
+    assert "131" in str(refused.value)

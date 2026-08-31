@@ -23,10 +23,12 @@ from collections.abc import Sequence
 from sqlalchemy import func, literal, select
 from sqlalchemy.orm import Session
 
-from ket.kernel.config.accounts_models import ChartOfAccount
+from ket.kernel.config.accounts_models import (
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+    ChartOfAccount,
+)
 from ket.kernel.periods.models import AccountingPeriod
 from ket.kernel.protocols import PROVIDERS, BankAccountMovement
-from ket.modules.bank.balance_service import DEPOSIT_ACCOUNT_CODE_PREFIX
 from ket.posting.engine.models import GlPosting
 
 

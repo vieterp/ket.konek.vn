@@ -7,9 +7,9 @@ mapper trải thành hai `PostingLine` một bên, hai sổ ghi giống nhau
 Chiều phân tích gắn vào **bên nghiệp vụ** — nhưng khác phiếu quỹ, thân chứng
 từ tiền gửi không mang TK kế toán (nó mang tài khoản ngân hàng DANH MỤC,
 FR-BNK-002; TK 112x nằm trên dòng). Bên tiền nhận diện theo **số hiệu TK nhóm
-tiền** (`MONEY_ACCOUNT_CODE_PREFIXES` — cùng doctrine với
-`CASH_ACCOUNT_CODE_PREFIXES` của guard 6B: nhóm 111/112 = tiền là bất biến
-SRS-định-nghĩa của cả hai chế độ kế toán, không phải đích cấu hình): bên tiền
+tiền** (`MONEY_ACCOUNT_CODE_PREFIXES`, ghép từ hai hằng kernel: nhóm 111/112 =
+tiền là bất biến SRS-định-nghĩa của cả hai chế độ kế toán, không phải đích cấu
+hình): bên tiền
 không nhận chiều khi bên kia là bên nghiệp vụ; dòng cả hai bên cùng là tiền
 (chuyển nội bộ 112↔112) hay không bên nào là tiền thì cả hai cùng nhận —
 đúng luật của phiếu quỹ, chỉ khác cách nhận diện bên tiền.
@@ -27,6 +27,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ket.kernel.config.accounts_models import (
+    CASH_ON_HAND_CODE_PREFIX,
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+)
 from ket.kernel.config.accounts_provider import accounts_by_id
 from ket.kernel.errors import PostingValidationError, PostingViolation
 from ket.modules.bank.models import (
@@ -55,15 +59,14 @@ _MONEY_IN_BY_KIND = {
     BankVoucherKind.CHEQUE: False,
 }
 
-MONEY_ACCOUNT_CODE_PREFIXES = ("111", "112")
-"""Nhóm TK tiền — bên không nhận chiều phân tích. Literal số hiệu CÓ CHỦ ĐÍCH,
-cùng lập luận `CASH_ACCOUNT_CODE_PREFIXES` (cash_book/guards.py, không import
-được vì luật module #1): nhóm 111/112 = tiền do chính SRS định nghĩa và là bất
-biến chung của TT99 lẫn TT133; chế độ tương lai đổi nhóm TK tiền thì chỗ sửa
-là MỘT hằng này."""
+MONEY_ACCOUNT_CODE_PREFIXES = (CASH_ON_HAND_CODE_PREFIX, DEPOSIT_ACCOUNT_CODE_PREFIX)
+"""Nhóm TK tiền — bên không nhận chiều phân tích.
 
-DEPOSIT_ACCOUNT_CODE_PREFIX = MONEY_ACCOUNT_CODE_PREFIXES[1]
-"""Nhóm 112 — bên mang chiều `bank_account`."""
+Ghép từ hai hằng của **kernel** thay vì viết lại literal: lát 6G-1 đưa cả hai về
+`kernel/config/accounts_models` đúng vì chỗ này từng khai "không import được vì
+luật module #1" — đúng với `cash_book/guards.py` (module ↛ module) nhưng SAI với
+kernel, mà mọi tầng đều import được.
+"""
 
 
 def _deposit_owner(body: BankVoucher, *, debit_side: bool) -> int:

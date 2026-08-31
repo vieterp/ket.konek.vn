@@ -26,7 +26,7 @@ from decimal import Decimal
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Engine, select, update
+from sqlalchemy import Engine, select, text, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from bank_support import ensure_company_bank_account, seed_bank_package_data
@@ -34,6 +34,10 @@ from cash_book_support import seed_cash_book_package_data
 from ket.kernel.config.accounts_models import ChartOfAccount, DetailTracking
 from ket.kernel.datasets.provisioning import DatasetRef, drop_dataset_schema, provision_dataset
 from ket.kernel.errors import PostingValidationError
+from ket.kernel.master_data.models.company_bank_account import (
+    COMPANY_BANK_ACCOUNT_TABLE_NAME,
+)
+from ket.kernel.master_data.usage import record_use, usage_count_of
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.modules.bank.balance_service import deposit_balances_as_of
 from ket.modules.bank.models import (
@@ -50,6 +54,7 @@ from ket.modules.cash_book.models import CashVoucherKind
 from ket.modules.cash_book.schemas import CashVoucherIn, CashVoucherLineIn
 from ket.modules.cash_book.service import CashVoucherService
 from ket.posting.engine.models import GlPosting, Ledger
+from ket.posting.integrity.checks.registry import check_of
 from posting_support import PostingContext, posting_scope, seed_posting_context
 
 pytestmark = pytest.mark.db
@@ -399,6 +404,10 @@ def _seed_statement(
         )
         session.flush()
         sync_statement_branch(session, bank_account_id=bank_account_id)
+        # Đường nhập thật `record_use` cho TK ngân hàng; gieo tay mà bỏ bước ấy
+        # thì check `usage_counter_accurate` đỏ vì CHÍNH dữ liệu của test — và
+        # nó đỏ đúng, vì nhánh `bank_statements` nay có trong câu kiểm.
+        record_use(session, entity_type=COMPANY_BANK_ACCOUNT_TABLE_NAME, entity_id=bank_account_id)
         return statement.id
 
 
@@ -473,3 +482,70 @@ def test_the_merge_hook_moves_the_branch_with_the_account(
             ).all()
         )
         assert line_branches == {other_context.branch_id}
+
+
+class TestUsageCounterCountsTheDimension:
+    """Review pre-landing vòng 2 H-2 — LỚP 3 của bản vá H-B không có test nào.
+
+    Đo được: gỡ nhánh đếm khỏi `_usage_of`, khỏi `_usage_of_stored`, khỏi cả
+    hai, hay gỡ nhánh SQL của check toàn vẹn — cả bốn đều SỐNG qua năm tệp test.
+    Nghĩa là cơ chế trả lời H-B (không cho xóa TK ngân hàng mà sổ đang trỏ tới)
+    có thể biến mất trọn vẹn mà mọi cổng vẫn xanh.
+
+    Vì sao nó quan trọng: `gl_postings.bank_account_id` cố ý KHÔNG có khóa
+    ngoại, còn `opening_balances.bank_account_id` thì CÓ — nên bộ đếm là thứ duy
+    nhất đứng giữa "xóa một dòng danh mục" và "lượt khóa sổ cuối năm đổ".
+    """
+
+    def test_a_cash_voucher_line_holds_the_account_and_releases_it(
+        self, run: Runner, context: PostingContext, accounts: dict[str, int], vcb: int
+    ) -> None:
+        """Đếm lên khi lưu, xuống khi xóa — `_usage_of` và `_usage_of_stored`
+        phải ĐỐI XỨNG, lệch thì check toàn vẹn đỏ ở lượt sau."""
+
+        def work(session: Session) -> object:
+            before = usage_count_of(
+                session, entity_type=COMPANY_BANK_ACCOUNT_TABLE_NAME, entity_id=vcb
+            )
+            service = CashVoucherService(session)
+            voucher = service.create(
+                _withdrawal(context, accounts, bank_account_id=vcb), user_id=ACTOR_ID
+            )
+            assert (
+                usage_count_of(session, entity_type=COMPANY_BANK_ACCOUNT_TABLE_NAME, entity_id=vcb)
+                == before + 1
+            )
+            service.delete(voucher.id)
+            assert (
+                usage_count_of(session, entity_type=COMPANY_BANK_ACCOUNT_TABLE_NAME, entity_id=vcb)
+                == before
+            )
+            return None
+
+        run(work)
+
+    def test_the_integrity_check_sees_the_same_references_the_service_counts(
+        self, run: Runner, context: PostingContext, accounts: dict[str, int], vcb: int
+    ) -> None:
+        """Hai vế của cùng một sự thật: dịch vụ đếm, check đối chiếu. Nhánh SQL
+        thiếu thì check ĐỎ trên chính dữ liệu hợp lệ."""
+
+        def work(session: Session) -> object:
+            service = CashVoucherService(session)
+            voucher = service.create(
+                _withdrawal(context, accounts, bank_account_id=vcb), user_id=ACTOR_ID
+            )
+            sql = check_of("usage_counter_accurate").sql()
+            # Chỉ soi TK đang kiểm: các bài khác trong tệp gieo sao kê và gộp
+            # danh mục bằng SQL thẳng nên cố ý để lại lệch — cùng lối lọc với
+            # `test_bank_voucher_service_flow`.
+            flagged = {
+                (row.entity_type, row.entity_id)
+                for row in session.execute(text(sql), {"branch_id": context.branch_id}).all()
+                if row.entity_type == COMPANY_BANK_ACCOUNT_TABLE_NAME and row.entity_id == vcb
+            }
+            assert flagged == set(), flagged
+            service.delete(voucher.id)
+            return None
+
+        run(work)

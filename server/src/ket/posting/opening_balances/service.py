@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from ket.kernel.auditing.listener import record_action
 from ket.kernel.auditing.models import AuditAction
 from ket.kernel.config.accounts_models import (
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
     BalanceNature,
     ChartOfAccount,
     DetailTracking,
@@ -315,13 +316,6 @@ def _partner_errors(
             )
         ]
     return partner.id, []
-
-
-DEPOSIT_ACCOUNT_CODE_PREFIX: Final[str] = "112"
-"""Nhóm TK tiền gửi — cùng doctrine với `MONEY_ACCOUNT_CODE_PREFIXES` của
-mapper tiền gửi (không import được: `posting` không import `modules.*`, luật
-phụ thuộc C4): nhóm 112 = tiền gửi do chính SRS định nghĩa và là bất biến
-chung của TT99 lẫn TT133; chế độ tương lai đổi nhóm thì chỗ sửa là MỘT hằng."""
 
 
 def _bank_account_errors(

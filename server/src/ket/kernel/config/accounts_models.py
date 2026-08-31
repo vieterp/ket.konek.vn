@@ -64,6 +64,9 @@ class BalanceNature:
     """Không có số dư (loại 5–9 kết chuyển hết cuối kỳ)."""
 
 
+CASH_ON_HAND_CODE_PREFIX = "111"
+"""Nhóm TK tiền mặt tại quỹ — cặp đôi của hằng ngay dưới."""
+
 DEPOSIT_ACCOUNT_CODE_PREFIX = "112"
 """Nhóm TK tiền gửi ngân hàng.
 

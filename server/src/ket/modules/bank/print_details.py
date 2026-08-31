@@ -22,7 +22,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ket.kernel.config.accounts_models import ChartOfAccount
+from ket.kernel.config.accounts_models import (
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+    ChartOfAccount,
+)
 from ket.kernel.config.printing.context import DocumentPrintDetails, PrintField
 from ket.kernel.config.printing.voucher_fields import (
     MoneyLine,
@@ -38,7 +41,6 @@ from ket.kernel.master_data.models.company_bank_account import CompanyBankAccoun
 from ket.kernel.master_data.models.employee import Employee
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.money_words import amount_in_words
-from ket.modules.bank.balance_service import DEPOSIT_ACCOUNT_CODE_PREFIX
 from ket.modules.bank.models import BankVoucher, BankVoucherKind, BankVoucherLine
 from ket.posting.contracts import Voucher
 
