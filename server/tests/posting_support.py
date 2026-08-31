@@ -32,6 +32,7 @@ from ket.kernel.periods.models import (
 )
 from ket.kernel.periods.service import PeriodService
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.models import Branch
 
 SEED_ACTOR_ID = 1
 
@@ -199,6 +200,23 @@ def seed_posting_context(
         package_id=package_id,
         accounts=accounts,
     )
+
+
+def ensure_second_branch(session_factory: sessionmaker[Session], dataset: DatasetRef) -> str:
+    """Mã của một chi nhánh KHÁC chi nhánh đầu tiên, tạo mới nếu chưa có.
+
+    `dataset_alpha` là dataset dùng chung ở mức session: chạy CẢ BỘ thì nhiều
+    tệp đã tạo sẵn vài chi nhánh, chạy RIÊNG một tệp thì chỉ có một. Bài test
+    nào phân biệt "trọn phạm vi" với "phạm vi hẹp" mà dựa vào may rủi ấy là bài
+    test phụ thuộc thứ tự tệp — nó xanh trong CI và đỏ trên máy người sửa nó.
+    """
+    with unit_of_work(session_factory, _seed_scope(dataset)) as session:
+        codes = list(session.scalars(select(Branch.code).order_by(Branch.id)).all())
+        if len(codes) > 1:
+            return codes[-1]
+        code = f"PB{uuid4().hex[:6].upper()}"
+        BranchService(session).create(code=code, name=f"Chi nhánh {code}")
+        return code
 
 
 def seed_posting_context_on_builtin(

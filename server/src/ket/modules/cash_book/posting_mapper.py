@@ -172,5 +172,6 @@ def _line_dimensions(line: CashVoucherLine) -> PostingDimensions:
         expense_item_id=line.expense_item_id,
         item_id=line.item_id,
         warehouse_id=line.warehouse_id,
+        bank_account_id=line.bank_account_id,
         extended=extended,
     )

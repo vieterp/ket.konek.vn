@@ -37,6 +37,7 @@ export const DIMENSION_CATALOG_SLUG: Readonly<Partial<Record<string, string>>> =
   expense_item: 'expense_items',
   item: 'items',
   warehouse: 'warehouses',
+  bank_account: 'company_bank_accounts',
 }
 
 /** Trường trên `JournalLineIn` nhận id đã tra được — trừ đối tượng (dùng `partner_id`/`partner_kind`). */
@@ -48,6 +49,7 @@ export const DIMENSION_LINE_FIELD: Readonly<Partial<Record<string, string>>> = {
   expense_item: 'expense_item_id',
   item: 'item_id',
   warehouse: 'warehouse_id',
+  bank_account: 'bank_account_id',
 }
 
 export interface DimensionColumn {
@@ -68,4 +70,5 @@ export const DIMENSION_COLUMNS: readonly DimensionColumn[] = [
   { key: 'expense_item', headerKey: 'gl.dim.expenseItem', values: ['expense_item'] },
   { key: 'item', headerKey: 'gl.dim.item', values: ['item'] },
   { key: 'warehouse', headerKey: 'gl.dim.warehouse', values: ['warehouse'] },
+  { key: 'bank_account', headerKey: 'gl.dim.bankAccount', values: ['bank_account'] },
 ]

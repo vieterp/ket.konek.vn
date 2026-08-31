@@ -513,16 +513,18 @@ class TestModulePermissionGate:
             refused = client.post(f"/api/v1/reports/{code}/preview", json=body, headers=headers)
             assert refused.status_code == 403, f"{code}: {refused.text}"
 
-        # Bộ sổ tổng hợp giữ nguyên thế đứng cũ (`NULL` = không cổng phụ).
-        allowed = client.post("/api/v1/reports/S03a-DN/preview", json=body, headers=headers)
-        assert allowed.status_code == 200, allowed.text
+        # Bộ sổ tổng hợp đóng cổng `general_ledger` từ lát 6G-1: nó đọc
+        # `gl_postings` của MỌI phân hệ, nên "được dùng chức năng báo cáo" một
+        # mình là cổng lỏng nhất trong cả danh mục.
+        refused_ledger = client.post("/api/v1/reports/S03a-DN/preview", json=body, headers=headers)
+        assert refused_ledger.status_code == 403, refused_ledger.text
 
         # Và danh mục không mời người ta bấm vào một 403.
         listed = client.get("/api/v1/reports", headers=headers)
         assert listed.status_code == 200
         codes = {item["code"] for item in listed.json()["reports"]}
         assert "doi-chieu-ngan-hang" not in codes
-        assert "S03a-DN" in codes
+        assert "S03a-DN" not in codes
 
     def test_a_pinned_param_is_not_offered_as_an_input_field(
         self, client: TestClient, headers_for_reports: dict[str, str]

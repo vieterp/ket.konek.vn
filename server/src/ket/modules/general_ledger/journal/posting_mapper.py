@@ -53,6 +53,7 @@ def _to_posting_line(line: JournalLine) -> PostingLine:
             expense_item_id=line.expense_item_id,
             item_id=line.item_id,
             warehouse_id=line.warehouse_id,
+            bank_account_id=line.bank_account_id,
             extended=extended,
         ),
         source_line_id=line.id,

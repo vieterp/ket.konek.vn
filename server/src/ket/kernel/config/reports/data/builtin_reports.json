@@ -1428,7 +1428,8 @@
       "layout_code": "gl-journal",
       "param_set_code": "gl_journal_params",
       "ledger_scope": "both",
-      "package_scheme": "TT99"
+      "package_scheme": "TT99",
+      "required_permission_module": "general_ledger"
     },
     {
       "code": "S03b-DN",
@@ -1440,7 +1441,8 @@
       "layout_code": "gl-ledger",
       "param_set_code": "gl_ledger_params",
       "ledger_scope": "both",
-      "package_scheme": "TT99"
+      "package_scheme": "TT99",
+      "required_permission_module": "general_ledger"
     },
     {
       "code": "S38-DN",
@@ -1452,7 +1454,8 @@
       "layout_code": "gl-detail",
       "param_set_code": "gl_detail_params",
       "ledger_scope": "both",
-      "package_scheme": "TT99"
+      "package_scheme": "TT99",
+      "required_permission_module": "general_ledger"
     },
     {
       "code": "S06-DN",
@@ -1464,7 +1467,8 @@
       "layout_code": "trial-balance",
       "param_set_code": "trial_balance_params",
       "ledger_scope": "both",
-      "package_scheme": "TT99"
+      "package_scheme": "TT99",
+      "required_permission_module": "general_ledger"
     },
     {
       "code": "S03a-DNN",
@@ -1476,7 +1480,8 @@
       "layout_code": "gl-journal",
       "param_set_code": "gl_journal_params",
       "ledger_scope": "both",
-      "package_scheme": "TT133"
+      "package_scheme": "TT133",
+      "required_permission_module": "general_ledger"
     },
     {
       "code": "S03b-DNN",
@@ -1488,7 +1493,8 @@
       "layout_code": "gl-ledger",
       "param_set_code": "gl_ledger_params",
       "ledger_scope": "both",
-      "package_scheme": "TT133"
+      "package_scheme": "TT133",
+      "required_permission_module": "general_ledger"
     },
     {
       "code": "S19-DNN",
@@ -1500,7 +1506,8 @@
       "layout_code": "gl-detail",
       "param_set_code": "gl_detail_params",
       "ledger_scope": "both",
-      "package_scheme": "TT133"
+      "package_scheme": "TT133",
+      "required_permission_module": "general_ledger"
     },
     {
       "code": "F01-DNN",

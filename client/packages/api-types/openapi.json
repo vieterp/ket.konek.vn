@@ -3482,6 +3482,17 @@
             ],
             "title": "Amount Fc"
           },
+          "bank_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Account Id"
+          },
           "contract_id": {
             "anyOf": [
               {
@@ -3635,6 +3646,17 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Amount Fc",
             "type": "string"
+          },
+          "bank_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Account Id"
           },
           "contract_id": {
             "anyOf": [
@@ -3807,6 +3829,7 @@
           "expense_item_id",
           "item_id",
           "warehouse_id",
+          "bank_account_id",
           "extended_dimensions",
           "description"
         ],
@@ -8505,6 +8528,17 @@
             "title": "Account Id",
             "type": "integer"
           },
+          "bank_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Account Id"
+          },
           "contract_id": {
             "anyOf": [
               {
@@ -8731,6 +8765,17 @@
             "title": "Account Id",
             "type": "integer"
           },
+          "bank_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Account Id"
+          },
           "contract_id": {
             "anyOf": [
               {
@@ -8913,6 +8958,7 @@
           "expense_item_id",
           "item_id",
           "warehouse_id",
+          "bank_account_id",
           "extended_dimensions",
           "description"
         ],

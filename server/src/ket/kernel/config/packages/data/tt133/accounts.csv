@@ -3,8 +3,8 @@ code,name,name_en,parent_code,balance_nature,is_summary,is_foreign_currency,deta
 1111,Tiền Việt Nam,,111,0,0,0,,0
 1112,Ngoại tệ,,111,0,0,1,,0
 112,Tiền gửi ngân hàng,,,0,1,0,,1
-1121,Tiền Việt Nam,,112,0,0,0,,0
-1122,Ngoại tệ,,112,0,0,1,,0
+1121,Tiền Việt Nam,,112,0,0,0,bank_account,0
+1122,Ngoại tệ,,112,0,0,1,bank_account,0
 121,Chứng khoán kinh doanh,,,0,0,0,,1
 128,Đầu tư nắm giữ đến ngày đáo hạn,,,0,1,0,,1
 1281,Tiền gửi có kỳ hạn,,128,0,0,0,,0

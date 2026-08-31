@@ -434,6 +434,7 @@ export const vi = {
   'gl.dim.expenseItem': 'Mã khoản mục chi phí',
   'gl.dim.item': 'Mã vật tư hàng hóa',
   'gl.dim.warehouse': 'Mã kho',
+  'gl.dim.bankAccount': 'Mã TK ngân hàng',
 
   'trialBalance.nav.title': 'Bảng cân đối tài khoản',
   'trialBalance.title': 'Bảng cân đối tài khoản',

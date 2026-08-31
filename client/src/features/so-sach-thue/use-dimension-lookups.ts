@@ -43,6 +43,7 @@ const DIMENSION_SLUGS = [
   'expense_items',
   'items',
   'warehouses',
+  'company_bank_accounts',
 ] as const
 
 type DimensionSlug = (typeof DIMENSION_SLUGS)[number]
@@ -247,6 +248,10 @@ export function useDimensionLookups(requiredIds: RequiredDimensionIds = {}): Dim
   const expenseItems = useSlugLookup('expense_items', requiredIds.expense_items ?? [])
   const items = useSlugLookup('items', requiredIds.items ?? [])
   const warehouses = useSlugLookup('warehouses', requiredIds.warehouses ?? [])
+  const companyBankAccounts = useSlugLookup(
+    'company_bank_accounts',
+    requiredIds.company_bank_accounts ?? [],
+  )
 
   const bySlug: Record<DimensionSlug, SlugLookup> = {
     partners,
@@ -257,6 +262,7 @@ export function useDimensionLookups(requiredIds: RequiredDimensionIds = {}): Dim
     expense_items: expenseItems,
     items,
     warehouses,
+    company_bank_accounts: companyBankAccounts,
   }
 
   const options: DimensionOptionsBySlug = {
@@ -268,6 +274,7 @@ export function useDimensionLookups(requiredIds: RequiredDimensionIds = {}): Dim
     expense_items: expenseItems.options,
     items: items.options,
     warehouses: warehouses.options,
+    company_bank_accounts: companyBankAccounts.options,
   }
 
   const resolveMissingCodes = async (

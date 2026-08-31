@@ -95,6 +95,14 @@ class GlPosting(DatasetBase):
             "entry_kind",
             postgresql_where=text("entry_kind <> 0"),
         ),
+        # Sổ chi tiết tiền gửi và bảng kê số dư đều lọc "112x của MỘT tài khoản
+        # ngân hàng" rồi gộp. Index MỘT PHẦN cùng lý do với `ix_gl_postings_
+        # partner`: đại đa số dòng sổ không chạm 112, phủ chúng là phủ cả bảng.
+        Index(
+            "ix_gl_postings_bank_account",
+            "bank_account_id",
+            postgresql_where=text("bank_account_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -159,6 +167,14 @@ class GlPosting(DatasetBase):
 
     item_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     warehouse_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    bank_account_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """TK ngân hàng doanh nghiệp sở hữu dòng 112x (lát 6G-1).
+
+    Không FK, cùng lối với các cột chiều khác: `gl_postings` là bảng sự thật đã
+    ghi sổ, và một FK RESTRICT ở đây biến việc sửa danh mục thành việc sửa sổ.
+    Ai được điền và khi nào bắt buộc là câu hỏi của `detail_tracking`.
+    """
 
     description: Mapped[str | None] = mapped_column(String(DESCRIPTION_MAX_LENGTH), nullable=True)
 

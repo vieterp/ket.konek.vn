@@ -13,26 +13,20 @@ của migration mới nhất. Dữ liệu kế toán đã chạy tới `0020` s�
 thấy năm mẫu đó nếu không có migration này — đúng cái bẫy "dataset cũ không
 nhận backfill" đã cắn ở lát 6A (doctrine 5B M-1).
 
-Bước dữ liệu vì thế CHUYỂN TỪ 0020 sang đây, giữ nguyên doctrine từ 6B:
-`refresh_builtin_reports` đọc dữ liệu builtin đóng gói HIỆN TẠI và probe SQL
-từng dataset, nên nó chỉ đúng ở migration CUỐI chuỗi. Migration tương lai thêm
-cột mà dataset builtin đọc phải dời tiếp bước này về cuối.
+Bước dữ liệu ĐÃ RỜI SANG 0022 (lát 6G-1), đúng doctrine từ 6B mà chính tệp này
+phát biểu: `refresh_builtin_reports` đọc dữ liệu builtin đóng gói HIỆN TẠI và
+probe SQL từng dataset, nên nó chỉ đúng ở migration CUỐI chuỗi. 0022 thêm cột
+`gl_postings.bank_account_id` mà ba dataset builtin đọc — để bước dữ liệu ở lại
+đây thì lượt nâng cấp nổ ngay tại 0021, trước khi cột kịp tồn tại.
 
-`downgrade()` không xóa mẫu: dòng `print_templates` là dữ liệu người dùng sửa
-được (FR-RPT-008) và có thể đã được chọn làm mặc định hoặc sửa nội dung — hạ
-phiên bản mã nguồn không phải là lý do để xóa thứ kế toán đã chỉnh. Cùng lập
-luận với `downgrade` của bước làm mới báo cáo builtin.
+Migration này vì thế còn lại **rỗng**, và ở lại chuỗi chứ không bị xóa: dataset
+nào đã chạy qua nó mang `alembic_version = '0021'`, và bỏ một revision khỏi
+chuỗi là làm mọi bản cài ấy không nâng cấp được nữa.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-
-from alembic import context, op
-
-from ket.kernel.config.printing.seed import ensure_builtin_print_templates
-from ket.kernel.config.reports.seed import refresh_builtin_reports
-from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 
 revision: str = "0021"
 down_revision: str | None = "0020"
@@ -41,30 +35,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    _refresh_builtin_data()
-
-
-def _target_schema() -> str:
-    schema = context.config.attributes.get(ALEMBIC_SCHEMA_ATTRIBUTE)
-    if not isinstance(schema, str):
-        raise RuntimeError(
-            f"Không xác định được schema đích: `{ALEMBIC_SCHEMA_ATTRIBUTE}` chưa được "
-            "`migrations/env.py` ghi vào Config.attributes"
-        )
-    return schema
-
-
-def _refresh_builtin_data() -> None:
-    """Làm mới metadata báo cáo + mẫu in builtin — CHUYỂN TỪ 0020 (xem docstring
-    đầu tệp). Chỉ chạy online, cùng lý do với bản gốc: bước dữ liệu đọc-rồi-ghi
-    không diễn đạt được thành SQL tĩnh của `upgrade --sql`."""
-    if context.is_offline_mode():
-        return
-    schema = _target_schema()
-    connection = op.get_bind()
-    refresh_builtin_reports(connection, schema)
-    ensure_builtin_print_templates(connection, schema)
+    """Rỗng — bước dữ liệu đã rời sang 0022 (xem docstring đầu tệp)."""
 
 
 def downgrade() -> None:
-    """Không có gì để hạ: migration này chỉ gieo dữ liệu còn thiếu."""
+    """Rỗng, đối xứng với `upgrade`."""

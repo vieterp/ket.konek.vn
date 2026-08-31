@@ -2,21 +2,15 @@
 
 Người gọi duy nhất là job carry-forward của số dư đầu kỳ (`posting` không
 import được module này — luật phụ thuộc C4 — nên đi qua Protocol kernel, lát
-6D). Câu hỏi nó trả lời: trong một năm, mỗi TK ngân hàng đã nhận/chi bao nhiêu
-qua **chứng từ tiền gửi đã ghi sổ** — thứ `gl_postings` một mình không nói
-được, vì chiều TK ngân hàng sống trên thân `bank_vouchers` (FR-BNK-002).
+6D). Câu hỏi nó trả lời: trong một năm, mỗi TK ngân hàng đã nhận/chi bao nhiêu.
 
-Cách tính: dòng sổ (`gl_postings`) của chứng từ tiền gửi, lọc bên tiền gửi
-theo tiền tố 112 (`DEPOSIT_ACCOUNT_CODE_PREFIX` — doctrine mapper 6C), quy về
-TK ngân hàng bằng `balance_service.deposit_owner_account()` — luật quy chủ ở
-ĐÚNG một chỗ, dùng chung với thẻ tài khoản của màn hình "Tiền vào tiền ra":
-
-* BC/UNC/SEC — mọi dòng 112x thuộc `bank_account_id` của thân chứng từ (một
-  chứng từ một tài khoản; dòng phí lẫn trong chứng từ tự trừ vào net, đúng số
-  tiền thật qua tài khoản);
-* CTNB — dòng **Nợ** 112x thuộc TK đích (`counter_bank_account_id`), dòng
-  **Có** 112x thuộc TK nguồn (`bank_account_id`) — một chứng từ chạm hai tài
-  khoản, mỗi bên một chiều (6C: chuyển nội bộ cùng tiền tệ).
+Cách tính từ lát 6G-1: mọi dòng sổ 112x (`DEPOSIT_ACCOUNT_CODE_PREFIX` —
+doctrine mapper 6C) đã mang sẵn chủ sở hữu ở cột `gl_postings.bank_account_id`,
+gộp theo cột đó. Trước đó chủ sở hữu phải SUY từ thân `bank_vouchers`, nên câu
+trả lời chỉ phủ chứng từ tiền gửi: phiếu quỹ nộp/rút tiền mặt ↔ ngân hàng và
+bút toán tổng hợp gõ thẳng 112x không có thân để bám và biến mất khỏi số dư
+chuyển sang năm sau (review 6E-1 H-3). Luật quy chủ nay sống ở đường GHI —
+`bank/posting_mapper._deposit_owner`.
 
 Gộp set-based trong SQL (LD-14); kết quả cỡ (số TK ngân hàng × tiền tệ) — vài
 chục dòng.
@@ -32,11 +26,7 @@ from sqlalchemy.orm import Session
 from ket.kernel.config.accounts_models import ChartOfAccount
 from ket.kernel.periods.models import AccountingPeriod
 from ket.kernel.protocols import PROVIDERS, BankAccountMovement
-from ket.modules.bank.balance_service import (
-    DEPOSIT_ACCOUNT_CODE_PREFIX,
-    deposit_owner_account,
-)
-from ket.modules.bank.models import BankVoucher
+from ket.modules.bank.balance_service import DEPOSIT_ACCOUNT_CODE_PREFIX
 from ket.posting.engine.models import GlPosting
 
 
@@ -49,16 +39,14 @@ class BankDepositMovementSource:
         period_ids = select(AccountingPeriod.id).where(
             AccountingPeriod.fiscal_year_id == fiscal_year_id
         )
-        owner_account = deposit_owner_account().label("bank_account_id")
         rows = session.execute(
             select(
                 GlPosting.account_id,
-                owner_account,
+                GlPosting.bank_account_id,
                 GlPosting.currency_code,
                 func.sum(GlPosting.debit_fc - GlPosting.credit_fc).label("net_fc"),
                 func.sum(GlPosting.debit - GlPosting.credit).label("net"),
             )
-            .join(BankVoucher, BankVoucher.id == GlPosting.voucher_id)
             .join(ChartOfAccount, ChartOfAccount.id == GlPosting.account_id)
             .where(
                 GlPosting.ledger == ledger,
@@ -66,7 +54,7 @@ class BankDepositMovementSource:
                 GlPosting.period_id.in_(period_ids),
                 ChartOfAccount.code.like(literal(f"{DEPOSIT_ACCOUNT_CODE_PREFIX}%")),
             )
-            .group_by(GlPosting.account_id, owner_account, GlPosting.currency_code)
+            .group_by(GlPosting.account_id, GlPosting.bank_account_id, GlPosting.currency_code)
         ).all()
         return tuple(
             BankAccountMovement(
@@ -77,9 +65,9 @@ class BankDepositMovementSource:
                 net=row.net,
             )
             for row in rows
-            # CTNB đích NULL không xảy ra (CHECK `counter_account_iff_transfer`)
-            # nhưng phòng thủ rẻ: một dòng không quy được chủ thì bỏ — nó ở lại
-            # phần không gắn của carry-forward, không làm đổ cả lượt chuyển.
+            # Dòng 112x không có chủ (dữ liệu ghi sổ trước lát 6G-1, hoặc gói
+            # cấu hình chưa bật chiều `bank_account`) thì bỏ — nó ở lại phần
+            # không gắn của carry-forward, không làm đổ cả lượt chuyển.
             if row.bank_account_id is not None and (row.net != 0 or row.net_fc != 0)
         )
 

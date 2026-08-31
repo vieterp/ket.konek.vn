@@ -65,6 +65,9 @@ lệ-thuộc-thứ-tự đã gặp hai lần trong lát này)."""
 
 JOURNAL_PRINT = permission_code(JOURNAL_PERMISSION_MODULE, JOURNAL_PERMISSION_CODE, Action.PRINT)
 JOURNAL_CREATE = permission_code(JOURNAL_PERMISSION_MODULE, JOURNAL_PERMISSION_CODE, Action.CREATE)
+JOURNAL_VIEW = permission_code(JOURNAL_PERMISSION_MODULE, JOURNAL_PERMISSION_CODE, Action.VIEW)
+"""Bộ sổ tổng hợp đóng cổng quyền phân hệ từ lát 6G-1 — `reporting.report.view`
+một mình không mở được S03a/S03b/S38/S06/S19 nữa."""
 
 
 @pytest.fixture
@@ -104,7 +107,7 @@ def printer_role(session_factory: sessionmaker[Session], print_dataset: DatasetR
 
 @pytest.fixture(scope="module")
 def print_viewer_role(session_factory: sessionmaker[Session], print_dataset: DatasetRef) -> str:
-    return ensure_role(session_factory, print_dataset, "in_5d_chi_xem", [REPORT_VIEW])
+    return ensure_role(session_factory, print_dataset, "in_5d_chi_xem", [REPORT_VIEW, JOURNAL_VIEW])
 
 
 def _post_journal(

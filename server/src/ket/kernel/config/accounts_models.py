@@ -82,6 +82,15 @@ class DetailTracking:
     EXPENSE_ITEM = "expense_item"
     ITEM = "item"
     WAREHOUSE = "warehouse"
+    BANK_ACCOUNT = "bank_account"
+    """Tài khoản ngân hàng doanh nghiệp của dòng 112x.
+
+    Bật trên 112x thì mọi đường ghi sổ — chứng từ tiền gửi, phiếu thu/chi nộp
+    rút tiền mặt, bút toán tổng hợp gõ thẳng — đều phải nói dòng này thuộc tài
+    khoản ngân hàng nào. Trước đó chủ sở hữu được **suy** từ thân
+    `bank_vouchers`, nên hai đường sau không suy được và sổ chi tiết tiền gửi
+    thiếu đúng bằng chúng.
+    """
 
     ALL = frozenset(
         {
@@ -95,6 +104,7 @@ class DetailTracking:
             EXPENSE_ITEM,
             ITEM,
             WAREHOUSE,
+            BANK_ACCOUNT,
         }
     )
 

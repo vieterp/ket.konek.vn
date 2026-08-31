@@ -49,6 +49,7 @@ function dimensionCatalogRoutes(): Record<string, typeof EMPTY_LIST> {
     '/master/expense_items': EMPTY_LIST,
     '/master/items': EMPTY_LIST,
     '/master/warehouses': EMPTY_LIST,
+    '/master/company_bank_accounts': EMPTY_LIST,
   }
 }
 

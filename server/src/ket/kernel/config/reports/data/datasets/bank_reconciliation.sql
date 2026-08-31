@@ -13,8 +13,9 @@
 -- Đơn vị so khớp giữ ĐÚNG định nghĩa của lát 6D, không phát minh lại: phát
 -- sinh RÒNG nguyên tệ trên TK 112x của chứng từ ĐÃ ghi sổ, đọc `gl_postings`
 -- **sổ tài chính** (ledger 0 — thiếu bộ lọc này thì hai hệ thống sổ nhân đôi
--- mọi con số, đúng cái bẫy test 6D đã bắt), và chuyển tiền nội bộ quy chủ
--- theo CHIỀU dòng (`bank_vouchers.kind = 3`: dòng Nợ thuộc tài khoản đích).
+-- mọi con số, đúng cái bẫy test 6D đã bắt), và chủ sở hữu đọc thẳng cột
+-- `gl_postings.bank_account_id` (chiều `bank_account`, lát 6G-1) — chuyển tiền
+-- nội bộ đã được quy chủ theo CHIỀU dòng ngay lúc ghi sổ.
 -- Một chứng từ CTNB hợp lệ đứng trên sao kê của CẢ HAI tài khoản, nên mọi
 -- phép gộp ở đây đi theo cặp (chứng từ, tài khoản ngân hàng) chứ không theo
 -- chứng từ — trùng khuôn unique "một chứng từ một dòng THEO TÀI KHOẢN" mà 6D
@@ -82,10 +83,7 @@ statement_lines AS (
 -- 6E-1 H-2). Cửa sổ ngày chỉ áp cho nhóm 3 (chứng từ CHƯA khớp), bên dưới.
 voucher_movements AS (
     SELECT p.voucher_id,
-           CASE
-               WHEN bv.kind = 3 AND p.debit > 0 THEN bv.counter_bank_account_id
-               ELSE bv.bank_account_id
-           END                                   AS bank_account_id,
+           p.bank_account_id,
            v.voucher_no,
            v.posting_date,
            v.description,

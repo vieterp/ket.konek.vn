@@ -72,10 +72,13 @@ def ensure_company_bank_account(
     *,
     code: str,
     currency_code: str | None = None,
+    branch_id: int | None = None,
 ) -> int:
     """Một tài khoản ngân hàng doanh nghiệp (kèm ngân hàng cha) — trả `id`.
 
     `currency_code=None` = đồng hạch toán (VND), đúng ngữ nghĩa cột.
+    `branch_id=None` = dùng chung toàn công ty (`MasterDataRow.branch_id`);
+    truyền một chi nhánh khi bài kiểm cần sao kê BỊ cô lập (lát 6G-1).
     Idempotent theo `code` để các tệp test dùng chung dataset không giẫm nhau.
     """
     scope = posting_scope(dataset, context, user_id=SEED_ACTOR_ID)
@@ -96,6 +99,7 @@ def ensure_company_bank_account(
             path="0.",
             bank_id=bank.id,
             currency_code=currency_code,
+            branch_id=branch_id,
         )
         session.add(account)
         session.flush()

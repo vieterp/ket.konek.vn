@@ -66,6 +66,7 @@ class CashVoucherLineIn(BaseModel):
     expense_item_id: int | None = None
     item_id: int | None = None
     warehouse_id: int | None = None
+    bank_account_id: int | None = None
     extended: tuple[ExtendedDimensionIn, ...] = ()
 
     description: str | None = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
@@ -155,6 +156,7 @@ class CashVoucherLineOut(BaseModel):
     expense_item_id: int | None
     item_id: int | None
     warehouse_id: int | None
+    bank_account_id: int | None
     extended_dimensions: dict[str, int] | None
     description: str | None
 

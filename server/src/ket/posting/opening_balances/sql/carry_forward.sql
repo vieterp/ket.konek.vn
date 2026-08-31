@@ -15,14 +15,20 @@
 -- bẩn. Gộp theo TRỌN bộ chiều để "giữ nguyên chi tiết" (FR-OPB-010): đối
 -- tượng công nợ, và cả các chiều 5 cột cố định mà chứng từ đã ghi.
 --
--- Chiều TK NGÂN HÀNG (kind 1, lát 6D): `gl_postings` không mang nó (nó sống
--- trên thân chứng từ của module bank), nên job hỏi `DepositMovementSource`
--- (kernel Protocol, module bank cài) rồi đổ vào `carry_bank_movements`. Câu
--- này cộng mỗi con số ấy vào xô (TK, TK ngân hàng, tiền tệ) và trừ đúng chừng
--- ấy khỏi xô không-gắn-TK-ngân-hàng — tổng chuyển năm không đổi, chỉ được
--- chia đúng chỗ. Phát sinh 112x KHÔNG qua chứng từ tiền gửi (bút toán GLE gõ
--- thẳng) ở lại xô không gắn (kind 0): không ai biết nó thuộc tài khoản nào,
--- và bịa một tài khoản sẽ làm BR-BNK-01 "khớp" trên một con số dối.
+-- Chiều TK NGÂN HÀNG (kind 1, lát 6D): job hỏi `DepositMovementSource` (kernel
+-- Protocol, module bank cài) rồi đổ vào `carry_bank_movements`. Câu này cộng
+-- mỗi con số ấy vào xô (TK, TK ngân hàng, tiền tệ) và trừ đúng chừng ấy khỏi
+-- xô không-gắn-TK-ngân-hàng — tổng chuyển năm không đổi, chỉ được chia đúng
+-- chỗ.
+--
+-- Từ lát 6G-1 nguồn ấy phủ MỌI chứng từ chạm 112x, không chỉ chứng từ tiền
+-- gửi: chủ sở hữu nằm ở cột `gl_postings.bank_account_id`. Chỉ dòng ghi sổ
+-- TRƯỚC 6G-1 mà migration không suy nổi chủ mới ở lại xô không gắn (kind 0) —
+-- bịa một tài khoản cho chúng sẽ làm BR-BNK-01 "khớp" trên một con số dối.
+--
+-- CẦN XÉT Ở BƯỚC 22: cột ấy làm chính Protocol này thừa — `posting` gộp thẳng
+-- `gl_postings.bank_account_id` được, không cần vòng qua module bank. Bỏ hay
+-- giữ là quyết định của lượt đóng băng kernel, không phải của lát này.
 --
 -- detail_kind của dòng sinh ra: có bank_account_id → 1; còn lại suy từ
 -- partner_kind (khách 2, NCC 3, nhân viên 4, còn lại 0). CẢNH BÁO PHASE 8:

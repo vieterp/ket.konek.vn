@@ -49,6 +49,14 @@ class PostingDimensions(BaseModel):
     item_id: int | None = None
     warehouse_id: int | None = None
 
+    bank_account_id: int | None = None
+    """`company_bank_accounts.id` sở hữu dòng 112x (lát 6G-1).
+
+    Chiều cố định chứ không phải chiều mở rộng vì ba đường ghi sổ khác nhau
+    (tiền gửi, quỹ, tổng hợp) đều điền nó và ba báo cáo đọc nó — chiều mở rộng
+    sống trong bảng EAV, không join rẻ được vào sổ chi tiết tiền gửi.
+    """
+
     extended: tuple[ExtendedDimensionValue, ...] = ()
 
     @model_validator(mode="after")
@@ -91,6 +99,8 @@ class PostingDimensions(BaseModel):
                 return self.item_id is not None
             case DetailTracking.WAREHOUSE:
                 return self.warehouse_id is not None
+            case DetailTracking.BANK_ACCOUNT:
+                return self.bank_account_id is not None
             case _:
                 # Giá trị lạ trong `detail_tracking` là dữ liệu cấu hình hỏng,
                 # không phải chứng từ hỏng — nổ to để lộ ra gói cấu hình sai.

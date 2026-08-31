@@ -431,6 +431,7 @@ export const en: Record<TranslationKey, string> = {
   'gl.dim.expenseItem': 'Expense item code',
   'gl.dim.item': 'Item code',
   'gl.dim.warehouse': 'Warehouse code',
+  'gl.dim.bankAccount': 'Bank account code',
 
   'trialBalance.nav.title': 'Trial balance',
   'trialBalance.title': 'Trial balance',

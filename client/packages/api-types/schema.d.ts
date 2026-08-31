@@ -8577,6 +8577,8 @@ export interface components {
             amount?: number | string | null;
             /** Amount Fc */
             amount_fc: number | string;
+            /** Bank Account Id */
+            bank_account_id?: number | null;
             /** Contract Id */
             contract_id?: number | null;
             /** Cost Object Id */
@@ -8610,6 +8612,8 @@ export interface components {
         CashVoucherLineOut: {
             /** Amount Fc */
             amount_fc: string;
+            /** Bank Account Id */
+            bank_account_id: number | null;
             /** Contract Id */
             contract_id: number | null;
             /** Cost Object Id */
@@ -10355,6 +10359,8 @@ export interface components {
         JournalLineIn: {
             /** Account Id */
             account_id: number;
+            /** Bank Account Id */
+            bank_account_id?: number | null;
             /** Contract Id */
             contract_id?: number | null;
             /** Corresponding Account Id */
@@ -10404,6 +10410,8 @@ export interface components {
         JournalLineOut: {
             /** Account Id */
             account_id: number;
+            /** Bank Account Id */
+            bank_account_id: number | null;
             /** Contract Id */
             contract_id: number | null;
             /** Corresponding Account Id */

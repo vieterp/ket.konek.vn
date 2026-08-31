@@ -144,6 +144,9 @@ def import_statement(
 
     statement = BankStatement(
         bank_account_id=bank_account_id,
+        # Chi nhánh đi theo TÀI KHOẢN, không theo người nhập — xem
+        # `statement_branch`; `NULL` = tài khoản dùng chung toàn công ty.
+        branch_id=account.branch_id,
         statement_date=max(line.booked_on for line in result.lines),
         opening_balance=opening_balance,
         closing_balance=closing_balance,
@@ -169,6 +172,7 @@ def import_statement(
             {
                 "statement_id": statement.id,
                 "bank_account_id": bank_account_id,
+                "branch_id": account.branch_id,
                 "line_no": line.row_number,
                 "txn_date": line.booked_on,
                 "reference_no": line.reference,

@@ -14,6 +14,7 @@ from io import BytesIO
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from bank_support import ensure_company_bank_account, seed_bank_package_data
@@ -756,4 +757,53 @@ def test_delete_statement_waits_for_inflight_match_then_refuses(
         assert line is not None and line.match_kind == StatementMatchKind.MANUAL
         # Dọn cho chi nhánh dùng chung.
         unmatch_line(session, line_id=line_id)
+        delete_statement(session, statement_id=statement_id)
+
+
+def test_an_unrelated_integrity_error_is_not_disguised_as_a_lost_race(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    bank_account: int,
+    profile_id: int,
+) -> None:
+    """Nợ L-2 của review 6D, trả ở lát 6G-1.
+
+    `_flush_matches` từng nuốt MỌI `IntegrityError` và kể lại thành "một lượt
+    khớp khác vừa lấy mất chứng từ". Một khóa ngoại gãy — lỗi lập trình, phải
+    nổ to và lên log — cũng ra đúng thông điệp ấy, nên người dùng bấm lại mãi
+    trong khi không có lượt nào tranh với họ cả.
+
+    Vi phạm THẬT từ PostgreSQL chứ không phải ngoại lệ dựng tay: điều đang được
+    kiểm là `_violated_constraint` đọc đúng `diag.constraint_name` mà psycopg
+    đặt, và một vật giả hình dạng sẽ xanh kể cả khi cách đọc ấy sai.
+    """
+    from ket.modules.bank.reconciliation import _flush_matches
+
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        result = _import(
+            session,
+            bank_account_id=bank_account,
+            profile_id=profile_id,
+            source=csv_of([("15/01/2026", "L2-1", "l2", "", "120000", "")]),
+            content_hash="7" * 64,
+        )
+        statement_id = result.statement.id  # type: ignore[attr-defined]
+
+    with pytest.raises(IntegrityError):
+        with unit_of_work(session_factory, scope) as session:
+            session.add(
+                BankStatementLine(
+                    statement_id=statement_id,
+                    bank_account_id=2_000_000_000,
+                    line_no=99,
+                    txn_date=JAN_15,
+                    credit=Decimal(1),
+                    match_kind=StatementMatchKind.UNMATCHED,
+                )
+            )
+            _flush_matches(session)
+
+    with unit_of_work(session_factory, scope) as session:
         delete_statement(session, statement_id=statement_id)

@@ -71,6 +71,17 @@ const ACCOUNTS_ROUTE: RouteReply = {
         level: 1,
         parent_id: null,
       },
+      {
+        id: 12,
+        code: '1121',
+        name: 'Tiền gửi ngân hàng VND',
+        balance_nature: 1,
+        detail_tracking: ['bank_account'],
+        is_summary: false,
+        is_foreign_currency: false,
+        level: 2,
+        parent_id: null,
+      },
     ],
   },
 }
@@ -834,6 +845,67 @@ describe('form phiếu chi — sửa và đối trừ', () => {
       const body = parseJsonBody(call?.[1] as RequestInit)
       expect(body).toMatchObject({ partner_id: 6 })
       expect(body.settlements).toEqual([])
+    })
+  })
+
+  it('dòng chạm 112 hiện cột "Mã TK ngân hàng" và gửi `bank_account_id` (H-3 lát 6G-1)', async () => {
+    // Rút tiền gửi nhập quỹ: Nợ 1111 / Có 1121. Trước 6G-1 dòng 112 này không
+    // quy được về tài khoản ngân hàng nào (nó là `cash_vouchers`, không có
+    // `bank_vouchers` để bám) nên S08-DN lệch sao kê đúng bằng nó.
+    const fetchMock = mockServer({
+      ...formRoutes(),
+      '/master/company_bank_accounts': {
+        status: 200,
+        body: { items: [catalogRow(9, 'VCB01', 'Vietcombank CN1')], total: 1 },
+      },
+      '/cash-book/open-invoices': { status: 200, body: { items: [] } },
+      '/cash-book/vouchers': { status: 201, body: CREATED_VOUCHER },
+    })
+    const user = userEvent.setup()
+
+    renderFeatureAt('/tien-vao-tien-ra/giao-dich/phieu/moi?kind=0')
+
+    const operationSelect = await screen.findByLabelText('Nghiệp vụ')
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'Thu khác' })).toBeInTheDocument()
+    })
+    await user.selectOptions(operationSelect, 'thu-khac')
+
+    const cashInput = screen.getByLabelText('TK quỹ')
+    await user.type(cashInput, '1111')
+    await user.keyboard('{Enter}')
+
+    // Ô sống duy nhất của lưới là ô ĐANG CHỌN — chọn ô đầu rồi Tab tới TK Có
+    // và gõ 1121 (TK khai chiều `bank_account`), đúng khuôn các test lưới khác.
+    const firstCell = await screen.findByLabelText('TK Nợ, dòng 1')
+    await user.click(firstCell)
+    await user.keyboard('{Tab}') // TK Nợ → TK Có
+    const creditCell = await screen.findByLabelText('TK Có, dòng 1')
+    // Nghiệp vụ "Thu khác" đã điền sẵn TK Có — xóa trước khi gõ, nếu không mã
+    // mới nối vào mã cũ và không tra được TK nào.
+    await user.clear(creditCell)
+    await user.type(creditCell, '1121')
+    await user.keyboard('{Tab}') // TK Có → Diễn giải
+    await user.keyboard('{Tab}') // Diễn giải → Số tiền
+    const amountInput = await screen.findByLabelText('Số tiền, dòng 1')
+    await user.type(amountInput, '700000')
+    await user.keyboard('{Tab}') // Số tiền → Mã TK ngân hàng
+
+    const bankCell = await screen.findByLabelText('Mã TK ngân hàng, dòng 1')
+    await user.type(bankCell, 'VCB01')
+    await user.keyboard('{Tab}')
+
+    await user.click(screen.getByRole('button', { name: 'Cất' }))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find((entry) =>
+        String(entry[0]).endsWith('/cash-book/vouchers'),
+      )
+      expect(call).toBeDefined()
+      const body = parseJsonBody(call?.[1] as RequestInit)
+      expect((body.lines as Record<string, unknown>[])[0]).toMatchObject({
+        bank_account_id: 9,
+      })
     })
   })
 })

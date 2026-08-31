@@ -220,6 +220,8 @@ class CashVoucherLine(DatasetBase, Audited):
     warehouse_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     """Đủ bộ chiều như dòng GLE: TK đối ứng có thể đòi bất kỳ chiều nào theo
     `detail_tracking`, và thiếu cột là thiếu đường điền."""
+    bank_account_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """TK ngân hàng doanh nghiệp của dòng 112x (chiều `bank_account`, lát 6G-1)."""
 
     extended_dimensions: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
     """Chiều mở rộng dạng `{"<dimension_id>": value_id}` — cùng khuôn và cùng

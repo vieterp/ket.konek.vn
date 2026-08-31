@@ -27,7 +27,12 @@ from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
 from ket.settings import Settings
-from posting_support import PostingContext, posting_scope, seed_posting_context
+from posting_support import (
+    PostingContext,
+    ensure_second_branch,
+    posting_scope,
+    seed_posting_context,
+)
 
 pytestmark = pytest.mark.db
 
@@ -126,9 +131,17 @@ def _all_branch_codes(
     session_factory: sessionmaker[Session], dataset_alpha: DatasetRef, context: PostingContext
 ) -> list[str]:
     """Khớp tự động đòi phạm vi MỌI chi nhánh (guard M-1) — người đối chiếu
-    của test cầm trọn danh sách chi nhánh hiện có của dataset dùng chung."""
+    của test cầm trọn danh sách chi nhánh hiện có của dataset dùng chung.
+
+    Tự dựng chi nhánh thứ hai nếu dataset chưa có (lát 6G-1): `dataset_alpha`
+    dùng chung nên chạy CẢ BỘ thì tệp khác đã tạo sẵn vài chi nhánh, còn chạy
+    RIÊNG tệp này thì chỉ có một — lúc ấy "trọn phạm vi" và "phạm vi hẹp" là
+    cùng một tập và `test_auto_match_requires_full_branch_scope` đỏ vì lý do
+    không liên quan gì tới thứ nó kiểm. Bộ test không được phụ thuộc thứ tự tệp.
+    """
     from ket.kernel.security.models import Branch
 
+    ensure_second_branch(session_factory, dataset_alpha)
     scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
     with unit_of_work(session_factory, scope) as session:
         return list(session.scalars(select(Branch.code)).all())

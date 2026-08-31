@@ -46,6 +46,7 @@ from ket.kernel.jobs import queue
 from ket.kernel.jobs.models import JobStatus
 from ket.kernel.jobs.registry import REGISTRY, JobCancelled, JobContext
 from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
 from ket.modules.general_ledger.journal.schemas import JournalLineIn, JournalVoucherIn
 from ket.modules.general_ledger.journal.service import JournalVoucherService
@@ -56,6 +57,10 @@ from ket.worker.runner import resolve_body_scope
 from posting_support import PostingContext, posting_scope, seed_posting_context
 
 pytestmark = pytest.mark.db
+
+JOURNAL_VIEW = permission_code("general_ledger", "journal_voucher", Action.VIEW)
+"""Bộ sổ tổng hợp đóng cổng quyền phân hệ từ lát 6G-1 — `reporting.report.view`
+một mình không mở được S03a/S03b/S38/S06/S19 nữa."""
 
 ACTOR_ID = 1
 VND = "VND"
@@ -97,7 +102,10 @@ def context(session_factory: sessionmaker[Session], render_dataset: DatasetRef) 
 @pytest.fixture(scope="module")
 def exporter_role(session_factory: sessionmaker[Session], render_dataset: DatasetRef) -> str:
     return ensure_role(
-        session_factory, render_dataset, "xuat_bao_cao_5e", [REPORT_VIEW, REPORT_EXPORT]
+        session_factory,
+        render_dataset,
+        "xuat_bao_cao_5e",
+        [REPORT_VIEW, REPORT_EXPORT, JOURNAL_VIEW],
     )
 
 
@@ -575,7 +583,7 @@ class TestRenderJobFlow:
             session_factory,
             render_dataset,
             "xep_hang_5e",
-            [REPORT_VIEW, REPORT_EXPORT, "system.job.view", "system.job.create"],
+            [REPORT_VIEW, REPORT_EXPORT, JOURNAL_VIEW, "system.job.view", "system.job.create"],
         )
         headers = _headers(
             client,
