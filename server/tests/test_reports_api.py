@@ -48,6 +48,7 @@ from ket.kernel.config.reports.spec import parse_layout_spec
 from ket.kernel.datasets.provisioning import DatasetRef, drop_dataset_schema, provision_dataset
 from ket.kernel.errors import ReportDatasetNotExecutableError
 from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
 from ket.modules.general_ledger.journal.schemas import JournalLineIn, JournalVoucherIn
 from ket.modules.general_ledger.journal.service import (
@@ -239,16 +240,23 @@ def _seed_books(
         )
 
 
+GLE_VIEW = permission_code("general_ledger", "journal_voucher", Action.VIEW)
+"""Bộ sổ tổng hợp đóng cổng quyền phân hệ từ lát 6G-1
+(`required_permission_module = "general_ledger"`), nên `reporting.report.view`
+một mình không mở được S03a/S03b/S38/S06 nữa — cùng luật đã áp cho báo cáo quỹ
+và ngân hàng ở 6E-1."""
+
+
 @pytest.fixture(scope="module")
 def exporter_role(session_factory: sessionmaker[Session], report_dataset: DatasetRef) -> str:
     return ensure_role(
-        session_factory, report_dataset, "xuat_bao_cao", [REPORT_VIEW, REPORT_EXPORT]
+        session_factory, report_dataset, "xuat_bao_cao", [REPORT_VIEW, REPORT_EXPORT, GLE_VIEW]
     )
 
 
 @pytest.fixture(scope="module")
 def viewer_only_role(session_factory: sessionmaker[Session], report_dataset: DatasetRef) -> str:
-    return ensure_role(session_factory, report_dataset, "chi_xem_bao_cao", [REPORT_VIEW])
+    return ensure_role(session_factory, report_dataset, "chi_xem_bao_cao", [REPORT_VIEW, GLE_VIEW])
 
 
 def _grand_total_row(sheet: openpyxl.worksheet.worksheet.Worksheet) -> list[object]:

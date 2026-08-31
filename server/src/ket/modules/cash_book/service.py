@@ -33,6 +33,9 @@ from ket.kernel.errors import (
     PostingViolation,
     VoucherBranchImmutableError,
 )
+from ket.kernel.master_data.models.company_bank_account import (
+    COMPANY_BANK_ACCOUNT_TABLE_NAME,
+)
 from ket.kernel.master_data.models.employee import EMPLOYEE_TABLE_NAME
 from ket.kernel.master_data.models.partner import PARTNER_TABLE_NAME
 from ket.kernel.master_data.usage import record_use
@@ -333,6 +336,7 @@ class CashVoucherService:
                     expense_item_id=line.expense_item_id,
                     item_id=line.item_id,
                     warehouse_id=line.warehouse_id,
+                    bank_account_id=line.bank_account_id,
                     extended_dimensions=(
                         {str(value.dimension_id): value.value_id for value in line.extended} or None
                     ),
@@ -458,6 +462,13 @@ class CashVoucherService:
         for line in payload.lines:
             if line.partner_id is not None and line.partner_kind is not None:
                 counters[(_USAGE_TABLE_BY_PARTNER_KIND[line.partner_kind], line.partner_id)] += 1
+            # Chiều TK ngân hàng cũng là một tham chiếu danh mục (lát 6G-1):
+            # `gl_postings.bank_account_id` cố ý KHÔNG có khóa ngoại, nên bộ đếm
+            # này là thứ duy nhất chặn xóa một TK ngân hàng mà sổ đang trỏ tới —
+            # thiếu nó thì lượt chuyển số dư năm sau đổ `ForeignKeyViolation`
+            # trên `opening_balances` (review pre-landing H-B).
+            if line.bank_account_id is not None:
+                counters[(COMPANY_BANK_ACCOUNT_TABLE_NAME, line.bank_account_id)] += 1
         return counters
 
     def _usage_of_stored(self, body: CashVoucher) -> Counter[tuple[str, int]]:
@@ -469,6 +480,8 @@ class CashVoucherService:
             if line.partner_id is not None and line.partner_kind is not None:
                 table = _USAGE_TABLE_BY_PARTNER_KIND[PartnerKind(line.partner_kind)]
                 counters[(table, line.partner_id)] += 1
+            if line.bank_account_id is not None:
+                counters[(COMPANY_BANK_ACCOUNT_TABLE_NAME, line.bank_account_id)] += 1
         return counters
 
     def _apply_usage(self, counters: Counter[tuple[str, int]]) -> None:

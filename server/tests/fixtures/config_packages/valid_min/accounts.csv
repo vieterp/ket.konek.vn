@@ -1,7 +1,7 @@
 code,name,name_en,parent_code,balance_nature,is_summary,is_foreign_currency,detail_tracking,is_locked
 111,Tiền mặt,Cash,,0,0,0,,1
 112,Tiền gửi ngân hàng,Bank deposit,,0,1,0,,1
-1121,Tiền gửi VND,Bank deposit VND,112,0,0,0,,0
+1121,Tiền gửi VND,Bank deposit VND,112,0,0,0,bank_account,0
 131,Phải thu của khách hàng,Trade receivable,,2,0,0,customer,1
 331,Phải trả cho người bán,Trade payable,,2,0,0,vendor,1
 911,Xác định kết quả kinh doanh,Income summary,,3,0,0,,1

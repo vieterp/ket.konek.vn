@@ -829,7 +829,7 @@ def test_post_requires_acknowledgement_for_guard_warnings(
         lines = session.execute(
             select(JournalLine).where(JournalLine.voucher_id == voucher.id)
         ).scalars()
-        request = to_posting_request(voucher.id, list(lines))
+        request = to_posting_request(session, voucher.id, list(lines))
 
         posting = PostingService(session)
         with pytest.raises(PostingValidationError) as caught:
@@ -884,7 +884,7 @@ def test_a_blocking_guard_ignores_acknowledgement(run: Runner, context: PostingC
             lines = session.execute(
                 select(JournalLine).where(JournalLine.voucher_id == voucher.id)
             ).scalars()
-            request = to_posting_request(voucher.id, list(lines))
+            request = to_posting_request(session, voucher.id, list(lines))
 
             posting = PostingService(session)
             with pytest.raises(PostingValidationError) as caught:

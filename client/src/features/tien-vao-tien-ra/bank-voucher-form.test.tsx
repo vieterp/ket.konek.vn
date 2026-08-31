@@ -29,7 +29,7 @@ const ACCOUNTS_ROUTE: RouteReply = {
         code: '1121',
         name: 'Tiền gửi VND',
         balance_nature: 1,
-        detail_tracking: null,
+        detail_tracking: ['bank_account'],
         is_summary: false,
         is_foreign_currency: false,
         level: 2,
@@ -80,8 +80,11 @@ function formRoutes(): FakeRoutes {
   return {
     ...baseRoutes(),
     '/accounts': ACCOUNTS_ROUTE,
-    '/master/company_bank_accounts': BANK_ACCOUNTS_ROUTE,
     ...dimensionCatalogRoutes(),
+    // SAU lượt trải: `dimensionCatalogRoutes` nay cũng khai danh mục TK ngân
+    // hàng (nó là danh mục chiều từ lát 6G-1), và khai trước sẽ bị bản rỗng của
+    // nó đè — form mất sạch tùy chọn TK ngân hàng.
+    '/master/company_bank_accounts': BANK_ACCOUNTS_ROUTE,
     '/cashflow/overview': EMPTY_OVERVIEW,
     '/cashflow/transactions': { status: 200, body: { items: [], total: 0 } },
   }
@@ -197,5 +200,29 @@ describe('form chứng từ ngân hàng', () => {
         (entry[1] as RequestInit | undefined)?.method === 'POST',
     )
     expect(posted).toBeUndefined()
+  })
+
+  it('KHÔNG hiện cột "Mã TK ngân hàng" dù TK 112 khai chiều đó (lát 6G-1)', async () => {
+    // Chủ sở hữu dòng 112x của chứng từ tiền gửi suy từ THÂN chứng từ (TK ngân
+    // hàng trên header, và với chuyển nội bộ thì thêm TK đích) ngay lúc ghi sổ.
+    // Một ô nhập tay ở lưới là cửa thứ hai cho cùng câu trả lời — hai cửa sẽ
+    // lệch, và bên lệch là bên không ai kiểm.
+    mockServer(formRoutes())
+    const user = userEvent.setup()
+    renderFeatureAt('/tien-vao-tien-ra/giao-dich/ngan-hang/moi')
+
+    // Phải GÕ 1121 vào một ô TK trước khi đọc header: cột chiều chỉ hiện khi TK
+    // trên dòng khai chiều đó, nên đọc header trên lưới TRỐNG là bài kiểm hằng
+    // đúng — bản đúng lẫn bản sai đều xanh (review 6G-1 M-2).
+    const firstCell = await screen.findByLabelText('TK Nợ, dòng 1')
+    await user.click(firstCell)
+    await user.type(firstCell, '1121')
+    await user.keyboard('{Tab}')
+
+    // Tên TK hiện ra = mã đã tra được vào ĐÚNG tài khoản khai `bank_account`;
+    // thiếu mốc này thì phần khẳng định bên dưới lại là hằng đúng.
+    await screen.findByText('Tiền gửi VND')
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent)
+    expect(headers).not.toContain('Mã TK ngân hàng')
   })
 })

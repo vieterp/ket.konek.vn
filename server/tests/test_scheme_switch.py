@@ -34,6 +34,7 @@ from ket.api.dependencies import BRANCH_HEADER
 from ket.kernel.datasets.provisioning import DatasetRef, drop_dataset_schema, provision_dataset
 from ket.kernel.periods.models import AccountingPeriod, AccountingScheme
 from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
 from ket.modules.general_ledger.journal.schemas import JournalLineIn, JournalVoucherIn
 from ket.modules.general_ledger.journal.service import JournalVoucherService
@@ -47,6 +48,10 @@ from posting_support import (
 )
 
 pytestmark = pytest.mark.db
+
+JOURNAL_VIEW = permission_code("general_ledger", "journal_voucher", Action.VIEW)
+"""Bộ sổ tổng hợp đóng cổng quyền phân hệ từ lát 6G-1 — `reporting.report.view`
+một mình không mở được S03a/S03b/S38/S06/S19 nữa."""
 
 ACTOR_ID = 1
 VND = "VND"
@@ -208,7 +213,7 @@ def _headers(
         session_factory,
         dataset,
         "doi_chieu_che_do",
-        [REPORT_VIEW, REPORT_EXPORT, STATEMENT_VIEW],
+        [REPORT_VIEW, REPORT_EXPORT, STATEMENT_VIEW, JOURNAL_VIEW],
     )
     headers = actor(
         client,

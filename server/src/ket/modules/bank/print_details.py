@@ -22,7 +22,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ket.kernel.config.accounts_models import ChartOfAccount
+from ket.kernel.config.accounts_models import (
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+    ChartOfAccount,
+)
 from ket.kernel.config.printing.context import DocumentPrintDetails, PrintField
 from ket.kernel.config.printing.voucher_fields import (
     MoneyLine,
@@ -38,7 +41,6 @@ from ket.kernel.master_data.models.company_bank_account import CompanyBankAccoun
 from ket.kernel.master_data.models.employee import Employee
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.money_words import amount_in_words
-from ket.modules.bank.balance_service import DEPOSIT_ACCOUNT_CODE_PREFIX
 from ket.modules.bank.models import BankVoucher, BankVoucherKind, BankVoucherLine
 from ket.posting.contracts import Voucher
 
@@ -122,7 +124,7 @@ def _money_amounts(
 
     Chuyển tiền nội bộ chạm 112 ở CẢ HAI bên (tiền không rời doanh nghiệp) nên
     số ròng bằng 0. Số đáng in là số **ĐẾN** tài khoản đích, tức bên **Nợ** —
-    cùng luật quy chủ mà `balance_service.deposit_owner_account` khai cho sổ
+    cùng luật quy chủ mà `posting_mapper._deposit_owner` khai lúc ghi sổ
     ("chuyển nội bộ thì dòng Nợ thuộc TK đích"). Không lấy bên Có: một lệnh
     chuyển kèm dòng phí ngân hàng (`Nợ 642/Có 1121`) có HAI dòng ghi Có 112x,
     và cộng cả hai là tờ giấy nói đã chuyển đi nhiều hơn số tài khoản đích nhận

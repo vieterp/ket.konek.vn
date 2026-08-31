@@ -286,6 +286,14 @@ class BankStatement(DatasetBase, Audited):
     bank_account_id: Mapped[int] = mapped_column(
         ForeignKey("company_bank_accounts.id", ondelete="RESTRICT"), nullable=False
     )
+    branch_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Chi nhánh CỦA TÀI KHOẢN, chép xuống để RLS lọc được (lát 6G-1).
+
+    `NULL` = tài khoản dùng chung toàn công ty, sao kê của nó hiện với mọi chi
+    nhánh — policy khai `allow_null_branch=True`. Nguồn sự thật vẫn là
+    `company_bank_accounts.branch_id`; `statement_branch.sync_statement_branch`
+    là ĐƯỜNG DUY NHẤT ghi cột này.
+    """
     statement_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     opening_balance: Mapped[Decimal | None] = mapped_column(
@@ -355,6 +363,10 @@ class BankStatementLine(DatasetBase, Audited):
     ghi — cùng khuôn denormalize `gl_postings.branch_id`): unique một-chứng-từ-
     một-dòng phải tính THEO TÀI KHOẢN, vì một chuyển nội bộ hợp lệ nằm trên
     HAI sao kê — tiền ra ở tài khoản nguồn, tiền vào ở tài khoản đích."""
+
+    branch_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Bản sao `bank_statements.branch_id` — RLS lọc theo cột của CHÍNH bảng,
+    một policy phải join lên bảng cha là policy chạy trên mọi dòng."""
 
     line_no: Mapped[int] = mapped_column(Integer, nullable=False)
     """Thứ tự dòng trong tệp gốc — sao kê 500 dòng phải hiện đúng thứ tự ngân

@@ -512,3 +512,72 @@ def test_integrity_check_flags_tampered_treasurer_book(
         return None
 
     run(work)
+
+
+def test_two_treasurers_booking_the_same_voucher_serialize_on_the_row_lock(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Nợ M9 của review 6C, trả ở lát 6G-1.
+
+    `CashTreasurerVoucherSource.book` cầm `FOR UPDATE` trên thân phiếu rồi mới
+    đọc trạng thái. Bản không khóa cũng XANH ở một kết nối — hai kết nối mới
+    phân biệt được: dưới READ COMMITTED cả hai đọc `treasurer_status = PENDING`
+    của cùng một ảnh chụp, cả hai ghi một dòng sổ quỹ, và sổ quỹ đếm đôi đúng
+    một phiếu. Có khóa thì người sau chờ, đọc lại trạng thái ĐÃ lật và bị từ
+    chối bằng thông điệp nghiệp vụ.
+
+    Bài kiểm này là lý do `session.refresh(voucher)` sau khi cầm khóa tồn tại:
+    thiếu nó, người sau vẫn quyết định trên bản chụp cũ trong identity map.
+    """
+    import threading
+
+    scope = posting_scope(dataset_alpha, context, user_id=TREASURER_ID)
+    with unit_of_work(session_factory, scope) as session:
+        _set_treasurer_enabled(session, True)
+    try:
+        with unit_of_work(session_factory, scope) as session:
+            service = CashVoucherService(session)
+            voucher = service.create(_receipt(context, accounts), user_id=ACTOR_ID)
+            service.post(voucher.id, user_id=ACTOR_ID)
+            voucher_id = voucher.id
+
+        barrier = threading.Barrier(2)
+        outcomes: list[str] = []
+        lock = threading.Lock()
+
+        def attempt() -> None:
+            barrier.wait()
+            try:
+                with unit_of_work(session_factory, scope) as session:
+                    book_vouchers(
+                        session, voucher_ids=(voucher_id,), book_date=None, user_id=TREASURER_ID
+                    )
+                outcome = "booked"
+            except TreasurerVoucherStateError:
+                outcome = "refused"
+            with lock:
+                outcomes.append(outcome)
+
+        threads = [threading.Thread(target=attempt) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert sorted(outcomes) == ["booked", "refused"]
+        with unit_of_work(session_factory, scope) as session:
+            rows = session.execute(
+                select(TreasurerCashBookEntry).where(
+                    TreasurerCashBookEntry.voucher_id == voucher_id
+                )
+            ).scalars()
+            assert len(list(rows)) == 1, "sổ quỹ đếm đôi một phiếu"
+            # Dọn: phiếu + dòng sổ quỹ không được rơi vãi vào chi nhánh dùng chung.
+            CashVoucherService(session).unpost(voucher_id, user_id=ACTOR_ID)
+            CashVoucherService(session).delete(voucher_id)
+    finally:
+        with unit_of_work(session_factory, scope) as session:
+            _set_treasurer_enabled(session, False)

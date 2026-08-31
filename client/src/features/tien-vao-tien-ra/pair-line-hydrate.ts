@@ -6,24 +6,35 @@
 
 import type { Schemas } from '@api-types'
 
-import { DIMENSION_COLUMNS } from '@/features/so-sach-thue/dimension-config'
+import {
+  DIMENSION_CATALOG_SLUG,
+  DIMENSION_COLUMNS,
+} from '@/features/so-sach-thue/dimension-config'
 import type { AccountMaps } from '@/features/so-sach-thue/use-account-lookup'
 import type { DimensionLookups } from '@/features/so-sach-thue/use-dimension-lookups'
 
 import type { PairLineRow } from './pair-line-types'
 
-/** Hai module cùng hình dạng dòng trả về — dùng chung một hàm dựng. */
-export type PairLineOut = Schemas['CashVoucherLineOut']
+/**
+ * Dòng trả về của hai module — dùng chung một hàm dựng.
+ *
+ * Hợp chứ không phải một: từ lát 6G-1 chỉ dòng phiếu quỹ mang cột chiều
+ * `bank_account_id`; chứng từ tiền gửi suy chủ sở hữu 112x từ THÂN chứng từ nên
+ * không có (và không được có) ô nhập tay tương ứng.
+ */
+export type PairLineOut = Schemas['CashVoucherLineOut'] | Schemas['BankVoucherLineOut']
 
-/** Slug danh mục ứng với một giá trị `detail_tracking` — mặt ngược của `DIMENSION_CATALOG_SLUG`. */
+/**
+ * Slug danh mục của một giá trị `detail_tracking` — ĐỌC `DIMENSION_CATALOG_SLUG`,
+ * không suy lại bằng `${dimension}s`.
+ *
+ * Bản suy-lại cũ đúng với chín chiều đầu rồi sai ngay ở chiều thứ mười:
+ * `bank_account` → `bank_accounts`, trong khi danh mục tên là
+ * `company_bank_accounts`. Mã đã tra được sẽ hiện thành ô TRỐNG trên form SỬA,
+ * và PUT thay-trọn-bộ biến ô trống ấy thành mất dữ liệu (cùng họ với 6F-1 C-1).
+ */
 function slugFor(dimension: string): string {
-  if (dimension === 'customer' || dimension === 'vendor') {
-    return 'partners'
-  }
-  if (dimension === 'employee') {
-    return 'employees'
-  }
-  return `${dimension}s`
+  return DIMENSION_CATALOG_SLUG[dimension] ?? `${dimension}s`
 }
 
 function idFor(line: PairLineOut, dimension: string): number | null {

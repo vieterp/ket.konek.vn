@@ -148,7 +148,7 @@ class JournalVoucherService:
     ) -> Voucher:
         lines = self._lines_of(voucher_id)
         return self._posting.post(
-            to_posting_request(voucher_id, lines),
+            to_posting_request(self._session, voucher_id, lines),
             user_id=user_id,
             acknowledged_warnings=acknowledged_warnings,
         )
@@ -202,6 +202,7 @@ class JournalVoucherService:
                     expense_item_id=line.expense_item_id,
                     item_id=line.item_id,
                     warehouse_id=line.warehouse_id,
+                    bank_account_id=line.bank_account_id,
                     extended_dimensions=(
                         {str(value.dimension_id): value.value_id for value in line.extended} or None
                     ),

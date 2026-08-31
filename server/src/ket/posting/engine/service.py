@@ -256,6 +256,7 @@ class PostingService:
                     "expense_item_id": dims.expense_item_id,
                     "item_id": dims.item_id,
                     "warehouse_id": dims.warehouse_id,
+                    "bank_account_id": dims.bank_account_id,
                     "description": line.source.description,
                 }
             )

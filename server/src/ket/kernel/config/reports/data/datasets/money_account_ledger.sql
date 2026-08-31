@@ -13,23 +13,17 @@
 -- **Chiều gộp thứ hai: TỪNG tài khoản ngân hàng.** S08-DN là sổ của MỘT tài
 -- khoản tiền gửi ("Nơi mở tài khoản giao dịch", "Số hiệu tài khoản tại nơi
 -- gửi"), nhưng `gl_postings` chỉ mang TK kế toán (1121) chứ không mang tài
--- khoản ngân hàng. Quy chủ theo đúng luật của `BankDepositMovementSource`
--- (kernel Protocol `DepositMovementSource`, lát 6D): chủ là
--- `bank_vouchers.bank_account_id`, RIÊNG chuyển tiền nội bộ thì dòng ghi Nợ
--- thuộc tài khoản ĐÍCH (`counter_bank_account_id`) — một chứng từ CTNB đứng
--- trên sổ của cả hai tài khoản, mỗi bên một chiều.
+-- khoản ngân hàng. Chủ sở hữu đọc thẳng cột `gl_postings.bank_account_id`
+-- (chiều `bank_account`, lát 6G-1); luật quy chủ — BC/UNC/SEC theo thân chứng
+-- từ, chuyển tiền nội bộ thì bên Nợ thuộc tài khoản ĐÍCH — sống ở đường GHI
+-- (`bank/posting_mapper._deposit_owner`) và không còn được chép lại ở đây.
 --
--- Phát sinh 112x KHÔNG quy được về một tài khoản ngân hàng nào rơi vào nhóm
--- `(chưa gắn)`. Hai nguồn, không phải một (review 6E-1 H-3):
---   * bút toán GLE gõ thẳng vào 112x;
---   * **chứng từ QUỸ chạm 112** — gói builtin khai sẵn `PT rut-tgnh-nhap-quy`
---     (rút tiền gửi về nhập quỹ) và chiều ngược bằng phiếu chi. Chúng là
---     `cash_vouchers`, không có `bank_vouchers` để bám, và `cash_vouchers`
---     chưa có cột TK ngân hàng.
--- Nộp/rút tiền mặt ↔ ngân hàng là nghiệp vụ HẰNG TUẦN, nên nhóm này không phải
--- ca hiếm: số dư S08-DN sẽ lệch sao kê đúng bằng các khoản đó. Nhóm hiện ra
--- thay vì bị giấu, và nợ "thêm `bank_account_id` cho chứng từ quỹ" đã ghi bàn
--- giao 6E-1 → 6G. Không bịa chủ, cùng lối carry-forward 6D.
+-- Trước 6G-1 chủ sở hữu suy bằng `LEFT JOIN bank_vouchers` ngay trong câu này,
+-- nên bút toán GLE gõ thẳng 112x và **chứng từ QUỸ chạm 112** (gói builtin khai
+-- sẵn `PT rut-tgnh-nhap-quy` và chiều ngược bằng phiếu chi) rơi vào nhóm
+-- `(chưa gắn)` — nghiệp vụ HẰNG TUẦN làm S08-DN lệch sao kê đúng bằng chúng
+-- (review 6E-1 H-3). Nhóm `(chưa gắn)` GIỮ LẠI cho dữ liệu ghi sổ trước lát
+-- này mà migration không suy nổi chủ: hiện ra thay vì bị giấu, không bịa chủ.
 --
 -- Số dư đầu kỳ = dư đầu năm (`opening_balances` của năm chứa :from_date, đã
 -- mang sẵn `bank_account_id` từ 0019) + phát sinh từ đầu năm tới trước
@@ -57,8 +51,8 @@ WITH fy AS (
     ORDER BY start_date DESC
     LIMIT 1
 ),
--- Quy chủ tài khoản ngân hàng cho MỌI dòng phát sinh trên TK tiền, một lần,
--- dùng lại cho cả nhánh số dư đầu kỳ lẫn nhánh dòng trong kỳ.
+-- CTE dòng phát sinh trên TK tiền, một lần, dùng lại cho cả nhánh số dư đầu kỳ
+-- lẫn nhánh dòng trong kỳ.
 postings AS (
     SELECT p.account_id,
            p.posting_date,
@@ -69,14 +63,9 @@ postings AS (
            p.credit,
            p.description,
            p.corresponding_account_id,
-           CASE
-               WHEN bv.id IS NULL THEN NULL
-               WHEN bv.kind = 3 AND p.debit > 0 THEN bv.counter_bank_account_id
-               ELSE bv.bank_account_id
-           END AS bank_account_id
+           p.bank_account_id
     FROM gl_postings p
     JOIN chart_of_accounts coa ON coa.id = p.account_id
-    LEFT JOIN bank_vouchers bv ON bv.id = p.voucher_id
     WHERE p.ledger = :ledger
       AND (CAST(:branch_ids AS INTEGER[]) IS NULL OR p.branch_id = ANY(:branch_ids))
       AND coa.code LIKE :account_prefix || '%'

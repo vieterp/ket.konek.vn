@@ -7,9 +7,9 @@ mapper trải thành hai `PostingLine` một bên, hai sổ ghi giống nhau
 Chiều phân tích gắn vào **bên nghiệp vụ** — nhưng khác phiếu quỹ, thân chứng
 từ tiền gửi không mang TK kế toán (nó mang tài khoản ngân hàng DANH MỤC,
 FR-BNK-002; TK 112x nằm trên dòng). Bên tiền nhận diện theo **số hiệu TK nhóm
-tiền** (`MONEY_ACCOUNT_CODE_PREFIXES` — cùng doctrine với
-`CASH_ACCOUNT_CODE_PREFIXES` của guard 6B: nhóm 111/112 = tiền là bất biến
-SRS-định-nghĩa của cả hai chế độ kế toán, không phải đích cấu hình): bên tiền
+tiền** (`MONEY_ACCOUNT_CODE_PREFIXES`, ghép từ hai hằng kernel: nhóm 111/112 =
+tiền là bất biến SRS-định-nghĩa của cả hai chế độ kế toán, không phải đích cấu
+hình): bên tiền
 không nhận chiều khi bên kia là bên nghiệp vụ; dòng cả hai bên cùng là tiền
 (chuyển nội bộ 112↔112) hay không bên nào là tiền thì cả hai cùng nhận —
 đúng luật của phiếu quỹ, chỉ khác cách nhận diện bên tiền.
@@ -27,6 +27,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ket.kernel.config.accounts_models import (
+    CASH_ON_HAND_CODE_PREFIX,
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+)
 from ket.kernel.config.accounts_provider import accounts_by_id
 from ket.kernel.errors import PostingValidationError, PostingViolation
 from ket.modules.bank.models import (
@@ -55,12 +59,36 @@ _MONEY_IN_BY_KIND = {
     BankVoucherKind.CHEQUE: False,
 }
 
-MONEY_ACCOUNT_CODE_PREFIXES = ("111", "112")
-"""Nhóm TK tiền — bên không nhận chiều phân tích. Literal số hiệu CÓ CHỦ ĐÍCH,
-cùng lập luận `CASH_ACCOUNT_CODE_PREFIXES` (cash_book/guards.py, không import
-được vì luật module #1): nhóm 111/112 = tiền do chính SRS định nghĩa và là bất
-biến chung của TT99 lẫn TT133; chế độ tương lai đổi nhóm TK tiền thì chỗ sửa
-là MỘT hằng này."""
+MONEY_ACCOUNT_CODE_PREFIXES = (CASH_ON_HAND_CODE_PREFIX, DEPOSIT_ACCOUNT_CODE_PREFIX)
+"""Nhóm TK tiền — bên không nhận chiều phân tích.
+
+Ghép từ hai hằng của **kernel** thay vì viết lại literal: lát 6G-1 đưa cả hai về
+`kernel/config/accounts_models` đúng vì chỗ này từng khai "không import được vì
+luật module #1" — đúng với `cash_book/guards.py` (module ↛ module) nhưng SAI với
+kernel, mà mọi tầng đều import được.
+"""
+
+
+def _deposit_owner(body: BankVoucher, *, debit_side: bool) -> int:
+    """TK ngân hàng doanh nghiệp sở hữu một bên 112x của chứng từ tiền gửi.
+
+    BC/UNC/SEC: mọi bên 112x thuộc `bank_account_id` của thân. Chuyển nội bộ:
+    bên **Nợ** là tài khoản ĐÍCH (`counter_bank_account_id`), bên **Có** là tài
+    khoản nguồn — một chứng từ đứng trên sổ của cả hai tài khoản, mỗi bên một
+    chiều.
+
+    Trước lát 6G-1 luật này sống ở đường ĐỌC (`bank/balance_service`) và được
+    chép lại ba lần bằng SQL, nên chứng từ quỹ và bút toán tổng hợp chạm 112 —
+    không có thân `bank_vouchers` để suy — rơi ra ngoài mọi báo cáo tiền gửi.
+    Nay nó ở đường GHI: engine lưu kết quả vào `gl_postings.bank_account_id` và
+    mọi người đọc chỉ còn đọc cột.
+    """
+    if body.kind == BankVoucherKind.INTERNAL_TRANSFER and debit_side:
+        counter = body.counter_bank_account_id
+        if counter is None:  # pragma: no cover - service đòi cặp TK khi tạo CTNB
+            raise RuntimeError("Chuyển tiền nội bộ thiếu tài khoản ngân hàng đích")
+        return counter
+    return body.bank_account_id
 
 
 def build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest:
@@ -97,11 +125,18 @@ def build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest:
         for account_id, account in accounts.items()
         if account.code.startswith(MONEY_ACCOUNT_CODE_PREFIXES)
     }
+    deposit_account_ids = {
+        account_id
+        for account_id, account in accounts.items()
+        if account.code.startswith(DEPOSIT_ACCOUNT_CODE_PREFIX)
+    }
 
     posting_lines: list[PostingLine] = []
     violations: list[PostingViolation] = []
     for line in lines:
-        posting_lines.extend(_split_pair(voucher, line, money_account_ids, violations))
+        posting_lines.extend(
+            _split_pair(voucher, body, line, money_account_ids, deposit_account_ids, violations)
+        )
     if violations:
         raise PostingValidationError(
             "Chứng từ còn dòng định khoản thiếu bên Nợ hoặc bên Có", violations=violations
@@ -119,8 +154,10 @@ def build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest:
 
 def _split_pair(
     voucher: Voucher,
+    body: BankVoucher,
     line: BankVoucherLine,
     money_account_ids: set[int],
+    deposit_account_ids: set[int],
     violations: list[PostingViolation],
 ) -> list[PostingLine]:
     if line.debit_account_id is None or line.credit_account_id is None:
@@ -140,6 +177,19 @@ def _split_pair(
     # tiền thì cả hai bên cùng nhận — đúng luật phiếu quỹ (xem docstring).
     debit_dimensions = _EMPTY_DIMENSIONS if debit_is_money and not credit_is_money else dimensions
     credit_dimensions = _EMPTY_DIMENSIONS if credit_is_money and not debit_is_money else dimensions
+
+    # Chiều `bank_account` đi ngược luật trên: nó thuộc CHÍNH bên 112x, kể cả
+    # khi bên đó là bên tiền không nhận chiều nào khác. Thiếu nó thì validator
+    # `dimension_required` chặn ngay ở chứng từ tiền gửi — nơi câu trả lời đã
+    # nằm sẵn trên thân chứng từ.
+    if line.debit_account_id in deposit_account_ids:
+        debit_dimensions = debit_dimensions.model_copy(
+            update={"bank_account_id": _deposit_owner(body, debit_side=True)}
+        )
+    if line.credit_account_id in deposit_account_ids:
+        credit_dimensions = credit_dimensions.model_copy(
+            update={"bank_account_id": _deposit_owner(body, debit_side=False)}
+        )
 
     description = line.description or voucher.description
     return [

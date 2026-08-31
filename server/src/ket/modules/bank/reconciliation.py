@@ -29,11 +29,14 @@ from decimal import Decimal
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, and_, exists, func, or_, select
+from sqlalchemy import ColumnElement, exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ket.kernel.config.accounts_models import ChartOfAccount
+from ket.kernel.config.accounts_models import (
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+    ChartOfAccount,
+)
 from ket.kernel.errors import (
     BankStatementMatchInvalidError,
     BankStatementMatchStateError,
@@ -44,10 +47,8 @@ from ket.modules.bank.models import (
     BankStatement,
     BankStatementLine,
     BankVoucher,
-    BankVoucherKind,
     StatementMatchKind,
 )
-from ket.modules.bank.posting_mapper import MONEY_ACCOUNT_CODE_PREFIXES
 from ket.posting.documents.models import Voucher, VoucherStatus
 from ket.posting.engine.models import GlPosting, Ledger
 
@@ -55,7 +56,7 @@ AUTO_MATCH_DATE_WINDOW_DAYS: Final[int] = 3
 """±3 ngày (`docs/srs/04` §4.3): lệnh chi lập cuối ngày ngân hàng xử lý hôm
 sau, giao dịch cuối tuần vào sổ thứ hai — cùng con số phase file bước 14."""
 
-_DEPOSIT_PREFIX: Final[str] = MONEY_ACCOUNT_CODE_PREFIXES[1]
+_DEPOSIT_PREFIX: Final[str] = DEPOSIT_ACCOUNT_CODE_PREFIX
 
 
 @dataclass(frozen=True)
@@ -93,23 +94,14 @@ class ReconciliationSummary:
 
 
 def _attribution_filter(bank_account_id: int) -> ColumnElement[bool]:
-    """Điều kiện "dòng sổ này thuộc TK ngân hàng X" — xem docstring module."""
-    return or_(
-        and_(
-            BankVoucher.kind != BankVoucherKind.INTERNAL_TRANSFER,
-            BankVoucher.bank_account_id == bank_account_id,
-        ),
-        and_(
-            BankVoucher.kind == BankVoucherKind.INTERNAL_TRANSFER,
-            or_(
-                and_(
-                    GlPosting.debit_fc > 0,
-                    BankVoucher.counter_bank_account_id == bank_account_id,
-                ),
-                and_(GlPosting.credit_fc > 0, BankVoucher.bank_account_id == bank_account_id),
-            ),
-        ),
-    )
+    """Điều kiện "dòng sổ này thuộc TK ngân hàng X".
+
+    Từ lát 6G-1 chỉ là phép so cột: chủ sở hữu được quy ngay lúc GHI sổ
+    (`posting_mapper._deposit_owner`) và nằm ở `gl_postings.bank_account_id`.
+    Bản cũ dựng lại luật CTNB ngay tại đây bằng `or_/and_` trên
+    `bank_vouchers` — bản chép thứ tư của cùng một luật.
+    """
+    return GlPosting.bank_account_id == bank_account_id
 
 
 def unmatched_vouchers(
@@ -343,6 +335,9 @@ def match_line(session: Session, *, line_id: UUID, voucher_id: UUID) -> None:
     _flush_matches(session)
 
 
+MATCHED_VOUCHER_UNIQUE_INDEX = "uq_bank_statement_lines_matched_voucher"
+
+
 def _flush_matches(session: Session) -> None:
     """Đẩy khớp xuống DB, đổi đua unique-index thành 409 đọc được.
 
@@ -350,13 +345,29 @@ def _flush_matches(session: Session) -> None:
     hai sao kê khác nhau vẫn giành được cùng một chứng từ, và bên thua đâm vào
     `uq_bank_statement_lines_matched_voucher`. Đó là kết quả đúng (một chứng
     từ một dòng mỗi tài khoản), chỉ cần kể bằng lỗi nghiệp vụ thay vì 500.
+
+    Chỉ dịch ĐÚNG ràng buộc ấy (nợ L-2 của 6D): bản cũ nuốt mọi
+    `IntegrityError`, nên một FK gãy hay một CHECK vi phạm — lỗi lập trình, phải
+    nổ to — cũng được kể thành "ai đó vừa lấy mất chứng từ" và người dùng bấm
+    lại mãi không hiểu. Nhận diện qua tên ràng buộc của psycopg chứ không qua
+    chuỗi thông báo: thông báo đổi theo locale của máy chủ.
     """
     try:
         session.flush()
     except IntegrityError as error:
+        if _violated_constraint(error) != MATCHED_VOUCHER_UNIQUE_INDEX:
+            raise
         raise BankStatementMatchStateError(
             "Một lượt khớp khác vừa lấy mất chứng từ — tải lại màn hình đối chiếu rồi thử lại"
         ) from error
+
+
+def _violated_constraint(error: IntegrityError) -> str | None:
+    """Tên ràng buộc bị vi phạm, `None` khi driver không nói (không phải psycopg,
+    hoặc lỗi không mang `diag`)."""
+    diagnostic = getattr(error.orig, "diag", None)
+    name = getattr(diagnostic, "constraint_name", None)
+    return name if isinstance(name, str) else None
 
 
 def _candidate_of(

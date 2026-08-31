@@ -11,6 +11,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
+from sqlalchemy.orm import Session
+
+from ket.kernel.config.accounts_models import DEPOSIT_ACCOUNT_CODE_PREFIX
+from ket.kernel.config.accounts_provider import accounts_by_id
 from ket.modules.general_ledger.journal.models import JournalLine
 from ket.posting.contracts import (
     ExtendedDimensionValue,
@@ -21,15 +25,27 @@ from ket.posting.contracts import (
 )
 
 
-def to_posting_request(voucher_id: UUID, lines: Sequence[JournalLine]) -> PostingRequest:
+def to_posting_request(
+    session: Session, voucher_id: UUID, lines: Sequence[JournalLine]
+) -> PostingRequest:
+    # Chiều `bank_account` chỉ có nghĩa trên dòng 112x: một dòng GLE khai TK
+    # ngân hàng cho TK khác là dữ liệu người dùng gõ nhầm, và để nó đi vào sổ
+    # thì lượt chuyển số dư đầu năm xếp dòng ấy sang nhóm tiền gửi (review
+    # pre-landing H-A). Lọc theo SỐ HIỆU TK, cùng doctrine với hai mapper kia.
+    accounts = accounts_by_id(session, [line.account_id for line in lines])
+    deposit_account_ids = {
+        account_id
+        for account_id, account in accounts.items()
+        if account.code.startswith(DEPOSIT_ACCOUNT_CODE_PREFIX)
+    }
     return PostingRequest(
         voucher_id=voucher_id,
-        financial_lines=tuple(_to_posting_line(line) for line in lines),
+        financial_lines=tuple(_to_posting_line(line, deposit_account_ids) for line in lines),
         management_lines=None,
     )
 
 
-def _to_posting_line(line: JournalLine) -> PostingLine:
+def _to_posting_line(line: JournalLine, deposit_account_ids: set[int]) -> PostingLine:
     extended = tuple(
         ExtendedDimensionValue(dimension_id=int(dimension_id), value_id=value_id)
         for dimension_id, value_id in sorted((line.extended_dimensions or {}).items())
@@ -53,6 +69,9 @@ def _to_posting_line(line: JournalLine) -> PostingLine:
             expense_item_id=line.expense_item_id,
             item_id=line.item_id,
             warehouse_id=line.warehouse_id,
+            bank_account_id=(
+                line.bank_account_id if line.account_id in deposit_account_ids else None
+            ),
             extended=extended,
         ),
         source_line_id=line.id,

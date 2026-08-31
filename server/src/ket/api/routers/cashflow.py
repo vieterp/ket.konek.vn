@@ -33,7 +33,10 @@ from ket.api.routers.cashflow_schemas import (
     CashflowTransaction,
     CashflowTransactionsResponse,
 )
-from ket.kernel.config.accounts_models import ChartOfAccount
+from ket.kernel.config.accounts_models import (
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+    ChartOfAccount,
+)
 from ket.kernel.contracts import Ledger
 from ket.kernel.currency.models import Currency
 from ket.kernel.errors import PermissionDeniedError
@@ -50,11 +53,7 @@ from ket.modules.bank import (
     INTERNAL_TRANSFER_PERMISSION_CODE,
     PAYMENT_ORDER_PERMISSION_CODE,
 )
-from ket.modules.bank.balance_service import (
-    DEPOSIT_ACCOUNT_CODE_PREFIX,
-    deposit_balances_as_of,
-    deposit_owner_account,
-)
+from ket.modules.bank.balance_service import deposit_balances_as_of
 from ket.modules.bank.models import BankVoucher
 from ket.modules.cash_book import (
     CASH_PERMISSION_MODULE,
@@ -240,10 +239,18 @@ def _unassigned_deposit_balance(
 ) -> Decimal:
     """Số dư TK 112 KHÔNG quy được về tài khoản ngân hàng nào.
 
-    Bút toán GLE gõ thẳng vào 112x không đi qua chứng từ tiền gửi nên không có
-    `bank_account_id` để bám (xem `bank/balance_service`). Con số này bằng
-    *tổng TK 112 − tổng các thẻ ngân hàng*, và hiện ra để người dùng đối chiếu
-    được hàng thẻ với bảng cân đối TK thay vì tự hỏi vì sao lệch.
+    Từ lát 6G-1 chỉ còn dòng ghi sổ TRƯỚC lát ấy mà migration không suy nổi chủ
+    (chiều `bank_account` nay bắt buộc trên 112x). Con số này bằng *tổng TK 112
+    − tổng các thẻ ngân hàng*, và hiện ra để người dùng đối chiếu được hàng thẻ
+    với bảng cân đối TK thay vì tự hỏi vì sao lệch.
+
+    **Khoảng hở đã biết, bàn giao 6G-2:** thẻ số dư nay gồm cả phát sinh 112x
+    của phiếu quỹ và bút toán tổng hợp, còn `_transactions_query` nhánh `bank`
+    vẫn chỉ liệt kê chứng từ tiền gửi — bấm vào thẻ không thấy hết những gì
+    tạo ra con số. Nới lưới KHÔNG phải sửa một dòng: nhánh này đứng sau cổng
+    `_may_see_bank`, nên cho phiếu quỹ lọt vào sẽ để người chỉ có quyền ngân
+    hàng đọc chi tiết phiếu quỹ. Muốn nới thì phải gộp cổng theo TỪNG dòng
+    (chứng từ nào thì quyền nấy) — quyết định sản phẩm, không phải lát này.
 
     `assigned` truyền vào chứ không tính lại: người gọi vừa dựng xong hàng thẻ
     từ CHÍNH tập số dư đó, nên tính lại vừa tốn một lượt quét vừa mở đường cho
@@ -406,7 +413,6 @@ def _transactions_query(
         if cash_account_code is not None:
             query = query.where(ChartOfAccount.code == cash_account_code)
     else:
-        owner = deposit_owner_account()
         deposit_accounts = select(ChartOfAccount.id).where(
             ChartOfAccount.code.like(literal(f"{DEPOSIT_ACCOUNT_CODE_PREFIX}%"))
         )
@@ -422,9 +428,10 @@ def _transactions_query(
             .outerjoin(Partner, Partner.id == BankVoucher.partner_id)
         )
         if bank_account_id is not None:
-            # Quy chủ theo CHIỀU dòng: chuyển tiền nội bộ đứng trên lưới của cả
-            # tài khoản nguồn lẫn tài khoản đích, mỗi bên đúng một chiều.
-            query = query.where(owner == bank_account_id)
+            # Chủ sở hữu đọc cột `gl_postings.bank_account_id` (lát 6G-1) —
+            # chuyển tiền nội bộ đã được quy chủ theo CHIỀU dòng ngay lúc ghi
+            # sổ, nên lưới của tài khoản nguồn và tài khoản đích vẫn tách đúng.
+            query = query.where(GlPosting.bank_account_id == bank_account_id)
 
     if from_date is not None:
         query = query.where(Voucher.posting_date >= from_date)

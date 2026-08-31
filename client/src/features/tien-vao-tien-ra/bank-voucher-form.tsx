@@ -122,6 +122,14 @@ function ExistingVoucherPage({ id }: { readonly id: string }): ReactElement {
 
 const DIMENSION_KEYS = DIMENSION_COLUMNS.map((column) => column.key)
 
+/**
+ * Chiều `bank_account` KHÔNG có mặt trên form chứng từ tiền gửi: chủ sở hữu của
+ * dòng 112x suy từ thân chứng từ (TK ngân hàng, và với chuyển nội bộ thì thêm
+ * TK đích) ngay lúc ghi sổ — `bank/posting_mapper._deposit_owner`. Một ô nhập
+ * tay ở đây là cửa thứ hai cho cùng một câu trả lời, và hai cửa sẽ lệch.
+ */
+const BANK_ACCOUNT_TRACKING = 'bank_account'
+
 function VoucherFormBody({
   voucher,
 }: {
@@ -325,7 +333,12 @@ function VoucherFormBody({
     for (const code of [row.debitCode, row.creditCode]) {
       const account = accountLookup.maps.byCode.get(code.trim().toLowerCase())
       for (const value of account?.detail_tracking ?? []) {
-        requiredDimensions.add(value)
+        // `bank_account` bị loại ngay ở NGUỒN, không chỉ ở cột hiển thị: nó đi
+        // tiếp vào bước tra mã lúc Cất, và một chiều "bắt buộc" mà form cố ý
+        // không có ô nhập sẽ chặn lưu bằng lỗi không ai sửa được.
+        if (value !== BANK_ACCOUNT_TRACKING) {
+          requiredDimensions.add(value)
+        }
       }
     }
   }

@@ -64,6 +64,19 @@ class BalanceNature:
     """Không có số dư (loại 5–9 kết chuyển hết cuối kỳ)."""
 
 
+CASH_ON_HAND_CODE_PREFIX = "111"
+"""Nhóm TK tiền mặt tại quỹ — cặp đôi của hằng ngay dưới."""
+
+DEPOSIT_ACCOUNT_CODE_PREFIX = "112"
+"""Nhóm TK tiền gửi ngân hàng.
+
+Literal số hiệu CÓ CHỦ ĐÍCH: nhóm 112 do chính SRS định nghĩa và là bất biến
+chung của TT99 lẫn TT133, không phải đích cấu hình. Đặt ở kernel vì cả ba tầng
+cần nó — loader gói, mapper của hai module, và đường chuyển số dư của `posting`
+— mà chúng không import được lẫn nhau (luật phụ thuộc C3/C4).
+"""
+
+
 class DetailTracking:
     """Giá trị hợp lệ của `chart_of_accounts.detail_tracking` (FR-SYS-021).
 
@@ -82,6 +95,15 @@ class DetailTracking:
     EXPENSE_ITEM = "expense_item"
     ITEM = "item"
     WAREHOUSE = "warehouse"
+    BANK_ACCOUNT = "bank_account"
+    """Tài khoản ngân hàng doanh nghiệp của dòng 112x.
+
+    Bật trên 112x thì mọi đường ghi sổ — chứng từ tiền gửi, phiếu thu/chi nộp
+    rút tiền mặt, bút toán tổng hợp gõ thẳng — đều phải nói dòng này thuộc tài
+    khoản ngân hàng nào. Trước đó chủ sở hữu được **suy** từ thân
+    `bank_vouchers`, nên hai đường sau không suy được và sổ chi tiết tiền gửi
+    thiếu đúng bằng chúng.
+    """
 
     ALL = frozenset(
         {
@@ -95,6 +117,7 @@ class DetailTracking:
             EXPENSE_ITEM,
             ITEM,
             WAREHOUSE,
+            BANK_ACCOUNT,
         }
     )
 

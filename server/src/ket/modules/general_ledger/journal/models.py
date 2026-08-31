@@ -86,6 +86,8 @@ class JournalLine(DatasetBase, Audited):
     expense_item_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     item_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     warehouse_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bank_account_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """TK ngân hàng doanh nghiệp của dòng 112x (chiều `bank_account`, lát 6G-1)."""
 
     extended_dimensions: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
     """Chiều mở rộng của dòng, dạng `{"<dimension_id>": value_id}`.

@@ -2,22 +2,19 @@
 -- FR-BNK-041) — số dư đầu kỳ, phát sinh thu/chi, số dư cuối kỳ theo TỪNG tài
 -- khoản ngân hàng và TỪNG loại tiền, hiện đồng thời nguyên tệ và quy đổi.
 --
--- Cùng luật quy chủ tài khoản ngân hàng với `money_account_ledger.sql` và
--- `BankDepositMovementSource` (kernel Protocol `DepositMovementSource`, 6D):
--- chủ là `bank_vouchers.bank_account_id`, riêng chuyển tiền nội bộ
--- (`kind = 3`) thì dòng ghi Nợ thuộc tài khoản ĐÍCH.
+-- Chủ sở hữu của một dòng 112x đọc thẳng cột `gl_postings.bank_account_id`
+-- (chiều `bank_account`, lát 6G-1). Luật quy chủ — BC/UNC/SEC theo thân chứng
+-- từ, chuyển tiền nội bộ thì bên Nợ thuộc tài khoản ĐÍCH — sống ở đường GHI,
+-- trong `bank/posting_mapper._deposit_owner`, và báo cáo không còn chép lại nó.
 --
--- Phát sinh 112x KHÔNG quy được về một tài khoản ngân hàng nào rơi vào nhóm
--- `(chưa gắn)`. Hai nguồn, không phải một (review 6E-1 H-3):
---   * bút toán GLE gõ thẳng vào 112x;
---   * **chứng từ QUỸ chạm 112** — gói builtin khai sẵn `PT rut-tgnh-nhap-quy`
---     (rút tiền gửi về nhập quỹ) và chiều ngược bằng phiếu chi. Chúng là
---     `cash_vouchers`, không có `bank_vouchers` để bám, và `cash_vouchers`
---     chưa có cột TK ngân hàng.
--- Nộp/rút tiền mặt ↔ ngân hàng là nghiệp vụ HẰNG TUẦN, nên nhóm này không phải
--- ca hiếm: số dư S08-DN sẽ lệch sao kê đúng bằng các khoản đó. Nhóm hiện ra
--- thay vì bị giấu, và nợ "thêm `bank_account_id` cho chứng từ quỹ" đã ghi bàn
--- giao 6E-1 → 6G. Không bịa chủ, cùng lối carry-forward 6D.
+-- Trước 6G-1 chủ sở hữu được suy bằng `LEFT JOIN bank_vouchers` ngay trong câu
+-- này, nên hai nguồn phát sinh rơi vào nhóm `(chưa gắn)`: bút toán GLE gõ
+-- thẳng 112x, và **chứng từ QUỸ chạm 112** (gói builtin khai sẵn
+-- `PT rut-tgnh-nhap-quy` và chiều ngược bằng phiếu chi) — nghiệp vụ HẰNG TUẦN
+-- làm số dư S08-DN lệch sao kê đúng bằng chúng (review 6E-1 H-3).
+--
+-- Nhóm `(chưa gắn)` GIỮ LẠI cho dữ liệu ghi sổ trước lát 6G-1 mà migration
+-- không suy nổi chủ: hiện ra thay vì bị giấu, không bịa chủ.
 --
 -- Số dư đầu kỳ = dư đầu năm (`opening_balances`, cột `bank_account_id` có từ
 -- 0019) + phát sinh từ đầu năm tới TRƯỚC :from_date. Cùng phép toán với
@@ -50,14 +47,9 @@ postings AS (
            p.credit,
            p.debit_fc,
            p.credit_fc,
-           CASE
-               WHEN bv.id IS NULL THEN NULL
-               WHEN bv.kind = 3 AND p.debit > 0 THEN bv.counter_bank_account_id
-               ELSE bv.bank_account_id
-           END AS bank_account_id
+           p.bank_account_id
     FROM gl_postings p
     JOIN chart_of_accounts coa ON coa.id = p.account_id
-    LEFT JOIN bank_vouchers bv ON bv.id = p.voucher_id
     WHERE p.ledger = :ledger
       AND (CAST(:branch_ids AS INTEGER[]) IS NULL OR p.branch_id = ANY(:branch_ids))
       AND coa.code LIKE '112%'

@@ -9,21 +9,23 @@
 
 import type { AccountMaps } from './use-account-lookup'
 import type { DimensionLookups } from './use-dimension-lookups'
-import { DIMENSION_COLUMNS } from './dimension-config'
+import { DIMENSION_CATALOG_SLUG, DIMENSION_COLUMNS } from './dimension-config'
 import type { LineRow } from './journal-line-types'
 import type { JournalVoucherOut } from './use-journal-voucher'
 
 type JournalLineOut = JournalVoucherOut['lines'][number]
 
-/** Slug danh mục ứng với một giá trị `detail_tracking` — mặt ngược của `DIMENSION_CATALOG_SLUG`. */
+/**
+ * Slug danh mục của một giá trị `detail_tracking` — ĐỌC `DIMENSION_CATALOG_SLUG`,
+ * không suy lại bằng `${dimension}s`.
+ *
+ * Bản suy-lại cũ đúng với chín chiều đầu rồi sai ngay ở chiều thứ mười:
+ * `bank_account` → `bank_accounts`, trong khi danh mục tên là
+ * `company_bank_accounts`. Mã đã tra được sẽ hiện thành ô TRỐNG trên form SỬA,
+ * và PUT thay-trọn-bộ biến ô trống ấy thành mất dữ liệu (cùng họ với 6F-1 C-1).
+ */
 function slugFor(dimension: string): string {
-  if (dimension === 'customer' || dimension === 'vendor') {
-    return 'partners'
-  }
-  if (dimension === 'employee') {
-    return 'employees'
-  }
-  return `${dimension}s`
+  return DIMENSION_CATALOG_SLUG[dimension] ?? `${dimension}s`
 }
 
 function idFor(line: JournalLineOut, dimension: string): number | null {

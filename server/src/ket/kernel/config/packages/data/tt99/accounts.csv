@@ -1,6 +1,6 @@
 code,name,name_en,parent_code,balance_nature,is_summary,is_foreign_currency,detail_tracking,is_locked
 111,Tiền mặt,,,0,0,0,,1
-112,Tiền gửi không kỳ hạn,,,0,0,0,,1
+112,Tiền gửi không kỳ hạn,,,0,0,0,bank_account,1
 113,Tiền đang chuyển,,,0,0,0,,1
 121,Chứng khoán kinh doanh,,,0,0,0,,1
 128,Đầu tư nắm giữ đến ngày đáo hạn,,,0,1,0,,1

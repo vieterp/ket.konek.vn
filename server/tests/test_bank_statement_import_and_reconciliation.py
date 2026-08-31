@@ -14,6 +14,7 @@ from io import BytesIO
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from bank_support import ensure_company_bank_account, seed_bank_package_data
@@ -38,8 +39,10 @@ from ket.kernel.master_data.models.company_bank_account import (
     CompanyBankAccount,
 )
 from ket.kernel.master_data.usage import usage_count_of
-from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.models import Branch
 from ket.modules.bank.models import (
+    BankStatement,
     BankStatementLine,
     BankVoucherKind,
     StatementMatchKind,
@@ -54,7 +57,12 @@ from ket.modules.bank.reconciliation import (
 from ket.modules.bank.schemas import BankVoucherIn, BankVoucherLineIn
 from ket.modules.bank.service import BankVoucherService
 from ket.modules.bank.statement_import import delete_statement, import_statement
-from posting_support import PostingContext, posting_scope, seed_posting_context
+from posting_support import (
+    PostingContext,
+    ensure_second_branch,
+    posting_scope,
+    seed_posting_context,
+)
 
 pytestmark = pytest.mark.db
 
@@ -148,6 +156,7 @@ def _import(
     profile_id: int,
     source: BytesIO,
     content_hash: str,
+    acting_branch_id: int | None = None,
 ) -> object:
     return import_statement(
         session,
@@ -157,6 +166,7 @@ def _import(
         file_name="sao-ke.csv",
         content_hash=content_hash,
         user_id=ACTOR_ID,
+        acting_branch_id=acting_branch_id,
     )
 
 
@@ -756,4 +766,171 @@ def test_delete_statement_waits_for_inflight_match_then_refuses(
         assert line is not None and line.match_kind == StatementMatchKind.MANUAL
         # Dọn cho chi nhánh dùng chung.
         unmatch_line(session, line_id=line_id)
+        delete_statement(session, statement_id=statement_id)
+
+
+def test_import_stamps_the_accounts_branch_on_statement_and_lines(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    bank_account: int,
+    profile_id: int,
+) -> None:
+    """Đường NHẬP phải tự đặt chiều chi nhánh, không dựa vào ai gọi hộ.
+
+    Kiểm đột biến của lát 6G-1 bắt được đúng lỗ này: bản test đầu chỉ gieo sao
+    kê bằng tay rồi gọi `sync_statement_branch`, nên bỏ hẳn phần gán chi nhánh
+    khỏi `import_statement` vẫn xanh — trong khi dòng nhập thật sẽ mang
+    `branch_id IS NULL` và policy `allow_null_branch` cho MỌI chi nhánh đọc.
+    """
+    # Tài khoản THUỘC MỘT CHI NHÁNH, không phải tài khoản dùng chung: với
+    # `branch_id IS NULL` thì "không đóng dấu" và "đóng dấu NULL" cho cùng một
+    # kết quả, và bài kiểm trở thành hằng đúng (bẫy kiểm-đột-biến-không-trung-
+    # thực, bài học 6F-2).
+    owned = ensure_company_bank_account(
+        session_factory,
+        dataset_alpha,
+        context,
+        code="6G-CN-RIENG",
+        branch_id=context.branch_id,
+    )
+    account_branch = context.branch_id
+
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        result = _import(
+            session,
+            bank_account_id=owned,
+            profile_id=profile_id,
+            source=csv_of([("15/01/2026", "BR-1", "chi nhanh", "", "310000", "")]),
+            content_hash="8" * 64,
+            acting_branch_id=context.branch_id,
+        )
+        statement_id = result.statement.id  # type: ignore[attr-defined]
+
+    with unit_of_work(session_factory, scope) as session:
+        statement = session.get(BankStatement, statement_id)
+        assert statement is not None
+        assert statement.branch_id == account_branch
+        line_branches = set(
+            session.scalars(
+                select(BankStatementLine.branch_id).where(
+                    BankStatementLine.statement_id == statement_id
+                )
+            ).all()
+        )
+        assert line_branches == {account_branch}
+        delete_statement(session, statement_id=statement_id)
+
+
+def test_importing_for_another_branchs_account_is_refused_at_the_door(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    profile_id: int,
+) -> None:
+    """Review 6G-1 H-4 — cổng phạm vi phải ở CỬA, không để RLS đỡ bằng lỗi thô.
+
+    `company_bank_accounts` cố ý không bật RLS (phạm vi ở tầng ứng dụng), nên
+    `session.get` thấy mọi tài khoản. Thiếu phép kiểm ở `require_bank_account`
+    thì lượt nhập đi lọt tới `INSERT`, `WITH CHECK` của policy sao kê mới nổ
+    thành 500 `InsufficientPrivilege` — và tệp đã nằm trong kho blob.
+
+    Thông điệp phải TRÙNG với ca "không có trong danh mục": một câu trả lời
+    riêng cho ca ngoài-phạm-vi là lời xác nhận tài khoản ấy tồn tại ở chi nhánh
+    bên cạnh, và một vòng lặp qua id vẽ lại được danh mục của họ.
+    """
+    # `ensure_second_branch` chỉ hứa "có ít nhất hai" — chi nhánh nó trả về có
+    # thể CHÍNH là chi nhánh của `context`, nên chọn tường minh một cái khác.
+    ensure_second_branch(session_factory, dataset_alpha)
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        other_branch_id = session.scalar(
+            select(Branch.id).where(Branch.id != context.branch_id).order_by(Branch.id).limit(1)
+        )
+    assert other_branch_id is not None
+
+    # Tạo dưới scope PHỦ chi nhánh kia: `audit_log` có RLS `WITH CHECK`, nên
+    # ghi một dòng danh mục của chi nhánh ngoài phạm vi bị chặn ngay ở bước gieo
+    # — đúng cơ chế mà bài kiểm này đang chứng minh, chỉ khác là ở đây nó cản
+    # việc dựng bối cảnh.
+    seeding = RequestScope(
+        dataset_schema=dataset_alpha.schema_name,
+        user_id=ACTOR_ID,
+        branch_ids=(context.branch_id, other_branch_id),
+        acting_branch_id=other_branch_id,
+    )
+    with unit_of_work(session_factory, seeding) as session:
+        foreign = CompanyBankAccount(
+            code="6G-CN-KHAC",
+            name="TK của chi nhánh khác",
+            path="0.",
+            bank_id=session.scalar(select(Bank.id).order_by(Bank.id).limit(1)),
+            branch_id=other_branch_id,
+        )
+        session.add(foreign)
+        session.flush()
+        foreign.path = f"{foreign.id}."
+        session.flush()
+        foreign_id = foreign.id
+
+    with unit_of_work(session_factory, scope) as session:
+        with pytest.raises(BankStatementImportInvalidError) as refused:
+            _import(
+                session,
+                bank_account_id=foreign_id,
+                profile_id=profile_id,
+                source=csv_of([("15/01/2026", "X-1", "ngoai pham vi", "", "10000", "")]),
+                content_hash="9" * 64,
+                acting_branch_id=context.branch_id,
+            )
+        assert "không có trong danh mục" in str(refused.value)
+
+
+def test_an_unrelated_integrity_error_is_not_disguised_as_a_lost_race(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    bank_account: int,
+    profile_id: int,
+) -> None:
+    """Nợ L-2 của review 6D, trả ở lát 6G-1.
+
+    `_flush_matches` từng nuốt MỌI `IntegrityError` và kể lại thành "một lượt
+    khớp khác vừa lấy mất chứng từ". Một khóa ngoại gãy — lỗi lập trình, phải
+    nổ to và lên log — cũng ra đúng thông điệp ấy, nên người dùng bấm lại mãi
+    trong khi không có lượt nào tranh với họ cả.
+
+    Vi phạm THẬT từ PostgreSQL chứ không phải ngoại lệ dựng tay: điều đang được
+    kiểm là `_violated_constraint` đọc đúng `diag.constraint_name` mà psycopg
+    đặt, và một vật giả hình dạng sẽ xanh kể cả khi cách đọc ấy sai.
+    """
+    from ket.modules.bank.reconciliation import _flush_matches
+
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        result = _import(
+            session,
+            bank_account_id=bank_account,
+            profile_id=profile_id,
+            source=csv_of([("15/01/2026", "L2-1", "l2", "", "120000", "")]),
+            content_hash="7" * 64,
+        )
+        statement_id = result.statement.id  # type: ignore[attr-defined]
+
+    with pytest.raises(IntegrityError):
+        with unit_of_work(session_factory, scope) as session:
+            session.add(
+                BankStatementLine(
+                    statement_id=statement_id,
+                    bank_account_id=2_000_000_000,
+                    line_no=99,
+                    txn_date=JAN_15,
+                    credit=Decimal(1),
+                    match_kind=StatementMatchKind.UNMATCHED,
+                )
+            )
+            _flush_matches(session)
+
+    with unit_of_work(session_factory, scope) as session:
         delete_statement(session, statement_id=statement_id)

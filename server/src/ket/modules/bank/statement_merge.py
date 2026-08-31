@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, aliased
 
 from ket.kernel.errors import BankStatementMatchStateError
 from ket.modules.bank.models import BankStatementLine
+from ket.modules.bank.statement_branch import sync_statement_branch
 
 
 class CompanyBankAccountStatementMergeHook:
@@ -53,4 +54,10 @@ class CompanyBankAccountStatementMergeHook:
             )
 
     def after_move(self, session: Session, *, target_id: int) -> None:
-        """Không có gì phải dọn: `before_move` đã chặn ca duy nhất gây đụng."""
+        """Chi nhánh của sao kê phải đi theo tài khoản ĐÍCH.
+
+        Bộ gộp dùng chung vừa trỏ `bank_account_id` của sao kê + dòng sang
+        `target_id`; nếu không đồng bộ tiếp thì chúng giữ chi nhánh của tài
+        khoản vừa biến mất và RLS lọc theo một con số không còn nghĩa.
+        """
+        sync_statement_branch(session, bank_account_id=target_id)

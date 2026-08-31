@@ -32,6 +32,7 @@ from pathlib import Path
 
 from ket.kernel.config.accounts_models import (
     ACCOUNT_CODE_MAX_LENGTH,
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
     DOCUMENT_TYPE_MAX_LENGTH,
     NAME_MAX_LENGTH,
     PURPOSE_MAX_LENGTH,
@@ -479,7 +480,54 @@ def _load_accounts(text: str) -> tuple[AccountRow, ...]:
             )
         )
         seen[code] = line
+    _require_bank_account_tracking(result)
     return tuple(result)
+
+
+def _require_bank_account_tracking(rows: list[AccountRow]) -> None:
+    """Mọi TK tiền gửi hạch toán được phải khai chiều `bank_account`.
+
+    Hai nửa của cùng một luật sống ở hai chỗ: `bank/posting_mapper` GÁN chiều
+    cho mọi dòng có số hiệu bắt đầu `112`, còn validator ghi sổ chỉ ĐÒI nó ở
+    những dòng TK khai chuỗi `bank_account` trong `accounts.csv`. Hai nửa lệch
+    nhau thì sổ chi tiết tiền gửi thiếu im lặng đúng bằng phần lệch — không lỗi,
+    không cảnh báo, chỉ một con số nhỏ hơn sự thật (review 6G-1 M-8).
+
+    Kiểm ở loader nên nó phủ CẢ gói người dùng nhập từ `.zip`, không chỉ hai gói
+    dựng sẵn. TK tổng hợp không kiểm: không ai hạch toán thẳng vào chúng.
+    """
+    missing = [
+        row.code
+        for row in rows
+        if row.code.startswith(DEPOSIT_ACCOUNT_CODE_PREFIX)
+        and not row.is_summary
+        and DetailTracking.BANK_ACCOUNT not in row.detail_tracking
+    ]
+    if missing:
+        raise _fail(
+            f"TK tiền gửi phải khai `detail_tracking` chứa `{DetailTracking.BANK_ACCOUNT}`: "
+            f"{', '.join(sorted(missing))}",
+            file=ACCOUNTS_FILE,
+            accounts=", ".join(sorted(missing)),
+        )
+    # …và CHỈ tài khoản tiền gửi được khai nó. Hai nửa luật nằm ở hai chỗ:
+    # mapper GÁN chiều theo TIỀN TỐ mã, còn validator ĐÒI theo `detail_tracking`.
+    # Một TK ngoài nhóm 112 khai chiều này vì thế thành TK **không ghi sổ nổi** —
+    # validator đòi, mà không đường ghi nào điền (review pre-landing vòng 2 M-1).
+    # Đường tới thật là gói nhập từ `.zip`, nên phép cấm phải ở loader.
+    stray = [
+        row.code
+        for row in rows
+        if not row.code.startswith(DEPOSIT_ACCOUNT_CODE_PREFIX)
+        and DetailTracking.BANK_ACCOUNT in row.detail_tracking
+    ]
+    if stray:
+        raise _fail(
+            f"Chỉ TK tiền gửi (mã bắt đầu `{DEPOSIT_ACCOUNT_CODE_PREFIX}`) được khai "
+            f"`{DetailTracking.BANK_ACCOUNT}`: {', '.join(sorted(stray))}",
+            file=ACCOUNTS_FILE,
+            accounts=", ".join(sorted(stray)),
+        )
 
 
 def _load_default_accounts(text: str, known_codes: frozenset[str]) -> tuple[DefaultAccountRow, ...]:

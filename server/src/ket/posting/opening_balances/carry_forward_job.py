@@ -15,7 +15,6 @@ Per-branch dưới phạm vi RLS của người xếp hàng, như job recalc (ch
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from datetime import timedelta
 from decimal import Decimal
 from importlib import resources
@@ -37,7 +36,6 @@ from ket.kernel.jobs.models import ResumeSemantics
 from ket.kernel.jobs.registry import REGISTRY, JobContext, JobResult, JobType
 from ket.kernel.money import ZERO
 from ket.kernel.periods.models import FiscalYear
-from ket.kernel.protocols import PROVIDERS, BankAccountMovement
 from ket.posting.balances.recalc_queue import mark_dirty
 from ket.posting.engine.models import Ledger
 from ket.posting.opening_balances.guards import (
@@ -53,42 +51,19 @@ from ket.posting.opening_balances.models import (
 
 CARRY_FORWARD_CODE: Final[str] = "posting.opening_balances.carry_forward"
 
-_CARRY_FORWARD_SQL_TEMPLATE: Final[str] = (
+_CARRY_FORWARD_SQL: Final[str] = (
     resources.files("ket.posting.opening_balances")
     .joinpath("sql/carry_forward.sql")
     .read_text("utf-8")
 )
+"""Câu SQL đủ, không còn chỗ trống nào để `format`.
 
-_EMPTY_BANK_MOVEMENTS: Final[str] = (
-    "SELECT NULL::integer, NULL::integer, NULL::varchar, NULL::numeric, NULL::numeric WHERE FALSE"
-)
-"""Thân CTE `bank_movements` khi không có phát sinh nào cần chia theo TK ngân
-hàng — cùng hình dạng cột với nhánh VALUES để câu SQL chỉ có một dạng."""
-
-
-def _bank_movements_clause(
-    movements: Sequence[BankAccountMovement],
-) -> tuple[str, dict[str, object]]:
-    """`(thân CTE, tham số)` — mỗi giá trị đi qua bound parameter, phần chữ
-    trong SQL chỉ có TÊN tham số do chính vòng lặp này sinh (không có đường
-    cho dữ liệu ngoài vào chuỗi lệnh). Không dùng bảng tạm được: TEMPORARY đã
-    bị thu hồi khỏi role app/worker (roles.sql — chống che `audit_log`)."""
-    if not movements:
-        return _EMPTY_BANK_MOVEMENTS, {}
-    rows: list[str] = []
-    params: dict[str, object] = {}
-    for index, movement in enumerate(movements):
-        rows.append(
-            f"(CAST(:bm{index}_account AS integer), CAST(:bm{index}_bank AS integer), "
-            f"CAST(:bm{index}_currency AS varchar), CAST(:bm{index}_net_fc AS numeric), "
-            f"CAST(:bm{index}_net AS numeric))"
-        )
-        params[f"bm{index}_account"] = movement.account_id
-        params[f"bm{index}_bank"] = movement.bank_account_id
-        params[f"bm{index}_currency"] = movement.currency_code
-        params[f"bm{index}_net_fc"] = movement.net_fc
-        params[f"bm{index}_net"] = movement.net
-    return "VALUES " + ", ".join(rows), params
+Bản 6D phải ghép một dãy `VALUES` cho CTE `bank_movements` vì `gl_postings`
+chưa mang chiều TK ngân hàng — phát sinh 112x phải hỏi module `bank` qua
+Protocol rồi cộng-trừ hai lượt ngay trong câu. Lát 6G-1 đưa chiều ấy thành cột
+thật nên cả đường vòng biến mất, và cùng nó là phép trừ sai đã đẻ ra dòng dư
+đầu năm bịa (review 6G-1 H-2).
+"""
 
 
 _CARRIED_KINDS: Final[tuple[int, ...]] = (
@@ -314,27 +289,19 @@ def run_carry_forward(context: JobContext, params: CarryForwardParams) -> JobRes
     invoices_dropped = 0
     parents_overrun = 0
     ledgers = (int(Ledger.FINANCIAL), int(Ledger.MANAGEMENT))
-    deposit_source = PROVIDERS.deposit_movement_source()
     for step, ledger in enumerate(ledgers, start=1):
-        # Chiều TK ngân hàng (kind 1, lát 6D): module bank cho biết mỗi TK
-        # ngân hàng phát sinh ròng bao nhiêu trong năm nguồn; không có module
-        # (hoặc không phát sinh) thì CTE rỗng và phát sinh 112x ở lại nhóm 0.
-        movements = (
-            deposit_source.deposit_movements(
-                session, fiscal_year_id=source.id, ledger=ledger, branch_id=branch_id
-            )
-            if deposit_source is not None
-            else ()
-        )
-        movements_clause, movement_params = _bank_movements_clause(movements)
+        # Chiều TK ngân hàng (kind 1) đi cùng đường với mọi chiều khác: cột
+        # `gl_postings.bank_account_id` (lát 6G-1). Bản 6D phải hỏi module bank
+        # qua Protocol rồi cộng-trừ hai lượt trong SQL vì cột ấy chưa tồn tại —
+        # và phép trừ đó sai khi dòng nguồn mang thêm chiều khác (review 6G-1
+        # H-2).
         session.execute(
-            text(_CARRY_FORWARD_SQL_TEMPLATE.format(bank_movements_rows=movements_clause)),
+            text(_CARRY_FORWARD_SQL),
             {
                 "source_fiscal_year_id": source.id,
                 "target_fiscal_year_id": target.id,
                 "ledger": ledger,
                 "branch_id": branch_id,
-                **movement_params,
             },
         )
         # Đếm lại thay vì tin `rowcount`: với INSERT … SELECT driver này trả

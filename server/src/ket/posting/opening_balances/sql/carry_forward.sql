@@ -3,26 +3,32 @@
 --
 -- Tham số:
 --   :source_fiscal_year_id, :target_fiscal_year_id, :ledger, :branch_id
--- Chỗ trống bank_movements_rows (khuôn str.format — chỉ MỘT chỗ, trong thân
--- CTE bank_movements): job điền một dãy VALUES tham-số-hóa (hoặc SELECT-rỗng
--- khi không có gì) TRƯỚC khi chạy — KHÔNG phải bảng tạm, vì TEMPORARY đã bị
--- thu hồi khỏi role app/worker (roles.sql, chống che audit_log bằng pg_temp)
--- và mọi giá trị vẫn đi qua bound parameter.
---
 -- Số cuối năm tính THẲNG từ nguồn sự thật: số dư ban đầu năm nguồn cộng mọi
 -- phát sinh `gl_postings` của các kỳ năm nguồn — không đọc snapshot
 -- `account_balances`, nên kết quả không phụ thuộc hàng đợi tính lại sạch hay
 -- bẩn. Gộp theo TRỌN bộ chiều để "giữ nguyên chi tiết" (FR-OPB-010): đối
 -- tượng công nợ, và cả các chiều 5 cột cố định mà chứng từ đã ghi.
 --
--- Chiều TK NGÂN HÀNG (kind 1, lát 6D): `gl_postings` không mang nó (nó sống
--- trên thân chứng từ của module bank), nên job hỏi `DepositMovementSource`
--- (kernel Protocol, module bank cài) rồi đổ vào `carry_bank_movements`. Câu
--- này cộng mỗi con số ấy vào xô (TK, TK ngân hàng, tiền tệ) và trừ đúng chừng
--- ấy khỏi xô không-gắn-TK-ngân-hàng — tổng chuyển năm không đổi, chỉ được
--- chia đúng chỗ. Phát sinh 112x KHÔNG qua chứng từ tiền gửi (bút toán GLE gõ
--- thẳng) ở lại xô không gắn (kind 0): không ai biết nó thuộc tài khoản nào,
--- và bịa một tài khoản sẽ làm BR-BNK-01 "khớp" trên một con số dối.
+-- Chiều TK NGÂN HÀNG (kind 1): đọc THẲNG `gl_postings.bank_account_id` như mọi
+-- chiều khác của dòng. Dòng không có chủ (ghi sổ trước lát 6G-1, migration
+-- không suy nổi) ở lại xô không gắn — bịa một tài khoản cho chúng sẽ làm
+-- BR-BNK-01 "khớp" trên một con số dối.
+--
+-- Bản 6D cộng-rồi-trừ qua Protocol `DepositMovementSource` vì `gl_postings`
+-- chưa mang chiều ấy. Cách đó **sai** và lát 6G-1 làm nó lộ ra: dòng TRỪ khai
+-- mọi chiều = NULL trong khi dòng gốc giữ nguyên chiều của nó, nên hai dòng rơi
+-- vào HAI xô của `GROUP BY` và phép trừ không triệt tiêu. Trước 6G-1 gần như
+-- không ai thấy vì nguồn chỉ trả dòng 112 của chứng từ tiền gửi (bên tiền mang
+-- bộ chiều RỖNG); lát này mở nguồn cho dòng 112 của phiếu quỹ và bút toán tổng
+-- hợp — chúng mang chiều thật, và một bút toán `Nợ 112` có thêm khoản mục chi
+-- phí sẽ đẻ ra BA dòng dư đầu năm, một dòng mang số ÂM bịa (review 6G-1 H-2).
+--
+-- TK ngân hàng đã bị xóa khỏi danh mục thì dòng hạ về nhóm chưa-gắn thay vì
+-- làm đổ cả lượt chuyển: `gl_postings.bank_account_id` không có khóa ngoại
+-- (bảng sự thật đã ghi sổ) còn `opening_balances.bank_account_id` thì CÓ, nên
+-- một id mồ côi sẽ thành `ForeignKeyViolation` giữa lượt khóa sổ cuối năm
+-- (review pre-landing H-B). Bộ đếm tham chiếu chặn phần lớn ca ấy, nhưng bút
+-- toán tổng hợp đứng ngoài bộ đếm — số tiền vẫn chuyển đủ, chỉ mất phần quy chủ.
 --
 -- detail_kind của dòng sinh ra: có bank_account_id → 1; còn lại suy từ
 -- partner_kind (khách 2, NCC 3, nhân viên 4, còn lại 0). CẢNH BÁO PHASE 8:
@@ -48,9 +54,6 @@ WITH source_periods AS (
     SELECT id FROM accounting_periods
     WHERE fiscal_year_id = :source_fiscal_year_id
 ),
-bank_movements(account_id, bank_account_id, currency_code, net_fc, net) AS (
-    {bank_movements_rows}
-),
 combined AS (
     SELECT account_id, currency_code, bank_account_id,
            partner_id, partner_kind, cost_object_id, project_id, order_id,
@@ -68,7 +71,22 @@ combined AS (
           AND branch_id = :branch_id
           AND detail_kind BETWEEN 0 AND 4
         UNION ALL
-        SELECT account_id, currency_code, NULL, partner_id, partner_kind,
+        -- `bank_account_id` chỉ được coi là chiều TK ngân hàng trên dòng 112x.
+        -- Hai mapper đã lọc ở đường GHI, nhưng phép lọc ở đây là lớp thứ hai có
+        -- chủ đích: `detail_kind` suy ra từ chính cột này, và một dòng công nợ
+        -- lỡ mang nó sẽ bị xếp sang nhóm tiền gửi — chi tiết hóa đơn rơi im
+        -- lặng vì lượt chuyển hóa đơn chỉ nhận nhóm 2–4 (review pre-landing
+        -- H-A: nguồn cũ `movement_source` lọc `112%`, bản viết lại đánh rơi).
+        SELECT account_id, currency_code,
+               CASE WHEN EXISTS (
+                        SELECT 1 FROM chart_of_accounts coa
+                         WHERE coa.id = gl_postings.account_id
+                           AND coa.code LIKE '112%'
+                    ) AND EXISTS (
+                        SELECT 1 FROM company_bank_accounts cba
+                         WHERE cba.id = gl_postings.bank_account_id
+                    ) THEN bank_account_id END,
+               partner_id, partner_kind,
                cost_object_id, project_id, order_id, contract_id,
                expense_item_id, item_id, warehouse_id, NULL,
                debit, credit, debit_fc, credit_fc
@@ -76,19 +94,6 @@ combined AS (
         WHERE ledger = :ledger
           AND branch_id = :branch_id
           AND period_id IN (SELECT id FROM source_periods)
-        UNION ALL
-        -- Cộng phát sinh tiền gửi vào xô của TK ngân hàng… (net âm hợp lệ:
-        -- đây là dòng trung gian, SUM ở trên mới là con số thật)
-        SELECT account_id, currency_code, bank_account_id, NULL, NULL,
-               NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-               net, 0, net_fc, 0
-        FROM bank_movements
-        UNION ALL
-        -- …và trừ đúng chừng ấy khỏi xô không gắn TK ngân hàng.
-        SELECT account_id, currency_code, NULL, NULL, NULL,
-               NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-               0, net, 0, net_fc
-        FROM bank_movements
     ) united
     GROUP BY account_id, currency_code, bank_account_id, partner_id,
              partner_kind, cost_object_id, project_id, order_id, contract_id,

@@ -7,10 +7,14 @@ kind-1 + phát sinh, dùng lại khuôn `DepositMovementSource`*.
 
 Vì sao không gọi thẳng `DepositMovementSource`: Protocol đó trả phát sinh của
 **cả năm** (đủ cho carry-forward, người gọi duy nhất của nó) còn thẻ tài khoản
-hỏi số dư **tới một ngày**. Thay vì nới hợp đồng kernel sắp đóng băng ở 6G cho
-một người gọi mới, hai đường dùng CHUNG đúng phần dễ sai — biểu thức quy chủ TK
-ngân hàng (`deposit_owner_account`) — và khác nhau ở phần tầm thường là mốc
-thời gian.
+hỏi số dư **tới một ngày**. Hai đường khác nhau đúng ở mốc thời gian.
+
+Từ lát 6G-1 cả hai chỉ còn ĐỌC cột `gl_postings.bank_account_id`: luật quy chủ
+(BC/UNC/SEC theo thân, CTNB theo chiều) chuyển hẳn sang đường GHI trong
+`bank/posting_mapper._deposit_owner`. Bốn bản chép của luật ấy — hai truy vấn
+Python ở đây, `money_account_ledger.sql`, `bank_balance_summary.sql` — biến mất
+cùng lúc, và phát sinh 112x của phiếu quỹ / bút toán tổng hợp lần đầu tiên có
+mặt trong số dư từng tài khoản.
 """
 
 from __future__ import annotations
@@ -20,46 +24,18 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import ColumnElement, case, func, literal, select
+from sqlalchemy import func, literal, select
 from sqlalchemy.orm import Session
 
-from ket.kernel.config.accounts_models import ChartOfAccount
+from ket.kernel.config.accounts_models import (
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
+    ChartOfAccount,
+)
 from ket.kernel.periods.service import fiscal_year_covering
-from ket.modules.bank.models import BankVoucher, BankVoucherKind
-from ket.modules.bank.posting_mapper import MONEY_ACCOUNT_CODE_PREFIXES
 from ket.posting.engine.models import GlPosting
 from ket.posting.opening_balances.models import OpeningBalance
 
-DEPOSIT_ACCOUNT_CODE_PREFIX = MONEY_ACCOUNT_CODE_PREFIXES[1]
-"""Chỉ nhóm 112 — dòng 111x trên chứng từ tiền gửi (nộp/rút tiền mặt) thuộc
-quỹ, không thuộc TK ngân hàng nào."""
-
 ZERO = Decimal(0)
-
-
-def deposit_owner_account() -> ColumnElement[int | None]:
-    """TK ngân hàng SỞ HỮU một dòng sổ 112x của chứng từ tiền gửi.
-
-    Luật (SRS 04 §2, lát 6C/6D) sống ở ĐÚNG MỘT chỗ trong Python vì nó là thứ
-    dễ sai và có nhiều người dùng: BC/UNC/SEC thì mọi dòng 112x thuộc
-    `bank_account_id` của thân chứng từ; CTNB thì dòng **Nợ** thuộc TK ĐÍCH
-    (`counter_bank_account_id`) và dòng **Có** thuộc TK nguồn — một chứng từ
-    đứng trên sổ của cả hai tài khoản, mỗi bên một chiều.
-
-    Người gọi: `movement_source.BankDepositMovementSource` (carry-forward) và
-    `deposit_balances_as_of` (thẻ tài khoản). Hai dataset báo cáo
-    (`money_account_ledger.sql`, `bank_balance_summary.sql`) lặp lại chính luật
-    này bằng SQL thuần — bản sao có chủ ý và ĐÃ GHI vào sổ tổng quát hóa của
-    bước 22: hợp nhất chúng cần một view/hàm SQL dùng chung, việc của lát kiểm
-    định 6G chứ không phải của lát này.
-    """
-    return case(
-        (
-            (BankVoucher.kind == BankVoucherKind.INTERNAL_TRANSFER) & (GlPosting.debit > 0),
-            BankVoucher.counter_bank_account_id,
-        ),
-        else_=BankVoucher.bank_account_id,
-    )
 
 
 @dataclass(frozen=True)
@@ -82,20 +58,18 @@ def deposit_balances_as_of(
     """Số dư từng TK ngân hàng hết ngày `as_of`, cộng trên `branch_ids`.
 
     = số dư đầu năm gắn TK ngân hàng (`opening_balances` nhóm kind-1, cột
-    `bank_account_id` có từ migration 0019) + phát sinh của chứng từ tiền gửi
-    từ đầu năm tới hết `as_of`.
+    `bank_account_id` có từ migration 0019) + **mọi** phát sinh 112x có chủ từ
+    đầu năm tới hết `as_of`, bất kể chứng từ nào sinh ra nó.
 
-    Phát sinh 112x KHÔNG quy được về một tài khoản ngân hàng nào thì KHÔNG có
-    mặt ở đây. Hai nguồn, không phải một (review 6E-1 H-3): bút toán GLE gõ
-    thẳng vào 112x, **và chứng từ QUỸ chạm 112** — gói builtin khai sẵn
-    `PT rut-tgnh-nhap-quy` cùng chiều ngược bằng phiếu chi, chúng là
-    `cash_vouchers` nên không có `bank_vouchers` để bám. Nộp/rút tiền mặt ↔
-    ngân hàng là nghiệp vụ hằng tuần, nên đây không phải ca hiếm.
+    Trước lát 6G-1 câu này chỉ đúng với chứng từ tiền gửi, vì chủ sở hữu được
+    suy từ thân `bank_vouchers`: phiếu quỹ nộp/rút tiền mặt ↔ ngân hàng (gói
+    builtin khai sẵn `PT rut-tgnh-nhap-quy` và chiều ngược bằng phiếu chi) và
+    bút toán tổng hợp gõ thẳng 112x không có thân để bám, nên rơi ra ngoài —
+    nghiệp vụ hằng tuần chứ không phải ca hiếm (review 6E-1 H-3).
 
-    Phần đó vẫn nằm trong tổng TK 112 của bảng cân đối; chênh giữa "tổng thẻ
-    ngân hàng" và "tổng TK 112" chính là phần chưa gắn, và màn hình hiển thị nó
-    thành một con số riêng thay vì giấu (ghi chú M-3 của review 6D). Nợ "thêm
-    `bank_account_id` cho chứng từ quỹ" ghi bàn giao 6E-1 → 6G.
+    Nay `bank_account` là chiều bắt buộc của 112x, nên phần "chưa gắn" chỉ còn
+    là dữ liệu ghi sổ TRƯỚC lát này mà migration không suy nổi chủ. Con số đó
+    vẫn hiện riêng trên màn hình thay vì bị giấu (ghi chú M-3 của review 6D).
 
     Chưa có năm tài chính phủ `as_of` thì trả rỗng — cùng hướng mặc định với
     `cash_balance_as_of`.
@@ -105,7 +79,6 @@ def deposit_balances_as_of(
         return ()
 
     branches = tuple(branch_ids)
-    owner = deposit_owner_account().label("bank_account_id")
     deposit_accounts = select(ChartOfAccount.id).where(
         ChartOfAccount.code.like(literal(f"{DEPOSIT_ACCOUNT_CODE_PREFIX}%"))
     )
@@ -134,12 +107,11 @@ def deposit_balances_as_of(
 
     movement_rows = session.execute(
         select(
-            owner,
+            GlPosting.bank_account_id,
             GlPosting.currency_code,
             func.sum(GlPosting.debit_fc - GlPosting.credit_fc).label("net_fc"),
             func.sum(GlPosting.debit - GlPosting.credit).label("net"),
         )
-        .join(BankVoucher, BankVoucher.id == GlPosting.voucher_id)
         .where(
             GlPosting.ledger == ledger,
             GlPosting.branch_id.in_(branches),
@@ -147,7 +119,7 @@ def deposit_balances_as_of(
             GlPosting.posting_date >= year.start_date,
             GlPosting.posting_date <= as_of,
         )
-        .group_by(owner, GlPosting.currency_code)
+        .group_by(GlPosting.bank_account_id, GlPosting.currency_code)
     ).all()
 
     totals: dict[tuple[int, str], list[Decimal]] = {}
