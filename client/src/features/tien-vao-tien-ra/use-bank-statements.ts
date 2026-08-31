@@ -81,6 +81,67 @@ export function useReconciliation(bankAccountId: number | null, asOf: string) {
   })
 }
 
+export type StatementProfileDetail = Schemas['BankStatementProfileDetailOut']
+export type StatementProfileInput = Schemas['BankStatementProfileIn']
+
+/**
+ * Mọi hồ sơ định dạng, trọn cột — nguồn của màn KHAI hồ sơ (lát 6G-2).
+ *
+ * Khác `useStatementProfiles` (ô chọn của màn nhập, lọc theo ngân hàng của một
+ * tài khoản): màn khai làm việc theo NGÂN HÀNG, và cần đủ cột để sửa.
+ */
+export function useAllStatementProfiles() {
+  const { client, datasetCode } = useSession()
+
+  return useQuery({
+    queryKey: ['bank-statements', datasetCode, 'profiles', 'all'],
+    enabled: datasetCode !== null,
+    queryFn: () =>
+      client.get<Schemas['BankStatementProfileDetailListResponse']>(
+        '/api/v1/bank/statements/profiles/all',
+        { datasetCode },
+      ),
+  })
+}
+
+export function useSaveStatementProfile() {
+  const { client, datasetCode } = useSession()
+  const invalidate = useInvalidateStatements()
+
+  return useMutation({
+    mutationFn: ({
+      profileId,
+      rowVersion,
+      body,
+    }: {
+      readonly profileId: number | null
+      readonly rowVersion: number | null
+      readonly body: StatementProfileInput
+    }) =>
+      profileId === null
+        ? client.post<StatementProfileDetail>('/api/v1/bank/statements/profiles', body, {
+            datasetCode,
+          })
+        : client.put<StatementProfileDetail>(
+            `/api/v1/bank/statements/profiles/${String(profileId)}`,
+            { ...body, row_version: rowVersion },
+            { datasetCode },
+          ),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteStatementProfile() {
+  const { client, datasetCode } = useSession()
+  const invalidate = useInvalidateStatements()
+
+  return useMutation({
+    mutationFn: ({ profileId }: { readonly profileId: number }) =>
+      client.delete<void>(`/api/v1/bank/statements/profiles/${String(profileId)}`, { datasetCode }),
+    onSuccess: invalidate,
+  })
+}
+
 export function useMatchCandidates(lineId: string | null) {
   const { client, datasetCode } = useSession()
 

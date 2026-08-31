@@ -52,7 +52,7 @@ import {
   type CashVoucherOut,
   type CashVoucherUpdate,
 } from './use-cash-voucher'
-import { useMasterSearchLookup } from './use-master-search-lookup'
+import { useMasterSearchLookup } from '@/features/danh-muc-thiet-lap/use-master-search-lookup'
 
 /** TK quỹ tiền mặt nhận diện theo tiền tố số hiệu — cùng luật server (`CASH_ON_HAND_PREFIX`). */
 const CASH_ACCOUNT_PREFIX = '111'

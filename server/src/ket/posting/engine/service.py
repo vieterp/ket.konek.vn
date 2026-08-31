@@ -38,6 +38,7 @@ from ket.kernel.money import convert_currency
 from ket.kernel.periods.models import AccountingPeriod, FiscalYear
 from ket.posting.balances.recalc_queue import mark_dirty
 from ket.posting.documents.models import Voucher, VoucherStatus
+from ket.posting.documents.registry import REFERENCE_GUARDS
 from ket.posting.documents.state_machine import VoucherAction, transition_to
 from ket.posting.engine.guards import run_guards
 from ket.posting.engine.models import GlPosting, Ledger, PostingDimensionValue
@@ -162,6 +163,16 @@ class PostingService:
                     )
                 ],
             )
+
+        # Ai đó còn trỏ vào chứng từ này? (dòng sao kê đã khớp, …). Kiểm ở ĐÂY
+        # chứ không ở router: service của từng module cũng gọi thẳng hàm này.
+        #
+        # SAU phép kiểm kỳ khóa, không trước (review 6G-2 M-6): kỳ khóa là câu
+        # trả lời "không có đường nào", còn guard là câu "có đường, làm việc X
+        # trước". Đảo thứ tự thì người dùng nhận lời khuyên "gỡ khớp trước",
+        # gỡ thành công (`unmatch_line` không kiểm kỳ khóa), rồi vẫn không bỏ
+        # ghi sổ được — một cặp đối chiếu đúng bị phá, không đổi lại được gì.
+        REFERENCE_GUARDS.check(self._session, voucher_id)
 
         touched_ledgers = set(
             self._session.execute(

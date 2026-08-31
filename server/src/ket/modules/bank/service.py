@@ -56,7 +56,6 @@ from ket.modules.bank.models import (
     BankVoucherLine,
 )
 from ket.modules.bank.posting_mapper import build_posting_request
-from ket.modules.bank.reconciliation import ensure_not_matched_to_statement
 from ket.modules.bank.schemas import BankVoucherIn
 from ket.modules.bank.settlement_service import (
     apply_settlements,
@@ -262,10 +261,10 @@ class BankVoucherService:
         return voucher
 
     def unpost(self, voucher_id: UUID, *, user_id: int) -> Voucher:
-        # H-3 review 6D: cửa dịch vụ phải canh cùng luật với hook after_unpost
-        # của endpoint hành động chung — chứng từ đã khớp sao kê thì gỡ khớp
-        # trước, không bỏ ghi sổ để lại một dòng "đã khớp" trỏ phiếu nháp.
-        ensure_not_matched_to_statement(self._session, voucher_id=voucher_id)
+        # Luật "đã khớp sao kê thì không bỏ ghi sổ" (6D H-3) KHÔNG còn nằm ở
+        # đây: từ 6G-2 nó là một `REFERENCE_GUARDS` chạy bên trong
+        # `PostingService.unpost`, nên cửa dịch vụ này và endpoint hành động
+        # chung dùng chung đúng một bản — không còn hai chỗ phải nhớ.
         voucher = self._posting.unpost(voucher_id, user_id=user_id)
         revert_settlements(self._session, voucher_id=voucher_id)
         return voucher

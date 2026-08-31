@@ -172,8 +172,16 @@ class TestLock:
                 seed_posting_context(session_factory, dataset_alpha)
             year_id = make_year(session, code="LOCK-SCOPE", start=date(2070, 1, 1))
             period = period_of(session, year_id, 1)
-            with pytest.raises(PeriodLockScopeError):
+            with pytest.raises(PeriodLockScopeError) as caught:
                 PeriodLockService(session).lock(period.id, scope=narrow)
+            # ĐẾM, không id (review pre-landing 6G-2 M-1): ba cửa hỏi cùng câu
+            # hỏi bằng cùng `missing_scope_branch_ids` — khóa sổ, đối chiếu
+            # ngân hàng, báo cáo phạm vi công ty — nên cả ba phải trả cùng hình
+            # dạng. Id chi nhánh người gọi chưa được cấp là thông tin về cấu
+            # trúc đơn vị mà họ chưa được thấy; nó đi thẳng ra thân phản hồi.
+            details = caught.value.details
+            assert "missing_branch_ids" not in details, details
+            assert details["branches_visible"] < details["branches_total"]
 
     def test_lock_must_be_sequential_within_the_year(self, run_wide: Runner) -> None:
         def work(session: Session, scope: RequestScope) -> object:

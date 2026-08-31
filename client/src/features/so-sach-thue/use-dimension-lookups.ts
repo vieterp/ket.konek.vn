@@ -5,7 +5,8 @@
  * `useLookupOptions` nên đứt ở trần trang 200; danh mục đối tác/vật tư thật
  * vượt trần đó ngay năm đầu.
  *
- * Ba lượt đọc, cùng khuôn `use-master-search-lookup` của nhóm 03:
+ * Ba lượt đọc, do CHÍNH `use-master-search-lookup` lo (lát 6G-2 gộp hai bản
+ * gần-giống thành một — tệp này nay chỉ còn phần ghép chín chiều lại):
  *
  * 1. **Seed** một trang đầu mỗi danh mục — mã phổ biến tra được ngay không chờ
  *    mạng, và danh mục nhỏ (kho, khoản mục) thì seed đã là trọn bộ.
@@ -21,18 +22,13 @@
  * danh mục ở màn hình khác vẫn tự làm mới seed ở đây.
  */
 
-import { useCallback, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-
 import type { LookupOption } from '@/design-system/components'
-import { useSession } from '@/lib/session'
 
-import type { CatalogPage, CatalogRow } from '@/features/danh-muc-thiet-lap/catalog-types'
+import {
+  useMasterSearchLookup,
+  type MasterSearchLookup,
+} from '@/features/danh-muc-thiet-lap/use-master-search-lookup'
 import { DIMENSION_CATALOG_SLUG, DIMENSION_LINE_FIELD } from './dimension-config'
-
-/** Trần một lượt đọc — MAX_PAGE_SIZE phía server (H52). */
-const SEED_LIMIT = 200
-const SEARCH_LIMIT = 20
 
 /** Các danh mục chiều — khớp `DIMENSION_CATALOG_SLUG` của `dimension-config`. */
 const DIMENSION_SLUGS = [
@@ -145,129 +141,21 @@ export function requiredDimensionIdsOf(
   return result
 }
 
-function toOptions(rows: readonly CatalogRow[]): LookupOption[] {
-  // Nút nhóm bị loại (không phải đích tham chiếu) — cùng luật `useLookupOptions`.
-  return rows
-    .filter((row) => !row.is_group)
-    .map((row) => ({ id: row.id, code: row.code, label: row.name }))
-}
-
-interface SlugLookup {
-  readonly options: readonly LookupOption[]
-  readonly isPending: boolean
-  /** Tra `search=` cho từng mã, gộp vào state, trả phần vừa tra được. */
-  readonly fetchCodes: (codes: readonly string[]) => Promise<readonly LookupOption[]>
-}
-
-function useSlugLookup(slug: DimensionSlug, requiredIds: readonly number[]): SlugLookup {
-  const { client, datasetCode } = useSession()
-  // Kết quả tra bù theo mã — gắn dataset để đổi bộ dữ liệu không mang lộn
-  // bản ghi của bộ cũ (cùng lý do review 6F-1 M-C gắn slug).
-  const [extra, setExtra] = useState<{
-    readonly datasetCode: string | null
-    readonly map: ReadonlyMap<number, LookupOption>
-  }>({ datasetCode: null, map: new Map() })
-  const extraMap = extra.datasetCode === datasetCode ? extra.map : new Map<number, LookupOption>()
-
-  const seed = useQuery({
-    queryKey: ['catalog', datasetCode, slug, 'dim-lookup-seed'],
-    enabled: datasetCode !== null,
-    queryFn: async () => {
-      const page = await client.get<CatalogPage>(
-        `/api/v1/master/${slug}?limit=${String(SEED_LIMIT)}`,
-        { datasetCode },
-      )
-      return toOptions(page.items)
-    },
-  })
-
-  const seededIds = new Set((seed.data ?? []).map((option) => option.id))
-  const missingIds = seed.isPending
-    ? []
-    : [...new Set(requiredIds)].filter((id) => !seededIds.has(id) && !extraMap.has(id))
-  const hydrate = useQuery({
-    queryKey: ['catalog', datasetCode, slug, 'dim-lookup-ids', missingIds.join(',')],
-    enabled: datasetCode !== null && missingIds.length > 0,
-    queryFn: async () => {
-      const page = await client.get<CatalogPage>(
-        `/api/v1/master/${slug}?limit=${String(SEED_LIMIT)}&` +
-          missingIds.map((id) => `ids=${String(id)}`).join('&'),
-        { datasetCode },
-      )
-      return toOptions(page.items)
-    },
-  })
-
-  const merged = new Map<number, LookupOption>()
-  for (const option of seed.data ?? []) {
-    merged.set(option.id, option)
-  }
-  for (const option of hydrate.data ?? []) {
-    merged.set(option.id, option)
-  }
-  for (const option of extraMap.values()) {
-    merged.set(option.id, option)
-  }
-
-  const fetchCodes = useCallback(
-    async (codes: readonly string[]): Promise<readonly LookupOption[]> => {
-      if (datasetCode === null || codes.length === 0) {
-        return []
-      }
-      const settled = await Promise.all(
-        codes.map(async (code) => {
-          try {
-            const page = await client.get<CatalogPage>(
-              `/api/v1/master/${slug}?search=${encodeURIComponent(code)}&limit=${String(SEARCH_LIMIT)}`,
-              { datasetCode },
-            )
-            return toOptions(page.items)
-          } catch {
-            // Mạng đứt giữa lượt tra bù: trả rỗng để lượt rà thứ hai báo "mã
-            // không tra được" — một thông điệp, một đường xử lý.
-            return []
-          }
-        }),
-      )
-      const fetched = settled.flat()
-      if (fetched.length > 0) {
-        setExtra((current) => {
-          const base =
-            current.datasetCode === datasetCode ? current.map : new Map<number, LookupOption>()
-          const next = new Map(base)
-          for (const option of fetched) {
-            next.set(option.id, option)
-          }
-          return { datasetCode, map: next }
-        })
-      }
-      return fetched
-    },
-    [client, datasetCode, slug],
-  )
-
-  return {
-    options: [...merged.values()],
-    isPending: seed.isPending || (missingIds.length > 0 && hydrate.isPending),
-    fetchCodes,
-  }
-}
-
 export function useDimensionLookups(requiredIds: RequiredDimensionIds = {}): DimensionLookups {
-  const partners = useSlugLookup('partners', requiredIds.partners ?? [])
-  const employees = useSlugLookup('employees', requiredIds.employees ?? [])
-  const costObjects = useSlugLookup('cost_objects', requiredIds.cost_objects ?? [])
-  const projects = useSlugLookup('projects', requiredIds.projects ?? [])
-  const contracts = useSlugLookup('contracts', requiredIds.contracts ?? [])
-  const expenseItems = useSlugLookup('expense_items', requiredIds.expense_items ?? [])
-  const items = useSlugLookup('items', requiredIds.items ?? [])
-  const warehouses = useSlugLookup('warehouses', requiredIds.warehouses ?? [])
-  const companyBankAccounts = useSlugLookup(
+  const partners = useMasterSearchLookup('partners', requiredIds.partners ?? [])
+  const employees = useMasterSearchLookup('employees', requiredIds.employees ?? [])
+  const costObjects = useMasterSearchLookup('cost_objects', requiredIds.cost_objects ?? [])
+  const projects = useMasterSearchLookup('projects', requiredIds.projects ?? [])
+  const contracts = useMasterSearchLookup('contracts', requiredIds.contracts ?? [])
+  const expenseItems = useMasterSearchLookup('expense_items', requiredIds.expense_items ?? [])
+  const items = useMasterSearchLookup('items', requiredIds.items ?? [])
+  const warehouses = useMasterSearchLookup('warehouses', requiredIds.warehouses ?? [])
+  const companyBankAccounts = useMasterSearchLookup(
     'company_bank_accounts',
     requiredIds.company_bank_accounts ?? [],
   )
 
-  const bySlug: Record<DimensionSlug, SlugLookup> = {
+  const bySlug: Record<DimensionSlug, MasterSearchLookup> = {
     partners,
     employees,
     cost_objects: costObjects,
@@ -334,7 +222,7 @@ export function useDimensionLookups(requiredIds: RequiredDimensionIds = {}): Dim
 
   return {
     options,
-    isLoading: Object.values(bySlug).some((lookup) => lookup.isPending),
+    isLoading: Object.values(bySlug).some((lookup) => lookup.isLoading),
     resolveMissingCodes,
   }
 }

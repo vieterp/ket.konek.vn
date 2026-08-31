@@ -49,7 +49,7 @@ from ket.kernel.errors import (
 from ket.kernel.periods.models import AccountingPeriod, FiscalYear
 from ket.kernel.periods.service import PeriodService
 from ket.kernel.persistence.unit_of_work import RequestScope
-from ket.kernel.security.models import Branch
+from ket.kernel.security.branch_scope import missing_scope_branch_ids
 from ket.posting.balances.models import BalanceRecalcQueue
 from ket.posting.documents.models import Voucher, VoucherStatus
 from ket.posting.opening_balances.models import OpeningBalance
@@ -241,15 +241,23 @@ class PeriodLockService:
 
         Chi nhánh ngừng hoạt động vẫn có phát sinh lịch sử và có thể còn dấu
         bẩn trong hàng đợi — loại nó khỏi phép kiểm là mở lại đúng lỗ hổng mà
-        phép kiểm này sinh ra để bịt. `branches` không bật RLS (xem
-        `security/models.py`) nên câu đếm này thấy đủ.
+        phép kiểm này sinh ra để bịt. Luật ấy nằm ở
+        `kernel.security.branch_scope` (dùng chung với cổng đối chiếu ngân
+        hàng); ở đây chỉ còn câu chữ báo lỗi riêng của khóa sổ.
         """
-        all_branch_ids = set(self._session.execute(select(Branch.id)).scalars().all())
-        missing = all_branch_ids - set(scope.branch_ids)
+        missing = missing_scope_branch_ids(self._session, scope)
         if missing:
+            visible = len(set(scope.branch_ids))
+            # ĐẾM, không id (review pre-landing 6G-2 M-1). Cả ba cửa hỏi cùng
+            # câu hỏi bằng cùng `missing_scope_branch_ids` — khóa sổ, đối chiếu
+            # ngân hàng, báo cáo phạm vi công ty — nên cả ba phải trả cùng một
+            # hình dạng: id chi nhánh người gọi CHƯA được cấp là thông tin về
+            # cấu trúc đơn vị mà họ chưa được thấy. Lát 6G-2 đổi hai cửa kia và
+            # bỏ sót cửa này.
             raise PeriodLockScopeError(
                 "Khóa sổ cần quyền trên mọi chi nhánh — phạm vi hiện tại còn thiếu",
-                missing_branch_ids=",".join(str(b) for b in sorted(missing)),
+                branches_visible=visible,
+                branches_total=visible + len(missing),
             )
 
     def _ensure_recalc_queue_clear(self, period: AccountingPeriod, year: FiscalYear) -> None:

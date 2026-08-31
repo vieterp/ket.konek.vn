@@ -196,6 +196,22 @@ class ReportDefinition(DatasetBase, Audited):
     hợp (`general_ledger`) giữ `NULL` — thế đứng cũ, đổi nó là việc riêng có
     phạm vi riêng, không phải việc kèm của lát này."""
 
+    requires_full_branch_scope: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    """Báo cáo chỉ đúng khi người đọc nhìn thấy MỌI chi nhánh (lát 6G-2, M-4).
+
+    Không phải một biến thể của `required_permission_module`: cột kia hỏi "được
+    đọc phân hệ này không", cột này hỏi "phạm vi có đủ để con số đúng không".
+    Một người có trọn quyền ngân hàng nhưng chỉ được cấp một chi nhánh vẫn đọc
+    ra `doi-chieu-ngan-hang` **sai**: dòng sao kê là dữ liệu mức tài khoản
+    (tài khoản dùng chung không mang chi nhánh) còn vế chứng từ nằm dưới RLS,
+    nên phần lệch phình đúng bằng phần chứng từ bị RLS giấu đi — một con số sai
+    mà trông hợp lý. Chặn ở đây, 403 kèm lý do, thay vì để họ đọc.
+
+    Là cột dữ liệu chứ không danh sách mã cứng trong code: báo cáo phase 7–10
+    có cùng hình dạng (đối chiếu công nợ, kiểm kê) sẽ chỉ cần bật cờ."""
+
     fixed_params: Mapped[SpecDocument] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )

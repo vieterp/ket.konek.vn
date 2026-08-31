@@ -7,6 +7,17 @@
  * seed một trang đầu để ô lookup có gợi ý ngay, phần còn lại tra theo chuỗi
  * đang gõ (debounce trong hook) và tra bù theo `ids=` cho form SỬA — bản ghi
  * của chứng từ cũ có thể xếp sau trang đầu hoặc đã ngừng theo dõi.
+ *
+ * **Bản DUY NHẤT** từ lát 6G-2 (nợ 6F-2): `so-sach-thue/use-dimension-lookups`
+ * từng giữ một `useSlugLookup` gần như y hệt — cùng seed, cùng tra bù `ids=`,
+ * cùng bộ nhớ phụ — khác đúng một điều: nó tra theo MÃ và **chờ** kết quả (rà
+ * lúc Cất), còn bản này tra theo chuỗi đang gõ và không chờ. Hai nhu cầu ấy là
+ * hai HÀM trên cùng một hook, không phải hai hook; giữ hai bản là giữ hai chỗ
+ * phải vá mỗi khi hợp đồng `/master/{slug}` đổi (và 6F-2 đã phải vá cả hai).
+ *
+ * Ở `danh-muc-thiet-lap` chứ không trong nhóm màn hình nào: cả nhóm 03 (Tiền
+ * vào tiền ra) lẫn nhóm 09 (Sổ sách – thuế) đều gọi, và nó đọc chính hợp đồng
+ * danh mục — `catalog-types` đã ở đây.
  */
 
 import { useCallback, useRef, useState } from 'react'
@@ -28,6 +39,13 @@ export interface MasterSearchLookup {
   readonly byId: ReadonlyMap<number, LookupOption>
   /** Gọi mỗi lần chuỗi gõ đổi — hook tự debounce rồi tra server. */
   readonly searchFor: (query: string) => void
+  /**
+   * Tra một loạt MÃ và **chờ** kết quả, gộp vào bộ nhớ phụ rồi trả phần tra
+   * được. Dùng ở đường rà-lúc-Cất: ô nhập cầm một mã người dùng gõ tay, cần
+   * biết ngay nó có thật hay không — khác hẳn `searchFor` (gợi ý trong lúc gõ,
+   * hỏng thì im lặng).
+   */
+  readonly fetchCodes: (codes: readonly string[]) => Promise<readonly LookupOption[]>
   readonly isLoading: boolean
 }
 
@@ -53,12 +71,14 @@ function mergeOptions(
 }
 
 /**
- * Kết quả tra thêm, gắn SLUG nó thuộc về — đổi slug (partners↔employees) thì
- * đọc ra coi như trống, id hai bảng trùng dải không trộn được vào nhau
- * (review 6F-1 M-C; cùng khuôn `ExtraState.postingDate` của use-account-lookup).
+ * Kết quả tra thêm, gắn SLUG **và** BỘ DỮ LIỆU nó thuộc về — đổi slug
+ * (partners↔employees) hay đổi dataset thì đọc ra coi như trống, id của hai
+ * bảng/hai bộ trùng dải không trộn được vào nhau (review 6F-1 M-C; hai bản
+ * tiền-6G-2 mỗi bản chỉ gắn MỘT trong hai khóa, nên bản gộp gắn cả hai).
  */
 interface ExtraState {
   readonly slug: string
+  readonly datasetCode: string | null
   readonly map: ReadonlyMap<number, LookupOption>
 }
 
@@ -67,8 +87,15 @@ export function useMasterSearchLookup(
   requiredIds: readonly number[] = [],
 ): MasterSearchLookup {
   const { client, datasetCode } = useSession()
-  const [extraState, setExtraState] = useState<ExtraState>({ slug, map: new Map() })
-  const extra = extraState.slug === slug ? extraState.map : new Map<number, LookupOption>()
+  const [extraState, setExtraState] = useState<ExtraState>({
+    slug,
+    datasetCode: null,
+    map: new Map(),
+  })
+  const extra =
+    extraState.slug === slug && extraState.datasetCode === datasetCode
+      ? extraState.map
+      : new Map<number, LookupOption>()
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const seed = useQuery({
@@ -129,8 +156,11 @@ export function useMasterSearchLookup(
           .then((page) => {
             setExtraState((current) => ({
               slug,
+              datasetCode,
               map: mergeOptions(
-                current.slug === slug ? current.map : new Map(),
+                current.slug === slug && current.datasetCode === datasetCode
+                  ? current.map
+                  : new Map(),
                 toOptions(page.items),
               ),
             }))
@@ -141,11 +171,48 @@ export function useMasterSearchLookup(
     [client, datasetCode, slug],
   )
 
+  const fetchCodes = useCallback(
+    async (codes: readonly string[]): Promise<readonly LookupOption[]> => {
+      if (datasetCode === null || codes.length === 0) {
+        return []
+      }
+      const settled = await Promise.all(
+        codes.map(async (code) => {
+          try {
+            const page = await client.get<CatalogPage>(
+              `/api/v1/master/${slug}?search=${encodeURIComponent(code)}&limit=${String(SEARCH_LIMIT)}`,
+              { datasetCode },
+            )
+            return toOptions(page.items)
+          } catch {
+            // Mạng đứt giữa lượt tra bù: trả rỗng để lượt rà thứ hai báo "mã
+            // không tra được" — một thông điệp, một đường xử lý.
+            return []
+          }
+        }),
+      )
+      const fetched = settled.flat()
+      if (fetched.length > 0) {
+        setExtraState((current) => ({
+          slug,
+          datasetCode,
+          map: mergeOptions(
+            current.slug === slug && current.datasetCode === datasetCode ? current.map : new Map(),
+            fetched,
+          ),
+        }))
+      }
+      return fetched
+    },
+    [client, datasetCode, slug],
+  )
+
   const hydrating = missingIds.length > 0 && hydrate.isPending
   return {
     options: [...merged.values()],
     byId: merged,
     searchFor,
+    fetchCodes,
     isLoading: seed.isPending || hydrating,
   }
 }

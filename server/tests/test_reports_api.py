@@ -724,3 +724,131 @@ class TestBuiltinSeed:
             } <= codes
             dataset = session.get(ReportDataset, "gl_ledger")
             assert dataset is not None and dataset.is_builtin
+
+
+class TestCompanyWideScopeGate:
+    """Lát 6G-2 (M-4): `requires_full_branch_scope` — cổng PHẠM VI của báo cáo.
+
+    `doi-chieu-ngan-hang` so sổ (dưới RLS chi nhánh) với sao kê (dữ liệu mức
+    tài khoản, không mang chi nhánh). Người được cấp một chi nhánh đọc ra phần
+    lệch phình đúng bằng phần RLS giấu đi — sai mà trông hợp lý, nên đường đúng
+    là từ chối có lý do chứ không "trả về ít hơn".
+    """
+
+    def _bank_reporter(
+        self,
+        client: TestClient,
+        session_factory: sessionmaker[Session],
+        report_dataset: DatasetRef,
+        user_factory: UserFactory,
+        test_password: str,
+        prefix: str,
+        branch_codes: list[str] | None,
+        branch_id: int,
+    ) -> dict[str, str]:
+        role = ensure_role(
+            session_factory,
+            report_dataset,
+            f"bao_cao_ngan_hang_{prefix}",
+            [REPORT_VIEW, permission_code("bank", "statement", Action.VIEW)],
+        )
+        headers = actor(
+            client,
+            session_factory,
+            report_dataset,
+            user_factory,
+            role,
+            prefix,
+            test_password,
+            branch_codes=branch_codes or all_branch_codes(session_factory, report_dataset),
+        )
+        return {**headers, BRANCH_HEADER: str(branch_id)}
+
+    def test_a_branch_scoped_reader_is_refused_and_the_catalog_hides_it(
+        self,
+        client: TestClient,
+        session_factory: sessionmaker[Session],
+        report_dataset: DatasetRef,
+        user_factory: UserFactory,
+        test_password: str,
+        context: PostingContext,
+        context_b: PostingContext,
+    ) -> None:
+        assert context_b.branch_id != context.branch_id
+        narrow = self._bank_reporter(
+            client,
+            session_factory,
+            report_dataset,
+            user_factory,
+            test_password,
+            "rpt_narrow",
+            [context.branch_code],
+            context.branch_id,
+        )
+        body = {"params": {"bank_account_id": 1, "as_of": "2026-01-31"}}
+        refused = client.post(
+            "/api/v1/reports/doi-chieu-ngan-hang/preview", json=body, headers=narrow
+        )
+        assert refused.status_code == 403, refused.text
+        body = refused.json()
+        assert body["error_code"] == "report.scope_insufficient"
+        # ĐẾM, không id (review 6G-2 M-2): id chi nhánh người gọi chưa được cấp
+        # là thông tin về cấu trúc đơn vị họ chưa được thấy. Cùng chính sách với
+        # `bank_statement.scope_insufficient` — một câu hỏi, một chính sách.
+        assert "missing_branch_ids" not in body.get("details", {}), body
+        assert body["details"]["branches_visible"] < body["details"]["branches_total"]
+
+        # Danh mục không mời người ta bấm vào một 403 (cùng luật `_may_open`).
+        listed = client.get("/api/v1/reports", headers=narrow)
+        assert listed.status_code == 200
+        assert "doi-chieu-ngan-hang" not in {item["code"] for item in listed.json()["reports"]}
+
+        # Người đủ phạm vi đi qua cổng — chứng minh 403 đến từ PHẠM VI, không
+        # từ quyền hay tham số. (Số liệu rỗng là chuyện khác, không phải 403.)
+        wide = self._bank_reporter(
+            client,
+            session_factory,
+            report_dataset,
+            user_factory,
+            test_password,
+            "rpt_wide",
+            None,
+            context.branch_id,
+        )
+        allowed = client.post(
+            "/api/v1/reports/doi-chieu-ngan-hang/preview", json=body, headers=wide
+        )
+        assert allowed.status_code != 403, allowed.text
+        assert "doi-chieu-ngan-hang" in {
+            item["code"] for item in client.get("/api/v1/reports", headers=wide).json()["reports"]
+        }
+
+    def test_a_one_sided_report_is_untouched_by_the_gate(
+        self,
+        client: TestClient,
+        session_factory: sessionmaker[Session],
+        report_dataset: DatasetRef,
+        user_factory: UserFactory,
+        test_password: str,
+        viewer_only_role: str,
+        context: PostingContext,
+    ) -> None:
+        """Cổng chỉ chạm báo cáo bật cờ: bật nhầm nó cho sổ cái là chặn mọi kế
+        toán chi nhánh khỏi dữ liệu họ có quyền đọc."""
+        narrow = {
+            **actor(
+                client,
+                session_factory,
+                report_dataset,
+                user_factory,
+                viewer_only_role,
+                "rpt_one_sided",
+                test_password,
+                branch_codes=[context.branch_code],
+            ),
+            BRANCH_HEADER: str(context.branch_id),
+        }
+        response = client.post(
+            "/api/v1/reports/S03b-DN/preview", json={"params": RANGE}, headers=narrow
+        )
+        assert response.status_code == 200, response.text

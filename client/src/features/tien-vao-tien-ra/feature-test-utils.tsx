@@ -21,6 +21,7 @@ import { CashVoucherForm } from './cash-voucher-form'
 import { CountSheetPage } from './count-sheet-page'
 import { ReconciliationDetailPage } from './reconciliation-detail-page'
 import { ReconciliationPage } from './reconciliation-page'
+import { StatementProfilePage } from './statement-profile-page'
 import { TreasurerCashBookPage } from './treasurer-cash-book-page'
 import { TreasurerQueuePage } from './treasurer-queue-page'
 
@@ -161,6 +162,7 @@ export function renderFeatureAt(path: string): void {
                 <Route path="doi-chieu/:id" element={<ReconciliationDetailPage />} />
                 <Route path="thu-quy" element={<TreasurerQueuePage />} />
                 <Route path="thu-quy/so-quy" element={<TreasurerCashBookPage />} />
+                <Route path="ho-so-sao-ke" element={<StatementProfilePage />} />
               </Route>
             </Route>
           </Routes>

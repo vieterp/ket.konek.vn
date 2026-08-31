@@ -56,6 +56,11 @@ export function FeatureNav(): ReactElement {
             {t('cashflow.nav.treasurerBook')}
           </NavLink>
         </li>
+        <li>
+          <NavLink to="/tien-vao-tien-ra/ho-so-sao-ke" className={LINK_CLASS}>
+            {t('cashflow.nav.statementProfiles')}
+          </NavLink>
+        </li>
       </ul>
     </nav>
   )

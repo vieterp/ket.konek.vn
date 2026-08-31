@@ -406,6 +406,48 @@ client/                              # Tauri + web UI (TypeScript)
 
 ---
 
+## 7b. API đóng băng của `ket.kernel` / `ket.posting` (bước 23, lát 6G-2)
+
+Phase 7 và 8 chạy **song song**, và ranh giới chia sẻ duy nhất giữa chúng là
+hai gói này. Từ 2026-08-31 bề mặt liên-module của chúng **đã đóng băng**:
+
+| Bề mặt | Tệp khai | Đóng băng? |
+| --- | --- | --- |
+| Protocol liên-module + registry | `ket/kernel/protocols.py` (`__all__`) | **Có** |
+| Ranh giới công khai của posting | `ket/posting/contracts.py` (`__all__`) | **Có** |
+| Tệp con bên trong hai gói | — | Không (cài đặt, tự do tái cấu trúc) |
+| "Ai được import ai" | `importlinter.ini` C1–C5 | Có, cổng riêng |
+
+Cổng: `server/tests/test_frozen_kernel_api.py` so chữ ký với ảnh chụp
+`server/tests/frozen_kernel_api.txt`. Đổi chữ ký ⇒ CI đỏ. Đường đổi hợp lệ (ADR-020):
+viết ADR bổ sung → `KET_UPDATE_FROZEN_API=1 uv run pytest tests/test_frozen_kernel_api.py`
+→ commit ảnh chụp mới cùng ADR.
+
+**Rà hạ tầng cuối phase 6 (bước 22).** Mọi lát 6A→6G có sửa
+`kernel`/`posting`/`reporting`; lần rà này xác nhận **không lát nào để lại một
+đặc thù Quỹ/Ngân hàng** trong ba gói ấy — mỗi lượt sửa đều đã tổng quát hóa
+ngay trong lát, và đó là kết quả mong đợi của "phân hệ đầu tiên là bài kiểm tra
+thật cho hạ tầng". Những mảnh hạ tầng do phase 6 sinh ra, nay dùng chung cho 12
+module còn lại:
+
+| Mảnh | Sinh ở lát | Ai dùng lại |
+| --- | --- | --- |
+| `PostingDocumentType` + 3 hook vòng đời (`after_post`/`after_unpost`/`before_delete`) | 6B | Mọi loại chứng từ của phase 7–9 |
+| `SettlementTargetSource` + `posting.settlements` (đối trừ + chênh lệch tỷ giá) | 6B/6C | Công nợ phase 7 |
+| Cặp Protocol thủ quỹ (`TreasurerCashBook`/`TreasurerVoucherSource`) | 6C | Thủ kho phase 8 (đúng khuôn) |
+| `CatalogRegistry.extend_merge_hooks` | 6D | Mọi danh mục có bảng con mang ràng buộc duy nhất |
+| `report_definitions.fixed_params` | 6E-1 | Biểu mẫu song sinh (S03a3/S03a4 phase 7) |
+| `required_permission_module` trên báo cáo | 6E-1 | Mọi báo cáo phân hệ |
+| `PostingDocumentType.print_details` + `DocumentPrintContext` sáu vùng | 6E-2 | 12 module còn lại: mỗi module một hàm |
+| `JobType.branch_scope` (`REQUESTER_BRANCHES`) | 5E | Mọi job đọc xuyên chi nhánh |
+| Chiều cố định `bank_account_id` trên `gl_postings` | 6G-1 | Chiều suy-ra của phase 7–8 |
+| `REFERENCE_GUARDS` — guard "còn ai tham chiếu?" chạy trong `PostingService.unpost` và `VoucherService.delete` | 6G-2 | Mọi ràng buộc liên-module tương lai; đăng ký từ phía module GIỮ ràng buộc |
+| `kernel/security/branch_scope` — "phạm vi có phủ mọi chi nhánh chưa" | 6G-2 | Khóa sổ, đối chiếu, báo cáo hai-vế |
+| `report_definitions.requires_full_branch_scope` | 6G-2 | Báo cáo so hai vế lệch phạm vi (đối chiếu công nợ, kiểm kê) |
+| `posting/engine/dimension_recompute` — tính lại chiều SUY RA từ thân chứng từ | 6G-2 | Mọi chiều ghi-lúc-post của phase 7–8 |
+
+---
+
 ## 8. Ánh xạ 18 phân hệ SRS → mã FR → package server → nhóm màn hình → phase
 
 | SRS | Phân hệ | Mã FR | Package server | Nhóm màn hình (UI) | Phase |

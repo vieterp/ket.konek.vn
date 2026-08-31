@@ -148,6 +148,15 @@
         "title": "AccountResponse",
         "type": "object"
       },
+      "AmountSignRule": {
+        "description": "Cách hiểu **dấu** của một cột số tiền gộp.\n\nChỉ có nghĩa khi hồ sơ dùng **một** cột số tiền. Sao kê hai cột (nợ/có) tự\nnó đã nói chiều tiền, nên `sign_rule` phải để trống ở đó — có `CHECK` canh.",
+        "enum": [
+          "signed",
+          "debit_positive"
+        ],
+        "title": "AmountSignRule",
+        "type": "string"
+      },
       "AssetTypesCreateRequest": {
         "additionalProperties": false,
         "description": "Loại tài sản cố định — tạo mới.",
@@ -1065,6 +1074,346 @@
         "title": "BankStatementOut",
         "type": "object"
       },
+      "BankStatementProfileDetailListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BankStatementProfileDetailOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BankStatementProfileDetailListResponse",
+        "type": "object"
+      },
+      "BankStatementProfileDetailOut": {
+        "description": "Trọn hồ sơ — thân của màn KHAI hồ sơ (lát 6G-2).\n\nTách khỏi `BankStatementProfileOut` chứ không mở rộng nó: ô chọn hồ sơ trên\nmàn nhập sao kê chỉ cần `id`/`name`, và bơm hai chục cột cách-đọc-tệp vào\nmọi lượt tải màn ấy là trả tiền cho thứ không ai đọc.",
+        "properties": {
+          "amount_col": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Col"
+          },
+          "balance_col": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance Col"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "integer"
+          },
+          "credit_col": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Col"
+          },
+          "csv_delimiter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Csv Delimiter"
+          },
+          "date_col": {
+            "title": "Date Col",
+            "type": "string"
+          },
+          "date_format": {
+            "title": "Date Format",
+            "type": "string"
+          },
+          "debit_col": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debit Col"
+          },
+          "decimal_sep": {
+            "title": "Decimal Sep",
+            "type": "string"
+          },
+          "description_col": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description Col"
+          },
+          "file_kind": {
+            "title": "File Kind",
+            "type": "string"
+          },
+          "header_row": {
+            "title": "Header Row",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ref_col": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Col"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "sign_rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sign Rule"
+          },
+          "thousand_sep": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thousand Sep"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "name",
+          "file_kind",
+          "header_row",
+          "date_col",
+          "date_format",
+          "debit_col",
+          "credit_col",
+          "amount_col",
+          "sign_rule",
+          "ref_col",
+          "description_col",
+          "balance_col",
+          "decimal_sep",
+          "thousand_sep",
+          "csv_delimiter",
+          "row_version"
+        ],
+        "title": "BankStatementProfileDetailOut",
+        "type": "object"
+      },
+      "BankStatementProfileIn": {
+        "additionalProperties": false,
+        "description": "Thân khai/sửa một hồ sơ.\n\nKhông kiểm chéo ở đây (một-trong-hai hình dạng cột tiền, ba dấu phải khác\nnhau đôi một): những luật ấy là `CHECK` trên bảng từ lát 3C-2, và nhân đôi\nchúng ở tầng schema là nhận hai bản có thể trôi khỏi nhau. Tầng này chỉ\ncanh kiểu và độ dài — thứ DB trả về dưới dạng lỗi khó đọc.",
+        "properties": {
+          "amount_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Col"
+          },
+          "balance_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance Col"
+          },
+          "bank_id": {
+            "minimum": 1.0,
+            "title": "Bank Id",
+            "type": "integer"
+          },
+          "credit_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Col"
+          },
+          "csv_delimiter": {
+            "anyOf": [
+              {
+                "maxLength": 1,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Csv Delimiter"
+          },
+          "date_col": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Date Col",
+            "type": "string"
+          },
+          "date_format": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Date Format",
+            "type": "string"
+          },
+          "debit_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debit Col"
+          },
+          "decimal_sep": {
+            "maxLength": 1,
+            "minLength": 1,
+            "title": "Decimal Sep",
+            "type": "string"
+          },
+          "description_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description Col"
+          },
+          "file_kind": {
+            "$ref": "#/components/schemas/StatementFileKind"
+          },
+          "header_row": {
+            "minimum": 1.0,
+            "title": "Header Row",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ref_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Col"
+          },
+          "sign_rule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AmountSignRule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "thousand_sep": {
+            "anyOf": [
+              {
+                "maxLength": 1,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thousand Sep"
+          }
+        },
+        "required": [
+          "bank_id",
+          "name",
+          "file_kind",
+          "header_row",
+          "date_col",
+          "date_format",
+          "decimal_sep"
+        ],
+        "title": "BankStatementProfileIn",
+        "type": "object"
+      },
       "BankStatementProfileListResponse": {
         "properties": {
           "items": {
@@ -1103,6 +1452,174 @@
           "name"
         ],
         "title": "BankStatementProfileOut",
+        "type": "object"
+      },
+      "BankStatementProfileUpdateIn": {
+        "additionalProperties": false,
+        "description": "Sửa = khai + số phiên bản dòng (khóa lạc quan, cùng khuôn danh mục).",
+        "properties": {
+          "amount_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Col"
+          },
+          "balance_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance Col"
+          },
+          "bank_id": {
+            "minimum": 1.0,
+            "title": "Bank Id",
+            "type": "integer"
+          },
+          "credit_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Col"
+          },
+          "csv_delimiter": {
+            "anyOf": [
+              {
+                "maxLength": 1,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Csv Delimiter"
+          },
+          "date_col": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Date Col",
+            "type": "string"
+          },
+          "date_format": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Date Format",
+            "type": "string"
+          },
+          "debit_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debit Col"
+          },
+          "decimal_sep": {
+            "maxLength": 1,
+            "minLength": 1,
+            "title": "Decimal Sep",
+            "type": "string"
+          },
+          "description_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description Col"
+          },
+          "file_kind": {
+            "$ref": "#/components/schemas/StatementFileKind"
+          },
+          "header_row": {
+            "minimum": 1.0,
+            "title": "Header Row",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ref_col": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Col"
+          },
+          "row_version": {
+            "minimum": 1.0,
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "sign_rule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AmountSignRule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "thousand_sep": {
+            "anyOf": [
+              {
+                "maxLength": 1,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thousand Sep"
+          }
+        },
+        "required": [
+          "bank_id",
+          "name",
+          "file_kind",
+          "header_row",
+          "date_col",
+          "date_format",
+          "decimal_sep",
+          "row_version"
+        ],
+        "title": "BankStatementProfileUpdateIn",
         "type": "object"
       },
       "BankVoucherIn": {
@@ -9679,9 +10196,20 @@
             ],
             "title": "Description"
           },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
           "kind": {
-            "title": "Kind",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
           },
           "net_fc": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -9718,6 +10246,7 @@
           "voucher_id",
           "voucher_no",
           "posting_date",
+          "document_type",
           "kind",
           "reference_no",
           "description",
@@ -13504,6 +14033,16 @@
         "title": "SetupItem",
         "type": "object"
       },
+      "StatementFileKind": {
+        "description": "Dạng tệp mà ngân hàng phát ra.",
+        "enum": [
+          "xlsx",
+          "csv",
+          "mt940"
+        ],
+        "title": "StatementFileKind",
+        "type": "string"
+      },
       "StatementLayoutListResponse": {
         "properties": {
           "layouts": {
@@ -15227,7 +15766,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.23.0"
+    "version": "0.24.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -16046,7 +16585,7 @@
     },
     "/api/v1/bank/statements/lines/{line_id}/actions/match": {
       "post": {
-        "description": "Khớp tay một dòng với một chứng từ — vẫn đòi đúng tài khoản, đúng chiều,\nđúng số tiền; chỉ cửa sổ ngày là không giới hạn.",
+        "description": "Khớp tay một dòng với một chứng từ — vẫn đòi đúng tài khoản, đúng chiều,\nđúng số tiền; chỉ cửa sổ ngày là không giới hạn.\n\nTừ 6G-2 cũng đòi phạm vi công ty như khớp tự động (M-4): 6D để ngỏ cửa này\nvì \"người dùng chỉ chọn được thứ mình thấy\", nhưng thứ họ *không* thấy mới\nlà vấn đề — khớp một dòng vào chứng từ chi nhánh mình trong khi chứng từ\nđúng nằm ở chi nhánh bị RLS giấu là một cặp khớp SAI, và nó khóa luôn dòng\nấy khỏi lượt khớp đúng sau này.",
         "operationId": "match_statement_line_api_v1_bank_statements_lines__line_id__actions_match_post",
         "parameters": [
           {
@@ -16213,6 +16752,165 @@
         "tags": [
           "bank-statements"
         ]
+      },
+      "post": {
+        "description": "Khai một cách đọc sao kê mới cho một ngân hàng (RT-26).\n\nQuyền `bank.statement_profile.*` riêng khỏi `bank.statement.*`: nhập sao kê\nlà việc hằng ngày của kế toán, còn sửa cách đọc tệp là việc đổi **luật diễn\ngiải mọi lượt nhập sau đó** — một dấu thập phân gõ nhầm ở đây làm mọi con\nsố sai gấp trăm lần mà không dòng nào báo đỏ.",
+        "operationId": "create_statement_profile_api_v1_bank_statements_profiles_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BankStatementProfileIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankStatementProfileDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Create Statement Profile",
+        "tags": [
+          "bank-statements"
+        ]
+      }
+    },
+    "/api/v1/bank/statements/profiles/all": {
+      "get": {
+        "description": "Mọi hồ sơ định dạng, trọn cột — thân của màn KHAI hồ sơ (lát 6G-2).\n\nKhác `/statements/profiles` ở hai điểm và cả hai đều cố ý: không lọc theo\ntài khoản (màn khai làm việc theo NGÂN HÀNG, không theo tài khoản), và trả\nđủ cột cách-đọc-tệp.",
+        "operationId": "list_all_statement_profiles_api_v1_bank_statements_profiles_all_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankStatementProfileDetailListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List All Statement Profiles",
+        "tags": [
+          "bank-statements"
+        ]
+      }
+    },
+    "/api/v1/bank/statements/profiles/{profile_id}": {
+      "delete": {
+        "description": "Xóa một hồ sơ.\n\nSao kê đã nhập giữ `profile_id` với `ON DELETE RESTRICT`, nên hồ sơ từng\ndùng thì không xóa được — dịch `IntegrityError` thành 409 đọc được thay vì\nđể 500 rơi ra, cùng lối `_flush_profile`.",
+        "operationId": "delete_statement_profile_api_v1_bank_statements_profiles__profile_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Delete Statement Profile",
+        "tags": [
+          "bank-statements"
+        ]
+      },
+      "put": {
+        "description": "Sửa trọn bộ một hồ sơ (PUT thay-trọn-bộ, cùng khuôn chứng từ).",
+        "operationId": "update_statement_profile_api_v1_bank_statements_profiles__profile_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BankStatementProfileUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankStatementProfileDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Update Statement Profile",
+        "tags": [
+          "bank-statements"
+        ]
       }
     },
     "/api/v1/bank/statements/{statement_id}": {
@@ -16296,7 +16994,7 @@
     },
     "/api/v1/bank/statements/{statement_id}/actions/auto-match": {
       "post": {
-        "description": "Khớp tự động (FR-BNK-030): cùng chiều + cùng số tiền + ngày ±3, ưu tiên\ntrùng số tham chiếu; ứng viên nhập nhằng để lại cho khớp tay.\n\nĐòi phạm vi MỌI chi nhánh (review 6D, M-1): ứng viên là chứng từ dưới RLS\nchi nhánh, còn sao kê là dữ liệu mức tài khoản — phạm vi hẹp làm máy không\nthấy ứng viên đúng và khớp nhầm ứng viên duy nhất còn lại một cách tất\nđịnh. Khớp TAY không bị chặn: người dùng chỉ chọn được thứ mình thấy.",
+        "description": "Khớp tự động (FR-BNK-030): cùng chiều + cùng số tiền + ngày ±3, ưu tiên\ntrùng số tham chiếu; ứng viên nhập nhằng để lại cho khớp tay.\n\nĐòi phạm vi MỌI chi nhánh — từ lát 6G-2 là luật của **cả** phân hệ đối\nchiếu, không riêng đường tự động (M-4). Lý do gốc (review 6D, M-1) vẫn\nđứng: ứng viên là chứng từ dưới RLS chi nhánh, còn sao kê là dữ liệu mức\ntài khoản (tài khoản dùng chung không mang chi nhánh), nên phạm vi hẹp làm\nmáy không thấy ứng viên đúng và khớp nhầm ứng viên duy nhất còn lại một\ncách tất định.",
         "operationId": "auto_match_statement_api_v1_bank_statements__statement_id__actions_auto_match_post",
         "parameters": [
           {

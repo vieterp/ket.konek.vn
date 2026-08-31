@@ -88,6 +88,11 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         # (`bank_statement.duplicate`, 409) — không thể nhân đôi sao kê, và
         # khóa ấy còn bền hơn khóa idempotency vì không hết hạn.
         "/api/v1/bank/statements/import",
+        # Khai hồ sơ định dạng sao kê (lát 6G-2): lượt gửi lại đâm vào unique
+        # `(bank_id, name)` của bảng (`bank_statement_profile.conflict`, 409) —
+        # cùng lối miễn trừ với nhập sao kê ngay trên, và cùng lý do: ràng buộc
+        # DB khử trùng bền hơn một khóa có hạn.
+        "/api/v1/bank/statements/profiles",
         # Ba thao tác khớp/gỡ khớp (lát 6D) ghi **trạng thái của một tập dòng**,
         # cùng họ với gán vai trò ở trên: chạy lại cho ra đúng trạng thái đó
         # (auto-match lần 2 thấy 0 dòng chưa khớp; match lần 2 → 409 đã khớp;

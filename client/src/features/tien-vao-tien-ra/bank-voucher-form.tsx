@@ -54,7 +54,7 @@ import {
   type BankVoucherOut,
   type BankVoucherUpdate,
 } from './use-bank-voucher'
-import { useMasterSearchLookup } from './use-master-search-lookup'
+import { useMasterSearchLookup } from '@/features/danh-muc-thiet-lap/use-master-search-lookup'
 
 /** Mã loại chứng từ theo `kind` — khớp `modules/bank/service.py`. */
 const DOCUMENT_TYPE_BY_KIND: readonly string[] = ['BC', 'UNC', 'SEC', 'CTNB']

@@ -1,0 +1,199 @@
+# module ket.kernel.protocols
+class ket.kernel.protocols.CommitmentProvider
+  committed_quantities(self, session: 'Session', *, item_ids: 'Sequence[int]', branch_id: 'int', warehouse_id: 'int | None' = None) -> 'Mapping[int, Decimal]'
+class ket.kernel.protocols.CrossModuleProviders
+  commitment_providers(self) -> 'tuple[CommitmentProvider, ...]'
+  inventory_posting(self) -> 'InventoryPosting | None'
+  payable_providers(self) -> 'tuple[PayableProvider, ...]'
+  receivable_providers(self) -> 'tuple[ReceivableProvider, ...]'
+  register_commitment(self, provider: 'CommitmentProvider') -> 'None'
+  register_inventory_posting(self, implementation: 'InventoryPosting') -> 'None'
+  register_payable(self, provider: 'PayableProvider') -> 'None'
+  register_receivable(self, provider: 'ReceivableProvider') -> 'None'
+  register_settlement_source(self, kind: 'SettlementTargetKind', source: 'SettlementTargetSource') -> 'None'
+  register_treasurer_cash_book(self, implementation: 'TreasurerCashBook') -> 'None'
+  register_treasurer_voucher_source(self, source: 'TreasurerVoucherSource') -> 'None'
+  settlement_source(self, kind: 'SettlementTargetKind') -> 'SettlementTargetSource | None'
+  treasurer_cash_book(self) -> 'TreasurerCashBook | None'
+  treasurer_voucher_source(self) -> 'TreasurerVoucherSource | None'
+class ket.kernel.protocols.InventoryMovementKind
+class ket.kernel.protocols.InventoryMovementLine
+  field item_id: int
+  field item_variant_id: int | None
+  field lot_no: str | None
+  field quantity: Decimal
+  field unit_id: int
+  field unit_price_fc: Decimal | None
+  field warehouse_id: int
+class ket.kernel.protocols.InventoryPosting
+  create_movement(self, session: 'Session', *, kind: 'InventoryMovementKind', source_voucher_id: 'UUID', branch_id: 'int', posting_date: 'date', currency_code: 'str', exchange_rate: 'Decimal', lines: 'Sequence[InventoryMovementLine]', user_id: 'int') -> 'UUID'
+class ket.kernel.protocols.OpenInvoice
+  field account_id: int
+  field amount_fc: Decimal
+  field branch_id: int
+  field currency_code: str
+  field description: str | None
+  field due_date: date | None
+  field exchange_rate: Decimal
+  field invoice_date: date
+  field invoice_no: str
+  field partner_id: int
+  field partner_kind: PartnerKind
+  field remaining: Decimal
+  field remaining_fc: Decimal
+  field target_id: UUID
+  field target_kind: SettlementTargetKind
+class ket.kernel.protocols.PROVIDERS: instance of
+  commitment_providers(self) -> 'tuple[CommitmentProvider, ...]'
+  inventory_posting(self) -> 'InventoryPosting | None'
+  payable_providers(self) -> 'tuple[PayableProvider, ...]'
+  receivable_providers(self) -> 'tuple[ReceivableProvider, ...]'
+  register_commitment(self, provider: 'CommitmentProvider') -> 'None'
+  register_inventory_posting(self, implementation: 'InventoryPosting') -> 'None'
+  register_payable(self, provider: 'PayableProvider') -> 'None'
+  register_receivable(self, provider: 'ReceivableProvider') -> 'None'
+  register_settlement_source(self, kind: 'SettlementTargetKind', source: 'SettlementTargetSource') -> 'None'
+  register_treasurer_cash_book(self, implementation: 'TreasurerCashBook') -> 'None'
+  register_treasurer_voucher_source(self, source: 'TreasurerVoucherSource') -> 'None'
+  settlement_source(self, kind: 'SettlementTargetKind') -> 'SettlementTargetSource | None'
+  treasurer_cash_book(self) -> 'TreasurerCashBook | None'
+  treasurer_voucher_source(self) -> 'TreasurerVoucherSource | None'
+class ket.kernel.protocols.PayableProvider
+  open_invoices(self, session: 'Session', *, partner_kind: 'PartnerKind', partner_id: 'int', branch_id: 'int', as_of: 'date') -> 'Sequence[OpenInvoice]'
+class ket.kernel.protocols.ReceivableProvider
+  open_invoices(self, session: 'Session', *, partner_kind: 'PartnerKind', partner_id: 'int', branch_id: 'int', as_of: 'date') -> 'Sequence[OpenInvoice]'
+class ket.kernel.protocols.SettlementTargetKind
+class ket.kernel.protocols.SettlementTargetSource
+  apply(self, session: 'Session', *, target_id: 'UUID', amount_fc: 'Decimal', amount: 'Decimal') -> 'None'
+  find(self, session: 'Session', *, target_ids: 'Sequence[UUID]') -> 'Sequence[OpenInvoice]'
+  revert(self, session: 'Session', *, target_id: 'UUID', amount_fc: 'Decimal', amount: 'Decimal') -> 'None'
+class ket.kernel.protocols.TreasurerBookEntry
+  field book_date: date
+  field branch_id: int
+  field cash_account_id: int
+  field payment_amount: Decimal
+  field posted_by: int
+  field receipt_amount: Decimal
+  field voucher_id: UUID
+class ket.kernel.protocols.TreasurerCashBook
+  erase(self, session: 'Session', *, voucher_id: 'UUID') -> 'None'
+  record(self, session: 'Session', entry: 'TreasurerBookEntry') -> 'None'
+class ket.kernel.protocols.TreasurerPendingVoucher
+  field amount: Decimal
+  field branch_id: int
+  field cash_account_id: int
+  field description: str | None
+  field document_type: str
+  field is_receipt: bool
+  field payer_receiver_name: str | None
+  field posting_date: date
+  field voucher_id: UUID
+  field voucher_no: str
+class ket.kernel.protocols.TreasurerVoucherSource
+  book(self, session: 'Session', *, voucher_id: 'UUID', book_date: 'date | None', user_id: 'int', today: 'date') -> 'TreasurerBookEntry'
+  pending(self, session: 'Session') -> 'Sequence[TreasurerPendingVoucher]'
+
+# module ket.posting.contracts
+ket.posting.contracts.AMOUNT_PRECISION: int
+ket.posting.contracts.AMOUNT_SCALE: int
+class ket.posting.contracts.EntryKind
+class ket.posting.contracts.ExtendedDimensionValue
+  field dimension_id: int
+  field value_id: int
+class ket.posting.contracts.GUARD_REGISTRY: instance of
+  guards(self) -> 'tuple[PostingGuard, ...]'
+  register(self, guard: 'PostingGuard') -> 'None'
+ket.posting.contracts.GUARD_WARNING_DETAIL: str
+class ket.posting.contracts.GuardFinding
+  field blocking: bool
+  field violation: PostingViolation
+class ket.posting.contracts.Ledger
+class ket.posting.contracts.POSTING_DOCUMENT_REGISTRY: instance of
+  codes(self) -> 'tuple[str, ...]'
+  get(self, code: 'str') -> 'PostingDocumentType'
+  register(self, document_type: 'PostingDocumentType') -> 'None'
+class ket.posting.contracts.PartnerKind
+class ket.posting.contracts.PostingDimensions
+  has_tracking(self, tracking: 'str') -> 'bool'
+  field bank_account_id: int | None
+  field contract_id: int | None
+  field cost_object_id: int | None
+  field expense_item_id: int | None
+  field extended: tuple[ExtendedDimensionValue, ...]
+  field item_id: int | None
+  field order_id: int | None
+  field partner_id: int | None
+  field partner_kind: PartnerKind | None
+  field project_id: int | None
+  field warehouse_id: int | None
+class ket.posting.contracts.PostingDocumentType
+  permission(self, action: 'Action') -> 'str'
+  field after_post: LifecycleHook | None
+  field after_unpost: LifecycleHook | None
+  field before_delete: LifecycleHook | None
+  field build_request: RequestBuilder
+  field code: str
+  field permission_module: str
+  field permission_name: str
+  field print_details: PrintDetailsBuilder | None
+  field title: str
+class ket.posting.contracts.PostingGuard
+  check(self, session: 'Session', *, voucher: 'Voucher', lines: 'Sequence[PreparedLine]') -> 'Sequence[GuardFinding]'
+class ket.posting.contracts.PostingLine
+  field account_id: int
+  field corresponding_account_id: int | None
+  field credit_fc: Decimal
+  field currency: str
+  field debit_fc: Decimal
+  field description: str | None
+  field dimensions: PostingDimensions
+  field rate: Decimal
+  field source_line_id: UUID | None
+class ket.posting.contracts.PostingRequest
+  field financial_lines: tuple[PostingLine, ...]
+  field management_lines: tuple[PostingLine, ...] | None
+  field voucher_id: UUID
+class ket.posting.contracts.PostingService
+  post(self, request: 'PostingRequest', *, user_id: 'int', acknowledged_warnings: 'bool' = False) -> 'Voucher'
+  unpost(self, voucher_id: 'UUID', *, user_id: 'int') -> 'Voucher'
+class ket.posting.contracts.REFERENCE_GUARDS: instance of
+  check(self, session: 'Session', voucher_id: 'UUID') -> 'None'
+  register(self, guard: 'VoucherReferenceGuard') -> 'None'
+class ket.posting.contracts.Voucher
+  field branch_id: Mapped[int]
+  field cashflow_activity: Mapped[int | None]
+  field created_at: Mapped[datetime]
+  field created_by: Mapped[int]
+  field currency_code: Mapped[str]
+  field description: Mapped[str | None]
+  field document_date: Mapped[date]
+  field document_type: Mapped[str]
+  field entry_kind: Mapped[int]
+  field exchange_rate: Mapped[Decimal]
+  field id: Mapped[UUID]
+  field period_id: Mapped[int]
+  field posted_at: Mapped[datetime | None]
+  field posted_by: Mapped[int | None]
+  field posting_date: Mapped[date]
+  field reversal_of_id: Mapped[UUID | None]
+  field source_document_id: Mapped[UUID | None]
+  field status: Mapped[int]
+  field voucher_no: Mapped[str]
+class ket.posting.contracts.VoucherAction
+class ket.posting.contracts.VoucherDraft
+  field branch_id: int
+  field cashflow_activity: int | None
+  field currency_code: str
+  field description: str | None
+  field document_date: date
+  field document_type: str
+  field entry_kind: int
+  field exchange_rate: Decimal
+  field posting_date: date
+class ket.posting.contracts.VoucherService
+  create(self, draft: 'VoucherDraft', *, rule: 'NumberingRule', user_id: 'int') -> 'Voucher'
+  delete(self, voucher_id: 'UUID') -> 'None'
+  ensure_editable(self, voucher: 'Voucher') -> 'None'
+  move_to_date(self, voucher: 'Voucher', *, posting_date: 'date') -> 'None'
+  require(self, voucher_id: 'UUID') -> 'Voucher'
+class ket.posting.contracts.VoucherStatus

@@ -21,9 +21,9 @@ dataset dùng chung, doctrine 6B).
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import Engine, select, text, update
@@ -33,11 +33,13 @@ from bank_support import ensure_company_bank_account, seed_bank_package_data
 from cash_book_support import seed_cash_book_package_data
 from ket.kernel.config.accounts_models import ChartOfAccount, DetailTracking
 from ket.kernel.datasets.provisioning import DatasetRef, drop_dataset_schema, provision_dataset
-from ket.kernel.errors import PostingValidationError
+from ket.kernel.errors import BankStatementMatchStateError, PostingValidationError
 from ket.kernel.master_data.models.company_bank_account import (
     COMPANY_BANK_ACCOUNT_TABLE_NAME,
+    CompanyBankAccount,
 )
 from ket.kernel.master_data.usage import record_use, usage_count_of
+from ket.kernel.periods.models import AccountingPeriod, FiscalYear
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.modules.bank.balance_service import deposit_balances_as_of
 from ket.modules.bank.models import (
@@ -46,6 +48,7 @@ from ket.modules.bank.models import (
     BankVoucherKind,
     StatementMatchKind,
 )
+from ket.modules.bank.reconciliation import match_line, unmatched_vouchers
 from ket.modules.bank.schemas import BankVoucherIn, BankVoucherLineIn
 from ket.modules.bank.service import BankVoucherService
 from ket.modules.bank.statement_branch import sync_statement_branch
@@ -53,6 +56,8 @@ from ket.modules.bank.statement_merge import CompanyBankAccountStatementMergeHoo
 from ket.modules.cash_book.models import CashVoucherKind
 from ket.modules.cash_book.schemas import CashVoucherIn, CashVoucherLineIn
 from ket.modules.cash_book.service import CashVoucherService
+from ket.posting.documents.models import Voucher
+from ket.posting.engine.dimension_recompute import recompute_derived_dimensions
 from ket.posting.engine.models import GlPosting, Ledger
 from ket.posting.integrity.checks.registry import check_of
 from posting_support import PostingContext, posting_scope, seed_posting_context
@@ -549,3 +554,554 @@ class TestUsageCounterCountsTheDimension:
             return None
 
         run(work)
+
+
+class TestReconciliationCoversEveryVoucherType:
+    """Lát 6G-2 (M-3): bàn khớp nhận MỌI chứng từ chạm 112x, không riêng bốn
+    loại của phân hệ ngân hàng.
+
+    6G-1 đưa phiếu quỹ và bút toán GLE vào **vế sổ** của báo cáo chênh lệch
+    nhưng để chúng ngoài **bàn khớp**, nên dòng sao kê của một phiếu rút tiền
+    đứng "chưa khớp" vĩnh viễn và FR-BNK-031 lớn dần đúng bằng phần vừa thêm.
+    """
+
+    def test_a_cash_voucher_is_a_match_candidate(
+        self, run: Runner, context: PostingContext, accounts: dict[str, int], acb: int
+    ) -> None:
+        def work(session: Session) -> object:
+            service = CashVoucherService(session)
+            voucher = service.create(
+                _withdrawal(context, accounts, bank_account_id=acb), user_id=ACTOR_ID
+            )
+            service.post(voucher.id, user_id=ACTOR_ID)
+            candidates = unmatched_vouchers(session, bank_account_id=acb)
+            mine = [item for item in candidates if item.voucher_id == voucher.id]
+            assert len(mine) == 1, candidates
+            # Phiếu RÚT tiền: tiền ra khỏi tài khoản ngân hàng ⇒ ròng âm, đúng
+            # chiều cột Nợ của sao kê.
+            assert mine[0].net_fc == Decimal(-700_000)
+            # Nhãn dòng suy từ `document_type`, không từ `kind` của phân hệ
+            # ngân hàng — chứng từ ngoài phân hệ ấy không có `kind`.
+            assert mine[0].kind is None
+            assert mine[0].document_type == "PT"
+            service.unpost(voucher.id, user_id=ACTOR_ID)
+            service.delete(voucher.id)
+            return None
+
+        run(work)
+
+    def test_a_matched_cash_voucher_cannot_be_unposted(
+        self, run: Runner, context: PostingContext, accounts: dict[str, int], acb: int
+    ) -> None:
+        """ "Một guard, mọi cửa" — luật "đã khớp thì không bỏ ghi sổ" nay là một
+        `REFERENCE_GUARDS` chạy trong `PostingService.unpost`, nên nó canh CẢ
+        phiếu quỹ dù module `cash_book` không biết phân hệ ngân hàng tồn tại
+        (luật C3).
+
+        Tên bài chỉ nói "unpost", có chủ đích: chiều XÓA **không tới được**
+        guard — `ensure_editable` từ chối chứng từ đã ghi sổ trước đó, và chứng
+        từ đã khớp sao kê thì luôn đã ghi sổ. Chiều ấy do FK `RESTRICT` canh.
+        Một tên bài hứa nhiều hơn thứ nó kiểm là một artefact ổn định mà người
+        sau sẽ tin (review pre-landing 6G-2 L-1).
+
+        Trước 6G-2 luật ấy là hook riêng của bốn loại chứng từ tiền gửi; mở bàn
+        khớp cho phiếu quỹ mà quên nó là mở đúng lỗ hổng 6D H-3 vừa bịt: dòng
+        sao kê "đã khớp" trỏ một phiếu nháp sửa được số tiền.
+        """
+
+        def work(session: Session) -> object:
+            service = CashVoucherService(session)
+            voucher = service.create(
+                _withdrawal(context, accounts, bank_account_id=acb), user_id=ACTOR_ID
+            )
+            service.post(voucher.id, user_id=ACTOR_ID)
+            # Gieo sao kê TRONG CÙNG session: `_seed_statement` mở kết nối
+            # riêng, và hai kết nối cùng chạm `master_data_usage` trong một
+            # transaction đang mở là một lượt chờ khóa tới hết `lock_timeout`.
+            statement = BankStatement(
+                bank_account_id=acb, statement_date=JAN_15, imported_by=ACTOR_ID
+            )
+            session.add(statement)
+            session.flush()
+            line = BankStatementLine(
+                statement_id=statement.id,
+                bank_account_id=acb,
+                line_no=1,
+                txn_date=JAN_15,
+                debit=Decimal(700_000),
+                match_kind=StatementMatchKind.UNMATCHED,
+            )
+            session.add(line)
+            session.flush()
+            sync_statement_branch(session, bank_account_id=acb)
+            match_line(session, line_id=line.id, voucher_id=voucher.id)
+
+            with pytest.raises(BankStatementMatchStateError):
+                service.unpost(voucher.id, user_id=ACTOR_ID)
+            session.rollback()
+            return None
+
+        run(work)
+
+
+class TestDerivedDimensionRecompute:
+    """Lát 6G-2 (M-9): luật quy chủ ở đường GHI ⇒ một lần sai là vĩnh viễn,
+    nên phải có đường tính lại theo thân chứng từ."""
+
+    def test_it_reports_drift_without_touching_the_ledger_and_then_fixes_it(
+        self, run: Runner, context: PostingContext, accounts: dict[str, int], vcb: int, acb: int
+    ) -> None:
+        def work(session: Session) -> object:
+            service = CashVoucherService(session)
+            voucher = service.create(
+                _withdrawal(context, accounts, bank_account_id=vcb), user_id=ACTOR_ID
+            )
+            service.post(voucher.id, user_id=ACTOR_ID)
+
+            # Giả lập "một lần sai đã đóng băng": đổi thẳng cột trên sổ, đúng
+            # hình dạng hậu quả mà M-9 mô tả (thân vẫn đúng, sổ thì không).
+            session.execute(
+                update(GlPosting)
+                .where(GlPosting.voucher_id == voucher.id, GlPosting.bank_account_id == vcb)
+                .values(bank_account_id=acb)
+            )
+            session.flush()
+
+            reported = recompute_derived_dimensions(session, branch_id=context.branch_id)
+            mine = [d for d in reported.drifts if d.voucher_id == voucher.id]
+            assert mine, reported
+            assert {(d.stored, d.expected) for d in mine} == {(acb, vcb)}
+            # Chế độ báo KHÔNG được ghi gì.
+            assert reported.applied == 0
+            still_wrong = session.scalars(
+                select(GlPosting.bank_account_id).where(
+                    GlPosting.voucher_id == voucher.id, GlPosting.bank_account_id.is_not(None)
+                )
+            ).all()
+            assert set(still_wrong) == {acb}
+
+            fixed = recompute_derived_dimensions(session, branch_id=context.branch_id, apply=True)
+            assert fixed.applied == len(mine)
+            after = session.scalars(
+                select(GlPosting.bank_account_id).where(
+                    GlPosting.voucher_id == voucher.id, GlPosting.bank_account_id.is_not(None)
+                )
+            ).all()
+            assert set(after) == {vcb}
+
+            # Lượt thứ hai không còn gì để sửa — phép ghi đè là idempotent.
+            assert (
+                recompute_derived_dimensions(
+                    session, branch_id=context.branch_id, apply=True
+                ).applied
+                == 0
+            )
+
+            service.unpost(voucher.id, user_id=ACTOR_ID)
+            service.delete(voucher.id)
+            return None
+
+        run(work)
+
+
+class TestRecomputeRefusesLockedPeriodsAndPartialWrites:
+    """Hai phát hiện HIGH của vòng review 6G-2 trên chính đường tính lại chiều."""
+
+    def test_a_locked_period_is_reported_but_never_written(
+        self,
+        run: Runner,
+        session_factory: sessionmaker[Session],
+        dimension_dataset: DatasetRef,
+        context: PostingContext,
+        accounts: dict[str, int],
+        vcb: int,
+        acb: int,
+    ) -> None:
+        """H-1: kỳ đã khóa là bất biến mạnh nhất của hệ — mọi cửa khác chặn, và
+        trước bản sửa này job tính lại là cửa DUY NHẤT ghi vào `gl_postings` của
+        kỳ khóa mà không hỏi. Bỏ qua nhưng vẫn BÁO (quyết định user)."""
+
+        def work(session: Session) -> object:
+            service = CashVoucherService(session)
+            voucher = service.create(
+                _withdrawal(context, accounts, bank_account_id=vcb), user_id=ACTOR_ID
+            )
+            posted = service.post(voucher.id, user_id=ACTOR_ID)
+            session.execute(
+                update(GlPosting)
+                .where(GlPosting.voucher_id == voucher.id, GlPosting.bank_account_id == vcb)
+                .values(bank_account_id=acb)
+            )
+            session.execute(
+                update(AccountingPeriod)
+                .where(AccountingPeriod.id == posted.period_id)
+                # `ck_accounting_periods_lock_stamp_complete`: dấu khóa đi
+                # theo CẶP (ai khóa, lúc nào) — đặt một nửa là vi phạm.
+                .values(locked_at=datetime(2026, 3, 1, tzinfo=UTC), locked_by=ACTOR_ID)
+            )
+            session.flush()
+
+            outcome = recompute_derived_dimensions(session, branch_id=context.branch_id, apply=True)
+            assert voucher.id in outcome.locked_vouchers
+            assert [d for d in outcome.drifts if d.voucher_id == voucher.id], (
+                "kỳ khóa vẫn phải BÁO chỗ lệch — kế toán trưởng mới là người quyết mở kỳ"
+            )
+            after = set(
+                session.scalars(
+                    select(GlPosting.bank_account_id).where(
+                        GlPosting.voucher_id == voucher.id,
+                        GlPosting.bank_account_id.is_not(None),
+                    )
+                ).all()
+            )
+            assert after == {acb}, "kỳ khóa mà cột vẫn đổi ⇒ cổng H-1 đã bị gỡ"
+
+            session.execute(
+                update(AccountingPeriod)
+                .where(AccountingPeriod.id == posted.period_id)
+                .values(locked_at=None, locked_by=None)
+            )
+            session.flush()
+            service.unpost(voucher.id, user_id=ACTOR_ID)
+            service.delete(voucher.id)
+            return None
+
+        run(work)
+
+    def test_a_voucher_it_cannot_resolve_is_never_written_in_part(
+        self, run: Runner, context: PostingContext, accounts: dict[str, int], vcb: int, acb: int
+    ) -> None:
+        """H-2: bản đầu `setattr` ngay trong vòng lặp rồi `break`, nên nó ghi
+        một NỬA chứng từ và đồng thời báo "không rà được" chính chứng từ ấy —
+        hai sổ mang hai chiều khác nhau, và nửa nào kịp ghi thì bất định."""
+
+        def work(session: Session) -> object:
+            service = CashVoucherService(session)
+            voucher = service.create(
+                _withdrawal(context, accounts, bank_account_id=vcb), user_id=ACTOR_ID
+            )
+            service.post(voucher.id, user_id=ACTOR_ID)
+            session.execute(
+                update(GlPosting)
+                .where(GlPosting.voucher_id == voucher.id, GlPosting.bank_account_id == vcb)
+                .values(bank_account_id=acb)
+            )
+            # Đẩy MỘT dòng ra khỏi bản đồ `(sổ, line_no)` mà bản dựng lại sinh
+            # ra ⇒ chứng từ "không rà được", trong khi dòng còn lại thì lệch.
+            session.execute(
+                update(GlPosting)
+                .where(
+                    GlPosting.voucher_id == voucher.id,
+                    GlPosting.ledger == Ledger.MANAGEMENT,
+                    GlPosting.line_no == 1,
+                )
+                .values(line_no=99)
+            )
+            session.flush()
+
+            outcome = recompute_derived_dimensions(session, branch_id=context.branch_id, apply=True)
+            assert voucher.id in outcome.unresolved_vouchers
+            assert outcome.applied == 0, "chứng từ chưa rà xong mà vẫn ghi ⇒ H-2 quay lại"
+            assert not [d for d in outcome.drifts if d.voucher_id == voucher.id], (
+                "drift của chứng từ chưa rà xong dựng trên bản đồ dòng đã biết là sai"
+            )
+            remaining = set(
+                session.scalars(
+                    select(GlPosting.bank_account_id).where(
+                        GlPosting.voucher_id == voucher.id,
+                        GlPosting.bank_account_id.is_not(None),
+                    )
+                ).all()
+            )
+            assert remaining == {acb}, remaining
+            session.rollback()
+            return None
+
+        run(work)
+
+
+def test_the_matched_guard_sees_lines_outside_the_callers_branch_scope(
+    session_factory: sessionmaker[Session],
+    dimension_dataset: DatasetRef,
+    context: PostingContext,
+    other_context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """H-3 review 6G-2 (mẫu lặp lần BA: 6C H-1, 3B-2 B-8).
+
+    `bank_statement_lines.branch_id` = chi nhánh của TÀI KHOẢN ngân hàng
+    (0022), còn chứng từ mang chi nhánh của CHÍNH nó. Hai trục ấy tách nhau
+    được, và khi tách thì guard "đã khớp thì không bỏ ghi sổ" chạy dưới RLS
+    người gọi hóa **mù**: người bỏ ghi sổ không thấy dòng sao kê đang trỏ vào
+    chứng từ của mình, guard im lặng cho qua, và dòng sao kê ở lại trỏ một
+    phiếu nháp sửa được số tiền — đúng lỗ hổng 6D H-3 đã bịt.
+
+    Đường tới trạng thái ấy trong sản phẩm (không phải dựng giả): tài khoản
+    ngân hàng DÙNG CHUNG (`branch_id IS NULL`, mặc định) nên mọi chi nhánh
+    khớp được; sau đó tài khoản được gán về một chi nhánh — qua màn danh mục
+    hoặc qua lượt GỘP danh mục — và `sync_statement_branch` đóng dấu lại dòng
+    sao kê theo tài khoản. Chứng từ thì không đi theo.
+
+    Bản vá là hàm `SECURITY DEFINER` (0024): phép kiểm nhìn thấy dòng dù người
+    gọi thì không.
+    """
+    shared = ensure_company_bank_account(
+        session_factory, dimension_dataset, context, code="6G-GUARD"
+    )
+    # Chứng từ thuộc chi nhánh B; tài khoản lúc này còn DÙNG CHUNG nên B khớp được.
+    scope_b = posting_scope(dimension_dataset, other_context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope_b) as session:
+        service = CashVoucherService(session)
+        voucher = service.create(
+            _withdrawal(other_context, accounts, bank_account_id=shared), user_id=ACTOR_ID
+        )
+        service.post(voucher.id, user_id=ACTOR_ID)
+        statement = BankStatement(
+            bank_account_id=shared, statement_date=JAN_15, imported_by=ACTOR_ID
+        )
+        session.add(statement)
+        session.flush()
+        line = BankStatementLine(
+            statement_id=statement.id,
+            bank_account_id=shared,
+            line_no=1,
+            txn_date=JAN_15,
+            debit=Decimal(700_000),
+            match_kind=StatementMatchKind.UNMATCHED,
+        )
+        session.add(line)
+        session.flush()
+        sync_statement_branch(session, bank_account_id=shared)
+        record_use(session, entity_type=COMPANY_BANK_ACCOUNT_TABLE_NAME, entity_id=shared)
+        match_line(session, line_id=line.id, voucher_id=voucher.id)
+        voucher_id = voucher.id
+        line_id = line.id
+
+    # Tài khoản chuyển về chi nhánh A ⇒ dòng sao kê theo nó, chứng từ ở lại B.
+    scope_a = posting_scope(dimension_dataset, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope_a) as session:
+        session.execute(
+            update(CompanyBankAccount)
+            .where(CompanyBankAccount.id == shared)
+            .values(branch_id=context.branch_id)
+        )
+        session.flush()
+        sync_statement_branch(session, bank_account_id=shared)
+
+    with unit_of_work(session_factory, scope_b) as session:
+        assert (
+            session.scalar(select(BankStatementLine.id).where(BankStatementLine.id == line_id))
+            is None
+        ), "tiền đề hỏng: phiên chi nhánh B vẫn thấy dòng sao kê của tài khoản chi nhánh A"
+        assert session.scalar(select(Voucher.id).where(Voucher.id == voucher_id)) is not None, (
+            "tiền đề hỏng: phiên chi nhánh B phải vẫn thấy CHỨNG TỪ của chính nó"
+        )
+        with pytest.raises(BankStatementMatchStateError):
+            CashVoucherService(session).unpost(voucher_id, user_id=ACTOR_ID)
+
+
+class TestDimensionJobsAreTwoTypesWithDifferentPermissions:
+    """Review 6G-2 H-1: chế độ GHI nằm ở LOẠI JOB, không ở một tham số.
+
+    Gói cả hai vào một loại nghĩa là mã quyền chỉ-đọc `posting.integrity.create`
+    bỗng thành quyền ghi `gl_postings`, và ma trận phân quyền không có cách nào
+    nói ra điều đó.
+    """
+
+    def test_both_are_registered_and_only_the_writing_one_needs_edit(self) -> None:
+        from ket.kernel.jobs.registry import REGISTRY as JOB_REGISTRY
+        from ket.posting.engine.dimension_recompute_job import (
+            DIMENSION_APPLY_JOB,
+            DIMENSION_RECOMPUTE_JOB,
+        )
+        from ket.posting.integrity.job import INTEGRITY_EDIT, INTEGRITY_RUN
+
+        assert JOB_REGISTRY.get("posting.dimensions.recompute") is DIMENSION_RECOMPUTE_JOB
+        assert JOB_REGISTRY.get("posting.dimensions.apply") is DIMENSION_APPLY_JOB
+        assert DIMENSION_RECOMPUTE_JOB.permission == INTEGRITY_RUN
+        assert DIMENSION_APPLY_JOB.permission == INTEGRITY_EDIT
+        assert INTEGRITY_EDIT != INTEGRITY_RUN
+
+    def test_both_refuse_to_run_without_an_acting_branch(
+        self, dimension_dataset: DatasetRef
+    ) -> None:
+        from ket.kernel.errors import JobParamsInvalidError
+        from ket.kernel.jobs.registry import JobContext
+        from ket.posting.engine.dimension_recompute_job import (
+            DimensionRecomputeParams,
+            run_dimension_apply,
+            run_dimension_report,
+        )
+
+        class _Progress:
+            def report(self, *, percent: int, message: str) -> None:
+                return None
+
+            def cancel_requested(self) -> bool:
+                return False
+
+        context = JobContext(
+            job_id=uuid4(),
+            session=None,  # type: ignore[arg-type] — bị chặn trước khi chạm session
+            progress=_Progress(),  # type: ignore[arg-type]
+            attempt=1,
+            dataset_schema=dimension_dataset.schema_name,
+            branch_id=None,
+            requested_by=ACTOR_ID,
+        )
+        for handler in (run_dimension_report, run_dimension_apply):
+            with pytest.raises(JobParamsInvalidError):
+                handler(context, DimensionRecomputeParams())
+
+    def test_the_reporting_job_never_writes(
+        self, run: Runner, context: PostingContext, accounts: dict[str, int], vcb: int, acb: int
+    ) -> None:
+        """Đối trọng của bài `apply`: cùng dữ liệu lệch, chế độ BÁO không đổi cột."""
+
+        def work(session: Session) -> object:
+            service = CashVoucherService(session)
+            voucher = service.create(
+                _withdrawal(context, accounts, bank_account_id=vcb), user_id=ACTOR_ID
+            )
+            service.post(voucher.id, user_id=ACTOR_ID)
+            session.execute(
+                update(GlPosting)
+                .where(GlPosting.voucher_id == voucher.id, GlPosting.bank_account_id == vcb)
+                .values(bank_account_id=acb)
+            )
+            session.flush()
+            outcome = recompute_derived_dimensions(session, branch_id=context.branch_id)
+            assert outcome.applied == 0
+            assert [d for d in outcome.drifts if d.voucher_id == voucher.id]
+            still = set(
+                session.scalars(
+                    select(GlPosting.bank_account_id).where(
+                        GlPosting.voucher_id == voucher.id,
+                        GlPosting.bank_account_id.is_not(None),
+                    )
+                ).all()
+            )
+            assert still == {acb}
+            session.rollback()
+            return None
+
+        run(work)
+
+
+def test_the_guard_function_pins_a_safe_search_path(
+    session_factory: sessionmaker[Session],
+    dimension_dataset: DatasetRef,
+    context: PostingContext,
+) -> None:
+    """Review pre-landing 6G-2 M-2: hình dạng `search_path` ghim trong hàm
+    `SECURITY DEFINER` là một thuộc tính AN NINH, phải khẳng định chứ không tin.
+
+    `pg_temp` phải nêu tường minh ở **CUỐI**. Không nêu thì PostgreSQL tìm nó
+    TRƯỚC schema dataset (luật ở `kernel/security/rls.py`), và khi ấy một
+    `CREATE TEMP TABLE bank_statement_lines(…)` rỗng làm guard "đã khớp thì
+    không bỏ ghi sổ" trả `false` **vĩnh viễn** — chứng từ đã khớp bỏ ghi sổ
+    được, đúng lỗ hổng 6D H-3.
+
+    Bản đầu ghim đúng giá trị này do TÌNH CỜ (thừa hưởng `SET LOCAL` mà bước
+    gieo dữ liệu của migration 0023 để lại trên cùng connection). Nay 0024 tự
+    đặt search_path trước `CREATE FUNCTION`; bài kiểm này là thứ giữ nó đúng.
+    """
+    scope = posting_scope(dimension_dataset, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        config = session.execute(
+            text(
+                "SELECT p.proconfig FROM pg_proc p"
+                " JOIN pg_namespace n ON n.oid = p.pronamespace"
+                " WHERE p.proname = 'voucher_has_matched_statement_line'"
+                "   AND n.nspname = :schema"
+            ),
+            {"schema": dimension_dataset.schema_name},
+        ).scalar_one()
+    assert config == [f"search_path={dimension_dataset.schema_name}, public, pg_temp"], config
+
+
+def test_a_closed_year_blocks_the_rewrite_even_when_the_period_is_open(
+    run: Runner, context: PostingContext, accounts: dict[str, int], vcb: int, acb: int
+) -> None:
+    """Đột biến sống sót ở vòng pre-landing: bỏ vế `FiscalYear.is_closed` khỏi
+    `_locked_period_ids` mà không bài nào đỏ.
+
+    Hai trạng thái khác nhau: kỳ khóa (`locked_at`) và **năm đã đóng**
+    (`is_closed`). `PostingService.unpost` từ chối cả hai, nên đường tính lại
+    chiều phải bỏ qua cả hai — nếu không, năm đã đóng vẫn bị sửa cột.
+    """
+
+    def work(session: Session) -> object:
+        service = CashVoucherService(session)
+        voucher = service.create(
+            _withdrawal(context, accounts, bank_account_id=vcb), user_id=ACTOR_ID
+        )
+        posted = service.post(voucher.id, user_id=ACTOR_ID)
+        session.execute(
+            update(GlPosting)
+            .where(GlPosting.voucher_id == voucher.id, GlPosting.bank_account_id == vcb)
+            .values(bank_account_id=acb)
+        )
+        period = session.get(AccountingPeriod, posted.period_id)
+        assert period is not None
+        assert period.locked_at is None, "tiền đề: kỳ phải còn MỞ để bài này kiểm đúng vế năm"
+        session.execute(
+            update(FiscalYear).where(FiscalYear.id == period.fiscal_year_id).values(is_closed=True)
+        )
+        session.flush()
+
+        outcome = recompute_derived_dimensions(session, branch_id=context.branch_id, apply=True)
+        assert voucher.id in outcome.locked_vouchers
+        assert outcome.applied == 0, "năm đã đóng mà vẫn ghi ⇒ vế `is_closed` đã bị gỡ"
+        session.rollback()
+        return None
+
+    run(work)
+
+
+def test_a_locked_period_answers_before_the_unmatch_advice(
+    run: Runner, context: PostingContext, accounts: dict[str, int], acb: int
+) -> None:
+    """Đột biến sống sót ở vòng pre-landing: đảo lại thứ tự M-6 mà không bài nào đỏ.
+
+    Chứng từ ĐÃ KHỚP sao kê nằm trong kỳ ĐÃ KHÓA phải nhận câu trả lời "kỳ đã
+    khóa" — câu "không có đường nào" — chứ không phải "gỡ khớp trước đã". Lời
+    khuyên sai dẫn người dùng gỡ một cặp đối chiếu ĐÚNG (`unmatch_line` không
+    kiểm kỳ khóa nên gỡ thành công), rồi lượt bỏ ghi sổ vẫn đổ vì kỳ khóa —
+    mất cặp khớp, không đổi lại được gì.
+    """
+
+    def work(session: Session) -> object:
+        service = CashVoucherService(session)
+        voucher = service.create(
+            _withdrawal(context, accounts, bank_account_id=acb), user_id=ACTOR_ID
+        )
+        posted = service.post(voucher.id, user_id=ACTOR_ID)
+        statement = BankStatement(bank_account_id=acb, statement_date=JAN_15, imported_by=ACTOR_ID)
+        session.add(statement)
+        session.flush()
+        line = BankStatementLine(
+            statement_id=statement.id,
+            bank_account_id=acb,
+            line_no=1,
+            txn_date=JAN_15,
+            debit=Decimal(700_000),
+            match_kind=StatementMatchKind.UNMATCHED,
+        )
+        session.add(line)
+        session.flush()
+        sync_statement_branch(session, bank_account_id=acb)
+        match_line(session, line_id=line.id, voucher_id=voucher.id)
+        session.execute(
+            update(AccountingPeriod)
+            .where(AccountingPeriod.id == posted.period_id)
+            .values(locked_at=datetime(2026, 3, 1, tzinfo=UTC), locked_by=ACTOR_ID)
+        )
+        session.flush()
+
+        with pytest.raises(PostingValidationError):
+            service.unpost(voucher.id, user_id=ACTOR_ID)
+        session.rollback()
+        return None
+
+    run(work)
