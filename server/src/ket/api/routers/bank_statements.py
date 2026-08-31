@@ -131,6 +131,7 @@ def import_bank_statement(
                 file_name=file_name,
                 content_hash=stored.content_hash,
                 user_id=authorized.scope.user_id,
+                acting_branch_id=authorized.scope.acting_branch_id,
             )
         return BankStatementImportOut.from_result(result)
 
@@ -142,7 +143,9 @@ def list_bank_statements(
     bank_account_id: Annotated[int, Query(ge=1)],
 ) -> BankStatementListResponse:
     with unit_of_work(factory, authorized.scope) as session:
-        require_bank_account(session, bank_account_id)
+        require_bank_account(
+            session, bank_account_id, acting_branch_id=authorized.scope.acting_branch_id
+        )
         statements = (
             session.execute(
                 select(BankStatement)
@@ -173,7 +176,9 @@ def list_statement_profiles(
     tĩnh đứng sau đường UUID sẽ thành 422 "profiles không phải UUID".
     """
     with unit_of_work(factory, authorized.scope) as session:
-        account = require_bank_account(session, bank_account_id)
+        account = require_bank_account(
+            session, bank_account_id, acting_branch_id=authorized.scope.acting_branch_id
+        )
         profiles = (
             session.execute(
                 select(BankStatementProfile)
@@ -285,6 +290,8 @@ def get_reconciliation(
     """Báo cáo lệch hai phía (FR-BNK-031): trên sao kê chưa có trên sổ và
     ngược lại, tính đến hết ngày `as_of`."""
     with unit_of_work(factory, authorized.scope) as session:
-        require_bank_account(session, bank_account_id)
+        require_bank_account(
+            session, bank_account_id, acting_branch_id=authorized.scope.acting_branch_id
+        )
         summary = reconciliation_summary(session, bank_account_id=bank_account_id, as_of=as_of)
         return ReconciliationResponse.from_summary(summary)

@@ -35,7 +35,7 @@ _VALID_ACCOUNTS = (
     "detail_tracking,is_locked\n"
     "111,Tiền mặt,,,0,0,0,,1\n"
     "112,Tiền gửi ngân hàng,,,0,1,0,,1\n"
-    "1121,Tiền gửi VND,,112,0,0,0,,0\n"
+    "1121,Tiền gửi VND,,112,0,0,0,bank_account,0\n"
     "131,Phải thu của khách hàng,,,2,0,0,customer,1\n"
 )
 _VALID_DEFAULT_ACCOUNTS = "document_type,purpose,account_code\n*,cash,111\n"
@@ -117,7 +117,7 @@ def test_missing_parent_account_is_rejected() -> None:
     bad = (
         "code,name,name_en,parent_code,balance_nature,is_summary,is_foreign_currency,"
         "detail_tracking,is_locked\n"
-        "1121,Tiền gửi VND,,112,0,0,0,,0\n"
+        "1121,Tiền gửi VND,,112,0,0,0,bank_account,0\n"
     )
     with pytest.raises(ConfigPackageDataInvalidError, match="cha"):
         load_package_from_texts(_valid_texts(**{ACCOUNTS_FILE: bad}))
@@ -258,3 +258,40 @@ def test_a_package_without_the_rules_file_is_still_valid() -> None:
     thống TK vẫn hợp lệ, danh sách nghiệp vụ khi đó rỗng."""
     loaded = load_package_from_texts(_valid_texts())
     assert loaded.auto_posting_rules == ()
+
+
+def test_a_deposit_account_without_the_bank_dimension_is_rejected() -> None:
+    """Review 6G-1 M-8 — hai nửa của luật quy chủ phải khớp nhau.
+
+    `bank/posting_mapper` GÁN chiều `bank_account` cho mọi dòng có số hiệu bắt
+    đầu `112`, còn validator ghi sổ chỉ ĐÒI nó ở TK khai chuỗi ấy trong
+    `accounts.csv`. Gói nào khai lệch thì sổ chi tiết tiền gửi thiếu im lặng
+    đúng bằng phần lệch — không lỗi, không cảnh báo. Kiểm ở loader nên nó phủ
+    cả gói người dùng nhập từ `.zip`.
+    """
+    accounts = (
+        "code,name,name_en,parent_code,balance_nature,is_summary,is_foreign_currency,"
+        "detail_tracking,is_locked\n"
+        "111,Tiền mặt,,,0,0,0,,1\n"
+        "112,Tiền gửi ngân hàng,,,0,1,0,,1\n"
+        "1121,Tiền gửi VND,,112,0,0,0,,0\n"
+        "131,Phải thu của khách hàng,,,2,0,0,customer,1\n"
+    )
+    with pytest.raises(ConfigPackageDataInvalidError) as refused:
+        load_package_from_texts(_valid_texts(**{ACCOUNTS_FILE: accounts}))
+    assert "1121" in str(refused.value)
+
+
+def test_a_summary_deposit_account_needs_no_dimension() -> None:
+    """TK tổng hợp không hạch toán thẳng vào được, nên không đòi chiều — thiếu
+    miễn trừ này thì mọi gói hợp lệ đều bị từ chối vì chính TK `112` cha."""
+    accounts = (
+        "code,name,name_en,parent_code,balance_nature,is_summary,is_foreign_currency,"
+        "detail_tracking,is_locked\n"
+        "111,Tiền mặt,,,0,0,0,,1\n"
+        "112,Tiền gửi ngân hàng,,,0,1,0,,1\n"
+        "1121,Tiền gửi VND,,112,0,0,0,bank_account,0\n"
+        "131,Phải thu của khách hàng,,,2,0,0,customer,1\n"
+    )
+    loaded = load_package_from_texts(_valid_texts(**{ACCOUNTS_FILE: accounts}))
+    assert [row.code for row in loaded.accounts] == ["111", "112", "1121", "131"]

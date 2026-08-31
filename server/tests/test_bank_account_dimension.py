@@ -34,7 +34,7 @@ from cash_book_support import seed_cash_book_package_data
 from ket.kernel.config.accounts_models import ChartOfAccount, DetailTracking
 from ket.kernel.datasets.provisioning import DatasetRef, drop_dataset_schema, provision_dataset
 from ket.kernel.errors import PostingValidationError
-from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.modules.bank.balance_service import deposit_balances_as_of
 from ket.modules.bank.models import (
     BankStatement,
@@ -45,6 +45,7 @@ from ket.modules.bank.models import (
 from ket.modules.bank.schemas import BankVoucherIn, BankVoucherLineIn
 from ket.modules.bank.service import BankVoucherService
 from ket.modules.bank.statement_branch import sync_statement_branch
+from ket.modules.bank.statement_merge import CompanyBankAccountStatementMergeHook
 from ket.modules.cash_book.models import CashVoucherKind
 from ket.modules.cash_book.schemas import CashVoucherIn, CashVoucherLineIn
 from ket.modules.cash_book.service import CashVoucherService
@@ -411,3 +412,64 @@ def _statement_visible(
     with unit_of_work(session_factory, scope) as session:
         found = session.scalar(select(BankStatement.id).where(BankStatement.id == statement_id))
         return found is not None
+
+
+def test_the_merge_hook_moves_the_branch_with_the_account(
+    session_factory: sessionmaker[Session],
+    dimension_dataset: DatasetRef,
+    context: PostingContext,
+    other_context: PostingContext,
+) -> None:
+    """Review 6G-1 M-1 — cửa thứ hai của "một hàm, mọi cửa" phải CHẠY.
+
+    Gỡ thân `CompanyBankAccountStatementMergeHook.after_move` mà cả bộ test vẫn
+    xanh nghĩa là không ai chạy nó (đúng khuôn 6D M11: hook gộp chỉ được assert
+    CÓ MẶT trong registry). Lỗi nó che: sau khi gộp TK X→Y, bộ gộp dùng chung đã
+    trỏ sao kê sang Y nhưng chi nhánh vẫn là của X — một tài khoản vừa biến mất
+    — nên RLS lọc theo một con số không còn nghĩa (mất hoặc lọt tùy hướng gộp).
+    """
+    source = ensure_company_bank_account(
+        session_factory,
+        dimension_dataset,
+        context,
+        code="6G-GOP-NGUON",
+        branch_id=context.branch_id,
+    )
+    # Gieo dưới scope CỦA CHI NHÁNH ĐÍCH: `audit_log` có RLS `WITH CHECK` nên
+    # ghi một dòng danh mục của chi nhánh ngoài phạm vi bị chặn ngay ở bước dựng.
+    target = ensure_company_bank_account(
+        session_factory,
+        dimension_dataset,
+        other_context,
+        code="6G-GOP-DICH",
+        branch_id=other_context.branch_id,
+    )
+    statement_id = _seed_statement(session_factory, dimension_dataset, context, source)
+
+    both = RequestScope(
+        dataset_schema=dimension_dataset.schema_name,
+        user_id=ACTOR_ID,
+        branch_ids=(context.branch_id, other_context.branch_id),
+        acting_branch_id=context.branch_id,
+    )
+    with unit_of_work(session_factory, both) as session:
+        # Đúng thứ bộ gộp dùng chung làm: trỏ khóa ngoại sang tài khoản đích.
+        for model in (BankStatement, BankStatementLine):
+            session.execute(
+                update(model).where(model.bank_account_id == source).values(bank_account_id=target)
+            )
+        session.flush()
+        CompanyBankAccountStatementMergeHook().after_move(session, target_id=target)
+
+    with unit_of_work(session_factory, both) as session:
+        statement = session.get(BankStatement, statement_id)
+        assert statement is not None
+        assert statement.branch_id == other_context.branch_id
+        line_branches = set(
+            session.scalars(
+                select(BankStatementLine.branch_id).where(
+                    BankStatementLine.statement_id == statement_id
+                )
+            ).all()
+        )
+        assert line_branches == {other_context.branch_id}

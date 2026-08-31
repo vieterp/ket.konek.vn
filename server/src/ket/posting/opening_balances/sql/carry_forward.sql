@@ -3,32 +3,25 @@
 --
 -- Tham số:
 --   :source_fiscal_year_id, :target_fiscal_year_id, :ledger, :branch_id
--- Chỗ trống bank_movements_rows (khuôn str.format — chỉ MỘT chỗ, trong thân
--- CTE bank_movements): job điền một dãy VALUES tham-số-hóa (hoặc SELECT-rỗng
--- khi không có gì) TRƯỚC khi chạy — KHÔNG phải bảng tạm, vì TEMPORARY đã bị
--- thu hồi khỏi role app/worker (roles.sql, chống che audit_log bằng pg_temp)
--- và mọi giá trị vẫn đi qua bound parameter.
---
 -- Số cuối năm tính THẲNG từ nguồn sự thật: số dư ban đầu năm nguồn cộng mọi
 -- phát sinh `gl_postings` của các kỳ năm nguồn — không đọc snapshot
 -- `account_balances`, nên kết quả không phụ thuộc hàng đợi tính lại sạch hay
 -- bẩn. Gộp theo TRỌN bộ chiều để "giữ nguyên chi tiết" (FR-OPB-010): đối
 -- tượng công nợ, và cả các chiều 5 cột cố định mà chứng từ đã ghi.
 --
--- Chiều TK NGÂN HÀNG (kind 1, lát 6D): job hỏi `DepositMovementSource` (kernel
--- Protocol, module bank cài) rồi đổ vào `carry_bank_movements`. Câu này cộng
--- mỗi con số ấy vào xô (TK, TK ngân hàng, tiền tệ) và trừ đúng chừng ấy khỏi
--- xô không-gắn-TK-ngân-hàng — tổng chuyển năm không đổi, chỉ được chia đúng
--- chỗ.
+-- Chiều TK NGÂN HÀNG (kind 1): đọc THẲNG `gl_postings.bank_account_id` như mọi
+-- chiều khác của dòng. Dòng không có chủ (ghi sổ trước lát 6G-1, migration
+-- không suy nổi) ở lại xô không gắn — bịa một tài khoản cho chúng sẽ làm
+-- BR-BNK-01 "khớp" trên một con số dối.
 --
--- Từ lát 6G-1 nguồn ấy phủ MỌI chứng từ chạm 112x, không chỉ chứng từ tiền
--- gửi: chủ sở hữu nằm ở cột `gl_postings.bank_account_id`. Chỉ dòng ghi sổ
--- TRƯỚC 6G-1 mà migration không suy nổi chủ mới ở lại xô không gắn (kind 0) —
--- bịa một tài khoản cho chúng sẽ làm BR-BNK-01 "khớp" trên một con số dối.
---
--- CẦN XÉT Ở BƯỚC 22: cột ấy làm chính Protocol này thừa — `posting` gộp thẳng
--- `gl_postings.bank_account_id` được, không cần vòng qua module bank. Bỏ hay
--- giữ là quyết định của lượt đóng băng kernel, không phải của lát này.
+-- Bản 6D cộng-rồi-trừ qua Protocol `DepositMovementSource` vì `gl_postings`
+-- chưa mang chiều ấy. Cách đó **sai** và lát 6G-1 làm nó lộ ra: dòng TRỪ khai
+-- mọi chiều = NULL trong khi dòng gốc giữ nguyên chiều của nó, nên hai dòng rơi
+-- vào HAI xô của `GROUP BY` và phép trừ không triệt tiêu. Trước 6G-1 gần như
+-- không ai thấy vì nguồn chỉ trả dòng 112 của chứng từ tiền gửi (bên tiền mang
+-- bộ chiều RỖNG); lát này mở nguồn cho dòng 112 của phiếu quỹ và bút toán tổng
+-- hợp — chúng mang chiều thật, và một bút toán `Nợ 112` có thêm khoản mục chi
+-- phí sẽ đẻ ra BA dòng dư đầu năm, một dòng mang số ÂM bịa (review 6G-1 H-2).
 --
 -- detail_kind của dòng sinh ra: có bank_account_id → 1; còn lại suy từ
 -- partner_kind (khách 2, NCC 3, nhân viên 4, còn lại 0). CẢNH BÁO PHASE 8:
@@ -54,9 +47,6 @@ WITH source_periods AS (
     SELECT id FROM accounting_periods
     WHERE fiscal_year_id = :source_fiscal_year_id
 ),
-bank_movements(account_id, bank_account_id, currency_code, net_fc, net) AS (
-    {bank_movements_rows}
-),
 combined AS (
     SELECT account_id, currency_code, bank_account_id,
            partner_id, partner_kind, cost_object_id, project_id, order_id,
@@ -74,7 +64,7 @@ combined AS (
           AND branch_id = :branch_id
           AND detail_kind BETWEEN 0 AND 4
         UNION ALL
-        SELECT account_id, currency_code, NULL, partner_id, partner_kind,
+        SELECT account_id, currency_code, bank_account_id, partner_id, partner_kind,
                cost_object_id, project_id, order_id, contract_id,
                expense_item_id, item_id, warehouse_id, NULL,
                debit, credit, debit_fc, credit_fc
@@ -82,19 +72,6 @@ combined AS (
         WHERE ledger = :ledger
           AND branch_id = :branch_id
           AND period_id IN (SELECT id FROM source_periods)
-        UNION ALL
-        -- Cộng phát sinh tiền gửi vào xô của TK ngân hàng… (net âm hợp lệ:
-        -- đây là dòng trung gian, SUM ở trên mới là con số thật)
-        SELECT account_id, currency_code, bank_account_id, NULL, NULL,
-               NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-               net, 0, net_fc, 0
-        FROM bank_movements
-        UNION ALL
-        -- …và trừ đúng chừng ấy khỏi xô không gắn TK ngân hàng.
-        SELECT account_id, currency_code, NULL, NULL, NULL,
-               NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-               0, net, 0, net_fc
-        FROM bank_movements
     ) united
     GROUP BY account_id, currency_code, bank_account_id, partner_id,
              partner_kind, cost_object_id, project_id, order_id, contract_id,

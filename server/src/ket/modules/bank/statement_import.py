@@ -63,10 +63,35 @@ class ImportedStatement:
     total_debit: Decimal
 
 
-def require_bank_account(session: Session, bank_account_id: int) -> CompanyBankAccount:
-    """TK ngân hàng phải có thật, là tài khoản cụ thể và còn theo dõi."""
+def _visible_to(account: CompanyBankAccount, branch_id: int | None) -> bool:
+    """Cùng luật với `MasterDataService._visible_to`: `NULL` = dùng chung toàn
+    công ty, còn lại phải khớp chi nhánh đang thao tác."""
+    return account.branch_id is None or account.branch_id == branch_id
+
+
+def require_bank_account(
+    session: Session, bank_account_id: int, *, acting_branch_id: int | None
+) -> CompanyBankAccount:
+    """TK ngân hàng phải có thật, TRONG PHẠM VI người gọi, là tài khoản cụ thể
+    và còn theo dõi.
+
+    `acting_branch_id` là tham số BẮT BUỘC-đặt-tên chứ không mặc định `None`:
+    `company_bank_accounts` cố ý không bật RLS (`branch_id IS NULL` = dùng chung
+    toàn công ty, mà policy chi nhánh sẽ giấu đúng những dòng ấy), nên lọc theo
+    chi nhánh chỉ tồn tại ở tầng ứng dụng — một mặc định im lặng ở đây là một
+    cửa mở im lặng.
+
+    Tài khoản riêng của chi nhánh khác trả CÙNG thông điệp "không có trong danh
+    mục", cùng lập luận `master_data_guards.ensure_visible`: một câu trả lời
+    riêng cho ca ngoài-phạm-vi là lời xác nhận "có một tài khoản id 47 ở chi
+    nhánh bên cạnh", và một vòng lặp qua id sẽ vẽ lại được danh mục của họ.
+
+    Thiếu phép kiểm này (review 6G-1 H-4), lượt nhập sao kê cho tài khoản chi
+    nhánh khác đi lọt tới tận `INSERT`, rồi `WITH CHECK` của policy RLS mới nổ
+    thành **500 InsufficientPrivilege** — tệp thì đã nằm trong kho blob.
+    """
     account = session.get(CompanyBankAccount, bank_account_id)
-    if account is None:
+    if account is None or not _visible_to(account, acting_branch_id):
         raise BankStatementImportInvalidError(
             "Tài khoản ngân hàng không có trong danh mục", bank_account_id=bank_account_id
         )
@@ -91,9 +116,10 @@ def import_statement(
     file_name: str,
     content_hash: str,
     user_id: int,
+    acting_branch_id: int | None,
 ) -> ImportedStatement:
     """Đọc tệp theo hồ sơ và ghi sao kê + dòng, trong transaction của người gọi."""
-    account = require_bank_account(session, bank_account_id)
+    account = require_bank_account(session, bank_account_id, acting_branch_id=acting_branch_id)
     profile = session.get(BankStatementProfile, profile_id)
     if profile is None:
         raise BankStatementImportInvalidError(

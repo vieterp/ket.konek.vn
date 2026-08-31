@@ -16,7 +16,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from bank_support import ensure_company_bank_account, seed_bank_package_data
@@ -320,6 +320,98 @@ def test_carry_forward_splits_deposit_movement_by_bank_account(
         assert target_row.debit == Decimal(250_000)
         plain_row = by_kind[(OpeningDetailKind.ACCOUNT, None)]
         assert plain_row.debit == Decimal(100_000)
+
+
+def test_a_deposit_line_carrying_another_dimension_yields_exactly_one_row(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    accounts: dict[str, int],
+    vnd_account: tuple[int, str],
+) -> None:
+    """Review 6G-1 H-2 — một dòng 112 mang THÊM một chiều khác chỉ được sinh
+    MỘT dòng dư đầu năm.
+
+    Bản 6D chia chiều TK ngân hàng bằng cách cộng vào xô (TK, TK ngân hàng) rồi
+    TRỪ khỏi xô "chưa gắn". Dòng trừ khai mọi chiều = NULL còn dòng gốc giữ
+    nguyên chiều của nó, nên hai dòng rơi vào hai xô của `GROUP BY` và phép trừ
+    không triệt tiêu: kết quả là BA dòng — dòng gốc còn nguyên, một dòng ÂM bịa
+    ở nhóm chưa-gắn, và dòng ngân hàng đúng. Tổng TK 112 vẫn khớp nên không
+    cổng nào kêu; chỉ chi tiết dư đầu năm sau là sai, và BR-BNK-01 đọc trên
+    chính tập ấy.
+
+    Lát 6G-1 làm lỗi này lộ ra vì nguồn không còn giới hạn ở chứng từ tiền gửi
+    (bên tiền của chúng mang bộ chiều RỖNG nên hầu như không ai gặp).
+    """
+    vnd_id, _vnd_code = vnd_account
+    cost_object_id = 424242
+    # Chi nhánh RIÊNG: `carry_forward` chạy theo (sổ, chi nhánh) và xóa sạch năm
+    # nhận trước khi ghi, nên gieo thêm chứng từ vào chi nhánh dùng chung sẽ đổi
+    # kết quả của bài kiểm ngay bên trên tùy thứ tự chạy.
+    context = seed_posting_context(session_factory, dataset_alpha)
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        journal = JournalVoucherService(session)
+        gle = journal.create(
+            JournalVoucherIn(
+                branch_id=context.branch_id,
+                document_date=JAN_15,
+                posting_date=JAN_15,
+                currency_code="VND",
+                exchange_rate=Decimal(1),
+                description="112 kèm khoản mục chi phí",
+                lines=(
+                    JournalLineIn(
+                        account_id=accounts["112"],
+                        debit_fc=Decimal(100_000),
+                        bank_account_id=vnd_id,
+                        cost_object_id=cost_object_id,
+                    ),
+                    JournalLineIn(account_id=accounts["3381"], credit_fc=Decimal(100_000)),
+                ),
+            ),
+            user_id=ACTOR_ID,
+        )
+        journal.post(gle.id, user_id=ACTOR_ID)
+
+    with unit_of_work(session_factory, scope) as session:
+        # Năm nhận là năm bắt đầu ngay sau năm nguồn — không chọn được số khác.
+        target_id = ensure_fiscal_year(session, "2027", date(2027, 1, 1))
+        carry_forward(session, dataset_alpha, context)
+
+    with unit_of_work(session_factory, scope) as session:
+        rows = (
+            session.execute(
+                select(OpeningBalance)
+                .where(OpeningBalance.fiscal_year_id == target_id)
+                .where(OpeningBalance.branch_id == context.branch_id)
+                .where(OpeningBalance.ledger == Ledger.FINANCIAL)
+                .where(OpeningBalance.account_id == accounts["112"])
+                .where(OpeningBalance.cost_object_id == cost_object_id)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(rows) == 1, [
+            (row.detail_kind, row.bank_account_id, row.debit, row.credit) for row in rows
+        ]
+        only = rows[0]
+        assert only.detail_kind == OpeningDetailKind.BANK
+        assert only.bank_account_id == vnd_id
+        assert only.debit == Decimal(100_000)
+        assert only.credit == Decimal(0)
+
+        # Và KHÔNG có dòng âm bịa nào ở nhóm chưa-gắn cho chính TK ấy.
+        orphan = session.execute(
+            select(func.count())
+            .select_from(OpeningBalance)
+            .where(OpeningBalance.fiscal_year_id == target_id)
+            .where(OpeningBalance.branch_id == context.branch_id)
+            .where(OpeningBalance.ledger == Ledger.FINANCIAL)
+            .where(OpeningBalance.account_id == accounts["112"])
+            .where(OpeningBalance.bank_account_id.is_(None))
+            .where(OpeningBalance.credit > 0)
+        ).scalar_one()
+        assert orphan == 0
 
 
 def test_bank_account_with_opening_rows_cannot_be_deleted(

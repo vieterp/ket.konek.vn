@@ -6608,6 +6608,11 @@ export interface paths {
          *     người yêu cầu (`JobBranchScope.REQUESTER_BRANCHES`, vá C1 review 5E), nên
          *     tệp có thể mang số liệu RỘNG hơn phạm vi của một người cùng chi nhánh —
          *     dòng job nhìn thấy được không có nghĩa tệp đọc được.
+         *
+         *     Cổng phân hệ kiểm LẠI ở đây, không mượn lượt kiểm của `/render` (review
+         *     6G-1 M-6): giữa lúc đặt job và lúc tải tệp, quyền có thể đã bị thu hồi —
+         *     và tệp thì vẫn nằm trong kho. "Cổng của bước B không được mượn bộ kiểm của
+         *     bước A" là đúng luật repo, và đây là bước B.
          */
         get: operations["download_render_job_file_api_v1_reports_render_jobs__job_id__file_get"];
         put?: never;

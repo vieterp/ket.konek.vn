@@ -27,9 +27,17 @@ một con số dối; kế toán sửa lại từng chứng từ là đường �
 
 Gói cấu hình bật `detail_tracking = bank_account` cho 112x (tt99 `112`, tt133
 `1121`/`1122`), nên từ đây validator ghi sổ ĐÒI chiều này — chứng từ nháp cũ
-chạm 112 phải bổ sung tài khoản ngân hàng trước khi ghi sổ lại. Version gói
-bump 3→4 (tt99) và 4→5 (tt133) để dataset đang chạy nhận backfill (doctrine
-5B M-1: dataset ở version cũ KHÔNG tự thấy dữ liệu gói mới).
+chạm 112 phải bổ sung tài khoản ngân hàng trước khi ghi sổ lại.
+
+**Dataset ĐÃ CẤP nhận chiều ấy bằng câu `UPDATE` dưới đây, không bằng bump
+version gói.** Bump version là đường SAI ở đây, và sai theo hai hướng: `_seed_one`
+gặp version lệch thì `return` TRƯỚC mọi backfill (không có câu `UPDATE
+chart_of_accounts` nào trên đường gieo mầm — nó chỉ chèn TK cho gói MỚI), nên
+chiều không bao giờ tới nơi; và cùng lượt `return` ấy tắt luôn
+`_ensure_statements_backfilled`/`_ensure_auto_posting_backfilled` cho mọi dataset
+cũ — một hồi quy nằm ngoài phạm vi lát này. Doctrine 5B M-1 nói dataset ở version
+cũ KHÔNG tự thấy dữ liệu gói mới; nó là lý do phải viết câu `UPDATE`, không phải
+lý do để bump.
 
 **2. `branch_id` cho sao kê ngân hàng.** `bank_statements` và
 `bank_statement_lines` sinh ra ở 0016/0019 hoàn toàn không có chiều chi nhánh,
@@ -71,6 +79,7 @@ sử: đổi tên hằng ở mã nguồn không được đổi nghĩa của m�
 def upgrade() -> None:
     _add_bank_account_dimension()
     _backfill_bank_account_dimension()
+    _enable_bank_account_tracking()
     _add_statement_branch()
     _refresh_builtin_data()
 
@@ -126,6 +135,44 @@ def _backfill_bank_account_dimension() -> None:
                AND coa.code LIKE '112%'
             """
         ).bindparams(transfer_kind=_INTERNAL_TRANSFER_KIND)
+    )
+
+
+def _enable_bank_account_tracking() -> None:
+    """Bật `bank_account` trên 112x của hai gói dựng sẵn — cho dataset ĐÃ CẤP.
+
+    Dataset cấp MỚI đọc thẳng `accounts.csv` nên đã có chiều; dataset cũ thì
+    không, và đường gieo mầm không có chỗ nào sửa `chart_of_accounts` của một
+    gói đã tồn tại (xem docstring đầu tệp). Thiếu câu này thì lát 6G-1 chỉ có
+    tác dụng trên bản cài mới: TK 112x không đòi chiều, phiếu quỹ và bút toán
+    tổng hợp chạm 112 tiếp tục để trống, mà đường ĐỌC thì đã bỏ hết luật suy cũ
+    — không còn cơ chế bù nào.
+
+    Chỉ hai gói dựng sẵn: gói người dùng tự nhập chịu trách nhiệm bằng chính
+    `accounts.csv` của nó, và loader có phép kiểm riêng bắt thiếu chiều này.
+    Không đụng TK tổng hợp (không ai hạch toán thẳng vào).
+
+    Idempotent: `NOT (detail_tracking @> ARRAY['bank_account'])` bỏ qua dòng đã
+    có, nên chạy lại không nhân đôi phần tử.
+    """
+    op.execute(
+        sa.text(
+            """
+            UPDATE chart_of_accounts
+               SET detail_tracking =
+                       coalesce(detail_tracking, ARRAY[]::varchar[])
+                       || ARRAY['bank_account']::varchar[]
+              FROM config_packages p
+             WHERE p.id = chart_of_accounts.package_id
+               AND p.code IN ('TT99-2025', 'TT133-2016')
+               AND chart_of_accounts.code LIKE '112%'
+               AND chart_of_accounts.is_summary = false
+               AND NOT (
+                       coalesce(detail_tracking, ARRAY[]::varchar[])
+                       @> ARRAY['bank_account']::varchar[]
+                   )
+            """
+        )
     )
 
 

@@ -23,6 +23,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import FileResponse, JSONResponse
+from sqlalchemy.orm import Session
 
 from ket.api.dependencies import (
     AppSettings,
@@ -56,10 +57,11 @@ from ket.kernel.errors import (
     AttachmentStorageNotConfiguredError,
     JobNotFoundError,
     PermissionDeniedError,
+    ReportNotFoundError,
     ReportRenderNotReadyError,
 )
 from ket.kernel.jobs import queue
-from ket.kernel.jobs.models import JobStatus
+from ket.kernel.jobs.models import Job, JobStatus
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import module_view_codes
 from ket.reporting.engine import REPORT_EXPORT, REPORT_VIEW
@@ -100,6 +102,23 @@ def _require_module_access(authorized: AuthorizedRequest, definition: ReportDefi
             f"Tài khoản không có quyền xem dữ liệu phân hệ {module!r}",
             permission=min(codes),
         )
+
+
+def _require_job_module_access(session: Session, authorized: AuthorizedRequest, job: Job) -> None:
+    """Cổng phân hệ cho tệp của một job render, suy từ mã báo cáo trong tham số.
+
+    Tham số job hỏng hoặc mã đã biến mất khỏi danh mục thì coi như không tìm
+    thấy tác vụ — cùng câu trả lời với "job của người khác", và không tiết lộ
+    rằng có một tệp ở đó.
+    """
+    code = (job.params or {}).get("code")
+    if not isinstance(code, str):  # pragma: no cover - thân job luôn ghi `code`
+        raise JobNotFoundError("Không tìm thấy tác vụ", job_id=str(job.id))
+    try:
+        definition, _spec = resolve_definition(session, code=code)
+    except ReportNotFoundError as error:
+        raise JobNotFoundError("Không tìm thấy tác vụ", job_id=str(job.id)) from error
+    _require_module_access(authorized, definition)
 
 
 def _may_open(authorized: AuthorizedRequest, definition: ReportDefinition) -> bool:
@@ -330,11 +349,17 @@ def download_render_job_file(
     người yêu cầu (`JobBranchScope.REQUESTER_BRANCHES`, vá C1 review 5E), nên
     tệp có thể mang số liệu RỘNG hơn phạm vi của một người cùng chi nhánh —
     dòng job nhìn thấy được không có nghĩa tệp đọc được.
+
+    Cổng phân hệ kiểm LẠI ở đây, không mượn lượt kiểm của `/render` (review
+    6G-1 M-6): giữa lúc đặt job và lúc tải tệp, quyền có thể đã bị thu hồi —
+    và tệp thì vẫn nằm trong kho. "Cổng của bước B không được mượn bộ kiểm của
+    bước A" là đúng luật repo, và đây là bước B.
     """
     with unit_of_work(factory, authorized.scope) as session:
         job = queue.get_job(session, job_id)
         if job.type != RENDER_JOB_CODE or job.requested_by != authorized.scope.user_id:
             raise JobNotFoundError("Không tìm thấy tác vụ", job_id=str(job_id))
+        _require_job_module_access(session, authorized, job)
         if job.status != JobStatus.DONE.value:
             raise ReportRenderNotReadyError(
                 "Tác vụ kết xuất chưa có tệp để tải",

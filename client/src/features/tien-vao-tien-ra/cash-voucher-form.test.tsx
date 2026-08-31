@@ -684,6 +684,57 @@ describe('form phiếu chi — sửa và đối trừ', () => {
     })
   })
 
+  it('sửa phiếu có chiều TK NGÂN HÀNG ngoài trang seed: ô hiện mã và PUT giữ id (review 6G-1 H-3)', async () => {
+    // Cùng khuôn bài kiểm chiều NHÂN VIÊN ngay trên: TK 1121 khai
+    // `bank_account`, và TK ngân hàng của phiếu nằm NGOÀI trang seed — ca
+    // thường gặp nhất là tài khoản đã ngừng theo dõi, vì trang seed lọc
+    // `is_active`. Không có lượt `ids=` thì ô hiện TRỐNG và PUT thay-trọn-bộ
+    // xóa `bank_account_id` mà không báo gì.
+    const savedWithBankLine = {
+      ...SAVED_PAYMENT,
+      id: 'aaaaaaaa-0000-0000-0000-000000000044',
+      partner_id: null,
+      partner_kind: null,
+      lines: [
+        {
+          ...SAVED_PAYMENT.lines[0],
+          debit_account_id: 12,
+          credit_account_id: 11,
+          bank_account_id: 777,
+        },
+      ],
+    }
+    const fetchMock = mockServer({
+      ...formRoutes(),
+      // Trang seed TRỐNG — id 777 chỉ tra được qua `ids=`.
+      '/master/company_bank_accounts': (_init, url) =>
+        url !== undefined && url.includes('ids=777')
+          ? { status: 200, body: { items: [catalogRow(777, 'VCB-CU', 'TK đã đóng')], total: 1 } }
+          : { status: 200, body: { items: [], total: 0 } },
+      [`/cash-book/vouchers/${savedWithBankLine.id}`]: { status: 200, body: savedWithBankLine },
+    })
+    const user = userEvent.setup()
+
+    renderFeatureAt(`/tien-vao-tien-ra/giao-dich/phieu/${savedWithBankLine.id}`)
+
+    expect(await screen.findByText('VCB-CU')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cất' }))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        (entry) =>
+          String(entry[0]).endsWith(`/cash-book/vouchers/${savedWithBankLine.id}`) &&
+          (entry[1] as RequestInit | undefined)?.method === 'PUT',
+      )
+      expect(call).toBeDefined()
+      const body = parseJsonBody(call?.[1] as RequestInit)
+      expect((body.lines as Record<string, unknown>[])[0]).toMatchObject({
+        bank_account_id: 777,
+      })
+    })
+  })
+
   it('đối trừ: dòng gõ rồi xóa trắng không được gửi lên server', async () => {
     const invoice1 = {
       target_kind: 2,

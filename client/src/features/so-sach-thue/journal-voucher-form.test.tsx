@@ -164,6 +164,128 @@ describe('form chứng từ nghiệp vụ khác', () => {
     ).toBeInTheDocument()
   })
 
+  it('sửa bút toán chạm 112: ô chiều TK ngân hàng hiện mã tra được và PUT giữ id (6G-1 H-3)', async () => {
+    // Song sinh của bài kiểm cùng tên ở form phiếu quỹ. Hai đường hydrate là
+    // hai tệp riêng (`journal-line-hydrate` / `pair-line-hydrate`), nên một bài
+    // kiểm không canh được cả hai — bản sửa `slugFor` ở tệp GLE từng sống sót
+    // qua kiểm đột biến vì đúng lý do đó (review 6G-1 M-2).
+    const voucherId = 'aaaaaaaa-0000-0000-0000-000000000010'
+    const accountsWithDeposit = {
+      status: 200,
+      body: {
+        package_id: 1,
+        items: [
+          ...ACCOUNTS_ROUTE.body.items,
+          {
+            id: 12,
+            code: '1121',
+            name: 'Tiền gửi VND',
+            balance_nature: 1,
+            detail_tracking: ['bank_account'],
+            is_summary: false,
+            is_foreign_currency: false,
+            level: 2,
+            parent_id: null,
+          },
+        ],
+      },
+    }
+    const voucher = {
+      id: voucherId,
+      document_type: 'gl_journal',
+      voucher_no: 'GLE00010',
+      branch_id: 1,
+      document_date: '2026-03-31',
+      posting_date: '2026-03-31',
+      period_id: 3,
+      currency_code: 'VND',
+      exchange_rate: '1',
+      description: 'Bút toán chạm 112',
+      status: 1,
+      row_version: 1,
+      created_at: '2026-03-31T00:00:00Z',
+      created_by: 1,
+      posted_at: null,
+      posted_by: null,
+      cashflow_activity: null,
+      entry_kind: 0,
+      lines: [
+        {
+          id: 'bbbbbbbb-0000-0000-0000-000000000002',
+          line_no: 1,
+          account_id: 12,
+          corresponding_account_id: null,
+          currency_code: 'VND',
+          exchange_rate: '1',
+          debit_fc: '1000000',
+          credit_fc: '0',
+          partner_id: null,
+          partner_kind: null,
+          cost_object_id: null,
+          project_id: null,
+          order_id: null,
+          contract_id: null,
+          expense_item_id: null,
+          item_id: null,
+          warehouse_id: null,
+          bank_account_id: 777,
+          extended_dimensions: null,
+          description: null,
+        },
+      ],
+    }
+    const fetchMock = mockServer({
+      ...baseRoutes(),
+      '/accounts': accountsWithDeposit,
+      ...dimensionCatalogRoutes(),
+      // Trang seed TRỐNG — id 777 chỉ tra được qua `ids=`.
+      '/master/company_bank_accounts': (_init: RequestInit | undefined, url?: string) =>
+        url !== undefined && url.includes('ids=777')
+          ? {
+              status: 200,
+              body: {
+                items: [
+                  {
+                    id: 777,
+                    uid: '019-vcb-cu',
+                    code: 'VCB-CU',
+                    name: 'TK đã đóng',
+                    name_en: null,
+                    parent_id: null,
+                    path: '777',
+                    level: 0,
+                    is_group: false,
+                    is_active: false,
+                    branch_id: null,
+                    row_version: 1,
+                  },
+                ],
+                total: 1,
+              },
+            }
+          : { status: 200, body: { items: [], total: 0 } },
+      [`/gl/journal-vouchers/${voucherId}`]: { status: 200, body: voucher },
+    })
+    const user = userEvent.setup()
+
+    renderFeatureAt(`/so-sach-thue/chung-tu/${voucherId}`)
+
+    expect(await screen.findByText('VCB-CU')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cất' }))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        (entry) =>
+          String(entry[0]).endsWith(`/gl/journal-vouchers/${voucherId}`) &&
+          (entry[1] as RequestInit | undefined)?.method === 'PUT',
+      )
+      expect(call).toBeDefined()
+      const body = parseJsonBody(call?.[1] as RequestInit)
+      expect((body.lines as Record<string, unknown>[])[0]).toMatchObject({ bank_account_id: 777 })
+    })
+  })
+
   it('sửa chứng từ kết chuyển: PUT giữ nguyên entry_kind, không âm thầm reset', async () => {
     const voucherId = 'aaaaaaaa-0000-0000-0000-000000000009'
     const closingVoucher = {

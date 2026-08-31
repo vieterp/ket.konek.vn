@@ -28,6 +28,7 @@ import type { LookupOption } from '@/design-system/components'
 import { useSession } from '@/lib/session'
 
 import type { CatalogPage, CatalogRow } from '@/features/danh-muc-thiet-lap/catalog-types'
+import { DIMENSION_CATALOG_SLUG, DIMENSION_LINE_FIELD } from './dimension-config'
 
 /** Trần một lượt đọc — MAX_PAGE_SIZE phía server (H52). */
 const SEED_LIMIT = 200
@@ -88,16 +89,29 @@ export interface DimensionIdCarrier {
   readonly expense_item_id?: number | null
   readonly item_id?: number | null
   readonly warehouse_id?: number | null
+  readonly bank_account_id?: number | null
 }
 
-const CARRIER_FIELD_SLUG = {
-  cost_object_id: 'cost_objects',
-  project_id: 'projects',
-  contract_id: 'contracts',
-  expense_item_id: 'expense_items',
-  item_id: 'items',
-  warehouse_id: 'warehouses',
-} as const
+/**
+ * Trường-trên-dòng → slug danh mục, DỰNG TỪ hai bảng của `dimension-config`
+ * thay vì chép tay lần thứ ba.
+ *
+ * Bản chép tay đã bỏ sót chiều thứ mười một (`bank_account`) và lỗi ấy im lặng
+ * theo đúng kiểu tệ nhất: không có lượt `?ids=` nào ⇒ TK ngân hàng ngoài trang
+ * seed (ngừng theo dõi, hoặc danh mục > 200) không tra được ⇒ ô hiện TRỐNG ⇒
+ * PUT thay-trọn-bộ gửi dòng KHÔNG có `bank_account_id`, tức xóa dữ liệu mà
+ * không một thông báo nào (review 6G-1 H-3, cùng họ 6F-1 C-1).
+ *
+ * `order` bị loại vì không có danh mục để tra (module Đơn hàng thuộc phase 7) —
+ * chính `DIMENSION_CATALOG_SLUG` là nơi nói điều đó, nên phép lọc dưới đây tự
+ * đúng theo nó. Ba chiều đối tượng đi đường riêng (`partner_id`+`partner_kind`).
+ */
+const CARRIER_FIELD_SLUG: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(DIMENSION_LINE_FIELD).flatMap(([dimension, field]) => {
+    const slug = DIMENSION_CATALOG_SLUG[dimension]
+    return field !== undefined && slug !== undefined ? [[field, slug] as const] : []
+  }),
+)
 
 export function requiredDimensionIdsOf(
   lines: readonly DimensionIdCarrier[],
@@ -121,7 +135,7 @@ export function requiredDimensionIdsOf(
       add(line.partner_kind === 2 ? 'employees' : 'partners', line.partner_id)
     }
     for (const [field, slug] of Object.entries(CARRIER_FIELD_SLUG)) {
-      add(slug, line[field as keyof typeof CARRIER_FIELD_SLUG])
+      add(slug as DimensionSlug, line[field as keyof DimensionIdCarrier])
     }
   }
   const result: Partial<Record<DimensionSlug, readonly number[]>> = {}
