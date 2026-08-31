@@ -43,7 +43,21 @@ class ket.kernel.protocols.OpenInvoice
   field remaining_fc: Decimal
   field target_id: UUID
   field target_kind: SettlementTargetKind
-ket.kernel.protocols.PROVIDERS: CrossModuleProviders
+class ket.kernel.protocols.PROVIDERS: instance of
+  commitment_providers(self) -> 'tuple[CommitmentProvider, ...]'
+  inventory_posting(self) -> 'InventoryPosting | None'
+  payable_providers(self) -> 'tuple[PayableProvider, ...]'
+  receivable_providers(self) -> 'tuple[ReceivableProvider, ...]'
+  register_commitment(self, provider: 'CommitmentProvider') -> 'None'
+  register_inventory_posting(self, implementation: 'InventoryPosting') -> 'None'
+  register_payable(self, provider: 'PayableProvider') -> 'None'
+  register_receivable(self, provider: 'ReceivableProvider') -> 'None'
+  register_settlement_source(self, kind: 'SettlementTargetKind', source: 'SettlementTargetSource') -> 'None'
+  register_treasurer_cash_book(self, implementation: 'TreasurerCashBook') -> 'None'
+  register_treasurer_voucher_source(self, source: 'TreasurerVoucherSource') -> 'None'
+  settlement_source(self, kind: 'SettlementTargetKind') -> 'SettlementTargetSource | None'
+  treasurer_cash_book(self) -> 'TreasurerCashBook | None'
+  treasurer_voucher_source(self) -> 'TreasurerVoucherSource | None'
 class ket.kernel.protocols.PayableProvider
   open_invoices(self, session: 'Session', *, partner_kind: 'PartnerKind', partner_id: 'int', branch_id: 'int', as_of: 'date') -> 'Sequence[OpenInvoice]'
 class ket.kernel.protocols.ReceivableProvider
@@ -86,13 +100,18 @@ class ket.posting.contracts.EntryKind
 class ket.posting.contracts.ExtendedDimensionValue
   field dimension_id: int
   field value_id: int
-ket.posting.contracts.GUARD_REGISTRY: PostingGuardRegistry
+class ket.posting.contracts.GUARD_REGISTRY: instance of
+  guards(self) -> 'tuple[PostingGuard, ...]'
+  register(self, guard: 'PostingGuard') -> 'None'
 ket.posting.contracts.GUARD_WARNING_DETAIL: str
 class ket.posting.contracts.GuardFinding
   field blocking: bool
   field violation: PostingViolation
 class ket.posting.contracts.Ledger
-ket.posting.contracts.POSTING_DOCUMENT_REGISTRY: PostingDocumentRegistry
+class ket.posting.contracts.POSTING_DOCUMENT_REGISTRY: instance of
+  codes(self) -> 'tuple[str, ...]'
+  get(self, code: 'str') -> 'PostingDocumentType'
+  register(self, document_type: 'PostingDocumentType') -> 'None'
 class ket.posting.contracts.PartnerKind
 class ket.posting.contracts.PostingDimensions
   has_tracking(self, tracking: 'str') -> 'bool'
@@ -137,7 +156,9 @@ class ket.posting.contracts.PostingRequest
 class ket.posting.contracts.PostingService
   post(self, request: 'PostingRequest', *, user_id: 'int', acknowledged_warnings: 'bool' = False) -> 'Voucher'
   unpost(self, voucher_id: 'UUID', *, user_id: 'int') -> 'Voucher'
-ket.posting.contracts.REFERENCE_GUARDS: VoucherReferenceGuards
+class ket.posting.contracts.REFERENCE_GUARDS: instance of
+  check(self, session: 'Session', voucher_id: 'UUID') -> 'None'
+  register(self, guard: 'VoucherReferenceGuard') -> 'None'
 class ket.posting.contracts.Voucher
   field branch_id: Mapped[int]
   field cashflow_activity: Mapped[int | None]

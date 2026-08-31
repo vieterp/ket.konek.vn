@@ -115,6 +115,31 @@ export function seedSession(): void {
 }
 
 /** Vẽ ứng dụng tại một đường dẫn của nhóm màn hình Sổ sách & Thuế. */
+/**
+ * Vẽ MỘT thành phần tùy ý bên trong đúng cái cây mà màn hình thật chạy trong
+ * đó (providers → phiên → truy vấn → định tuyến).
+ *
+ * Có để kiểm được các hook đọc dữ liệu mà không phải lái cả một form qua lưới
+ * nhập liệu — `resolveMissingCodes` là ca đầu tiên (review 6G-2: đột biến "bỏ
+ * lời gọi `fetchCodes`" sống sót vì không bài nào chạm tới đường ấy).
+ */
+export function renderWithSession(element: ReactElement): void {
+  render(
+    (
+      <AppProviders>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="/" element={<SessionGate />}>
+              <Route index element={element} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </AppProviders>
+    ) as ReactElement,
+  )
+}
+
+
 export function renderFeatureAt(path: string): void {
   render(
     (

@@ -281,7 +281,14 @@ class TestGatingIsIndependentOfAccountingScheme:
         """`requires_full_branch_scope` là cổng PHẠM VI (M-4), khác cổng quyền.
 
         Bật nhầm nó cho một báo cáo một-vế là chặn người dùng hợp lệ khỏi dữ
-        liệu họ có quyền đọc, nên danh sách mang cờ được ghim tường minh."""
+        liệu họ có quyền đọc, nên danh sách mang cờ được ghim tường minh.
+
+        `chenh-lech-so-quy-so-ke-toan` cũng so hai vế nhưng KHÔNG cần cờ, và đó
+        là phép so đáng nhớ: `treasurer_cash_book` mang `branch_id` + RLS như
+        `gl_postings`, và dataset lọc chi nhánh **bên trong** — hai vế cùng thu
+        hẹp theo nhau, nên phạm vi hẹp cho ra ÍT DÒNG HƠN chứ không cho ra số
+        lệch lớn hơn. Đối chiếu ngân hàng khác vì vế sao kê treo trên tài khoản
+        (dùng chung, không mang chi nhánh) nên nó KHÔNG thu hẹp theo."""
         loaded = load_builtin_reports()
         demanding = {
             definition.code

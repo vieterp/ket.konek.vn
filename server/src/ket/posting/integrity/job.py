@@ -35,6 +35,13 @@ INTEGRITY_PERMISSION_CODE: Final[str] = "integrity"
 INTEGRITY_RUN: Final[str] = permission_code(
     INTEGRITY_PERMISSION_MODULE, INTEGRITY_PERMISSION_CODE, Action.CREATE
 )
+INTEGRITY_EDIT: Final[str] = permission_code(
+    INTEGRITY_PERMISSION_MODULE, INTEGRITY_PERMISSION_CODE, Action.EDIT
+)
+"""Quyền GHI của nhóm soát sổ — hiện chỉ job `posting.dimensions.apply` dùng
+(review 6G-2 H-1). Tách khỏi `INTEGRITY_RUN` để vai trò chỉ soát sổ không kèm
+quyền ghi vào `gl_postings`."""
+
 INTEGRITY_VIEW: Final[str] = permission_code(
     INTEGRITY_PERMISSION_MODULE, INTEGRITY_PERMISSION_CODE, Action.VIEW
 )

@@ -25,7 +25,6 @@ from ket.kernel.numbering.service import NumberingRule, NumberingService
 from ket.kernel.periods.models import AccountingPeriod
 from ket.kernel.periods.service import PeriodService
 from ket.posting.documents.models import EntryKind, Voucher, VoucherStatus
-from ket.posting.documents.registry import REFERENCE_GUARDS
 from ket.posting.documents.state_machine import VoucherAction, transition
 
 
@@ -133,10 +132,13 @@ class VoucherService:
         """
         voucher = self.require(voucher_id)
         self.ensure_editable(voucher)
-        # Cùng bộ guard với `PostingService.unpost`: FK RESTRICT của người tham
-        # chiếu cũng chặn được lượt xóa, nhưng bằng một `IntegrityError` không
-        # nói cho kế toán biết phải làm gì tiếp.
-        REFERENCE_GUARDS.check(self._session, voucher_id)
+        # KHÔNG gọi `REFERENCE_GUARDS` ở đây (review 6G-2 M-4): guard sao kê
+        # canh chứng từ ĐÃ GHI SỔ, mà `ensure_editable` ngay trên đã từ chối
+        # mọi trạng thái đã ghi sổ — lời gọi ấy là mã chết, và nó bắt mỗi lượt
+        # xóa chứng từ nháp gánh một truy vấn vô ích, nhân với mọi guard phase
+        # 7–9 sẽ đăng ký sau. Chiều xóa đã có FK `RESTRICT` của người tham
+        # chiếu canh. Guard nào cần canh chứng từ NHÁP thì phải đặt trước
+        # `ensure_editable` và đi kèm test chứng minh đường ấy tới được.
         # Xác nhận cạnh DELETE tồn tại cho trạng thái hiện tại — giữ mọi luật
         # chuyển ở một chỗ thay vì lặp phép so trạng thái ở đây.
         transition(VoucherStatus(voucher.status), VoucherAction.DELETE)

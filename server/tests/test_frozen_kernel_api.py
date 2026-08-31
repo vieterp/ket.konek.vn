@@ -90,6 +90,14 @@ def _render_module(module: ModuleType) -> list[str]:
             lines.extend(_render_class(module.__name__, name, member))
         elif inspect.isfunction(member):
             lines.append(_render_callable(f"{module.__name__}.{name}", member))
+        elif type(member).__module__.startswith("ket."):
+            # Singleton registry (`PROVIDERS`, `POSTING_DOCUMENT_REGISTRY`,
+            # `REFERENCE_GUARDS`, `GUARD_REGISTRY`) — chụp chữ ký LỚP của nó,
+            # không chỉ tên kiểu (review 6G-2 M-5). Phase 7/8 gọi
+            # `REGISTRY.register(...)` chứ không gọi lớp, nên "tên kiểu không
+            # đổi" là một lời hứa rỗng: đổi tham số của `register` mà ảnh chụp
+            # vẫn xanh, đúng bề mặt bước 23 sinh ra để bảo vệ.
+            lines.extend(_render_class(module.__name__, f"{name}: instance of", type(member)))
         else:
             lines.append(f"{module.__name__}.{name}: {type(member).__name__}")
     return lines
@@ -133,3 +141,13 @@ def test_the_snapshot_covers_the_protocols_phase_7_and_8_will_implement() -> Non
         assert f"class ket.kernel.protocols.{name}" in rendered, name
     for name in ("PostingService", "PostingRequest", "PostingDocumentType", "VoucherService"):
         assert f"class ket.posting.contracts.{name}" in rendered, name
+    # Bốn registry singleton — bề mặt phase 7/8 GỌI (review 6G-2 M-5). Chữ ký
+    # `register(...)` của chúng phải nằm trong ảnh chụp, không chỉ tên kiểu.
+    for registry, method in (
+        ("PROVIDERS", "register_receivable"),
+        ("POSTING_DOCUMENT_REGISTRY", "register"),
+        ("REFERENCE_GUARDS", "register"),
+        ("GUARD_REGISTRY", "register"),
+    ):
+        assert f"{registry}: instance of" in rendered, registry
+        assert method in rendered, f"{registry}.{method}"

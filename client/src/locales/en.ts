@@ -653,6 +653,9 @@ export const en: Record<TranslationKey, string> = {
   'cashflow.profile.title': 'Bank statement format profiles',
   'cashflow.profile.hint':
     'Each bank exports statements differently. Declare "which column is the date, which is the amount" once and every later import follows it. Declare the amount columns ONE of two ways: separate debit/credit columns, or a single amount column plus a sign rule.',
+  'cashflow.profile.numberInvalid': 'Bank id and header row must be positive whole numbers.',
+  'cashflow.profile.confirmDelete':
+    'Delete this profile? Later statement imports can no longer use the declared layout.',
   'cashflow.profile.new': 'New profile',
   'cashflow.profile.editTitle': 'Edit profile',
   'cashflow.profile.empty': 'No profile declared yet — importing a statement needs one for that bank.',

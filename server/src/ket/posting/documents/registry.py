@@ -133,10 +133,17 @@ class VoucherReferenceGuards:
     không phải biết phân hệ ngân hàng tồn tại, và luật C3 (module không import
     module) vẫn đứng.
 
-    Điểm gọi là `PostingService.unpost` và `VoucherService.delete` — hai hàm
-    mà **mọi** cửa đều đi qua (endpoint hành động chung lẫn service của từng
-    module) — chứ không ở tầng router: đặt ở router thì đường service là một
-    cửa thứ hai không có cổng, đúng bài học 6D H-3.
+    Điểm gọi là `PostingService.unpost` — hàm mà **mọi** cửa bỏ ghi sổ đều đi
+    qua (endpoint hành động chung lẫn service của từng module) — chứ không ở
+    tầng router: đặt ở router thì đường service là một cửa thứ hai không có
+    cổng, đúng bài học 6D H-3.
+
+    **Không** chạy ở `VoucherService.delete` (review 6G-2 M-4): guard duy nhất
+    hiện có canh chứng từ ĐÃ GHI SỔ, mà đường xóa chỉ nhận chứng từ Đã cất —
+    lời gọi ở đó là mã chết, trả bằng một truy vấn thừa mỗi lượt xóa. Chiều xóa
+    do FK `RESTRICT` của người tham chiếu canh. Guard nào cần canh chứng từ
+    NHÁP phải tự đặt điểm gọi trước `ensure_editable` **và** kèm test chứng
+    minh đường ấy tới được — đừng tin một lời gọi không có bài kiểm.
     """
 
     def __init__(self) -> None:

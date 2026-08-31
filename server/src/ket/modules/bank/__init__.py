@@ -73,7 +73,13 @@ PERMISSION_REGISTRY.register(
     DocumentType(
         module=BANK_PERMISSION_MODULE,
         code=STATEMENT_PROFILE_PERMISSION_CODE,
-        actions=CATALOG_ACTIONS,
+        # CHỈ `view` + `edit` — đúng số cửa có thật (review 6G-2 M-3). Ba cửa
+        # ghi (khai/sửa/xóa) dùng CHUNG một mã `edit` vì cùng một rủi ro (đổi
+        # luật đọc mọi tệp sao kê sau đó) và không có vai trò thực tế nào được
+        # sửa mà không được khai. Đăng ký `create`/`delete` như bản đầu là để
+        # ma trận phân quyền hứa hai mã không cửa nào đọc: cấp `create` xong
+        # vẫn 403, còn `edit` thì mở cả tạo lẫn xóa.
+        actions=frozenset({Action.VIEW, Action.EDIT}),
     )
 )
 PERMISSION_REGISTRY.register(

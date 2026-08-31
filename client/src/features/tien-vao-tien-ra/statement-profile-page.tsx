@@ -24,7 +24,14 @@ import type { ReactElement } from 'react'
 import { useState } from 'react'
 
 import type { DataTableColumn } from '@/design-system/components'
-import { Alert, Button, DataTable, Drawer, TextField } from '@/design-system/components'
+import {
+  Alert,
+  Button,
+  DataTable,
+  Drawer,
+  SelectField,
+  TextField,
+} from '@/design-system/components'
 import { translateErrorCode, useI18n } from '@/lib/i18n'
 import { ApiError } from '@/lib/session'
 
@@ -67,6 +74,25 @@ const EMPTY_DRAFT: ProfileDraft = {
   thousand_sep: '',
   csv_delimiter: ';',
 }
+
+/**
+ * Hai tập giá trị ĐÓNG (`StatementFileKind`, `AmountSignRule` phía server).
+ *
+ * Ô chọn chứ không ô gõ tự do (review 6G-2 L-2): gõ "csvv" ra một 422 thô
+ * không chỉ vào ô nào. Đây KHÔNG phải kiểm chéo ở client — luật hình dạng
+ * (một-trong-hai cột tiền, ba dấu khác nhau) vẫn để server trả lời; liệt kê
+ * giá trị hợp lệ là việc của ô nhập.
+ */
+const FILE_KINDS = [
+  { value: 'csv', label: 'CSV' },
+  { value: 'xlsx', label: 'XLSX' },
+] as const
+
+const SIGN_RULES = [
+  { value: '', label: '—' },
+  { value: 'signed', label: 'Cột số tiền mang dấu' },
+  { value: 'debit_positive', label: 'Dương = tiền ra' },
+] as const
 
 /** Ô trống = "tệp không có cột này" → `null`, khác hẳn chuỗi rỗng (xem
  * docstring `thousand_sep` phía server: chuỗi rỗng lọt qua mọi `CHECK`). */
@@ -126,16 +152,41 @@ export function StatementProfilePage(): ReactElement {
   const [editing, setEditing] = useState<StatementProfileDetail | null>(null)
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<ProfileDraft>(EMPTY_DRAFT)
+  const [confirmingId, setConfirmingId] = useState<number | null>(null)
+
+  const set = (key: keyof ProfileDraft, value: string): void => {
+    setDraft((current) => ({ ...current, [key]: value }))
+  }
 
   const field = (key: keyof ProfileDraft, label: string): ReactElement => (
     <TextField
       label={label}
       value={draft[key]}
       onChange={(event) => {
-        setDraft((current) => ({ ...current, [key]: event.target.value }))
+        set(key, event.target.value)
       }}
     />
   )
+
+  const choice = (
+    key: keyof ProfileDraft,
+    label: string,
+    options: readonly { readonly value: string; readonly label: string }[],
+  ): ReactElement => (
+    <SelectField
+      label={label}
+      value={draft[key]}
+      options={[...options]}
+      onChange={(event) => {
+        set(key, event.target.value)
+      }}
+    />
+  )
+
+  /** Ô số: rỗng hoặc không phải số ⇒ báo tại chỗ thay vì gửi `NaN`
+   * (`JSON.stringify(NaN)` ra `null` ⇒ 422 không chỉ vào ô nào — review L-1). */
+  const numberProblem = (key: 'bank_id' | 'header_row'): boolean =>
+    !/^\d+$/.test(draft[key].trim()) || Number.parseInt(draft[key], 10) < 1
 
   const startCreate = (): void => {
     setEditing(null)
@@ -183,7 +234,11 @@ export function StatementProfilePage(): ReactElement {
           <Button
             variant="ghost"
             onClick={() => {
-              remove.mutate({ profileId: row.id })
+              // Hỏi lại trước khi xóa (review 6G-2 L-3): hồ sơ là cấu hình
+              // quyết định cách đọc MỌI tệp sao kê sau đó, không phải một dòng
+              // dữ liệu. `confirmingId` chứ không `window.confirm` — hộp thoại
+              // gốc chặn cả vòng lặp sự kiện và không dịch được.
+              setConfirmingId(row.id)
             }}
           >
             {t('catalog.drawer.delete')}
@@ -199,6 +254,7 @@ export function StatementProfilePage(): ReactElement {
   const listError = errorOf(profiles.error)
   const removeError = errorOf(remove.error)
   const saveError = errorOf(save.error)
+  const numberInvalid = numberProblem('bank_id') || numberProblem('header_row')
 
   return (
     <div className="flex h-full gap-4">
@@ -224,6 +280,30 @@ export function StatementProfilePage(): ReactElement {
           zebra
         />
 
+        {confirmingId !== null && (
+          <Alert tone="warning">
+            <span className="flex items-center gap-3">
+              {t('cashflow.profile.confirmDelete')}
+              <Button
+                onClick={() => {
+                  remove.mutate({ profileId: confirmingId })
+                  setConfirmingId(null)
+                }}
+              >
+                {t('catalog.drawer.delete')}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setConfirmingId(null)
+                }}
+              >
+                {t('common.cancel')}
+              </Button>
+            </span>
+          </Alert>
+        )}
+
         {/* Gắn `key` theo bản ghi đang sửa và chỉ dựng khi mở: state của form
             phải chết cùng lượt sửa, không sống ngầm sang lượt sau (bài học
             6F-2 L-1 — drawer luôn-gắn giữ lại tệp của lượt đã hủy). */}
@@ -242,14 +322,14 @@ export function StatementProfilePage(): ReactElement {
             <div className="grid grid-cols-2 gap-3">
               {field('bank_id', t('cashflow.profile.field.bank'))}
               {field('name', t('cashflow.profile.field.name'))}
-              {field('file_kind', t('cashflow.profile.field.fileKind'))}
+              {choice('file_kind', t('cashflow.profile.field.fileKind'), FILE_KINDS)}
               {field('header_row', t('cashflow.profile.field.headerRow'))}
               {field('date_col', t('cashflow.profile.field.dateCol'))}
               {field('date_format', t('cashflow.profile.field.dateFormat'))}
               {field('debit_col', t('cashflow.profile.field.debitCol'))}
               {field('credit_col', t('cashflow.profile.field.creditCol'))}
               {field('amount_col', t('cashflow.profile.field.amountCol'))}
-              {field('sign_rule', t('cashflow.profile.field.signRule'))}
+              {choice('sign_rule', t('cashflow.profile.field.signRule'), SIGN_RULES)}
               {field('ref_col', t('cashflow.profile.field.refCol'))}
               {field('description_col', t('cashflow.profile.field.descriptionCol'))}
               {field('balance_col', t('cashflow.profile.field.balanceCol'))}
@@ -258,6 +338,11 @@ export function StatementProfilePage(): ReactElement {
               {field('csv_delimiter', t('cashflow.profile.field.csvDelimiter'))}
             </div>
 
+            {numberInvalid && (
+              <div className="mt-3">
+                <Alert tone="error">{t('cashflow.profile.numberInvalid')}</Alert>
+              </div>
+            )}
             {saveError !== null && (
               <div className="mt-3">
                 <Alert tone="error">{saveError}</Alert>
@@ -274,7 +359,7 @@ export function StatementProfilePage(): ReactElement {
                 {t('common.cancel')}
               </Button>
               <Button
-                disabled={save.isPending}
+                disabled={save.isPending || numberInvalid}
                 onClick={() => {
                   save.mutate(
                     {

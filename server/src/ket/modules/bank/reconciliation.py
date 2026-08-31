@@ -29,7 +29,7 @@ from decimal import Decimal
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Row, Select, exists, func, select
+from sqlalchemy import ColumnElement, Row, Select, exists, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -305,12 +305,20 @@ def ensure_not_matched_to_statement(session: Session, *, voucher_id: UUID) -> No
     `ket.modules.bank.ensure_voucher_not_matched_to_statement` (đường công khai
     của module, không import thẳng tệp con).
     """
+    # Đọc qua hàm `SECURITY DEFINER` (migration 0024) chứ không truy vấn ORM:
+    # câu ORM chạy dưới RLS của người gọi, mà `bank_statement_lines.branch_id`
+    # là chi nhánh của TÀI KHOẢN ngân hàng (0022) — người bỏ ghi sổ ở chi nhánh
+    # B không thấy dòng sao kê của tài khoản chi nhánh A và guard im lặng cho
+    # qua (review 6G-2 H-3, mẫu lặp lần ba: 6C H-1, 3B-2 B-8). Một phép kiểm
+    # phải nhìn thấy thứ nó đang đi tìm, kể cả khi người gọi thì không.
     matched = session.execute(
-        select(BankStatementLine.id)
-        .where(BankStatementLine.matched_voucher_id == voucher_id)
-        .limit(1)
-    ).first()
-    if matched is not None:
+        # Chuỗi HẰNG, không f-string: `test_no_sql_string_interpolation` quét cả
+        # `text(...)`, và một tên hàm ghép vào câu SQL trông y hệt một chỗ tiêm
+        # thật đối với bộ quét — cũng như đối với người đọc.
+        text("SELECT voucher_has_matched_statement_line(:voucher_id)"),
+        {"voucher_id": voucher_id},
+    ).scalar_one()
+    if matched:
         raise BankStatementMatchStateError(
             "Chứng từ đã khớp với dòng sao kê — gỡ khớp ở màn đối chiếu trước khi bỏ ghi sổ",
             voucher_id=str(voucher_id),

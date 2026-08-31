@@ -655,7 +655,7 @@ def profile_admin_headers(
         PROFILE_ADMIN_ROLE,
         [
             permission_code("bank", "statement_profile", action)
-            for action in (Action.VIEW, Action.CREATE, Action.EDIT, Action.DELETE)
+            for action in (Action.VIEW, Action.EDIT)
         ]
         + _statement_codes(),
     )
@@ -850,3 +850,81 @@ class TestStatementProfileAdministration:
             ).status_code
             == 403
         )
+
+
+def test_the_statement_profile_permission_matrix_matches_the_doors(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    test_password: str,
+    context: PostingContext,
+    bank_account: int,
+) -> None:
+    """Review 6G-2 M-3: ma trận phân quyền không được hứa mã mà không cửa nào đọc.
+
+    Bản đầu đăng ký cả bốn `CATALOG_ACTIONS` trong khi ba cửa ghi dùng CHUNG
+    `edit` và `/all` dùng `statement_profile.view` — nên cấp `create` cho một
+    vai trò vẫn ra 403, còn `edit` thì mở luôn cả tạo lẫn xóa. Người quản trị
+    đọc màn phân quyền không suy ra được điều đó.
+    """
+    from ket.kernel.security.permissions import REGISTRY as PERMISSION_REGISTRY
+
+    declared = {
+        code for code in PERMISSION_REGISTRY.codes() if code.startswith("bank.statement_profile.")
+    }
+    assert declared == {"bank.statement_profile.view", "bank.statement_profile.edit"}, declared
+
+    # Và mã `view` thật sự là cổng của màn khai — không phải `bank.statement.view`.
+    viewer_role = ensure_role(
+        session_factory,
+        dataset_alpha,
+        "chi_xem_ho_so_sao_ke",
+        ["bank.statement_profile.view"],
+    )
+    headers = actor(
+        client,
+        session_factory,
+        dataset_alpha,
+        user_factory,
+        viewer_role,
+        "profile_viewer",
+        test_password,
+        branch_codes=[context.branch_code],
+    )
+    listed = client.get("/api/v1/bank/statements/profiles/all", headers=headers)
+    assert listed.status_code == 200, listed.text
+    # …nhưng không mở được cửa ghi.
+    assert (
+        client.post(
+            "/api/v1/bank/statements/profiles",
+            headers=headers,
+            json=_profile_payload(1, "khong duoc phep 2"),
+        ).status_code
+        == 403
+    )
+
+
+def test_a_bad_bank_id_reports_itself_and_not_a_phantom_statement(
+    client: TestClient,
+    profile_admin_headers: dict[str, str],
+) -> None:
+    """Review 6G-2 M-1: `_flush_profile` từng nuốt MỌI `IntegrityError` thành
+    "hồ sơ đang được sao kê sử dụng — xóa các sao kê đó trước".
+
+    Khai hồ sơ với `bank_id` không tồn tại vi phạm khóa ngoại của CHÍNH bảng hồ
+    sơ, và câu trả lời cũ khuyên người dùng đi xóa dữ liệu thật để chữa một lỗi
+    không liên quan. Đây đúng là nợ L-2 của 6D mà `_flush_matches` đã sửa rồi
+    lát này chép lại ở bảng bên cạnh.
+    """
+    response = client.post(
+        "/api/v1/bank/statements/profiles",
+        headers=profile_admin_headers,
+        json=_profile_payload(987_654, "ngan hang khong ton tai"),
+    )
+    assert response.status_code != 409 or (
+        response.json()["error_code"] != "bank_statement_profile.conflict"
+    ), (
+        "vi phạm FK `bank_id` KHÔNG được đội lốt 'hồ sơ đang được sao kê sử dụng' "
+        f"— nhận: {response.text}"
+    )

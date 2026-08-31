@@ -151,9 +151,6 @@ class PostingService:
         phase-04 §Bảng phát sinh chung. Kỳ đã khóa thì không tới được đây.
         """
         voucher = self._require_voucher(voucher_id)
-        # Ai đó còn trỏ vào chứng từ này? (dòng sao kê đã khớp, …). Kiểm ở ĐÂY
-        # chứ không ở router: service của từng module cũng gọi thẳng hàm này.
-        REFERENCE_GUARDS.check(self._session, voucher_id)
         period, year = self._share_lock_period(voucher.period_id)
         if period.locked_at is not None or year.is_closed:
             raise PostingValidationError(
@@ -166,6 +163,16 @@ class PostingService:
                     )
                 ],
             )
+
+        # Ai đó còn trỏ vào chứng từ này? (dòng sao kê đã khớp, …). Kiểm ở ĐÂY
+        # chứ không ở router: service của từng module cũng gọi thẳng hàm này.
+        #
+        # SAU phép kiểm kỳ khóa, không trước (review 6G-2 M-6): kỳ khóa là câu
+        # trả lời "không có đường nào", còn guard là câu "có đường, làm việc X
+        # trước". Đảo thứ tự thì người dùng nhận lời khuyên "gỡ khớp trước",
+        # gỡ thành công (`unmatch_line` không kiểm kỳ khóa), rồi vẫn không bỏ
+        # ghi sổ được — một cặp đối chiếu đúng bị phá, không đổi lại được gì.
+        REFERENCE_GUARDS.check(self._session, voucher_id)
 
         touched_ledgers = set(
             self._session.execute(

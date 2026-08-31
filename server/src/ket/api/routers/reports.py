@@ -124,11 +124,17 @@ def _require_full_branch_scope(
         return
     missing = missing_scope_branch_ids(session, authorized.scope)
     if missing:
+        visible = len(set(authorized.scope.branch_ids))
+        # ĐẾM, không id (review 6G-2 M-2): id chi nhánh người gọi KHÔNG được cấp
+        # là thông tin về cấu trúc đơn vị mà họ chưa được thấy. Cùng chính sách
+        # với `BankReconciliationScopeError` ở lát này — hai bên cùng một câu
+        # hỏi thì không được hai chính sách. Id đầy đủ ở log kèm correlation_id.
         raise ReportBranchScopeError(
             f"Báo cáo {definition.code!r} chỉ đúng khi đọc mọi chi nhánh — phạm vi "
             "hiện tại còn thiếu; nhờ người có phạm vi toàn đơn vị chạy",
             report_code=definition.code,
-            missing_branch_ids=",".join(str(b) for b in sorted(missing)),
+            branches_visible=visible,
+            branches_total=visible + len(missing),
         )
 
 

@@ -25,8 +25,12 @@ PERMISSION_REGISTRY.register(
     DocumentType(
         module="posting",
         code="integrity",
-        # `view` + `create` là đủ: bộ kiểm chỉ đọc và chỉ ra — không có gì để
-        # sửa hay xóa qua nó (phase-04 §Bộ kiểm tra toàn vẹn: "không tự sửa").
-        actions=frozenset({Action.VIEW, Action.CREATE}),
+        # `view` + `create`: bộ kiểm toàn vẹn chỉ đọc và chỉ ra (phase-04
+        # §Bộ kiểm tra toàn vẹn: "không tự sửa"). `edit` thêm ở lát 6G-2 cho
+        # MỘT việc duy nhất — job `posting.dimensions.apply` ghi lại chiều
+        # suy-ra đã lệch. Tách khỏi `create` có chủ đích (review 6G-2 H-1): vai
+        # trò "soát sổ" đang được cấp `create` hôm nay KHÔNG được kèm theo
+        # quyền ghi vào `gl_postings`.
+        actions=frozenset({Action.VIEW, Action.CREATE, Action.EDIT}),
     )
 )

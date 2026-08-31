@@ -657,6 +657,10 @@ export const vi = {
   'cashflow.profile.title': 'Hồ sơ định dạng sao kê',
   'cashflow.profile.hint':
     'Mỗi ngân hàng xuất sao kê một kiểu. Khai ở đây "cột nào là ngày, cột nào là tiền" một lần, mọi lượt nhập sau đọc theo. Cột số tiền khai MỘT TRONG HAI cách: hai cột Ghi nợ/Ghi có, hoặc một cột Số tiền kèm quy tắc dấu.',
+  'cashflow.profile.numberInvalid':
+    'Mã ngân hàng và dòng tiêu đề phải là số nguyên dương.',
+  'cashflow.profile.confirmDelete':
+    'Xóa hồ sơ này? Mọi lượt nhập sao kê sau đó sẽ không dùng được cách đọc đã khai.',
   'cashflow.profile.new': 'Khai hồ sơ mới',
   'cashflow.profile.editTitle': 'Sửa hồ sơ',
   'cashflow.profile.empty': 'Chưa khai hồ sơ nào — nhập sao kê cần ít nhất một hồ sơ cho ngân hàng đó.',

@@ -96,15 +96,26 @@ StatementMatcher = Annotated[AuthorizedRequest, Depends(require_permission(STATE
 StatementRemover = Annotated[AuthorizedRequest, Depends(require_permission(STATEMENT_DELETE))]
 
 _PROFILE_NAME_UNIQUE: Final[str] = "uq_bank_statement_profiles_bank_name"
+_STATEMENT_PROFILE_FK: Final[str] = "fk_bank_statements_profile_id"
+"""Khóa ngoại của bảng KHÁC (`bank_statements.profile_id`) — ràng buộc duy nhất
+có nghĩa "hồ sơ đang được dùng". Ràng buộc mang tiền tố hồ sơ là lỗi của chính
+thân yêu cầu."""
+
 _PROFILE_CHECK_PREFIX: Final[str] = "ck_bank_statement_profiles"
 """Quy ước đặt tên của `persistence/base.NAMING_CONVENTION` — mọi `CHECK` của
 bảng hồ sơ mang tiền tố này, nên một tên khớp tiền tố nghĩa là "hình dạng khai
 sai", còn tên KHÔNG khớp là ràng buộc của bảng khác trỏ tới (FK `RESTRICT` của
 `bank_statements.profile_id`)."""
 
+PROFILE_VIEW = permission_code(
+    BANK_PERMISSION_MODULE, STATEMENT_PROFILE_PERMISSION_CODE, Action.VIEW
+)
 PROFILE_EDIT = permission_code(
     BANK_PERMISSION_MODULE, STATEMENT_PROFILE_PERMISSION_CODE, Action.EDIT
 )
+ProfileViewer = Annotated[AuthorizedRequest, Depends(require_permission(PROFILE_VIEW))]
+"""Màn KHAI hồ sơ. Ô chọn hồ sơ của màn nhập sao kê thì không dùng mã này —
+nó đi `bank.statement.view` như phần còn lại của đường nhập."""
 StatementAdmin = Annotated[AuthorizedRequest, Depends(require_permission(PROFILE_EDIT))]
 """Khai/sửa/xóa hồ sơ định dạng — **một** mã cho cả ba, không tách create/edit/
 delete: ba thao tác ấy cùng một rủi ro (đổi luật đọc tệp) và không có vai trò
@@ -148,10 +159,17 @@ def _flush_profile(session: Session) -> None:
                 "Cách đọc tệp khai chưa hợp lệ — xem lại cột số tiền và các dấu phân cách",
                 constraint=constraint,
             ) from error
-        raise BankStatementProfileConflictError(
-            "Hồ sơ này đang được sao kê đã nhập sử dụng — xóa các sao kê đó trước",
-            constraint=constraint or "",
-        ) from error
+        if constraint == _STATEMENT_PROFILE_FK:
+            raise BankStatementProfileConflictError(
+                "Hồ sơ này đang được sao kê đã nhập sử dụng — xóa các sao kê đó trước",
+                constraint=constraint,
+            ) from error
+        # Mọi ràng buộc KHÁC phải nổ to (review 6G-2 M-1, đúng nợ L-2 của 6D mà
+        # `_flush_matches` đã sửa rồi lát này chép lại): `bank_id` trỏ một ngân
+        # hàng không tồn tại vốn vi phạm khóa ngoại của CHÍNH bảng hồ sơ, và
+        # gộp nó vào câu "đang được sao kê sử dụng" là khuyên người dùng đi xóa
+        # dữ liệu thật để chữa một lỗi không liên quan.
+        raise
 
 
 def _require_company_wide_scope(
@@ -294,7 +312,7 @@ def list_statement_profiles(
 
 @router.get("/statements/profiles/all", response_model=BankStatementProfileDetailListResponse)
 def list_all_statement_profiles(
-    authorized: StatementViewer, factory: SessionFactory
+    authorized: ProfileViewer, factory: SessionFactory
 ) -> BankStatementProfileDetailListResponse:
     """Mọi hồ sơ định dạng, trọn cột — thân của màn KHAI hồ sơ (lát 6G-2).
 

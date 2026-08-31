@@ -790,7 +790,13 @@ class TestCompanyWideScopeGate:
             "/api/v1/reports/doi-chieu-ngan-hang/preview", json=body, headers=narrow
         )
         assert refused.status_code == 403, refused.text
-        assert refused.json()["error_code"] == "report.scope_insufficient"
+        body = refused.json()
+        assert body["error_code"] == "report.scope_insufficient"
+        # ĐẾM, không id (review 6G-2 M-2): id chi nhánh người gọi chưa được cấp
+        # là thông tin về cấu trúc đơn vị họ chưa được thấy. Cùng chính sách với
+        # `bank_statement.scope_insufficient` — một câu hỏi, một chính sách.
+        assert "missing_branch_ids" not in body.get("details", {}), body
+        assert body["details"]["branches_visible"] < body["details"]["branches_total"]
 
         # Danh mục không mời người ta bấm vào một 403 (cùng luật `_may_open`).
         listed = client.get("/api/v1/reports", headers=narrow)
