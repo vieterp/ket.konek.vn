@@ -15,6 +15,12 @@ from __future__ import annotations
 
 import pytest
 
+# Nạp registry trước khi đọc manifest: `load_builtin_reports` kiểm
+# `required_permission_module` bằng chính sổ đăng ký mã quyền, và sổ ấy chỉ đầy
+# khi các module đã import. Thiếu dòng này tệp CHỈ xanh khi chạy cùng tệp khác
+# đã import hộ — đúng kiểu phụ thuộc thứ tự làm bài kiểm xanh vì lý do khác lý
+# do nó viết ra.
+from ket import model_registry as _model_registry  # noqa: F401
 from ket.kernel.config.reports.loader import load_builtin_reports
 from ket.kernel.config.reports.models import ReportDataset
 from ket.kernel.config.reports.scope import (
@@ -222,3 +228,64 @@ class TestBuiltinManifest:
         loaded = load_builtin_reports()
         for spec in loaded.param_set_specs.values():
             assert not STANDARD_PARAMS.intersection(p.name for p in spec.params)
+
+
+class TestGatingIsIndependentOfAccountingScheme:
+    """Lát 6G-2 (M-7): cổng quyền của một báo cáo không được phụ thuộc THÔNG TƯ.
+
+    `F01-DNN` (TT133) và `S06-DN` (TT99) là cùng một bảng cân đối tài khoản đọc
+    cùng `dataset_code`; 6G-1 đóng cổng `general_ledger` cho bộ sổ TT99 và bỏ
+    quên bản TT133, nên cùng một dữ liệu mở hay đóng tùy chế độ kế toán khách
+    hàng đang chạy — thứ không ai nhìn thấy khi đọc một trong hai dòng.
+
+    Kiểm theo BẤT BIẾN thay vì theo hai mã cụ thể: mọi cặp báo cáo dùng chung
+    dataset phải đòi cùng phân hệ quyền, nên mã mẫu TT133 thêm ở phase sau
+    không lặp lại được lỗi này.
+    """
+
+    def test_the_same_form_in_two_schemes_requires_the_same_permission_module(self) -> None:
+        """Hai định nghĩa là CÙNG MỘT biểu mẫu khi chúng khác nhau đúng ở
+        `package_scheme` — cùng dataset, cùng layout, cùng bộ tham số, cùng
+        tham số ghim.
+
+        Không gộp theo mỗi `dataset_code`: `S07a-DN` và `S08-DN` dùng chung
+        dataset `money_account_ledger` nhưng ghim `account_prefix` khác nhau
+        (111 ↔ 112) và vì thế là hai phân hệ khác nhau — cổng của chúng ĐÚNG
+        khi khác nhau. Chỗ sai là khi cùng một tờ giấy đổi cổng theo thông tư.
+        """
+        loaded = load_builtin_reports()
+        by_form: dict[tuple[str, str, str, tuple[tuple[str, object], ...]], set[str | None]] = {}
+        for definition in loaded.manifest.definitions:
+            key = (
+                definition.dataset_code,
+                definition.layout_code,
+                definition.param_set_code,
+                tuple(sorted(definition.fixed_params.items())),
+            )
+            by_form.setdefault(key, set()).add(definition.required_permission_module)
+        drifting = {key: modules for key, modules in by_form.items() if len(modules) > 1}
+        assert drifting == {}, drifting
+
+    def test_the_trial_balance_of_both_schemes_is_gated(self) -> None:
+        """Bản neo cho bất biến ở trên: nếu ai đó gỡ cổng khỏi CẢ HAI mã thì
+        phép kiểm kia vẫn xanh (hai `None` cũng là "giống nhau")."""
+        loaded = load_builtin_reports()
+        gates = {
+            definition.code: definition.required_permission_module
+            for definition in loaded.manifest.definitions
+            if definition.dataset_code == "trial_balance"
+        }
+        assert gates == {"S06-DN": "general_ledger", "F01-DNN": "general_ledger"}
+
+    def test_only_the_reconciliation_report_demands_company_wide_scope(self) -> None:
+        """`requires_full_branch_scope` là cổng PHẠM VI (M-4), khác cổng quyền.
+
+        Bật nhầm nó cho một báo cáo một-vế là chặn người dùng hợp lệ khỏi dữ
+        liệu họ có quyền đọc, nên danh sách mang cờ được ghim tường minh."""
+        loaded = load_builtin_reports()
+        demanding = {
+            definition.code
+            for definition in loaded.manifest.definitions
+            if definition.requires_full_branch_scope
+        }
+        assert demanding == {"doi-chieu-ngan-hang"}

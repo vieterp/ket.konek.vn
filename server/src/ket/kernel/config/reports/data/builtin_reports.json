@@ -1519,7 +1519,8 @@
       "layout_code": "trial-balance",
       "param_set_code": "trial_balance_params",
       "ledger_scope": "both",
-      "package_scheme": "TT133"
+      "package_scheme": "TT133",
+      "required_permission_module": "general_ledger"
     },
     {
       "code": "du-bao-dong-tien",
@@ -1635,7 +1636,8 @@
       "param_set_code": "bank_reconciliation_params",
       "ledger_scope": "financial",
       "package_scheme": null,
-      "required_permission_module": "bank"
+      "required_permission_module": "bank",
+      "requires_full_branch_scope": true
     },
     {
       "code": "bang-ke-so-du-ngan-hang",

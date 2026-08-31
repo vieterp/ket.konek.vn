@@ -56,6 +56,9 @@ from ket.posting import integrity as integrity_registration
 from ket.posting import periods as periods_registration
 from ket.posting.balances import models as balance_models
 from ket.posting.documents import models as voucher_models
+from ket.posting.engine import (
+    dimension_recompute_job as dimension_recompute_registration,
+)
 from ket.posting.engine import models as gl_posting_models
 from ket.posting.opening_balances import models as opening_balance_models
 
@@ -84,6 +87,7 @@ __all__ = [
     "control_models",
     "currency_models",
     "dimension_models",
+    "dimension_recompute_registration",
     "excel_models",
     "gl_journal_models",
     "gl_posting_models",

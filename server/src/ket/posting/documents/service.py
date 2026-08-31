@@ -25,6 +25,7 @@ from ket.kernel.numbering.service import NumberingRule, NumberingService
 from ket.kernel.periods.models import AccountingPeriod
 from ket.kernel.periods.service import PeriodService
 from ket.posting.documents.models import EntryKind, Voucher, VoucherStatus
+from ket.posting.documents.registry import REFERENCE_GUARDS
 from ket.posting.documents.state_machine import VoucherAction, transition
 
 
@@ -132,6 +133,10 @@ class VoucherService:
         """
         voucher = self.require(voucher_id)
         self.ensure_editable(voucher)
+        # Cùng bộ guard với `PostingService.unpost`: FK RESTRICT của người tham
+        # chiếu cũng chặn được lượt xóa, nhưng bằng một `IntegrityError` không
+        # nói cho kế toán biết phải làm gì tiếp.
+        REFERENCE_GUARDS.check(self._session, voucher_id)
         # Xác nhận cạnh DELETE tồn tại cho trạng thái hiện tại — giữ mọi luật
         # chuyển ở một chỗ thay vì lặp phép so trạng thái ở đây.
         transition(VoucherStatus(voucher.status), VoucherAction.DELETE)

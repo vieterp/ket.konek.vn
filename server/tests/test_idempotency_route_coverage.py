@@ -115,6 +115,7 @@ def test_the_exemption_list_is_exactly_what_was_reviewed() -> None:
             # Lát 6D: nhập sao kê — khóa băm-nội-dung per-TK chặn nhân đôi
             # (409 duplicate), bền hơn khóa idempotency vì không hết hạn.
             "/api/v1/bank/statements/import",
+            "/api/v1/bank/statements/profiles",
             # Lát 6D: ba thao tác khớp ghi trạng thái của một tập dòng (cùng
             # họ gán vai trò): chạy lại cho ra đúng trạng thái đó hoặc 409,
             # không lần gửi lại nào tạo thêm bản ghi.

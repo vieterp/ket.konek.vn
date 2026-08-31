@@ -1433,6 +1433,19 @@ class ReportNotFoundError(DomainError):
     http_status: ClassVar[int] = 404
 
 
+class ReportBranchScopeError(DomainError):
+    """Báo cáo bật `requires_full_branch_scope` nhưng phạm vi người đọc hẹp hơn
+    công ty (lát 6G-2, M-4).
+
+    403 chứ không "trả về số ít hơn": báo cáo loại này so hai vế mà chỉ một vế
+    nằm dưới RLS (sổ ↔ sao kê), nên phạm vi hẹp không cắt bớt kết quả — nó
+    **phình phần lệch** đúng bằng phần bị giấu. Một con số sai mà trông hợp lý
+    thì tệ hơn hẳn một lời từ chối có lý do."""
+
+    error_code: ClassVar[str] = "report.scope_insufficient"
+    http_status: ClassVar[int] = 403
+
+
 class ReportParamsInvalidError(DomainError):
     """Tham số render không qua được bộ kiểm sinh từ `param_set.spec`
     (FR-RPT-002): thiếu tham số bắt buộc, sai kiểu, hoặc tham số lạ."""
@@ -1591,6 +1604,25 @@ class BankStatementNotFoundError(DomainError):
 
     error_code: ClassVar[str] = "bank_statement.not_found"
     http_status: ClassVar[int] = 404
+
+
+class BankStatementProfileNotFoundError(DomainError):
+    """Không tìm thấy hồ sơ định dạng sao kê được trỏ tới (lát 6G-2)."""
+
+    error_code: ClassVar[str] = "bank_statement_profile.not_found"
+    http_status: ClassVar[int] = 404
+
+
+class BankStatementProfileConflictError(DomainError):
+    """Hồ sơ đụng ràng buộc của bảng: trùng `(ngân hàng, tên)`, hoặc còn sao kê
+    đã nhập trỏ vào nên không xóa được (`ON DELETE RESTRICT`).
+
+    409 chứ không 422: cả hai đều là trạng thái đổi được — đổi tên, hoặc xóa
+    sao kê cũ trước. Câu chữ do nơi ném quyết định vì hai ca cần hai lời khuyên
+    khác nhau."""
+
+    error_code: ClassVar[str] = "bank_statement_profile.conflict"
+    http_status: ClassVar[int] = 409
 
 
 class BankStatementMatchStateError(DomainError):

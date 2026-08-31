@@ -49,7 +49,7 @@ from ket.kernel.errors import (
 from ket.kernel.periods.models import AccountingPeriod, FiscalYear
 from ket.kernel.periods.service import PeriodService
 from ket.kernel.persistence.unit_of_work import RequestScope
-from ket.kernel.security.models import Branch
+from ket.kernel.security.branch_scope import missing_scope_branch_ids
 from ket.posting.balances.models import BalanceRecalcQueue
 from ket.posting.documents.models import Voucher, VoucherStatus
 from ket.posting.opening_balances.models import OpeningBalance
@@ -241,11 +241,11 @@ class PeriodLockService:
 
         Chi nhánh ngừng hoạt động vẫn có phát sinh lịch sử và có thể còn dấu
         bẩn trong hàng đợi — loại nó khỏi phép kiểm là mở lại đúng lỗ hổng mà
-        phép kiểm này sinh ra để bịt. `branches` không bật RLS (xem
-        `security/models.py`) nên câu đếm này thấy đủ.
+        phép kiểm này sinh ra để bịt. Luật ấy nằm ở
+        `kernel.security.branch_scope` (dùng chung với cổng đối chiếu ngân
+        hàng); ở đây chỉ còn câu chữ báo lỗi riêng của khóa sổ.
         """
-        all_branch_ids = set(self._session.execute(select(Branch.id)).scalars().all())
-        missing = all_branch_ids - set(scope.branch_ids)
+        missing = missing_scope_branch_ids(self._session, scope)
         if missing:
             raise PeriodLockScopeError(
                 "Khóa sổ cần quyền trên mọi chi nhánh — phạm vi hiện tại còn thiếu",

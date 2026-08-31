@@ -57,12 +57,17 @@ from ket.kernel.errors import (
     AttachmentStorageNotConfiguredError,
     JobNotFoundError,
     PermissionDeniedError,
+    ReportBranchScopeError,
     ReportNotFoundError,
     ReportRenderNotReadyError,
 )
 from ket.kernel.jobs import queue
 from ket.kernel.jobs.models import Job, JobStatus
 from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.security.branch_scope import (
+    missing_scope_branch_ids,
+    scope_covers_every_branch,
+)
 from ket.kernel.security.permissions import module_view_codes
 from ket.reporting.engine import REPORT_EXPORT, REPORT_VIEW
 from ket.reporting.engine.engine import (
@@ -80,7 +85,9 @@ ReportViewer = Annotated[AuthorizedRequest, Depends(require_permission(REPORT_VI
 ReportExporter = Annotated[AuthorizedRequest, Depends(require_permission(REPORT_EXPORT))]
 
 
-def _require_module_access(authorized: AuthorizedRequest, definition: ReportDefinition) -> None:
+def _require_report_access(
+    session: Session, authorized: AuthorizedRequest, definition: ReportDefinition
+) -> None:
     """Cổng quyền PHỤ theo phân hệ của báo cáo (review 6E-1 H-1b).
 
     `reporting.report.view` trả lời "được dùng chức năng báo cáo không", KHÔNG
@@ -93,6 +100,7 @@ def _require_module_access(authorized: AuthorizedRequest, definition: ReportDefi
     BFF dòng tiền) — người chỉ được cấp quyền xem phiếu thu vẫn đọc được sổ quỹ.
     `required_permission_module IS NULL` = không cổng phụ.
     """
+    _require_full_branch_scope(session, authorized, definition)
     module = definition.required_permission_module
     if module is None:
         return
@@ -101,6 +109,26 @@ def _require_module_access(authorized: AuthorizedRequest, definition: ReportDefi
         raise PermissionDeniedError(
             f"Tài khoản không có quyền xem dữ liệu phân hệ {module!r}",
             permission=min(codes),
+        )
+
+
+def _require_full_branch_scope(
+    session: Session, authorized: AuthorizedRequest, definition: ReportDefinition
+) -> None:
+    """Cổng PHẠM VI (lát 6G-2, M-4) — khác cổng quyền ở trên: quyền trả lời
+    "được đọc phân hệ này không", phạm vi trả lời "con số có đúng không".
+
+    Chỉ báo cáo bật cờ mới bị chặn, và cờ nằm trong metadata nên phase sau chỉ
+    cần bật, không sửa hàm này."""
+    if not definition.requires_full_branch_scope:
+        return
+    missing = missing_scope_branch_ids(session, authorized.scope)
+    if missing:
+        raise ReportBranchScopeError(
+            f"Báo cáo {definition.code!r} chỉ đúng khi đọc mọi chi nhánh — phạm vi "
+            "hiện tại còn thiếu; nhờ người có phạm vi toàn đơn vị chạy",
+            report_code=definition.code,
+            missing_branch_ids=",".join(str(b) for b in sorted(missing)),
         )
 
 
@@ -118,11 +146,17 @@ def _require_job_module_access(session: Session, authorized: AuthorizedRequest, 
         definition, _spec = resolve_definition(session, code=code)
     except ReportNotFoundError as error:
         raise JobNotFoundError("Không tìm thấy tác vụ", job_id=str(job.id)) from error
-    _require_module_access(authorized, definition)
+    _require_report_access(session, authorized, definition)
 
 
-def _may_open(authorized: AuthorizedRequest, definition: ReportDefinition) -> bool:
-    """`_require_module_access` ở dạng trả lời thay vì dạng chặn."""
+def _may_open(
+    session: Session, authorized: AuthorizedRequest, definition: ReportDefinition
+) -> bool:
+    """`_require_report_access` ở dạng trả lời thay vì dạng chặn."""
+    if definition.requires_full_branch_scope and not scope_covers_every_branch(
+        session, authorized.scope
+    ):
+        return False
     module = definition.required_permission_module
     if module is None:
         return True
@@ -141,9 +175,9 @@ def get_reports(
         definitions = list_definitions(session, category=category, module=module)
         # Danh mục chỉ hiện báo cáo người dùng MỞ ĐƯỢC — cùng nguyên tắc
         # `Access.has` ("màn hình chỉ hiện việc người dùng bấm được"). Lọc ở
-        # đây không phải cổng an ninh (cổng nằm ở `_require_module_access` của
+        # đây không phải cổng an ninh (cổng nằm ở `_require_report_access` của
         # từng cửa); nó chỉ để danh mục không mời người ta bấm vào một 403.
-        visible = [item for item in definitions if _may_open(authorized, item)]
+        visible = [item for item in definitions if _may_open(session, authorized, item)]
         return ReportListResponse(
             reports=[ReportSummaryResponse.model_validate(item) for item in visible]
         )
@@ -159,7 +193,7 @@ def get_report_params(
     (FR-RPT-002; bộ chuẩn là hợp đồng cố định, xem `reports_schemas`)."""
     with unit_of_work(factory, authorized.scope) as session:
         definition, spec = resolve_definition(session, code=code)
-        _require_module_access(authorized, definition)
+        _require_report_access(session, authorized, definition)
         # Tham số ĐÃ GHIM không phải ô nhập (review 6E-1 M-2): client dựng form
         # từ đây, và vẽ một ô "Chiều tiền" bắt buộc cho Sổ Nhật ký thu tiền là
         # vẽ một ô mà mọi giá trị khác `thu` đều 422 — giá trị đã nằm trong
@@ -208,7 +242,7 @@ def preview(
             user_id=authorized.scope.user_id,
             include_logo=False,
         )
-        _require_module_access(authorized, resolve_definition(session, code=code)[0])
+        _require_report_access(session, authorized, resolve_definition(session, code=code)[0])
         result = preview_report(session, code=code, raw_params=body.params, options=options)
         return ReportPreviewResponse(
             code=result.code,
@@ -277,7 +311,7 @@ def render(
     render đồng bộ giữ transaction + RAM suốt lượt chạy).
     """
     with unit_of_work(factory, authorized.scope) as session:
-        _require_module_access(authorized, resolve_definition(session, code=code)[0])
+        _require_report_access(session, authorized, resolve_definition(session, code=code)[0])
         estimated = estimate_report_rows(session, code=code, raw_params=body.params)
         threshold_key = (
             REPORT_PDF_JOB_THRESHOLD_KEY if body.format == "pdf" else REPORT_XLSX_JOB_THRESHOLD_KEY

@@ -393,6 +393,12 @@ export interface paths {
          * Match Statement Line
          * @description Khớp tay một dòng với một chứng từ — vẫn đòi đúng tài khoản, đúng chiều,
          *     đúng số tiền; chỉ cửa sổ ngày là không giới hạn.
+         *
+         *     Từ 6G-2 cũng đòi phạm vi công ty như khớp tự động (M-4): 6D để ngỏ cửa này
+         *     vì "người dùng chỉ chọn được thứ mình thấy", nhưng thứ họ *không* thấy mới
+         *     là vấn đề — khớp một dòng vào chứng từ chi nhánh mình trong khi chứng từ
+         *     đúng nằm ở chi nhánh bị RLS giấu là một cặp khớp SAI, và nó khóa luôn dòng
+         *     ấy khỏi lượt khớp đúng sau này.
          */
         post: operations["match_statement_line_api_v1_bank_statements_lines__line_id__actions_match_post"];
         delete?: never;
@@ -459,8 +465,69 @@ export interface paths {
          */
         get: operations["list_statement_profiles_api_v1_bank_statements_profiles_get"];
         put?: never;
+        /**
+         * Create Statement Profile
+         * @description Khai một cách đọc sao kê mới cho một ngân hàng (RT-26).
+         *
+         *     Quyền `bank.statement_profile.*` riêng khỏi `bank.statement.*`: nhập sao kê
+         *     là việc hằng ngày của kế toán, còn sửa cách đọc tệp là việc đổi **luật diễn
+         *     giải mọi lượt nhập sau đó** — một dấu thập phân gõ nhầm ở đây làm mọi con
+         *     số sai gấp trăm lần mà không dòng nào báo đỏ.
+         */
+        post: operations["create_statement_profile_api_v1_bank_statements_profiles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/statements/profiles/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List All Statement Profiles
+         * @description Mọi hồ sơ định dạng, trọn cột — thân của màn KHAI hồ sơ (lát 6G-2).
+         *
+         *     Khác `/statements/profiles` ở hai điểm và cả hai đều cố ý: không lọc theo
+         *     tài khoản (màn khai làm việc theo NGÂN HÀNG, không theo tài khoản), và trả
+         *     đủ cột cách-đọc-tệp.
+         */
+        get: operations["list_all_statement_profiles_api_v1_bank_statements_profiles_all_get"];
+        put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/statements/profiles/{profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Statement Profile
+         * @description Sửa trọn bộ một hồ sơ (PUT thay-trọn-bộ, cùng khuôn chứng từ).
+         */
+        put: operations["update_statement_profile_api_v1_bank_statements_profiles__profile_id__put"];
+        post?: never;
+        /**
+         * Delete Statement Profile
+         * @description Xóa một hồ sơ.
+         *
+         *     Sao kê đã nhập giữ `profile_id` với `ON DELETE RESTRICT`, nên hồ sơ từng
+         *     dùng thì không xóa được — dịch `IntegrityError` thành 409 đọc được thay vì
+         *     để 500 rơi ra, cùng lối `_flush_profile`.
+         */
+        delete: operations["delete_statement_profile_api_v1_bank_statements_profiles__profile_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -504,10 +571,12 @@ export interface paths {
          * @description Khớp tự động (FR-BNK-030): cùng chiều + cùng số tiền + ngày ±3, ưu tiên
          *     trùng số tham chiếu; ứng viên nhập nhằng để lại cho khớp tay.
          *
-         *     Đòi phạm vi MỌI chi nhánh (review 6D, M-1): ứng viên là chứng từ dưới RLS
-         *     chi nhánh, còn sao kê là dữ liệu mức tài khoản — phạm vi hẹp làm máy không
-         *     thấy ứng viên đúng và khớp nhầm ứng viên duy nhất còn lại một cách tất
-         *     định. Khớp TAY không bị chặn: người dùng chỉ chọn được thứ mình thấy.
+         *     Đòi phạm vi MỌI chi nhánh — từ lát 6G-2 là luật của **cả** phân hệ đối
+         *     chiếu, không riêng đường tự động (M-4). Lý do gốc (review 6D, M-1) vẫn
+         *     đứng: ứng viên là chứng từ dưới RLS chi nhánh, còn sao kê là dữ liệu mức
+         *     tài khoản (tài khoản dùng chung không mang chi nhánh), nên phạm vi hẹp làm
+         *     máy không thấy ứng viên đúng và khớp nhầm ứng viên duy nhất còn lại một
+         *     cách tất định.
          */
         post: operations["auto_match_statement_api_v1_bank_statements__statement_id__actions_auto_match_post"];
         delete?: never;
@@ -7435,6 +7504,15 @@ export interface components {
             parent_id: number | null;
         };
         /**
+         * AmountSignRule
+         * @description Cách hiểu **dấu** của một cột số tiền gộp.
+         *
+         *     Chỉ có nghĩa khi hồ sơ dùng **một** cột số tiền. Sao kê hai cột (nợ/có) tự
+         *     nó đã nói chiều tiền, nên `sign_rule` phải để trống ở đó — có `CHECK` canh.
+         * @enum {string}
+         */
+        AmountSignRule: "signed" | "debit_positive";
+        /**
          * AssetTypesCreateRequest
          * @description Loại tài sản cố định — tạo mới.
          */
@@ -7782,6 +7860,98 @@ export interface components {
              */
             statement_date: string;
         };
+        /** BankStatementProfileDetailListResponse */
+        BankStatementProfileDetailListResponse: {
+            /** Items */
+            items: components["schemas"]["BankStatementProfileDetailOut"][];
+        };
+        /**
+         * BankStatementProfileDetailOut
+         * @description Trọn hồ sơ — thân của màn KHAI hồ sơ (lát 6G-2).
+         *
+         *     Tách khỏi `BankStatementProfileOut` chứ không mở rộng nó: ô chọn hồ sơ trên
+         *     màn nhập sao kê chỉ cần `id`/`name`, và bơm hai chục cột cách-đọc-tệp vào
+         *     mọi lượt tải màn ấy là trả tiền cho thứ không ai đọc.
+         */
+        BankStatementProfileDetailOut: {
+            /** Amount Col */
+            amount_col: string | null;
+            /** Balance Col */
+            balance_col: string | null;
+            /** Bank Id */
+            bank_id: number;
+            /** Credit Col */
+            credit_col: string | null;
+            /** Csv Delimiter */
+            csv_delimiter: string | null;
+            /** Date Col */
+            date_col: string;
+            /** Date Format */
+            date_format: string;
+            /** Debit Col */
+            debit_col: string | null;
+            /** Decimal Sep */
+            decimal_sep: string;
+            /** Description Col */
+            description_col: string | null;
+            /** File Kind */
+            file_kind: string;
+            /** Header Row */
+            header_row: number;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Ref Col */
+            ref_col: string | null;
+            /** Row Version */
+            row_version: number;
+            /** Sign Rule */
+            sign_rule: string | null;
+            /** Thousand Sep */
+            thousand_sep: string | null;
+        };
+        /**
+         * BankStatementProfileIn
+         * @description Thân khai/sửa một hồ sơ.
+         *
+         *     Không kiểm chéo ở đây (một-trong-hai hình dạng cột tiền, ba dấu phải khác
+         *     nhau đôi một): những luật ấy là `CHECK` trên bảng từ lát 3C-2, và nhân đôi
+         *     chúng ở tầng schema là nhận hai bản có thể trôi khỏi nhau. Tầng này chỉ
+         *     canh kiểu và độ dài — thứ DB trả về dưới dạng lỗi khó đọc.
+         */
+        BankStatementProfileIn: {
+            /** Amount Col */
+            amount_col?: string | null;
+            /** Balance Col */
+            balance_col?: string | null;
+            /** Bank Id */
+            bank_id: number;
+            /** Credit Col */
+            credit_col?: string | null;
+            /** Csv Delimiter */
+            csv_delimiter?: string | null;
+            /** Date Col */
+            date_col: string;
+            /** Date Format */
+            date_format: string;
+            /** Debit Col */
+            debit_col?: string | null;
+            /** Decimal Sep */
+            decimal_sep: string;
+            /** Description Col */
+            description_col?: string | null;
+            file_kind: components["schemas"]["StatementFileKind"];
+            /** Header Row */
+            header_row: number;
+            /** Name */
+            name: string;
+            /** Ref Col */
+            ref_col?: string | null;
+            sign_rule?: components["schemas"]["AmountSignRule"] | null;
+            /** Thousand Sep */
+            thousand_sep?: string | null;
+        };
         /** BankStatementProfileListResponse */
         BankStatementProfileListResponse: {
             /** Items */
@@ -7799,6 +7969,44 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+        };
+        /**
+         * BankStatementProfileUpdateIn
+         * @description Sửa = khai + số phiên bản dòng (khóa lạc quan, cùng khuôn danh mục).
+         */
+        BankStatementProfileUpdateIn: {
+            /** Amount Col */
+            amount_col?: string | null;
+            /** Balance Col */
+            balance_col?: string | null;
+            /** Bank Id */
+            bank_id: number;
+            /** Credit Col */
+            credit_col?: string | null;
+            /** Csv Delimiter */
+            csv_delimiter?: string | null;
+            /** Date Col */
+            date_col: string;
+            /** Date Format */
+            date_format: string;
+            /** Debit Col */
+            debit_col?: string | null;
+            /** Decimal Sep */
+            decimal_sep: string;
+            /** Description Col */
+            description_col?: string | null;
+            file_kind: components["schemas"]["StatementFileKind"];
+            /** Header Row */
+            header_row: number;
+            /** Name */
+            name: string;
+            /** Ref Col */
+            ref_col?: string | null;
+            /** Row Version */
+            row_version: number;
+            sign_rule?: components["schemas"]["AmountSignRule"] | null;
+            /** Thousand Sep */
+            thousand_sep?: string | null;
         };
         /**
          * BankVoucherIn
@@ -10759,8 +10967,10 @@ export interface components {
         MatchCandidateOut: {
             /** Description */
             description: string | null;
+            /** Document Type */
+            document_type: string;
             /** Kind */
-            kind: number;
+            kind: number | null;
             /** Net Fc */
             net_fc: string;
             /**
@@ -12247,6 +12457,12 @@ export interface components {
             /** Value */
             value: string;
         };
+        /**
+         * StatementFileKind
+         * @description Dạng tệp mà ngân hàng phát ra.
+         * @enum {string}
+         */
+        StatementFileKind: "xlsx" | "csv" | "mt940";
         /** StatementLayoutListResponse */
         StatementLayoutListResponse: {
             /** Layouts */
@@ -13576,6 +13792,132 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BankStatementProfileListResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_statement_profile_api_v1_bank_statements_profiles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BankStatementProfileIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementProfileDetailOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_all_statement_profiles_api_v1_bank_statements_profiles_all_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementProfileDetailListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_statement_profile_api_v1_bank_statements_profiles__profile_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BankStatementProfileUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementProfileDetailOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_statement_profile_api_v1_bank_statements_profiles__profile_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {

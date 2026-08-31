@@ -38,6 +38,7 @@ from ket.kernel.money import convert_currency
 from ket.kernel.periods.models import AccountingPeriod, FiscalYear
 from ket.posting.balances.recalc_queue import mark_dirty
 from ket.posting.documents.models import Voucher, VoucherStatus
+from ket.posting.documents.registry import REFERENCE_GUARDS
 from ket.posting.documents.state_machine import VoucherAction, transition_to
 from ket.posting.engine.guards import run_guards
 from ket.posting.engine.models import GlPosting, Ledger, PostingDimensionValue
@@ -150,6 +151,9 @@ class PostingService:
         phase-04 §Bảng phát sinh chung. Kỳ đã khóa thì không tới được đây.
         """
         voucher = self._require_voucher(voucher_id)
+        # Ai đó còn trỏ vào chứng từ này? (dòng sao kê đã khớp, …). Kiểm ở ĐÂY
+        # chứ không ở router: service của từng module cũng gọi thẳng hàm này.
+        REFERENCE_GUARDS.check(self._session, voucher_id)
         period, year = self._share_lock_period(voucher.period_id)
         if period.locked_at is not None or year.is_closed:
             raise PostingValidationError(

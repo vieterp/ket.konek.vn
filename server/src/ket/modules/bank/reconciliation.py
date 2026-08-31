@@ -29,7 +29,7 @@ from decimal import Decimal
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, exists, func, select
+from sqlalchemy import ColumnElement, Row, Select, exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -43,6 +43,7 @@ from ket.kernel.errors import (
     BankStatementNotFoundError,
 )
 from ket.kernel.money import ZERO
+from ket.kernel.persistence.constraints import violated_constraint
 from ket.modules.bank.models import (
     BankStatement,
     BankStatementLine,
@@ -66,7 +67,12 @@ class MatchCandidate:
     voucher_id: UUID
     voucher_no: str
     posting_date: date
-    kind: int
+    document_type: str
+    """Mã loại chứng từ (`vouchers.document_type`) — từ 6G-2 bàn khớp nhận MỌI
+    loại chạm 112x, nên nhãn dòng không suy được từ riêng phân hệ ngân hàng."""
+    kind: int | None
+    """Loại chứng từ tiền gửi (BC/UNC/SEC/CTNB), `None` với chứng từ ngoài phân
+    hệ ngân hàng — phiếu quỹ nộp/rút tiền, bút toán GLE chạm 112."""
     reference_no: str | None
     description: str | None
     net_fc: Decimal
@@ -104,6 +110,74 @@ def _attribution_filter(bank_account_id: int) -> ColumnElement[bool]:
     return GlPosting.bank_account_id == bank_account_id
 
 
+_CANDIDATE_COLUMNS = (
+    Voucher.id,
+    Voucher.voucher_no,
+    Voucher.posting_date,
+    Voucher.document_type,
+    Voucher.description,
+    BankVoucher.kind,
+    BankVoucher.reference_no,
+)
+"""Bộ cột định danh một ứng viên — cũng đúng là bộ `GROUP BY`, vì `net_fc` là
+hàm gộp duy nhất. Giữ một bản để hai đường (`unmatched_vouchers` và
+`_candidate_of`) không trôi khỏi nhau."""
+
+
+_CandidateRow = tuple[UUID, str, date, str, str | None, int, str | None, Decimal]
+"""Hình dạng một dòng ứng viên. `kind` khai `int` vì đó là kiểu CỘT
+(`bank_vouchers.kind` NOT NULL), nhưng `outerjoin` trả `None` cho chứng từ
+ngoài phân hệ ngân hàng — `MatchCandidate.kind` vì thế mới là `int | None`.
+Chênh lệch này là chênh lệch có thật giữa kiểu tĩnh của cột và kết quả một
+phép nối ngoài, không phải một chỗ ép kiểu cho qua chuyện."""
+
+
+def _candidate_query() -> Select[_CandidateRow]:
+    """Khung truy vấn ứng viên dùng chung.
+
+    `outerjoin(BankVoucher)` chứ không `join` (lát 6G-2, M-3): bàn khớp nhận
+    **mọi** chứng từ có phát sinh 112x quy về tài khoản này, không riêng bốn
+    loại của phân hệ ngân hàng. Phiếu quỹ nộp tiền vào ngân hàng và bút toán
+    GLE chạm 112 có mặt trên sao kê y như ủy nhiệm chi; để chúng ngoài bàn khớp
+    là để dòng sao kê của chúng đứng "chưa khớp" **vĩnh viễn** và làm chênh
+    lệch FR-BNK-031 lớn dần theo thời gian — chính thứ 6G-1 vừa làm tệ thêm khi
+    đưa hai loại ấy vào vế sổ.
+
+    Sổ tài chính + tiền tố TK 112 + chiều `bank_account_id`: ba điều kiện này
+    là định nghĩa "tiền qua tài khoản X", không phải đặc tính của phân hệ nào.
+    """
+    return (
+        select(
+            *_CANDIDATE_COLUMNS,
+            func.sum(GlPosting.debit_fc - GlPosting.credit_fc).label("net_fc"),
+        )
+        .outerjoin(BankVoucher, BankVoucher.id == Voucher.id)
+        .join(GlPosting, GlPosting.voucher_id == Voucher.id)
+        .join(ChartOfAccount, ChartOfAccount.id == GlPosting.account_id)
+        .where(
+            Voucher.status == VoucherStatus.DA_GHI_SO,
+            # Sao kê đối chiếu với SỔ TÀI CHÍNH: hai sổ ghi cùng dòng tiền
+            # (LD-07), cộng cả hai là nhân đôi số tiền qua tài khoản.
+            GlPosting.ledger == Ledger.FINANCIAL,
+            ChartOfAccount.code.like(f"{_DEPOSIT_PREFIX}%"),
+        )
+        .group_by(*_CANDIDATE_COLUMNS)
+    )
+
+
+def _candidate_from_row(row: Row[_CandidateRow]) -> MatchCandidate:
+    return MatchCandidate(
+        voucher_id=row.id,
+        voucher_no=row.voucher_no,
+        posting_date=row.posting_date,
+        document_type=row.document_type,
+        kind=row.kind,
+        reference_no=row.reference_no,
+        description=row.description,
+        net_fc=row.net_fc,
+    )
+
+
 def unmatched_vouchers(
     session: Session,
     *,
@@ -111,9 +185,9 @@ def unmatched_vouchers(
     date_from: date | None = None,
     date_to: date | None = None,
 ) -> tuple[MatchCandidate, ...]:
-    """Chứng từ tiền gửi đã ghi sổ, chưa khớp dòng sao kê nào, có tiền ròng
-    qua tài khoản này — dưới phạm vi RLS của session (chi nhánh ngoài phạm vi
-    không hiện ra, cùng bài 6C H-1)."""
+    """Chứng từ đã ghi sổ, chưa khớp dòng sao kê nào, có tiền ròng qua tài
+    khoản này — dưới phạm vi RLS của session (chi nhánh ngoài phạm vi không
+    hiện ra, cùng bài 6C H-1)."""
     already_matched = exists(
         select(BankStatementLine.id).where(
             BankStatementLine.matched_voucher_id == Voucher.id,
@@ -123,35 +197,8 @@ def unmatched_vouchers(
         )
     )
     query = (
-        select(
-            Voucher.id,
-            Voucher.voucher_no,
-            Voucher.posting_date,
-            Voucher.description,
-            BankVoucher.kind,
-            BankVoucher.reference_no,
-            func.sum(GlPosting.debit_fc - GlPosting.credit_fc).label("net_fc"),
-        )
-        .join(BankVoucher, BankVoucher.id == Voucher.id)
-        .join(GlPosting, GlPosting.voucher_id == Voucher.id)
-        .join(ChartOfAccount, ChartOfAccount.id == GlPosting.account_id)
-        .where(
-            Voucher.status == VoucherStatus.DA_GHI_SO,
-            # Sao kê đối chiếu với SỔ TÀI CHÍNH: hai sổ ghi cùng dòng tiền
-            # (LD-07), cộng cả hai là nhân đôi số tiền qua tài khoản.
-            GlPosting.ledger == Ledger.FINANCIAL,
-            ChartOfAccount.code.like(f"{_DEPOSIT_PREFIX}%"),
-            _attribution_filter(bank_account_id),
-            ~already_matched,
-        )
-        .group_by(
-            Voucher.id,
-            Voucher.voucher_no,
-            Voucher.posting_date,
-            Voucher.description,
-            BankVoucher.kind,
-            BankVoucher.reference_no,
-        )
+        _candidate_query()
+        .where(_attribution_filter(bank_account_id), ~already_matched)
         .order_by(Voucher.posting_date, Voucher.voucher_no)
     )
     if date_from is not None:
@@ -159,19 +206,7 @@ def unmatched_vouchers(
     if date_to is not None:
         query = query.where(Voucher.posting_date <= date_to)
     rows = session.execute(query).all()
-    return tuple(
-        MatchCandidate(
-            voucher_id=row.id,
-            voucher_no=row.voucher_no,
-            posting_date=row.posting_date,
-            kind=row.kind,
-            reference_no=row.reference_no,
-            description=row.description,
-            net_fc=row.net_fc,
-        )
-        for row in rows
-        if row.net_fc != ZERO
-    )
+    return tuple(_candidate_from_row(row) for row in rows if row.net_fc != ZERO)
 
 
 def _line_amount(line: BankStatementLine) -> Decimal:
@@ -261,6 +296,14 @@ def ensure_not_matched_to_statement(session: Session, *, voucher_id: UUID) -> No
     rồi ghi sổ lại — vòng qua trọn luật khớp-bằng-tuyệt-đối. Gọi từ CẢ HAI
     cửa: hook `after_unpost` của endpoint hành động chung, và
     `BankVoucherService.unpost` (đường dịch vụ).
+
+    Từ lát 6G-2 phải chạy cho **mọi phân hệ có thể khớp**, không riêng chứng từ
+    tiền gửi (M-3): bàn khớp nay nhận phiếu quỹ nộp/rút tiền và bút toán GLE
+    chạm 112, nên hai phân hệ ấy cũng phải gọi guard này ở hook `after_unpost`
+    và `before_delete` của chúng — "một guard, mọi cửa". Hàm nằm ở module
+    `bank` vì bảng `bank_statement_lines` thuộc về nó; hai module kia gọi qua
+    `ket.modules.bank.ensure_voucher_not_matched_to_statement` (đường công khai
+    của module, không import thẳng tệp con).
     """
     matched = session.execute(
         select(BankStatementLine.id)
@@ -320,7 +363,7 @@ def match_line(session: Session, *, line_id: UUID, voucher_id: UUID) -> None:
     )
     if candidate is None:
         raise BankStatementMatchInvalidError(
-            "Chứng từ không phải chứng từ tiền gửi đã ghi sổ của tài khoản này",
+            "Chứng từ không có phát sinh tiền gửi đã ghi sổ trên tài khoản này",
             voucher_id=str(voucher_id),
         )
     if candidate.net_fc != amount:
@@ -355,19 +398,11 @@ def _flush_matches(session: Session) -> None:
     try:
         session.flush()
     except IntegrityError as error:
-        if _violated_constraint(error) != MATCHED_VOUCHER_UNIQUE_INDEX:
+        if violated_constraint(error) != MATCHED_VOUCHER_UNIQUE_INDEX:
             raise
         raise BankStatementMatchStateError(
             "Một lượt khớp khác vừa lấy mất chứng từ — tải lại màn hình đối chiếu rồi thử lại"
         ) from error
-
-
-def _violated_constraint(error: IntegrityError) -> str | None:
-    """Tên ràng buộc bị vi phạm, `None` khi driver không nói (không phải psycopg,
-    hoặc lỗi không mang `diag`)."""
-    diagnostic = getattr(error.orig, "diag", None)
-    name = getattr(diagnostic, "constraint_name", None)
-    return name if isinstance(name, str) else None
 
 
 def _candidate_of(
@@ -376,45 +411,11 @@ def _candidate_of(
     """Ứng viên hóa MỘT chứng từ — cùng truy vấn với `unmatched_vouchers` nhưng
     không loại trừ đã-khớp (người gọi tự kiểm để trả 409 thay vì 422)."""
     row = session.execute(
-        select(
-            Voucher.id,
-            Voucher.voucher_no,
-            Voucher.posting_date,
-            Voucher.description,
-            BankVoucher.kind,
-            BankVoucher.reference_no,
-            func.sum(GlPosting.debit_fc - GlPosting.credit_fc).label("net_fc"),
-        )
-        .join(BankVoucher, BankVoucher.id == Voucher.id)
-        .join(GlPosting, GlPosting.voucher_id == Voucher.id)
-        .join(ChartOfAccount, ChartOfAccount.id == GlPosting.account_id)
-        .where(
-            Voucher.id == voucher_id,
-            Voucher.status == VoucherStatus.DA_GHI_SO,
-            GlPosting.ledger == Ledger.FINANCIAL,
-            ChartOfAccount.code.like(f"{_DEPOSIT_PREFIX}%"),
-            _attribution_filter(bank_account_id),
-        )
-        .group_by(
-            Voucher.id,
-            Voucher.voucher_no,
-            Voucher.posting_date,
-            Voucher.description,
-            BankVoucher.kind,
-            BankVoucher.reference_no,
-        )
+        _candidate_query().where(Voucher.id == voucher_id, _attribution_filter(bank_account_id))
     ).one_or_none()
     if row is None or row.net_fc == ZERO:
         return None
-    return MatchCandidate(
-        voucher_id=row.id,
-        voucher_no=row.voucher_no,
-        posting_date=row.posting_date,
-        kind=row.kind,
-        reference_no=row.reference_no,
-        description=row.description,
-        net_fc=row.net_fc,
-    )
+    return _candidate_from_row(row)
 
 
 def unmatch_line(session: Session, *, line_id: UUID) -> None:

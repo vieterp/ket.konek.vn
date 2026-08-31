@@ -49,6 +49,7 @@ import {
   CountSheetPage,
   ReconciliationDetailPage,
   ReconciliationPage,
+  StatementProfilePage,
   TreasurerCashBookPage,
   TreasurerQueuePage,
 } from '@/features/tien-vao-tien-ra'
@@ -115,6 +116,7 @@ const tienVaoTienRaRoutes: RouteObject[] = [
       { path: 'doi-chieu/:id', element: <ReconciliationDetailPage /> },
       { path: 'thu-quy', element: <TreasurerQueuePage /> },
       { path: 'thu-quy/so-quy', element: <TreasurerCashBookPage /> },
+      { path: 'ho-so-sao-ke', element: <StatementProfilePage /> },
     ],
   },
 ]

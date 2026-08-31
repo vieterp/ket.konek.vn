@@ -14,10 +14,11 @@ from __future__ import annotations
 
 from ket.posting.documents.models import EntryKind, Voucher, VoucherStatus
 from ket.posting.documents.registry import (
-    REGISTRY as POSTING_DOCUMENT_REGISTRY,
+    REFERENCE_GUARDS,
+    PostingDocumentType,
 )
 from ket.posting.documents.registry import (
-    PostingDocumentType,
+    REGISTRY as POSTING_DOCUMENT_REGISTRY,
 )
 from ket.posting.documents.service import VoucherDraft, VoucherService
 from ket.posting.documents.state_machine import VoucherAction
@@ -42,6 +43,7 @@ __all__ = [
     "GUARD_REGISTRY",
     "GUARD_WARNING_DETAIL",
     "POSTING_DOCUMENT_REGISTRY",
+    "REFERENCE_GUARDS",
     "EntryKind",
     "ExtendedDimensionValue",
     "GuardFinding",

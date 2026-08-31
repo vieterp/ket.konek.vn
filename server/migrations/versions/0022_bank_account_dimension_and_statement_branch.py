@@ -48,8 +48,13 @@ dùng chung toàn công ty) chứ không phải chi nhánh của người nhập
 CỦA tài khoản, và hai nguồn sự thật cho cùng một câu hỏi là hai nguồn sẽ lệch.
 Policy vì thế `allow_null_branch=True`, cùng khuôn `audit_log` của 0001.
 
-Bước dữ liệu `_refresh_builtin_data` CHUYỂN TỪ 0021 sang đây: ba dataset báo
-cáo giờ đọc cột `gl_postings.bank_account_id`, mà `refresh_builtin_reports`
+Bước dữ liệu `_refresh_builtin_data` từng ở đây (chuyển 0021 → 0022 ở lát
+6G-1) đã CHUYỂN TIẾP sang `0023`, đúng doctrine "bước làm mới đứng ở CUỐI
+chuỗi": lát 6G-2 thêm cột `report_definitions.requires_full_branch_scope` mà
+chính dữ liệu builtin ghi vào — để bước dữ liệu ở lại đây thì lượt nâng cấp nổ
+tại 0022, trước khi cột kịp tồn tại. Ghi chú gốc giữ nguyên vì lý do của nó vẫn
+đúng: ba dataset báo cáo đọc cột `gl_postings.bank_account_id`, mà
+`refresh_builtin_reports`
 probe SQL đóng gói HIỆN TẠI — để nó ở 0021 thì lượt nâng cấp nổ ngay tại 0021,
 trước khi cột kịp tồn tại. Doctrine từ 6B, lần thứ tư áp dụng.
 """
@@ -59,11 +64,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import context, op
+from alembic import op
 
-from ket.kernel.config.printing.seed import ensure_builtin_print_templates
-from ket.kernel.config.reports.seed import refresh_builtin_reports
-from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 from ket.kernel.security.rls import enable_branch_rls_statements
 
 revision: str = "0022"
@@ -81,7 +83,6 @@ def upgrade() -> None:
     _backfill_bank_account_dimension()
     _enable_bank_account_tracking()
     _add_statement_branch()
-    _refresh_builtin_data()
 
 
 def _add_bank_account_dimension() -> None:
@@ -211,28 +212,6 @@ def _add_statement_branch() -> None:
         # chi nhánh — cùng đối xử với sự kiện mức hệ thống ở `audit_log`.
         for statement in enable_branch_rls_statements(table, allow_null_branch=True):
             op.execute(statement)
-
-
-def _target_schema() -> str:
-    schema = context.config.attributes.get(ALEMBIC_SCHEMA_ATTRIBUTE)
-    if not isinstance(schema, str):
-        raise RuntimeError(
-            f"Không xác định được schema đích: `{ALEMBIC_SCHEMA_ATTRIBUTE}` chưa được "
-            "`migrations/env.py` ghi vào Config.attributes"
-        )
-    return schema
-
-
-def _refresh_builtin_data() -> None:
-    """Làm mới metadata báo cáo + mẫu in builtin — CHUYỂN TỪ 0021 (xem docstring
-    đầu tệp). Chỉ chạy online, cùng lý do với bản gốc: bước dữ liệu đọc-rồi-ghi
-    không diễn đạt được thành SQL tĩnh của `upgrade --sql`."""
-    if context.is_offline_mode():
-        return
-    schema = _target_schema()
-    connection = op.get_bind()
-    refresh_builtin_reports(connection, schema)
-    ensure_builtin_print_templates(connection, schema)
 
 
 def downgrade() -> None:

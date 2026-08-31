@@ -6,8 +6,9 @@ Ba lời hứa mới của lát:
   tệ phải khớp tiền tệ TK ngân hàng, TK kế toán phải nhóm 112; TK 112 nhập ở
   sheet Số dư tài khoản chỉ còn là CẢNH BÁO (dữ liệu trước 6D vẫn đọc được).
 * Carry-forward giữ nhóm 1 qua năm VÀ chia phát sinh 112 theo TK ngân hàng
-  (qua `DepositMovementSource` module bank cài); phát sinh 112 không qua chứng
-  từ tiền gửi (GLE gõ thẳng) ở lại nhóm 0 — không bịa chủ tài khoản.
+  (đọc thẳng chiều `gl_postings.bank_account_id` từ 6G-1; Protocol
+  `DepositMovementSource` của bản 6D đã bị xóa ở 6G-2 khi mất người gọi cuối);
+  dòng 112 không quy được chủ tài khoản ở lại nhóm 0 — không bịa chủ.
 """
 
 from __future__ import annotations

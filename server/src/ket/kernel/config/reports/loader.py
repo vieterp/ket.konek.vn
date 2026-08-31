@@ -88,6 +88,10 @@ class DefinitionEntry(_ManifestModel):
     `ReportDefinition.required_permission_module`. Kiểm ở
     `_assert_permission_module_known`."""
 
+    requires_full_branch_scope: bool = False
+    """Đòi phạm vi mọi chi nhánh — xem
+    `ReportDefinition.requires_full_branch_scope`."""
+
     fixed_params: dict[str, object] = Field(default_factory=dict)
     """Tham số ghim `{tên: giá trị}` — xem `ReportDefinition.fixed_params`. Tên
     phải là tham số đã khai trong `param_set_code` và giá trị phải đúng kiểu

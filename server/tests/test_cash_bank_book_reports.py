@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from bank_support import ensure_company_bank_account, seed_bank_package_data
 from cash_book_support import seed_cash_book_package_data
-from catalog_api_support import UserFactory, actor, ensure_role
+from catalog_api_support import UserFactory, actor, all_branch_codes, ensure_role
 from conftest import api_test_client
 from ket.api.dependencies import BRANCH_HEADER
 from ket.kernel.config.catalog import TREASURER_ENABLED_KEY
@@ -46,7 +46,12 @@ from ket.modules.cash_book.schemas import CashVoucherIn, CashVoucherLineIn
 from ket.modules.cash_book.service import CashVoucherService
 from ket.modules.warehousing.treasurer.queue_service import book_vouchers
 from ket.settings import Settings
-from posting_support import PostingContext, posting_scope, seed_posting_context
+from posting_support import (
+    PostingContext,
+    ensure_second_branch,
+    posting_scope,
+    seed_posting_context,
+)
 
 pytestmark = pytest.mark.db
 
@@ -399,6 +404,57 @@ def preview(
     return run
 
 
+@pytest.fixture
+def preview_company_wide(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    test_password: str,
+    context: PostingContext,
+    report_role: str,
+) -> Preview:
+    """`preview` với phạm vi TOÀN ĐƠN VỊ — bắt buộc cho `doi-chieu-ngan-hang`.
+
+    Báo cáo ấy bật `requires_full_branch_scope` từ lát 6G-2 (M-4): nó so sao kê
+    (mức tài khoản, không mang chi nhánh) với sổ (dưới RLS chi nhánh), nên đọc
+    dưới phạm vi hẹp cho ra phần lệch lớn hơn thật. Cổng trả 403, và bài kiểm
+    phải đi qua cổng bằng phạm vi đúng chứ không bằng cách gỡ cổng.
+
+    `ensure_second_branch` gọi tường minh: `dataset_alpha` dùng chung, chạy
+    RIÊNG tệp này thì có thể chỉ một chi nhánh — lúc đó "hẹp" và "toàn đơn vị"
+    là cùng một tập và bài kiểm xanh vì lý do khác lý do nó viết ra.
+    """
+    ensure_second_branch(session_factory, dataset_alpha)
+    headers = {
+        **actor(
+            client,
+            session_factory,
+            dataset_alpha,
+            user_factory,
+            report_role,
+            "doi_chieu_toan_don_vi",
+            test_password,
+            branch_codes=all_branch_codes(session_factory, dataset_alpha),
+        ),
+        BRANCH_HEADER: str(context.branch_id),
+    }
+
+    def run(code: str, **params: object) -> PreviewResult:
+        body = {
+            "params": {
+                "from_date": OCT_05.isoformat(),
+                "to_date": OCT_31.isoformat(),
+                **params,
+            }
+        }
+        response = client.post(f"/api/v1/reports/{code}/preview", json=body, headers=headers)
+        assert response.status_code == 200, response.text
+        return PreviewResult(response.json())
+
+    return run
+
+
 class TestPinnedFormsShareADataset:
     def test_cash_and_deposit_detail_books_show_only_their_own_account_group(
         self, preview: Preview, books: dict[str, UUID]
@@ -601,9 +657,9 @@ class TestTreasurerBooks:
 
 class TestBankBooks:
     def test_reconciliation_separates_matched_and_both_kinds_of_gap(
-        self, preview: Preview, books: dict[str, UUID]
+        self, preview_company_wide: Preview, books: dict[str, UUID]
     ) -> None:
-        result = preview("doi-chieu-ngan-hang")
+        result = preview_company_wide("doi-chieu-ngan-hang")
         by_reference = {row["statement_reference"]: row for row in result.rows}
 
         matched = by_reference["SK-KHOP"]
@@ -621,7 +677,7 @@ class TestBankBooks:
 
     def test_a_matched_pair_across_the_period_edge_makes_no_phantom_difference(
         self,
-        preview: Preview,
+        preview_company_wide: Preview,
         session_factory: sessionmaker[Session],
         dataset_alpha: DatasetRef,
         context: PostingContext,
@@ -681,7 +737,7 @@ class TestBankBooks:
             match_line(session, line_id=line.id, voucher_id=advice.id)
 
         # Kỳ chỉ chứa DÒNG SAO KÊ (chứng từ nằm ở kỳ trước).
-        statement_side = preview(
+        statement_side = preview_company_wide(
             "doi-chieu-ngan-hang",
             from_date=EDGE_STATEMENT_DATE.isoformat(),
             to_date=(EDGE_STATEMENT_DATE + timedelta(days=5)).isoformat(),
@@ -692,7 +748,7 @@ class TestBankBooks:
         assert statement_side.money(matched[0], "difference") == Decimal(0)
 
         # Kỳ chỉ chứa CHỨNG TỪ (dòng sao kê về muộn, nằm ở kỳ sau).
-        voucher_side = preview(
+        voucher_side = preview_company_wide(
             "doi-chieu-ngan-hang",
             from_date=(EDGE_VOUCHER_DATE - timedelta(days=1)).isoformat(),
             to_date=EDGE_VOUCHER_DATE.isoformat(),

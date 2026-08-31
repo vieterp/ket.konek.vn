@@ -14,7 +14,8 @@
 -- không suy nổi) ở lại xô không gắn — bịa một tài khoản cho chúng sẽ làm
 -- BR-BNK-01 "khớp" trên một con số dối.
 --
--- Bản 6D cộng-rồi-trừ qua Protocol `DepositMovementSource` vì `gl_postings`
+-- Bản 6D cộng-rồi-trừ qua Protocol `DepositMovementSource` (xóa ở 6G-2 khi
+-- mất người gọi cuối cùng — chính bản viết lại này) vì `gl_postings`
 -- chưa mang chiều ấy. Cách đó **sai** và lát 6G-1 làm nó lộ ra: dòng TRỪ khai
 -- mọi chiều = NULL trong khi dòng gốc giữ nguyên chiều của nó, nên hai dòng rơi
 -- vào HAI xô của `GROUP BY` và phép trừ không triệt tiêu. Trước 6G-1 gần như

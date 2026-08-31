@@ -222,6 +222,7 @@ def _seed_definitions(connection: Connection, loaded: LoadedReports) -> int:
                 ),
                 fixed_params=entry.fixed_params,
                 required_permission_module=entry.required_permission_module,
+                requires_full_branch_scope=entry.requires_full_branch_scope,
             )
         )
         added += 1

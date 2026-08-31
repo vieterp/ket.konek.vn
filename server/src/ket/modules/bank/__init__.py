@@ -32,6 +32,7 @@ from ket.kernel.security.permissions import (
 )
 from ket.posting.contracts import (
     POSTING_DOCUMENT_REGISTRY,
+    REFERENCE_GUARDS,
     PostingDocumentType,
     PostingRequest,
 )
@@ -43,6 +44,7 @@ CHEQUE_PERMISSION_CODE = "cheque"
 INTERNAL_TRANSFER_PERMISSION_CODE = "internal_transfer"
 
 STATEMENT_PERMISSION_CODE = "statement"
+STATEMENT_PROFILE_PERMISSION_CODE = "statement_profile"
 EBANKING_PERMISSION_CODE = "ebanking"
 
 for _permission_code in (
@@ -61,6 +63,17 @@ PERMISSION_REGISTRY.register(
     # edit = khớp/gỡ khớp, delete = xóa sao kê nhập nhầm.
     DocumentType(
         module=BANK_PERMISSION_MODULE, code=STATEMENT_PERMISSION_CODE, actions=CATALOG_ACTIONS
+    )
+)
+PERMISSION_REGISTRY.register(
+    # Hồ sơ định dạng sao kê (lát 6G-2, màn khai): quyền riêng khỏi `statement`
+    # — nhập sao kê là việc hằng ngày, còn sửa cách đọc tệp đổi luật diễn giải
+    # của MỌI lượt nhập sau đó, và sai ở đây (dấu thập phân, cột tiền) hỏng
+    # **im lặng** ra một con số hợp lệ khác.
+    DocumentType(
+        module=BANK_PERMISSION_MODULE,
+        code=STATEMENT_PROFILE_PERMISSION_CODE,
+        actions=CATALOG_ACTIONS,
     )
 )
 PERMISSION_REGISTRY.register(
@@ -95,12 +108,8 @@ def _after_post(session: Session, voucher_id: UUID, user_id: int) -> None:
 
 
 def _after_unpost(session: Session, voucher_id: UUID, user_id: int) -> None:
-    from ket.modules.bank.reconciliation import ensure_not_matched_to_statement
     from ket.modules.bank.settlement_service import revert_settlements
 
-    # H-3 review 6D: chứng từ đã khớp sao kê không bỏ ghi sổ được — hook chạy
-    # cùng transaction với unpost nên ném ở đây là hủy cả lượt.
-    ensure_not_matched_to_statement(session, voucher_id=voucher_id)
     revert_settlements(session, voucher_id=voucher_id)
 
 
@@ -118,15 +127,26 @@ def _print_details(session: Session, voucher_id: UUID, user_id: int) -> Document
     return build_print_details(session, voucher_id, user_id)
 
 
-def _register_deposit_movement_source() -> None:
-    """Bản cài `DepositMovementSource` (lát 6D) — carry-forward số dư đầu kỳ
-    gọi qua kernel Protocol để giữ nhóm ngân hàng (kind 1) qua năm."""
-    from ket.modules.bank.movement_source import register
+def _register_statement_match_guard() -> None:
+    """Luật "chứng từ đã khớp sao kê thì không bỏ ghi sổ / không xóa" (6D H-3)
+    đăng ký ở bộ guard DÙNG CHUNG của posting, không ở hook riêng bốn loại
+    chứng từ tiền gửi.
 
-    register()
+    Từ lát 6G-2 bàn khớp nhận cả phiếu quỹ nộp/rút tiền và bút toán GLE chạm
+    112 (M-3), nên luật này không còn là việc riêng của phân hệ ngân hàng —
+    nhưng bảng `bank_statement_lines` thì vẫn là của nó. Đăng ký từ phía chủ
+    bảng giữ được cả hai: mọi loại chứng từ được canh, mà `cash_book` /
+    `general_ledger` không phải biết tới phân hệ ngân hàng (luật C3).
+    """
+    from ket.modules.bank.reconciliation import ensure_not_matched_to_statement
+
+    def _guard(session: Session, voucher_id: UUID) -> None:
+        ensure_not_matched_to_statement(session, voucher_id=voucher_id)
+
+    REFERENCE_GUARDS.register(_guard)
 
 
-_register_deposit_movement_source()
+_register_statement_match_guard()
 
 
 def _register_statement_merge_hook() -> None:

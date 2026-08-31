@@ -108,6 +108,53 @@ class PostingDocumentRegistry:
         return tuple(sorted(self._types))
 
 
+VoucherReferenceGuard = Callable[[Session, UUID], None]
+"""`(session, voucher_id)` — "chứng từ này còn bị ai đó tham chiếu không".
+
+Ném `DomainError` để chặn, im lặng để cho qua. Khác `LifecycleHook` ở hai
+điểm quyết định: không nhận `user_id` (câu hỏi về DỮ LIỆU, không về người
+bấm), và **không gắn với một loại chứng từ nào** — nó chạy cho mọi loại.
+"""
+
+
+class VoucherReferenceGuards:
+    """Bộ guard chạy trước MỌI lượt bỏ ghi sổ và MỌI lượt xóa chứng từ.
+
+    Vì sao là một bộ dùng chung thay vì thêm một `LifecycleHook` nữa cho từng
+    loại: thứ được bảo vệ nằm ở phía **người tham chiếu**, không phía chứng từ.
+    Dòng sao kê ngân hàng khớp được với phiếu quỹ nộp tiền và bút toán GLE
+    (lát 6G-2, M-3) — nếu luật "đã khớp thì không bỏ ghi sổ" phải được từng
+    module tự nhớ đăng ký vào hook của mình, thì mỗi phân hệ mới của phase 7–9
+    là một cơ hội quên, và chỗ quên đó im lặng: chứng từ bỏ ghi sổ xong, dòng
+    sao kê vẫn trỏ vào một phiếu nháp sửa được số tiền.
+
+    Đăng ký từ phía module **giữ** ràng buộc (`bank` đăng ký guard sao kê),
+    không từ phía module bị ràng buộc — nên `cash_book` và `general_ledger`
+    không phải biết phân hệ ngân hàng tồn tại, và luật C3 (module không import
+    module) vẫn đứng.
+
+    Điểm gọi là `PostingService.unpost` và `VoucherService.delete` — hai hàm
+    mà **mọi** cửa đều đi qua (endpoint hành động chung lẫn service của từng
+    module) — chứ không ở tầng router: đặt ở router thì đường service là một
+    cửa thứ hai không có cổng, đúng bài học 6D H-3.
+    """
+
+    def __init__(self) -> None:
+        self._guards: list[VoucherReferenceGuard] = []
+
+    def register(self, guard: VoucherReferenceGuard) -> None:
+        self._guards.append(guard)
+
+    def check(self, session: Session, voucher_id: UUID) -> None:
+        for guard in self._guards:
+            guard(session, voucher_id)
+
+
+REFERENCE_GUARDS: Final[VoucherReferenceGuards] = VoucherReferenceGuards()
+"""Bộ guard của tiến trình — module đăng ký lúc import, cùng chỗ với registry
+loại chứng từ."""
+
+
 REGISTRY: Final[PostingDocumentRegistry] = PostingDocumentRegistry()
 """Registry của tiến trình. Module đăng ký loại của mình lúc import — cùng chỗ
 với đăng ký mã quyền (xem `modules/general_ledger/journal/__init__.py`)."""

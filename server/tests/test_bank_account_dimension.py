@@ -33,7 +33,7 @@ from bank_support import ensure_company_bank_account, seed_bank_package_data
 from cash_book_support import seed_cash_book_package_data
 from ket.kernel.config.accounts_models import ChartOfAccount, DetailTracking
 from ket.kernel.datasets.provisioning import DatasetRef, drop_dataset_schema, provision_dataset
-from ket.kernel.errors import PostingValidationError
+from ket.kernel.errors import BankStatementMatchStateError, PostingValidationError
 from ket.kernel.master_data.models.company_bank_account import (
     COMPANY_BANK_ACCOUNT_TABLE_NAME,
 )
@@ -46,6 +46,7 @@ from ket.modules.bank.models import (
     BankVoucherKind,
     StatementMatchKind,
 )
+from ket.modules.bank.reconciliation import match_line, unmatched_vouchers
 from ket.modules.bank.schemas import BankVoucherIn, BankVoucherLineIn
 from ket.modules.bank.service import BankVoucherService
 from ket.modules.bank.statement_branch import sync_statement_branch
@@ -53,6 +54,7 @@ from ket.modules.bank.statement_merge import CompanyBankAccountStatementMergeHoo
 from ket.modules.cash_book.models import CashVoucherKind
 from ket.modules.cash_book.schemas import CashVoucherIn, CashVoucherLineIn
 from ket.modules.cash_book.service import CashVoucherService
+from ket.posting.engine.dimension_recompute import recompute_derived_dimensions
 from ket.posting.engine.models import GlPosting, Ledger
 from ket.posting.integrity.checks.registry import check_of
 from posting_support import PostingContext, posting_scope, seed_posting_context
@@ -545,6 +547,148 @@ class TestUsageCounterCountsTheDimension:
                 if row.entity_type == COMPANY_BANK_ACCOUNT_TABLE_NAME and row.entity_id == vcb
             }
             assert flagged == set(), flagged
+            service.delete(voucher.id)
+            return None
+
+        run(work)
+
+
+class TestReconciliationCoversEveryVoucherType:
+    """Lát 6G-2 (M-3): bàn khớp nhận MỌI chứng từ chạm 112x, không riêng bốn
+    loại của phân hệ ngân hàng.
+
+    6G-1 đưa phiếu quỹ và bút toán GLE vào **vế sổ** của báo cáo chênh lệch
+    nhưng để chúng ngoài **bàn khớp**, nên dòng sao kê của một phiếu rút tiền
+    đứng "chưa khớp" vĩnh viễn và FR-BNK-031 lớn dần đúng bằng phần vừa thêm.
+    """
+
+    def test_a_cash_voucher_is_a_match_candidate(
+        self, run: Runner, context: PostingContext, accounts: dict[str, int], acb: int
+    ) -> None:
+        def work(session: Session) -> object:
+            service = CashVoucherService(session)
+            voucher = service.create(
+                _withdrawal(context, accounts, bank_account_id=acb), user_id=ACTOR_ID
+            )
+            service.post(voucher.id, user_id=ACTOR_ID)
+            candidates = unmatched_vouchers(session, bank_account_id=acb)
+            mine = [item for item in candidates if item.voucher_id == voucher.id]
+            assert len(mine) == 1, candidates
+            # Phiếu RÚT tiền: tiền ra khỏi tài khoản ngân hàng ⇒ ròng âm, đúng
+            # chiều cột Nợ của sao kê.
+            assert mine[0].net_fc == Decimal(-700_000)
+            # Nhãn dòng suy từ `document_type`, không từ `kind` của phân hệ
+            # ngân hàng — chứng từ ngoài phân hệ ấy không có `kind`.
+            assert mine[0].kind is None
+            assert mine[0].document_type == "PT"
+            service.unpost(voucher.id, user_id=ACTOR_ID)
+            service.delete(voucher.id)
+            return None
+
+        run(work)
+
+    def test_a_matched_cash_voucher_can_be_neither_unposted_nor_deleted(
+        self, run: Runner, context: PostingContext, accounts: dict[str, int], acb: int
+    ) -> None:
+        """ "Một guard, mọi cửa" — luật "đã khớp thì không bỏ ghi sổ" nay là một
+        `REFERENCE_GUARDS` chạy trong `PostingService.unpost` và
+        `VoucherService.delete`, nên nó canh CẢ phiếu quỹ dù module `cash_book`
+        không biết phân hệ ngân hàng tồn tại (luật C3).
+
+        Trước 6G-2 luật ấy là hook riêng của bốn loại chứng từ tiền gửi; mở bàn
+        khớp cho phiếu quỹ mà quên nó là mở đúng lỗ hổng 6D H-3 vừa bịt: dòng
+        sao kê "đã khớp" trỏ một phiếu nháp sửa được số tiền.
+        """
+
+        def work(session: Session) -> object:
+            service = CashVoucherService(session)
+            voucher = service.create(
+                _withdrawal(context, accounts, bank_account_id=acb), user_id=ACTOR_ID
+            )
+            service.post(voucher.id, user_id=ACTOR_ID)
+            # Gieo sao kê TRONG CÙNG session: `_seed_statement` mở kết nối
+            # riêng, và hai kết nối cùng chạm `master_data_usage` trong một
+            # transaction đang mở là một lượt chờ khóa tới hết `lock_timeout`.
+            statement = BankStatement(
+                bank_account_id=acb, statement_date=JAN_15, imported_by=ACTOR_ID
+            )
+            session.add(statement)
+            session.flush()
+            line = BankStatementLine(
+                statement_id=statement.id,
+                bank_account_id=acb,
+                line_no=1,
+                txn_date=JAN_15,
+                debit=Decimal(700_000),
+                match_kind=StatementMatchKind.UNMATCHED,
+            )
+            session.add(line)
+            session.flush()
+            sync_statement_branch(session, bank_account_id=acb)
+            match_line(session, line_id=line.id, voucher_id=voucher.id)
+
+            with pytest.raises(BankStatementMatchStateError):
+                service.unpost(voucher.id, user_id=ACTOR_ID)
+            session.rollback()
+            return None
+
+        run(work)
+
+
+class TestDerivedDimensionRecompute:
+    """Lát 6G-2 (M-9): luật quy chủ ở đường GHI ⇒ một lần sai là vĩnh viễn,
+    nên phải có đường tính lại theo thân chứng từ."""
+
+    def test_it_reports_drift_without_touching_the_ledger_and_then_fixes_it(
+        self, run: Runner, context: PostingContext, accounts: dict[str, int], vcb: int, acb: int
+    ) -> None:
+        def work(session: Session) -> object:
+            service = CashVoucherService(session)
+            voucher = service.create(
+                _withdrawal(context, accounts, bank_account_id=vcb), user_id=ACTOR_ID
+            )
+            service.post(voucher.id, user_id=ACTOR_ID)
+
+            # Giả lập "một lần sai đã đóng băng": đổi thẳng cột trên sổ, đúng
+            # hình dạng hậu quả mà M-9 mô tả (thân vẫn đúng, sổ thì không).
+            session.execute(
+                update(GlPosting)
+                .where(GlPosting.voucher_id == voucher.id, GlPosting.bank_account_id == vcb)
+                .values(bank_account_id=acb)
+            )
+            session.flush()
+
+            reported = recompute_derived_dimensions(session, branch_id=context.branch_id)
+            mine = [d for d in reported.drifts if d.voucher_id == voucher.id]
+            assert mine, reported
+            assert {(d.stored, d.expected) for d in mine} == {(acb, vcb)}
+            # Chế độ báo KHÔNG được ghi gì.
+            assert reported.applied == 0
+            still_wrong = session.scalars(
+                select(GlPosting.bank_account_id).where(
+                    GlPosting.voucher_id == voucher.id, GlPosting.bank_account_id.is_not(None)
+                )
+            ).all()
+            assert set(still_wrong) == {acb}
+
+            fixed = recompute_derived_dimensions(session, branch_id=context.branch_id, apply=True)
+            assert fixed.applied == len(mine)
+            after = session.scalars(
+                select(GlPosting.bank_account_id).where(
+                    GlPosting.voucher_id == voucher.id, GlPosting.bank_account_id.is_not(None)
+                )
+            ).all()
+            assert set(after) == {vcb}
+
+            # Lượt thứ hai không còn gì để sửa — phép ghi đè là idempotent.
+            assert (
+                recompute_derived_dimensions(
+                    session, branch_id=context.branch_id, apply=True
+                ).applied
+                == 0
+            )
+
+            service.unpost(voucher.id, user_id=ACTOR_ID)
             service.delete(voucher.id)
             return None
 

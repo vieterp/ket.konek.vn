@@ -3,11 +3,12 @@
 Song sinh với `cash_book/balance_service.py` cho phía ngân hàng, và là thứ màn
 hình "Tiền vào tiền ra" (BFF `/api/v1/cashflow/overview`) đọc để dựng thẻ tài
 khoản — món nợ lát 6D bàn giao: *số dư per-TK-ngân-hàng = số dư đầu kỳ nhóm
-kind-1 + phát sinh, dùng lại khuôn `DepositMovementSource`*.
+kind-1 + phát sinh*.
 
-Vì sao không gọi thẳng `DepositMovementSource`: Protocol đó trả phát sinh của
-**cả năm** (đủ cho carry-forward, người gọi duy nhất của nó) còn thẻ tài khoản
-hỏi số dư **tới một ngày**. Hai đường khác nhau đúng ở mốc thời gian.
+Từ lát 6G-2 Protocol `DepositMovementSource` không còn tồn tại: bản sửa H-2 của
+6G-1 làm carry-forward đọc thẳng cột `gl_postings.bank_account_id` và lấy đi
+người gọi cuối cùng của nó, nên bước đóng băng kernel (bước 23) xóa hẳn thay vì
+đóng băng một Protocol không ai gọi.
 
 Từ lát 6G-1 cả hai chỉ còn ĐỌC cột `gl_postings.bank_account_id`: luật quy chủ
 (BC/UNC/SEC theo thân, CTNB theo chiều) chuyển hẳn sang đường GHI trong
