@@ -23,9 +23,20 @@ Vì sao `SECURITY DEFINER` an toàn ở đây, đủ hẹp để không mở c�
 
 * Hàm trả về **một boolean** về **một** `voucher_id` truyền vào. Nó không trả
   dữ liệu sao kê, không nhận điều kiện lọc tự do, không ghi gì.
-* `SET search_path` ghim vào ĐÚNG schema của dataset. Đây là phần bắt buộc của
-  `SECURITY DEFINER`: search_path thả nổi cho phép người gọi trỏ tên bảng sang
-  một schema họ tạo, và hàm sẽ đọc bảng ấy với quyền chủ sở hữu.
+* `SET search_path FROM CURRENT` ghim search_path của phiên **lúc tạo hàm** vào
+  chính hàm. Đây là phần bắt buộc của `SECURITY DEFINER`: search_path thả nổi
+  cho phép người gọi trỏ tên bảng sang một schema họ tạo, và hàm sẽ đọc bảng ấy
+  với quyền chủ sở hữu.
+
+  `upgrade()` vì thế **tự đặt** search_path bằng `set_search_path_statement`
+  ngay trước `CREATE FUNCTION`, không tin vào giá trị sẵn có trên connection
+  (review pre-landing 6G-2 M-2). Hình dạng đúng là `<schema>, public, pg_temp`
+  — **`pg_temp` nêu tường minh ở CUỐI**; không nêu thì PostgreSQL tìm nó TRƯỚC
+  schema dataset, và một `CREATE TEMP TABLE bank_statement_lines(…)` rỗng sẽ
+  làm guard này trả `false` vĩnh viễn (luật đầy đủ ở `kernel/security/rls.py`).
+  Bản đầu ghim đúng giá trị ấy hoàn toàn do TÌNH CỜ: nó thừa hưởng `SET LOCAL`
+  mà bước gieo dữ liệu của 0023 để lại trên cùng connection — một thuộc tính an
+  toàn không được phép phụ thuộc vào một revision khác.
 * Chủ sở hữu là `ket_owner` — chủ các bảng, và không bảng nào bật
   `FORCE ROW LEVEL SECURITY`, nên chủ bảng vốn đã ngoài RLS.
 
@@ -44,7 +55,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from alembic import op
+from alembic import context, op
+
+from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
+from ket.kernel.security.rls import set_search_path_statement
 
 revision: str = "0024"
 down_revision: str | None = "0023"
@@ -52,17 +66,32 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-def upgrade() -> None:
-    """Không ghép chuỗi nào — kể cả tên schema.
+def _target_schema() -> str:
+    schema = context.config.attributes.get(ALEMBIC_SCHEMA_ATTRIBUTE)
+    if not isinstance(schema, str):
+        raise RuntimeError(
+            f"Không xác định được schema đích: `{ALEMBIC_SCHEMA_ATTRIBUTE}` chưa được "
+            "`migrations/env.py` ghi vào Config.attributes"
+        )
+    return schema
 
-    `migrations/env.py` đã `SET search_path` vào schema dataset trước khi chạy
-    revision, nên `CREATE FUNCTION` không cần schema-qualify, và
-    **`SET search_path FROM CURRENT`** ghim đúng giá trị ấy vào thân hàm lúc
-    tạo. Bản đầu nội suy tên schema hai chỗ và phải xin miễn trừ ở
-    `test_no_sql_string_interpolation`; miễn trừ theo TỆP đặt cả tệp ra ngoài
-    tầm quét vĩnh viễn (xem docstring `ALLOWED_FILES`), nên không lấy khi còn
-    đường tránh.
+
+def upgrade() -> None:
+    """Không ghép chuỗi nào ở tệp này — kể cả tên schema.
+
+    `set_search_path_statement` là hàm SẴN CÓ của kernel, tự gọi
+    `validate_schema_name` bên trong — nó *trả về* chuỗi DDL chứ không tự chạy,
+    nên `test_no_sql_string_interpolation` không đụng tới (bộ quét chỉ bắt
+    `text()`/`execute()` NHẬN f-string). `CREATE FUNCTION` sau đó không cần
+    schema-qualify vì search_path đã trỏ đúng chỗ.
+
+    Bản đầu nội suy tên schema hai chỗ và phải xin miễn trừ; miễn trừ theo TỆP
+    đặt cả tệp ra ngoài tầm quét vĩnh viễn (xem docstring `ALLOWED_FILES`), nên
+    không lấy khi còn đường tránh.
     """
+    # Đặt search_path TƯỜNG MINH trước khi tạo hàm — `FROM CURRENT` chỉ chụp
+    # lại thứ đang có, nên "thứ đang có" phải do chính revision này quyết định.
+    op.execute(set_search_path_statement(_target_schema()))
     op.execute(
         "CREATE OR REPLACE FUNCTION voucher_has_matched_statement_line(p_voucher_id uuid)"
         " RETURNS boolean"

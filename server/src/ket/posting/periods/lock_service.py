@@ -247,9 +247,17 @@ class PeriodLockService:
         """
         missing = missing_scope_branch_ids(self._session, scope)
         if missing:
+            visible = len(set(scope.branch_ids))
+            # ĐẾM, không id (review pre-landing 6G-2 M-1). Cả ba cửa hỏi cùng
+            # câu hỏi bằng cùng `missing_scope_branch_ids` — khóa sổ, đối chiếu
+            # ngân hàng, báo cáo phạm vi công ty — nên cả ba phải trả cùng một
+            # hình dạng: id chi nhánh người gọi CHƯA được cấp là thông tin về
+            # cấu trúc đơn vị mà họ chưa được thấy. Lát 6G-2 đổi hai cửa kia và
+            # bỏ sót cửa này.
             raise PeriodLockScopeError(
                 "Khóa sổ cần quyền trên mọi chi nhánh — phạm vi hiện tại còn thiếu",
-                missing_branch_ids=",".join(str(b) for b in sorted(missing)),
+                branches_visible=visible,
+                branches_total=visible + len(missing),
             )
 
     def _ensure_recalc_queue_clear(self, period: AccountingPeriod, year: FiscalYear) -> None:

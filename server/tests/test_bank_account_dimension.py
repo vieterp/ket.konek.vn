@@ -39,7 +39,7 @@ from ket.kernel.master_data.models.company_bank_account import (
     CompanyBankAccount,
 )
 from ket.kernel.master_data.usage import record_use, usage_count_of
-from ket.kernel.periods.models import AccountingPeriod
+from ket.kernel.periods.models import AccountingPeriod, FiscalYear
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.modules.bank.balance_service import deposit_balances_as_of
 from ket.modules.bank.models import (
@@ -590,13 +590,19 @@ class TestReconciliationCoversEveryVoucherType:
 
         run(work)
 
-    def test_a_matched_cash_voucher_can_be_neither_unposted_nor_deleted(
+    def test_a_matched_cash_voucher_cannot_be_unposted(
         self, run: Runner, context: PostingContext, accounts: dict[str, int], acb: int
     ) -> None:
         """ "Một guard, mọi cửa" — luật "đã khớp thì không bỏ ghi sổ" nay là một
-        `REFERENCE_GUARDS` chạy trong `PostingService.unpost` và
-        `VoucherService.delete`, nên nó canh CẢ phiếu quỹ dù module `cash_book`
-        không biết phân hệ ngân hàng tồn tại (luật C3).
+        `REFERENCE_GUARDS` chạy trong `PostingService.unpost`, nên nó canh CẢ
+        phiếu quỹ dù module `cash_book` không biết phân hệ ngân hàng tồn tại
+        (luật C3).
+
+        Tên bài chỉ nói "unpost", có chủ đích: chiều XÓA **không tới được**
+        guard — `ensure_editable` từ chối chứng từ đã ghi sổ trước đó, và chứng
+        từ đã khớp sao kê thì luôn đã ghi sổ. Chiều ấy do FK `RESTRICT` canh.
+        Một tên bài hứa nhiều hơn thứ nó kiểm là một artefact ổn định mà người
+        sau sẽ tin (review pre-landing 6G-2 L-1).
 
         Trước 6G-2 luật ấy là hook riêng của bốn loại chứng từ tiền gửi; mở bàn
         khớp cho phiếu quỹ mà quên nó là mở đúng lỗ hổng 6D H-3 vừa bịt: dòng
@@ -980,3 +986,122 @@ class TestDimensionJobsAreTwoTypesWithDifferentPermissions:
             return None
 
         run(work)
+
+
+def test_the_guard_function_pins_a_safe_search_path(
+    session_factory: sessionmaker[Session],
+    dimension_dataset: DatasetRef,
+    context: PostingContext,
+) -> None:
+    """Review pre-landing 6G-2 M-2: hình dạng `search_path` ghim trong hàm
+    `SECURITY DEFINER` là một thuộc tính AN NINH, phải khẳng định chứ không tin.
+
+    `pg_temp` phải nêu tường minh ở **CUỐI**. Không nêu thì PostgreSQL tìm nó
+    TRƯỚC schema dataset (luật ở `kernel/security/rls.py`), và khi ấy một
+    `CREATE TEMP TABLE bank_statement_lines(…)` rỗng làm guard "đã khớp thì
+    không bỏ ghi sổ" trả `false` **vĩnh viễn** — chứng từ đã khớp bỏ ghi sổ
+    được, đúng lỗ hổng 6D H-3.
+
+    Bản đầu ghim đúng giá trị này do TÌNH CỜ (thừa hưởng `SET LOCAL` mà bước
+    gieo dữ liệu của migration 0023 để lại trên cùng connection). Nay 0024 tự
+    đặt search_path trước `CREATE FUNCTION`; bài kiểm này là thứ giữ nó đúng.
+    """
+    scope = posting_scope(dimension_dataset, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        config = session.execute(
+            text(
+                "SELECT p.proconfig FROM pg_proc p"
+                " JOIN pg_namespace n ON n.oid = p.pronamespace"
+                " WHERE p.proname = 'voucher_has_matched_statement_line'"
+                "   AND n.nspname = :schema"
+            ),
+            {"schema": dimension_dataset.schema_name},
+        ).scalar_one()
+    assert config == [f"search_path={dimension_dataset.schema_name}, public, pg_temp"], config
+
+
+def test_a_closed_year_blocks_the_rewrite_even_when_the_period_is_open(
+    run: Runner, context: PostingContext, accounts: dict[str, int], vcb: int, acb: int
+) -> None:
+    """Đột biến sống sót ở vòng pre-landing: bỏ vế `FiscalYear.is_closed` khỏi
+    `_locked_period_ids` mà không bài nào đỏ.
+
+    Hai trạng thái khác nhau: kỳ khóa (`locked_at`) và **năm đã đóng**
+    (`is_closed`). `PostingService.unpost` từ chối cả hai, nên đường tính lại
+    chiều phải bỏ qua cả hai — nếu không, năm đã đóng vẫn bị sửa cột.
+    """
+
+    def work(session: Session) -> object:
+        service = CashVoucherService(session)
+        voucher = service.create(
+            _withdrawal(context, accounts, bank_account_id=vcb), user_id=ACTOR_ID
+        )
+        posted = service.post(voucher.id, user_id=ACTOR_ID)
+        session.execute(
+            update(GlPosting)
+            .where(GlPosting.voucher_id == voucher.id, GlPosting.bank_account_id == vcb)
+            .values(bank_account_id=acb)
+        )
+        period = session.get(AccountingPeriod, posted.period_id)
+        assert period is not None
+        assert period.locked_at is None, "tiền đề: kỳ phải còn MỞ để bài này kiểm đúng vế năm"
+        session.execute(
+            update(FiscalYear).where(FiscalYear.id == period.fiscal_year_id).values(is_closed=True)
+        )
+        session.flush()
+
+        outcome = recompute_derived_dimensions(session, branch_id=context.branch_id, apply=True)
+        assert voucher.id in outcome.locked_vouchers
+        assert outcome.applied == 0, "năm đã đóng mà vẫn ghi ⇒ vế `is_closed` đã bị gỡ"
+        session.rollback()
+        return None
+
+    run(work)
+
+
+def test_a_locked_period_answers_before_the_unmatch_advice(
+    run: Runner, context: PostingContext, accounts: dict[str, int], acb: int
+) -> None:
+    """Đột biến sống sót ở vòng pre-landing: đảo lại thứ tự M-6 mà không bài nào đỏ.
+
+    Chứng từ ĐÃ KHỚP sao kê nằm trong kỳ ĐÃ KHÓA phải nhận câu trả lời "kỳ đã
+    khóa" — câu "không có đường nào" — chứ không phải "gỡ khớp trước đã". Lời
+    khuyên sai dẫn người dùng gỡ một cặp đối chiếu ĐÚNG (`unmatch_line` không
+    kiểm kỳ khóa nên gỡ thành công), rồi lượt bỏ ghi sổ vẫn đổ vì kỳ khóa —
+    mất cặp khớp, không đổi lại được gì.
+    """
+
+    def work(session: Session) -> object:
+        service = CashVoucherService(session)
+        voucher = service.create(
+            _withdrawal(context, accounts, bank_account_id=acb), user_id=ACTOR_ID
+        )
+        posted = service.post(voucher.id, user_id=ACTOR_ID)
+        statement = BankStatement(bank_account_id=acb, statement_date=JAN_15, imported_by=ACTOR_ID)
+        session.add(statement)
+        session.flush()
+        line = BankStatementLine(
+            statement_id=statement.id,
+            bank_account_id=acb,
+            line_no=1,
+            txn_date=JAN_15,
+            debit=Decimal(700_000),
+            match_kind=StatementMatchKind.UNMATCHED,
+        )
+        session.add(line)
+        session.flush()
+        sync_statement_branch(session, bank_account_id=acb)
+        match_line(session, line_id=line.id, voucher_id=voucher.id)
+        session.execute(
+            update(AccountingPeriod)
+            .where(AccountingPeriod.id == posted.period_id)
+            .values(locked_at=datetime(2026, 3, 1, tzinfo=UTC), locked_by=ACTOR_ID)
+        )
+        session.flush()
+
+        with pytest.raises(PostingValidationError):
+            service.unpost(voucher.id, user_id=ACTOR_ID)
+        session.rollback()
+        return None
+
+    run(work)

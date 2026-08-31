@@ -124,3 +124,28 @@ def test_only_the_session_pruning_job_declares_a_privileged_connection() -> None
 
     assert privileged == {"system.maintenance.prune_sessions"}
     assert "system.maintenance.prune_idempotency_keys" in dataset_scoped
+
+
+def test_every_job_permission_is_a_registered_permission_code() -> None:
+    """Review pre-landing 6G-2 M-4: mã quyền của job phải CÓ trong sổ đăng ký.
+
+    Hậu quả của việc thiếu là tuyệt đối và im lặng: mã không đăng ký ⇒
+    `provision_dataset` không gieo dòng nào vào bảng `permissions` ⇒ không vai
+    trò nào cấp được ⇒ **kể cả quản trị viên** cũng không xếp hàng nổi job đó,
+    403 vĩnh viễn. Không cổng nào bắt được điều ấy cho tới lát 6G-2: phép đột
+    biến gỡ `Action.EDIT` khỏi `posting.integrity` sống sót qua ba tệp test.
+
+    Kiểm theo BẤT BIẾN chứ không theo danh sách mã: mọi loại job thêm ở phase
+    7–9 tự động nằm trong tầm.
+    """
+    from ket import model_registry as _registry  # noqa: F401 — nạp mọi bản đăng ký
+    from ket.kernel.jobs.registry import REGISTRY as JOB_REGISTRY
+    from ket.kernel.security.permissions import REGISTRY as PERMISSION_REGISTRY
+
+    declared = set(PERMISSION_REGISTRY.codes())
+    missing = {
+        code: JOB_REGISTRY.get(code).permission
+        for code in JOB_REGISTRY.codes()
+        if JOB_REGISTRY.get(code).permission not in declared
+    }
+    assert missing == {}, missing
