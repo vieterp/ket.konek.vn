@@ -65,7 +65,7 @@ def _build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest
         .scalars()
         .all()
     )
-    return to_posting_request(voucher_id, lines)
+    return to_posting_request(session, voucher_id, lines)
 
 
 POSTING_DOCUMENT_REGISTRY.register(

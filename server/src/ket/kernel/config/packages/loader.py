@@ -32,6 +32,7 @@ from pathlib import Path
 
 from ket.kernel.config.accounts_models import (
     ACCOUNT_CODE_MAX_LENGTH,
+    DEPOSIT_ACCOUNT_CODE_PREFIX,
     DOCUMENT_TYPE_MAX_LENGTH,
     NAME_MAX_LENGTH,
     PURPOSE_MAX_LENGTH,
@@ -124,11 +125,6 @@ _BALANCE_NATURE_RANGE = range(
 )  # 0..3, hai đầu đều hợp lệ
 
 _DETAIL_TRACKING_SEPARATOR = ";"
-
-DEPOSIT_ACCOUNT_PREFIX = "112"
-"""Nhóm TK tiền gửi ngân hàng — literal số hiệu CÓ CHỦ ĐÍCH, cùng lập luận
-`MONEY_ACCOUNT_CODE_PREFIXES` của mapper: nhóm 112 do chính SRS định nghĩa và
-là bất biến chung của TT99 lẫn TT133."""
 
 
 @dataclass(frozen=True)
@@ -503,7 +499,7 @@ def _require_bank_account_tracking(rows: list[AccountRow]) -> None:
     missing = [
         row.code
         for row in rows
-        if row.code.startswith(DEPOSIT_ACCOUNT_PREFIX)
+        if row.code.startswith(DEPOSIT_ACCOUNT_CODE_PREFIX)
         and not row.is_summary
         and DetailTracking.BANK_ACCOUNT not in row.detail_tracking
     ]

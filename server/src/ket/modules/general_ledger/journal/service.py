@@ -148,7 +148,7 @@ class JournalVoucherService:
     ) -> Voucher:
         lines = self._lines_of(voucher_id)
         return self._posting.post(
-            to_posting_request(voucher_id, lines),
+            to_posting_request(self._session, voucher_id, lines),
             user_id=user_id,
             acknowledged_warnings=acknowledged_warnings,
         )

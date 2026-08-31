@@ -28,6 +28,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ket.kernel.config.accounts_models import DEPOSIT_ACCOUNT_CODE_PREFIX
+from ket.kernel.config.accounts_provider import accounts_by_id
 from ket.kernel.errors import PostingValidationError, PostingViolation
 from ket.modules.cash_book.models import (
     CashSettlement,
@@ -85,10 +87,29 @@ def build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest:
         .all()
     )
 
+    # Chiều `bank_account` thuộc riêng bên 112x. Luật "dòng không chạm quỹ thì
+    # CẢ HAI bên nhận trọn chiều" (xem `_split_pair`) đúng với chiều đối tác/
+    # khoản mục, nhưng sai với chiều này: một dòng `Nợ 131 / Có 112` sẽ dán TK
+    # ngân hàng lên cả dòng công nợ, và lượt chuyển số dư đầu năm xếp dư phải
+    # thu sang nhóm tiền gửi — chi tiết hóa đơn rơi im lặng (review pre-landing
+    # H-A). Lọc theo SỐ HIỆU TK, cùng doctrine với mapper ngân hàng.
+    touched_ids = [
+        account_id
+        for line in lines
+        for account_id in (line.debit_account_id, line.credit_account_id)
+        if account_id is not None
+    ]
+    accounts = accounts_by_id(session, touched_ids)
+    deposit_account_ids = {
+        account_id
+        for account_id, account in accounts.items()
+        if account.code.startswith(DEPOSIT_ACCOUNT_CODE_PREFIX)
+    }
+
     posting_lines: list[PostingLine] = []
     violations: list[PostingViolation] = []
     for line in lines:
-        posting_lines.extend(_split_pair(voucher, body, line, violations))
+        posting_lines.extend(_split_pair(voucher, body, line, deposit_account_ids, violations))
     if violations:
         raise PostingValidationError(
             "Phiếu còn dòng định khoản thiếu bên Nợ hoặc bên Có", violations=violations
@@ -111,6 +132,7 @@ def _split_pair(
     voucher: Voucher,
     body: CashVoucher,
     line: CashVoucherLine,
+    deposit_account_ids: set[int],
     violations: list[PostingViolation],
 ) -> list[PostingLine]:
     if line.debit_account_id is None or line.credit_account_id is None:
@@ -129,6 +151,13 @@ def _split_pair(
     # Bên quỹ không nhận chiều; dòng không chạm quỹ thì cả hai bên cùng nhận.
     debit_dimensions = _EMPTY_DIMENSIONS if debit_is_cash and not credit_is_cash else dimensions
     credit_dimensions = _EMPTY_DIMENSIONS if credit_is_cash and not debit_is_cash else dimensions
+    # Chiều TK ngân hàng chỉ ở lại bên 112x — xem `build_posting_request`.
+    debit_dimensions = _only_deposit_keeps_bank_account(
+        debit_dimensions, line.debit_account_id, deposit_account_ids
+    )
+    credit_dimensions = _only_deposit_keeps_bank_account(
+        credit_dimensions, line.credit_account_id, deposit_account_ids
+    )
 
     description = line.description or voucher.description
     return [
@@ -155,6 +184,15 @@ def _split_pair(
             description=description,
         ),
     ]
+
+
+def _only_deposit_keeps_bank_account(
+    dimensions: PostingDimensions, account_id: int | None, deposit_account_ids: set[int]
+) -> PostingDimensions:
+    """Bỏ `bank_account_id` khỏi một bên không phải 112x."""
+    if dimensions.bank_account_id is None or account_id in deposit_account_ids:
+        return dimensions
+    return dimensions.model_copy(update={"bank_account_id": None})
 
 
 def _line_dimensions(line: CashVoucherLine) -> PostingDimensions:

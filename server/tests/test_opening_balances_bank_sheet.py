@@ -16,20 +16,24 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from bank_support import ensure_company_bank_account, seed_bank_package_data
 from cash_book_support import seed_cash_book_package_data
+from ket.kernel.contracts import PartnerKind
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.master_data.models.company_bank_account import CompanyBankAccount
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.modules.bank.models import BankVoucherKind
 from ket.modules.bank.schemas import BankVoucherIn, BankVoucherLineIn
 from ket.modules.bank.service import BankVoucherService
+from ket.modules.cash_book.models import CashVoucherKind
+from ket.modules.cash_book.schemas import CashVoucherIn, CashVoucherLineIn
+from ket.modules.cash_book.service import CashVoucherService
 from ket.modules.general_ledger.journal.schemas import JournalLineIn, JournalVoucherIn
 from ket.modules.general_ledger.journal.service import JournalVoucherService
-from ket.posting.engine.models import Ledger
+from ket.posting.engine.models import GlPosting, Ledger
 from ket.posting.opening_balances.models import OpeningBalance, OpeningDetailKind
 from ket.posting.opening_balances.template import ACCOUNT_SHEET, BANK_SHEET, build_opening_template
 from posting_support import PostingContext, posting_scope, seed_posting_context
@@ -38,6 +42,11 @@ from test_opening_balances_carry_forward import carry_forward, ensure_fiscal_yea
 from test_opening_balances_import import opening_rows, run_opening_import
 
 pytestmark = pytest.mark.db
+
+CUSTOMER_ID = 515151
+"""Id đối tác bất kỳ: TK 131 của gói test đòi CHIỀU `customer`, và chiều nguồn
+`master` chỉ được kiểm tồn tại ở tầng API — validator ghi sổ chỉ hỏi "đã điền
+chưa" (xem `dimension_required`)."""
 
 ACTOR_ID = 1
 JAN_15 = date(2026, 1, 15)
@@ -412,6 +421,183 @@ def test_a_deposit_line_carrying_another_dimension_yields_exactly_one_row(
             .where(OpeningBalance.credit > 0)
         ).scalar_one()
         assert orphan == 0
+
+
+def test_a_receivable_line_paired_with_112_stays_a_receivable(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    accounts: dict[str, int],
+    vnd_account: tuple[int, str],
+) -> None:
+    """Review pre-landing H-A — hồi quy do CHÍNH bản vá H-2 tạo ra.
+
+    Dòng phiếu quỹ `Nợ 131 / Có 112` không chạm TK quỹ, nên luật chung cho **cả
+    hai** bên nhận trọn chiều — kể cả `bank_account`. Bản viết lại
+    `carry_forward.sql` đọc cột ấy trên MỌI dòng và gán `detail_kind = 1` cho
+    bất kỳ dòng nào có nó, nên dư PHẢI THU bị xếp sang nhóm tiền gửi. Lượt
+    chuyển hóa đơn chỉ nhận nhóm 2–4 ⇒ chi tiết hóa đơn rơi im lặng, và khóa
+    ngoại `RESTRICT` ghim luôn TK ngân hàng vào một dòng công nợ.
+
+    Nay chiều bị lọc ở CẢ HAI đầu: mapper không dán nó lên bên không phải 112x,
+    và câu chuyển năm chỉ coi nó là chiều ngân hàng khi số hiệu TK bắt đầu 112.
+    """
+    vnd_id, _vnd_code = vnd_account
+    context = seed_posting_context(session_factory, dataset_alpha)
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+
+    with unit_of_work(session_factory, scope) as session:
+        service = CashVoucherService(session)
+        voucher = service.create(
+            CashVoucherIn(
+                kind=CashVoucherKind.RECEIPT,
+                operation_code="thu-khac",
+                cash_account_id=accounts["111"],
+                branch_id=context.branch_id,
+                document_date=JAN_15,
+                posting_date=JAN_15,
+                currency_code="VND",
+                exchange_rate=Decimal(1),
+                payer_receiver_name="Khách trả qua ngân hàng",
+                description="Nợ 131 / Có 112 — không chạm TK quỹ",
+                lines=(
+                    CashVoucherLineIn(
+                        debit_account_id=accounts["131"],
+                        credit_account_id=accounts["112"],
+                        amount_fc=Decimal(500_000),
+                        partner_kind=PartnerKind.CUSTOMER,
+                        partner_id=CUSTOMER_ID,
+                        bank_account_id=vnd_id,
+                    ),
+                ),
+            ),
+            user_id=ACTOR_ID,
+        )
+        service.post(voucher.id, user_id=ACTOR_ID)
+
+        # Ở SỔ: chiều chỉ nằm trên bên 112, không đổ sang bên 131.
+        owners = dict(
+            session.execute(
+                select(GlPosting.account_id, GlPosting.bank_account_id).where(
+                    GlPosting.voucher_id == voucher.id,
+                    GlPosting.ledger == Ledger.FINANCIAL,
+                )
+            ).all()
+        )
+        assert owners[accounts["112"]] == vnd_id
+        assert owners[accounts["131"]] is None
+
+    with unit_of_work(session_factory, scope) as session:
+        target_id = ensure_fiscal_year(session, "2027", date(2027, 1, 1))
+        carry_forward(session, dataset_alpha, context)
+
+    with unit_of_work(session_factory, scope) as session:
+        receivable = (
+            session.execute(
+                select(OpeningBalance)
+                .where(OpeningBalance.fiscal_year_id == target_id)
+                .where(OpeningBalance.branch_id == context.branch_id)
+                .where(OpeningBalance.ledger == Ledger.FINANCIAL)
+                .where(OpeningBalance.account_id == accounts["131"])
+            )
+            .scalars()
+            .all()
+        )
+        assert len(receivable) == 1, [(row.detail_kind, row.bank_account_id) for row in receivable]
+        assert receivable[0].detail_kind == OpeningDetailKind.RECEIVABLE
+        assert receivable[0].bank_account_id is None
+
+
+def test_carry_forward_repairs_rows_written_before_the_dimension_was_filtered(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    accounts: dict[str, int],
+    vnd_account: tuple[int, str],
+) -> None:
+    """Lớp phòng thủ THỨ HAI của review pre-landing H-A + H-B, kiểm riêng.
+
+    Hai bản vá chồng nhau: mapper thôi dán `bank_account` lên bên không phải
+    112x, và câu chuyển năm chỉ coi cột ấy là chiều ngân hàng khi số hiệu TK bắt
+    đầu `112` **và** TK ngân hàng còn trong danh mục. Với bản vá mapper tại chỗ,
+    lớp SQL không bao giờ được chạm tới — nên bài kiểm này ghi thẳng vào
+    `gl_postings` hai hình dạng mà lớp ấy tồn tại để chịu:
+
+    * dòng công nợ mang `bank_account_id` — đúng thứ dữ liệu đã ghi sổ TRƯỚC bản
+      vá mapper đang mang, và cũng là thứ một module tương lai quên lọc sẽ tạo;
+    * dòng 112 trỏ một TK ngân hàng đã bị xóa khỏi danh mục — `gl_postings`
+      không có khóa ngoại còn `opening_balances` thì có, nên thiếu lớp này lượt
+      khóa sổ cuối năm đổ `ForeignKeyViolation` (H-B).
+    """
+    vnd_id, _vnd_code = vnd_account
+    context = seed_posting_context(session_factory, dataset_alpha)
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    missing_bank_id = 987_654_321
+
+    with unit_of_work(session_factory, scope) as session:
+        journal = JournalVoucherService(session)
+        voucher = journal.create(
+            JournalVoucherIn(
+                branch_id=context.branch_id,
+                document_date=JAN_15,
+                posting_date=JAN_15,
+                currency_code="VND",
+                exchange_rate=Decimal(1),
+                description="dựng hai hình dạng cho lớp phòng thủ SQL",
+                lines=(
+                    JournalLineIn(
+                        account_id=accounts["131"],
+                        debit_fc=Decimal(500_000),
+                        partner_kind=PartnerKind.CUSTOMER,
+                        partner_id=CUSTOMER_ID,
+                    ),
+                    JournalLineIn(
+                        account_id=accounts["112"],
+                        credit_fc=Decimal(500_000),
+                        bank_account_id=vnd_id,
+                    ),
+                ),
+            ),
+            user_id=ACTOR_ID,
+        )
+        journal.post(voucher.id, user_id=ACTOR_ID)
+
+        # Ghi THẲNG vào sổ, vòng qua mapper: đúng hình dạng dữ liệu cũ.
+        session.execute(
+            update(GlPosting)
+            .where(GlPosting.voucher_id == voucher.id)
+            .where(GlPosting.account_id == accounts["131"])
+            .values(bank_account_id=vnd_id)
+        )
+        session.execute(
+            update(GlPosting)
+            .where(GlPosting.voucher_id == voucher.id)
+            .where(GlPosting.account_id == accounts["112"])
+            .values(bank_account_id=missing_bank_id)
+        )
+
+    with unit_of_work(session_factory, scope) as session:
+        target_id = ensure_fiscal_year(session, "2027", date(2027, 1, 1))
+        carry_forward(session, dataset_alpha, context)  # H-B: không được đổ
+
+    with unit_of_work(session_factory, scope) as session:
+        rows = {
+            row.account_id: row
+            for row in session.execute(
+                select(OpeningBalance)
+                .where(OpeningBalance.fiscal_year_id == target_id)
+                .where(OpeningBalance.branch_id == context.branch_id)
+                .where(OpeningBalance.ledger == Ledger.FINANCIAL)
+                .where(OpeningBalance.account_id.in_([accounts["131"], accounts["112"]]))
+            )
+            .scalars()
+            .all()
+        }
+        # H-A: dòng công nợ giữ nguyên nhóm phải thu dù mang cột ấy.
+        assert rows[accounts["131"]].detail_kind == OpeningDetailKind.RECEIVABLE
+        assert rows[accounts["131"]].bank_account_id is None
+        # H-B: TK ngân hàng mồ côi hạ về nhóm chưa-gắn, tiền vẫn chuyển đủ.
+        assert rows[accounts["112"]].detail_kind == OpeningDetailKind.ACCOUNT
+        assert rows[accounts["112"]].bank_account_id is None
+        assert rows[accounts["112"]].credit == Decimal(500_000)
 
 
 def test_bank_account_with_opening_rows_cannot_be_deleted(

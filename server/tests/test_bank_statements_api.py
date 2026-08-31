@@ -23,7 +23,8 @@ from ket.kernel.bank_import.profile_models import BankStatementProfile, Statemen
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.master_data.models.bank import Bank
 from ket.kernel.master_data.models.company_bank_account import CompanyBankAccount
-from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.models import Branch
 from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
 from ket.settings import Settings
@@ -503,3 +504,61 @@ def test_profiles_endpoint_lists_only_the_accounts_bank(
     )
     assert missing.status_code == 422
     assert missing.json()["error_code"] == "bank_statement.import_invalid"
+
+
+def test_every_statement_door_refuses_another_branchs_account(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    bank_account: int,
+    narrow_clerk_headers: dict[str, str],
+) -> None:
+    """Review pre-landing M-2 — bốn cửa gọi `require_bank_account`, ba cửa
+    không có test nào.
+
+    Phép đo của review: gỡ HẲN lời gọi khỏi `list_bank_statements` và
+    `get_reconciliation` mà cả tệp này vẫn xanh. Cổng phạm vi mới (H-4) vì thế
+    có thể biến mất khỏi ba trong bốn cửa mà không ai biết.
+
+    `company_bank_accounts` cố ý không bật RLS nên `session.get` thấy mọi tài
+    khoản — cổng ở tầng ứng dụng là lớp duy nhất, và nó phải có mặt ở TỪNG cửa.
+    """
+    ensure_second_branch(session_factory, dataset_alpha)
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        other_branch_id = session.scalar(
+            select(Branch.id).where(Branch.id != context.branch_id).order_by(Branch.id).limit(1)
+        )
+    assert other_branch_id is not None
+
+    seeding = RequestScope(
+        dataset_schema=dataset_alpha.schema_name,
+        user_id=ACTOR_ID,
+        branch_ids=(context.branch_id, other_branch_id),
+        acting_branch_id=other_branch_id,
+    )
+    with unit_of_work(session_factory, seeding) as session:
+        foreign = CompanyBankAccount(
+            code="6G-API-CN-KHAC",
+            name="TK của chi nhánh khác",
+            path="0.",
+            bank_id=session.scalar(
+                select(CompanyBankAccount.bank_id).where(CompanyBankAccount.id == bank_account)
+            ),
+            branch_id=other_branch_id,
+        )
+        session.add(foreign)
+        session.flush()
+        foreign.path = f"{foreign.id}."
+        session.flush()
+        foreign_id = foreign.id
+
+    for path in (
+        f"/api/v1/bank/statements?bank_account_id={foreign_id}",
+        f"/api/v1/bank/reconciliation?bank_account_id={foreign_id}&as_of=2026-01-31",
+        f"/api/v1/bank/statements/profiles?bank_account_id={foreign_id}",
+    ):
+        refused = client.get(path, headers=narrow_clerk_headers)
+        assert refused.status_code == 422, f"{path}: {refused.text}"
+        assert refused.json()["error_code"] == "bank_statement.import_invalid", path

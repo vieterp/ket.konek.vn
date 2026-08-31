@@ -27,7 +27,7 @@ from uuid import UUID, uuid4
 import openpyxl
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine
+from sqlalchemy import Engine, delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 import ket.reporting.render_job as render_job_module
@@ -45,7 +45,8 @@ from ket.kernel.errors import AttachmentStorageNotConfiguredError
 from ket.kernel.jobs import queue
 from ket.kernel.jobs.models import JobStatus
 from ket.kernel.jobs.registry import REGISTRY, JobCancelled, JobContext
-from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.models import Permission, Role, RolePermission
 from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
 from ket.modules.general_ledger.journal.schemas import JournalLineIn, JournalVoucherIn
@@ -353,6 +354,70 @@ class TestRenderJobFlow:
         assert sheet is not None
         cells = [row[0] for row in sheet.iter_rows(values_only=True)]
         assert "Tổng cộng" in cells, "tệp từ job phải là cùng bản kết xuất với đường đồng bộ"
+
+    def test_the_file_door_re_checks_the_module_gate(
+        self,
+        client: TestClient,
+        session_factory: sessionmaker[Session],
+        render_dataset: DatasetRef,
+        context: PostingContext,
+        user_factory: UserFactory,
+        test_password: str,
+        render_storage: Path,
+        seeded_books: None,
+        low_xlsx_threshold: None,
+    ) -> None:
+        """Review pre-landing M-3 — cổng phân hệ ở cửa TẢI TỆP không có test.
+
+        Phép đo của review: gỡ hẳn `_require_job_module_access` mà cả tệp này
+        vẫn xanh. Giữa lúc đặt job và lúc tải tệp, quyền có thể đã bị thu hồi —
+        và tệp thì vẫn nằm trong kho. "Cổng của bước B không được mượn bộ kiểm
+        của bước A" (6E-2 H-2 cùng họ).
+
+        Phải là **CÙNG một người dùng** bị rút quyền, không phải người khác:
+        job của người khác trả 404 ngay ở phép kiểm `requested_by`, nên bài kiểm
+        dựng theo hướng ấy xanh cả khi cổng biến mất — bản đầu của chính bài này
+        đã sập đúng bẫy đó và chỉ lộ ra khi đem gỡ cổng đi chạy thử.
+        """
+        role = ensure_role(
+            session_factory,
+            render_dataset,
+            "xuat_bao_cao_6g_bi_rut",
+            [REPORT_VIEW, REPORT_EXPORT, JOURNAL_VIEW, "system.job.view", "system.job.create"],
+        )
+        headers = _headers(
+            client,
+            session_factory,
+            render_dataset,
+            user_factory,
+            role,
+            "rj-bi-rut-quyen",
+            test_password,
+            context.branch_id,
+        )
+        job_id, _estimated = _enqueue_render(client, headers)
+        _run_render_job(session_factory, render_dataset, context, render_storage, job_id)
+        assert (
+            client.get(f"/api/v1/reports/render-jobs/{job_id}/file", headers=headers).status_code
+            == 200
+        ), "tiền đề: đủ quyền thì tải được"
+
+        # Rút quyền phân hệ khỏi CHÍNH vai trò ấy — phiên đăng nhập vẫn còn.
+        scope = RequestScope(dataset_schema=render_dataset.schema_name, user_id=1, branch_ids=())
+        with unit_of_work(session_factory, scope) as session:
+            role_id = session.scalar(select(Role.id).where(Role.code == role))
+            permission_id = session.scalar(
+                select(Permission.id).where(Permission.code == JOURNAL_VIEW)
+            )
+            session.execute(
+                delete(RolePermission)
+                .where(RolePermission.role_id == role_id)
+                .where(RolePermission.permission_id == permission_id)
+            )
+
+        refused = client.get(f"/api/v1/reports/render-jobs/{job_id}/file", headers=headers)
+        assert refused.status_code == 403, refused.text
+        assert refused.json()["error_code"] == "auth.permission_denied"
 
     def test_file_of_someone_elses_job_is_not_found(
         self,

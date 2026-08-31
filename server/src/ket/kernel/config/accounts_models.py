@@ -64,6 +64,16 @@ class BalanceNature:
     """Không có số dư (loại 5–9 kết chuyển hết cuối kỳ)."""
 
 
+DEPOSIT_ACCOUNT_CODE_PREFIX = "112"
+"""Nhóm TK tiền gửi ngân hàng.
+
+Literal số hiệu CÓ CHỦ ĐÍCH: nhóm 112 do chính SRS định nghĩa và là bất biến
+chung của TT99 lẫn TT133, không phải đích cấu hình. Đặt ở kernel vì cả ba tầng
+cần nó — loader gói, mapper của hai module, và đường chuyển số dư của `posting`
+— mà chúng không import được lẫn nhau (luật phụ thuộc C3/C4).
+"""
+
+
 class DetailTracking:
     """Giá trị hợp lệ của `chart_of_accounts.detail_tracking` (FR-SYS-021).
 
