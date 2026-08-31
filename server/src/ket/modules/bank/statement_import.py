@@ -50,6 +50,7 @@ from ket.modules.bank.models import (
     BankStatementLine,
     StatementMatchKind,
 )
+from ket.modules.bank.statement_branch import sync_statement_branch
 
 
 @dataclass(frozen=True)
@@ -144,9 +145,6 @@ def import_statement(
 
     statement = BankStatement(
         bank_account_id=bank_account_id,
-        # Chi nhánh đi theo TÀI KHOẢN, không theo người nhập — xem
-        # `statement_branch`; `NULL` = tài khoản dùng chung toàn công ty.
-        branch_id=account.branch_id,
         statement_date=max(line.booked_on for line in result.lines),
         opening_balance=opening_balance,
         closing_balance=closing_balance,
@@ -172,7 +170,6 @@ def import_statement(
             {
                 "statement_id": statement.id,
                 "bank_account_id": bank_account_id,
-                "branch_id": account.branch_id,
                 "line_no": line.row_number,
                 "txn_date": line.booked_on,
                 "reference_no": line.reference,
@@ -184,6 +181,12 @@ def import_statement(
             for line in result.lines
         ],
     )
+    # Chi nhánh của sao kê + dòng đi theo TÀI KHOẢN, không theo người nhập, và
+    # được đặt bằng ĐÚNG hàm mà hook gộp danh mục dùng — hai cửa, một luật. Gán
+    # tay ở đây thay vì gọi hàm là mời một trong hai cửa lệch đi, và cửa lệch
+    # sinh ra dòng `branch_id IS NULL` mà policy `allow_null_branch` cho MỌI chi
+    # nhánh đọc: một lỗ cô lập im lặng, không phải một ô hiển thị sai.
+    sync_statement_branch(session, bank_account_id=bank_account_id)
     record_use(session, entity_type=COMPANY_BANK_ACCOUNT_TABLE_NAME, entity_id=bank_account_id)
     record_action(
         session,

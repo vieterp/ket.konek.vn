@@ -41,6 +41,7 @@ from ket.kernel.master_data.models.company_bank_account import (
 from ket.kernel.master_data.usage import usage_count_of
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.modules.bank.models import (
+    BankStatement,
     BankStatementLine,
     BankVoucherKind,
     StatementMatchKind,
@@ -757,6 +758,59 @@ def test_delete_statement_waits_for_inflight_match_then_refuses(
         assert line is not None and line.match_kind == StatementMatchKind.MANUAL
         # Dọn cho chi nhánh dùng chung.
         unmatch_line(session, line_id=line_id)
+        delete_statement(session, statement_id=statement_id)
+
+
+def test_import_stamps_the_accounts_branch_on_statement_and_lines(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    bank_account: int,
+    profile_id: int,
+) -> None:
+    """Đường NHẬP phải tự đặt chiều chi nhánh, không dựa vào ai gọi hộ.
+
+    Kiểm đột biến của lát 6G-1 bắt được đúng lỗ này: bản test đầu chỉ gieo sao
+    kê bằng tay rồi gọi `sync_statement_branch`, nên bỏ hẳn phần gán chi nhánh
+    khỏi `import_statement` vẫn xanh — trong khi dòng nhập thật sẽ mang
+    `branch_id IS NULL` và policy `allow_null_branch` cho MỌI chi nhánh đọc.
+    """
+    # Tài khoản THUỘC MỘT CHI NHÁNH, không phải tài khoản dùng chung: với
+    # `branch_id IS NULL` thì "không đóng dấu" và "đóng dấu NULL" cho cùng một
+    # kết quả, và bài kiểm trở thành hằng đúng (bẫy kiểm-đột-biến-không-trung-
+    # thực, bài học 6F-2).
+    owned = ensure_company_bank_account(
+        session_factory,
+        dataset_alpha,
+        context,
+        code="6G-CN-RIENG",
+        branch_id=context.branch_id,
+    )
+    account_branch = context.branch_id
+
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        result = _import(
+            session,
+            bank_account_id=owned,
+            profile_id=profile_id,
+            source=csv_of([("15/01/2026", "BR-1", "chi nhanh", "", "310000", "")]),
+            content_hash="8" * 64,
+        )
+        statement_id = result.statement.id  # type: ignore[attr-defined]
+
+    with unit_of_work(session_factory, scope) as session:
+        statement = session.get(BankStatement, statement_id)
+        assert statement is not None
+        assert statement.branch_id == account_branch
+        line_branches = set(
+            session.scalars(
+                select(BankStatementLine.branch_id).where(
+                    BankStatementLine.statement_id == statement_id
+                )
+            ).all()
+        )
+        assert line_branches == {account_branch}
         delete_statement(session, statement_id=statement_id)
 
 

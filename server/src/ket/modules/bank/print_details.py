@@ -122,7 +122,7 @@ def _money_amounts(
 
     Chuyển tiền nội bộ chạm 112 ở CẢ HAI bên (tiền không rời doanh nghiệp) nên
     số ròng bằng 0. Số đáng in là số **ĐẾN** tài khoản đích, tức bên **Nợ** —
-    cùng luật quy chủ mà `balance_service.deposit_owner_account` khai cho sổ
+    cùng luật quy chủ mà `posting_mapper._deposit_owner` khai lúc ghi sổ
     ("chuyển nội bộ thì dòng Nợ thuộc TK đích"). Không lấy bên Có: một lệnh
     chuyển kèm dòng phí ngân hàng (`Nợ 642/Có 1121`) có HAI dòng ghi Có 112x,
     và cộng cả hai là tờ giấy nói đã chuyển đi nhiều hơn số tài khoản đích nhận
