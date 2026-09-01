@@ -31,6 +31,39 @@ brew services start postgresql@16
 Linux: cài `postgresql-16`, sửa `port` trong `/etc/postgresql/16/main/postgresql.conf`,
 `systemctl restart postgresql@16-main`.
 
+### Khi bản phân phối không còn `postgresql-16` (Ubuntu 26.04 trở đi)
+
+Ubuntu 26.04 chỉ có **PostgreSQL 18** trong kho mặc định; `postgresql-16` phải lấy từ kho
+PGDG. Chạy test trên 18 là **được**, và cổng phiên bản của app vẫn qua vì nó chỉ chặn cụm
+**cũ hơn** đích. Nhưng phải biết mình đang đánh đổi gì:
+
+> **CI vẫn chạy `postgres:16`.** Cụm dev 18 nghĩa là "xanh ở máy" không còn bảo đảm "xanh ở
+> CI" — chênh lệch chỉ lộ ra sau khi push. Ai gặp lỗi CI mà máy mình xanh thì nghi chỗ này
+> trước tiên.
+
+Dựng cụm test cục bộ trên 18 (đã dùng thật từ lát 7A, 2026-09-01):
+
+```bash
+sudo -u postgres psql -c "CREATE ROLE $USER LOGIN SUPERUSER"   # DSN admin không ghi user
+# /etc/postgresql/18/main/pg_hba.conf — thêm TRƯỚC dòng scram 127.0.0.1:
+#   host  all  <user>,ket_owner,ket_app,ket_worker  127.0.0.1/32  trust
+sudo systemctl reload postgresql@18-main
+make server-test-db PGPORT=5432
+```
+
+`trust` chứ không phải mật khẩu, vì hai lý do bắt buộc: `roles.sql` cố ý tạo
+`ket_owner`/`ket_app`/`ket_worker` **không mật khẩu**, và `tests/conftest.py` **xóa rồi dựng
+lại** chính các vai trò ấy mỗi phiên — mật khẩu đặt tay sẽ mất sau lượt chạy đầu tiên. Phạm
+vi hẹp lại bằng cách liệt kê đúng bốn vai trò và chỉ loopback IPv4.
+
+Không cần tạo tay vai trò nền hay CSDL `ket_test`: `conftest` tự chạy `roles.sql`
+(`ensure_database_roles`) và tự `CREATE DATABASE`.
+
+> **Cụm này bị phá được.** Nhóm test `db` chạy `DROP ROLE`/`DROP OWNED BY` ở phạm vi **cụm**
+> — đó là điều mà `KET_TEST_DESTRUCTIVE_CLUSTER=1` bắt người chạy khẳng định. Đừng trỏ nó
+> vào cụm còn giữ dữ liệu của việc khác; nếu cần dùng chung máy, dựng cụm riêng bằng
+> `pg_createcluster 18 kettest -p 5433`.
+
 ---
 
 ## 1b. Hai biến môi trường mới (lát 2C-1)
