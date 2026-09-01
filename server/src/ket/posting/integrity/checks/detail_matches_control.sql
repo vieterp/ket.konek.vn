@@ -5,9 +5,15 @@
 --
 -- Validator `dimension_required` chặn từ lúc ghi sổ; check này bắt dữ liệu
 -- đi vòng (SQL trực tiếp, gói cấu hình đổi `detail_tracking` SAU khi đã có
--- phát sinh). Đối chiếu số dư với sổ chi tiết thật (`ar_ap_ledger`,
--- `inventory_balances`) thuộc phase 7/8 — bổ sung vào registry khi các bảng
--- đó ra đời.
+-- phát sinh). Nó đo CHIỀU CÓ MẶT, không đo SỐ TIỀN: một dòng đủ chiều vẫn có
+-- thể mang số lệch với sổ chi tiết.
+--
+-- Phép đo số tiền là việc của một check khác, và nó chưa chạy được: bản thảo
+-- `arap_matches_control.sql` đã có trong thư mục này nhưng **cố ý chưa vào
+-- registry** — bốn nguồn báo-sai còn mở (bút toán tổng hợp gõ thẳng vào TK
+-- công nợ, bên trái tính của TK lưỡng tính không có hóa đơn chi tiết, hóa đơn
+-- rơi khi chuyển năm, và ranh giới năm giữa hai sổ phụ) được liệt kê ngay
+-- trong đầu tệp ấy. Đối chiếu tồn kho thuộc phase 8.
 --
 -- `customer`/`vendor`/`employee` đòi đúng LOẠI đối tác (cùng luật
 -- `PostingDimensions.has_tracking`): partner_kind 0 customer, 1 vendor,

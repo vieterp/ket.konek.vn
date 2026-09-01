@@ -1,5 +1,6 @@
 """Danh mục các phép kiểm toàn vẹn (FR-NFR-007, FR-GLE-032/033) — 7 của
-phase 4 + đối chiếu sổ quỹ thủ quỹ của phase 6 (BR-WHK-03).
+phase 4, đối chiếu sổ quỹ thủ quỹ của phase 6 (BR-WHK-03), và đối chiếu số đã
+đối trừ với dòng đối trừ của lát 7A (BR-QUY-02).
 
 Mỗi phép kiểm là MỘT tệp `.sql` độc lập trả về danh sách dòng chênh lệch —
 không UPDATE, không tự sửa (chữ của phase file: "chỉ chỉ ra"). Registry là
@@ -15,6 +16,13 @@ Hợp đồng của một tệp check:
   `SELECT count(*)` và `LIMIT` nên thứ tự không có hợp đồng;
 * cột trả về tự mô tả được dòng chênh (khóa + hai vế lệch), và dòng nào lần
   về chứng từ được thì mang `voucher_id` — U11 đòi mỗi lỗi dẫn tới chỗ sửa.
+
+Thư mục này có MỘT tệp `.sql` **không** nằm trong `CHECKS`:
+`arap_matches_control.sql` — bản thảo đối chiếu sổ phụ công nợ với số dư TK
+công nợ trên sổ cái. Nó đứng ngoài registry có chủ đích: trên dữ liệu đúng
+của hôm nay nó vẫn đỏ ở bốn tình huống hợp lệ, và đầu tệp ấy liệt kê cả bốn
+kèm điều kiện phải đóng trước khi thêm một dòng vào danh sách dưới đây. Một
+check kêu sai dạy người dùng bỏ qua mọi check còn lại.
 """
 
 from __future__ import annotations
@@ -83,6 +91,11 @@ CHECKS: Final[tuple[IntegrityCheck, ...]] = (
         code="treasurer_book_matches_ledger",
         title="Sổ quỹ thủ quỹ khớp sổ kế toán TK tiền mặt",
         rule="BR-WHK-03",
+    ),
+    IntegrityCheck(
+        code="settlement_matches_subledger",
+        title="Số đã đối trừ trên sổ phụ khớp dòng đối trừ của chứng từ đã ghi sổ",
+        rule="BR-QUY-02",
     ),
 )
 
