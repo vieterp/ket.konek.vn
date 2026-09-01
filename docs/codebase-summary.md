@@ -240,7 +240,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 
 ---
 
-## 5. Bộ test (**server: 767 không-DB + 1147 DB (1.914 total); client: 267**) 
+## 5. Bộ test (**server: 768 không-DB + 1147 DB (1.915 total); client: 267**) 
 
 | Tệp | Chứng minh điều gì |
 | --- | --- |
@@ -286,7 +286,21 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_statement_layout_loader.py` (non-db) | **Lát 5B**: fail-closed loader — sai công thức, rowref, chu trình, TK không khớp accounts.csv; golden test B01/B02 khớp mẫu đúng thứ tự; chỉ tiêu ngoại lệ không cộng dương; layout income cấm hàm số dư |
 | `test_statement_builder_api.py` (db) | **Lát 5B**: dataset riêng `bctc5b` — statement builder lấy `opening_balances`+`gl_postings`, cột so sánh (N/A khi chưa lập), test BR-GLE-04/BR-RPT-01/BR-RPT-04; API `/api/v1/statements` + `/api/v1/statements/{layout_code}/preview` + quyền + 403/404 |
 
-Tổng **1.914 test** (1.147 cần PostgreSQL). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
+Tổng **1.915 test** (1.147 cần PostgreSQL).
+
+**Băm mật khẩu chạy tham số RẺ trong test.** `conftest.cheap_password_hashing`
+(autouse, phạm vi HÀM) hạ Argon2id xuống mức tối thiểu: hồ sơ cProfile cho thấy
+băm chiếm **16% CPU** của bộ test, và bỏ nó rút bộ DB từ **985s xuống 868s
+(−12%)**. Bài nào cần tham số THẬT phải mang dấu `real_password_hashing` —
+hiện có hai: `test_password_policy.py` (khẳng định trên chính cấu hình
+production) và `test_auth_concurrency.py` (cửa sổ đua rộng đúng bằng thời gian
+băm, hạ băm là làm bài mất khả năng bắt lỗi).
+
+Fixture phải ở phạm vi **hàm**, không phải phiên: bản đầu dùng phạm vi phiên và
+để tệp cần tham số thật "tắt" bằng cách khai trùng tên — cách ấy không gỡ được
+bản vá đã áp từ module chạy trước, nên tệp ấy xanh RỖNG trong mọi lượt chạy
+đầy đủ. `test_password_policy.py::test_the_real_argon2_parameters_are_live` là
+cổng canh chính chuyện đó. Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
 
 ---
 

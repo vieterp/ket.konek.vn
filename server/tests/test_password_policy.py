@@ -18,6 +18,32 @@ from argon2 import PasswordHasher
 from ket.kernel.errors import AuthThrottledError, WeakPasswordError
 from ket.kernel.security import passwords
 
+pytestmark = pytest.mark.real_password_hashing
+"""Tệp này khẳng định trên THAM SỐ ARGON2 THẬT.
+
+`conftest.cheap_password_hashing` hạ chi phí băm cho cả bộ test (16% CPU).
+Chạy tệp này dưới bộ tham số rẻ sẽ khiến ba bài về `needs_rehash` xanh **rỗng**:
+hash "yếu hơn" hoá ra mạnh hơn bộ đang chạy, và `_DUMMY_HASH` bị thay nên bài
+canh hằng số production trở thành phép so một thứ với chính nó.
+
+Bản đầu của bản vá dùng fixture phạm vi PHIÊN + khai trùng tên ở đây để "tắt".
+Cách ấy không chạy — khai trùng không gỡ được bản vá đã áp từ module trước — và
+review pre-landing bắt được bằng probe. Dấu `real_password_hashing` + fixture
+phạm vi HÀM ở conftest mới thật sự miễn trừ.
+"""
+
+
+def test_the_real_argon2_parameters_are_live() -> None:
+    """Cổng của chính tệp này: sai bộ tham số thì ĐỎ, không xanh rỗng.
+
+    Không có bài này thì một lần nữa ai đó đổi cơ chế miễn trừ và mọi khẳng
+    định dưới đây lặng lẽ mất hiệu lực — đúng chuyện vừa xảy ra.
+    """
+    assert passwords._HASHER.memory_cost == 64 * 1024
+    assert passwords._HASHER.time_cost == 3
+    assert passwords._DUMMY_HASH.startswith("$argon2id$v=19$m=65536,t=3,p=1$")
+
+
 GOOD_PASSWORD = "Ph1eu#Thu2026"
 USERNAME = "ketoan"
 

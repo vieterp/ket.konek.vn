@@ -21,6 +21,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from argon2 import PasswordHasher
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
@@ -417,6 +418,54 @@ def session_factory(app_engine: Engine) -> sessionmaker[Session]:
     dùng được nó.
     """
     return create_session_factory(app_engine)
+
+
+@pytest.fixture(scope="session")
+def _cheap_hasher() -> tuple[PasswordHasher, str]:
+    """Bộ băm rẻ + hash mồi, dựng MỘT lần cho cả phiên."""
+    cheap = PasswordHasher(
+        # `memory_cost` tối thiểu của Argon2 là `8 * parallelism`; lấy 16 để có
+        # chút dư — nâng `parallelism` mà quên chỗ này thì MỌI lượt băm ném.
+        time_cost=1,
+        memory_cost=16,
+        parallelism=1,
+        hash_len=32,
+        salt_len=16,
+    )
+    return cheap, cheap.hash("khong-phai-mat-khau-that")
+
+
+@pytest.fixture(autouse=True)
+def cheap_password_hashing(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hạ tham số Argon2id xuống mức tối thiểu — trừ bài mang dấu `real_password_hashing`.
+
+    Đo được, không phải phỏng đoán: cProfile một lượt 380 bài cho
+    `argon2_hash` + `argon2_verify` = **38,4s / 244s (16%)**. Tham số thật
+    (`time_cost=3`, `memory_cost=64 MiB`) tồn tại để một cuộc dò offline tốn
+    kém; trong test không có kẻ dò nào, chỉ có cùng một mật khẩu bị băm hàng
+    trăm lần.
+
+    **Phạm vi hàm, không phải phiên** — và đó là điểm cốt tử. Bản đầu dùng
+    fixture phạm vi PHIÊN rồi để `test_password_policy.py` "tắt" bằng cách khai
+    trùng tên. Cách ấy KHÔNG chạy: khai trùng chỉ ngăn module đó *yêu cầu*
+    fixture, nó không gỡ một bản vá đã áp từ module chạy trước. Mà
+    `test_password_policy.py` xếp sau ~50 tệp, nên trong mọi lượt chạy thật nó
+    kiểm trên `m=8,t=1` và ba khẳng định về tham số của nó **xanh rỗng** —
+    đúng loại lỗi mà chính bản vá này định tránh (review pre-landing bắt được
+    bằng probe in thẳng `_HASHER` ra).
+
+    Phạm vi hàm + `monkeypatch` thì mỗi bài tự áp và tự gỡ, nên dấu miễn trừ
+    có hiệu lực thật. Chi phí `setattr` mỗi bài là không đáng kể.
+    """
+    if request.node.get_closest_marker("real_password_hashing"):
+        return
+    from ket.kernel.security import passwords
+
+    hasher, dummy = request.getfixturevalue("_cheap_hasher")
+    monkeypatch.setattr(passwords, "_HASHER", hasher)
+    # `_DUMMY_HASH` phải đi theo: tham số nằm trong chính chuỗi hash, giữ bản
+    # cũ thì đường "người dùng không tồn tại" vẫn trả full 64 MiB.
+    monkeypatch.setattr(passwords, "_DUMMY_HASH", dummy)
 
 
 def api_test_client(app: FastAPI) -> TestClient:
