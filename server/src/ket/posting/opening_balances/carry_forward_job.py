@@ -201,6 +201,9 @@ def _carry_invoices(
             {
                 "id": uuid7(),
                 "opening_balance_id": target.id,
+                # Cùng chi nhánh với dòng cha theo đúng định nghĩa: `targets`
+                # đã lọc `parent.branch_id == branch_id` ở trên.
+                "branch_id": branch_id,
                 "invoice_no": row.invoice_no,
                 "invoice_date": row.invoice_date,
                 "due_date": row.due_date,

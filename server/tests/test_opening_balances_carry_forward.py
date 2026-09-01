@@ -142,6 +142,7 @@ def seed_source_year(session: Session, context: PostingContext, *, vendor_id: in
         [
             OpeningBalanceInvoice(
                 opening_balance_id=parent.id,
+                branch_id=parent.branch_id,
                 invoice_no="HD-A",
                 invoice_date=date(2025, 11, 20),
                 amount=Decimal("600000.00"),
@@ -149,6 +150,7 @@ def seed_source_year(session: Session, context: PostingContext, *, vendor_id: in
             ),
             OpeningBalanceInvoice(
                 opening_balance_id=parent.id,
+                branch_id=parent.branch_id,
                 invoice_no="HD-B",
                 invoice_date=date(2025, 12, 5),
                 amount=Decimal("400000.00"),

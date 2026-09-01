@@ -84,6 +84,7 @@ def _seed_two_groups(session: Session, context: PostingContext) -> int:
         session.add(
             OpeningBalanceInvoice(
                 opening_balance_id=payable_row.id,
+                branch_id=payable_row.branch_id,
                 invoice_no=f"HD-{ledger}",
                 invoice_date=date(2025, 12, 1),
                 amount=Decimal("500000.00"),
