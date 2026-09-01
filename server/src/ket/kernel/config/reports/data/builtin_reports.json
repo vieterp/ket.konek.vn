@@ -146,6 +146,20 @@
       "supports_branch": false,
       "supports_ledger": false,
       "description": "Bảng kê số dư ngân hàng theo từng TK ngân hàng và loại tiền (FR-BNK-041)"
+    },
+    {
+      "code": "ar_ap_aging",
+      "sql_file": "ar_ap_aging.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "direction"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Tuổi nợ phải thu/phải trả theo mốc quá hạn, gộp sổ phụ công nợ và số dư ban đầu; direction ghim 'thu' hoặc 'chi'"
     }
   ],
   "param_sets": [
@@ -282,6 +296,20 @@
             "label": "Tài khoản ngân hàng",
             "label_en": "Bank account",
             "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "ar_ap_aging_params",
+      "spec": {
+        "params": [
+          {
+            "name": "direction",
+            "kind": "text",
+            "label": "Chiều công nợ",
+            "label_en": "Debt direction",
+            "required": true
           }
         ]
       }
@@ -1415,6 +1443,200 @@
           "orientation": "landscape"
         }
       }
+    },
+    {
+      "code": "ar-aging",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          {
+            "key": "partner_code",
+            "label": "Mã đối tác",
+            "label_en": "Partner code",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "partner_name",
+            "label": "Tên đối tác",
+            "label_en": "Partner name",
+            "type": "text"
+          },
+          {
+            "key": "invoice_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "invoice_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "days_overdue",
+            "label": "Số ngày quá hạn",
+            "label_en": "Days overdue",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "bucket",
+            "label": "Nhóm tuổi nợ",
+            "label_en": "Aging bucket",
+            "type": "text",
+            "align": "center",
+            "width": 10
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "remaining_fc",
+            "label": "Còn nợ (nguyên tệ)",
+            "label_en": "Remaining (FC)",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "remaining",
+            "label": "Còn nợ (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "remaining"
+        ],
+        "sort": [
+          "partner_code",
+          "due_date",
+          "invoice_no"
+        ]
+      }
+    },
+    {
+      "code": "ap-aging",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          {
+            "key": "partner_code",
+            "label": "Mã đối tác",
+            "label_en": "Partner code",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "partner_name",
+            "label": "Tên đối tác",
+            "label_en": "Partner name",
+            "type": "text"
+          },
+          {
+            "key": "invoice_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "invoice_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "days_overdue",
+            "label": "Số ngày quá hạn",
+            "label_en": "Days overdue",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "bucket",
+            "label": "Nhóm tuổi nợ",
+            "label_en": "Aging bucket",
+            "type": "text",
+            "align": "center",
+            "width": 10
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "remaining_fc",
+            "label": "Còn nợ (nguyên tệ)",
+            "label_en": "Remaining (FC)",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "remaining",
+            "label": "Còn nợ (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "remaining"
+        ],
+        "sort": [
+          "partner_code",
+          "due_date",
+          "invoice_no"
+        ]
+      }
     }
   ],
   "definitions": [
@@ -1651,6 +1873,38 @@
       "ledger_scope": "both",
       "package_scheme": null,
       "required_permission_module": "bank"
+    },
+    {
+      "code": "tuoi-no-phai-thu",
+      "name": "Bảng tuổi nợ phải thu",
+      "name_en": "Accounts receivable aging",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_aging",
+      "layout_code": "ar-aging",
+      "param_set_code": "ar_ap_aging_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu"
+      },
+      "package_scheme": null,
+      "required_permission_module": "receivables"
+    },
+    {
+      "code": "tuoi-no-phai-tra",
+      "name": "Bảng tuổi nợ phải trả",
+      "name_en": "Accounts payable aging",
+      "category": "mua-hang",
+      "module": "purchase",
+      "dataset_code": "ar_ap_aging",
+      "layout_code": "ap-aging",
+      "param_set_code": "ar_ap_aging_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "chi"
+      },
+      "package_scheme": null,
+      "required_permission_module": "receivables"
     }
   ]
 }
