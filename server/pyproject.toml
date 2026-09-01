@@ -150,6 +150,11 @@ markers = [
     # CI chạy nhóm này trong job riêng có service PostgreSQL; job đa-OS chạy
     # `-m 'not db'` vì service container chỉ có trên runner Linux.
     "db: cần PostgreSQL thật (bỏ qua khi không kết nối được)",
+    # Chạy trên THAM SỐ ARGON2 THẬT. `conftest.cheap_password_hashing` hạ chi
+    # phí băm cho toàn bộ test (băm chiếm 16% CPU của bộ); bài nào khẳng định
+    # trên cấu hình production, hoặc có cửa sổ đua rộng đúng bằng thời gian
+    # băm, phải mang dấu này.
+    "real_password_hashing: không hạ tham số Argon2id cho bài này",
 ]
 
 # ---------------------------------------------------------------------------

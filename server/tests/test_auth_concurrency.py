@@ -31,7 +31,17 @@ from ket.kernel.persistence.session import control_session
 from ket.kernel.security import account_service, auth_service, totp
 from ket.kernel.security.keystore import SecretBox
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.real_password_hashing]
+"""Giữ THAM SỐ ARGON2 THẬT cho tệp này.
+
+`conftest.cheap_password_hashing` hạ chi phí băm cho cả bộ test. Ở đây điều đó
+làm hỏng chính thứ đang kiểm: cửa sổ đua của `auth_service` là quãng
+`SELECT … FOR UPDATE` → verify mật khẩu → ghi số lần sai, và **độ rộng của nó
+gần bằng thời gian băm**. Hạ băm từ ~80ms xuống ~0,1ms thu cửa sổ ấy lại ngót
+ba bậc, nên một hồi quy tương lai (ví dụ ai đó bỏ `with_for_update()`) vẫn có
+thể xanh vì hai thread không kịp chen vào nhau. Bài vẫn *chạy*, chỉ là gần như
+không còn bắt được gì — nên nó phải chạy trên tham số thật (review pre-landing).
+"""
 
 PASSWORD = "Ph1eu#Thu2026"
 WRONG_PASSWORD = "Sai#MatKhau2026"
