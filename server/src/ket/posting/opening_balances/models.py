@@ -184,8 +184,8 @@ class OpeningBalanceInvoice(DatasetBase, Audited):
     thu/phải trả, và **từng lần tạm ứng** của nhóm nhân viên — SRS đòi chi tiết
     theo lần cho cả ba. Tổng các dòng con phải khớp bên còn-nợ của dòng cha
     (BR-OPB-02 — đúng theo cách dựng ở lượt nhập; lượt chuyển năm đo lệch bằng
-    `invoice_overrun_parents`). Không có `branch_id` riêng — phạm vi là phạm vi
-    dòng cha, cùng lối `opening_balance_id CASCADE`.
+    `invoice_overrun_parents`). Mang `branch_id` chép từ dòng cha từ lát 7A —
+    xem docstring của chính cột.
     """
 
     __tablename__ = "opening_balance_invoices"
@@ -196,6 +196,7 @@ class OpeningBalanceInvoice(DatasetBase, Audited):
         CheckConstraint("paid_amount_fc >= 0", name="paid_fc_not_negative"),
         CheckConstraint("paid_amount_fc <= amount_fc", name="paid_fc_within_amount"),
         Index("ix_opening_balance_invoices_parent", "opening_balance_id"),
+        Index("ix_opening_balance_invoices_branch", "branch_id"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -204,6 +205,14 @@ class OpeningBalanceInvoice(DatasetBase, Audited):
         ForeignKey("opening_balances.id", ondelete="CASCADE"),
         nullable=False,
     )
+
+    branch_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    """Bản sao `opening_balances.branch_id` — RLS lọc theo cột của CHÍNH bảng
+    (lát 7A, trả nợ 4C). Trước đó bảng không có cột này, và vì cổng
+    `test_rls_policy_coverage` chỉ soi bảng CÓ `branch_id`, nó không bao giờ bị
+    hỏi tới: một truy vấn đọc thẳng bảng vượt được ranh giới chi nhánh mà không
+    có gì đỏ. Mọi đường ghi phải điền cột này bằng `branch_id` của dòng cha —
+    lệch nó là lệch phạm vi, và bản chép chỉ đúng lúc nó được ghi."""
 
     invoice_no: Mapped[str | None] = mapped_column(String(50), nullable=True)
     invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)

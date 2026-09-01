@@ -426,10 +426,32 @@ def test_fx_difference_grid_receipt_and_payment(
 
 
 def test_settlement_kind_without_a_source_is_refused(
-    run: Runner, context: PostingContext, accounts: dict[str, int]
+    run: Runner,
+    context: PostingContext,
+    accounts: dict[str, int],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Loại đích chưa có chủ (hóa đơn bán — phase 7) bị từ chối rõ ràng."""
-    assert PROVIDERS.settlement_source(SettlementTargetKind.SALES_INVOICE) is None
+    """Loại đích chưa có chủ bị từ chối rõ ràng.
+
+    Viết ở 6B khi hóa đơn bán **thật sự** chưa có source. Lát 7A đăng ký source
+    cho cả `SALES_INVOICE` lẫn `PURCHASE_INVOICE`, nên không còn giá trị enum
+    nào thiếu chủ để mượn — nhưng bất biến thì vẫn sống: một bản cài KHÔNG có
+    module `receivables` phải từ chối bằng `settlement.kind_unavailable` chứ
+    không nuốt dòng đối trừ.
+
+    Nên thay vì xóa bài, mô phỏng sự vắng mặt ngay tại cái khe mà
+    `posting/settlements.py` hỏi — `PROVIDERS.settlement_source` — chứ không
+    chọc vào dict private của registry.
+    """
+    # `delitem` trên chính sổ đăng ký, không `setattr` lên singleton: vá
+    # phương thức của một instance dùng chung thì lượt undo của pytest ghi bound
+    # method thành THUỘC TÍNH INSTANCE vĩnh viễn — hành vi y hệt, nhưng registry
+    # không còn nguyên vẹn cho các tệp chạy sau. `delitem` khôi phục đúng mục đã
+    # gỡ, và nó mô phỏng đúng thứ đang mô phỏng: bản cài vắng mặt.
+    monkeypatch.delitem(
+        PROVIDERS._settlement_sources,
+        SettlementTargetKind.SALES_INVOICE,
+    )
 
     def work(session: Session) -> object:
         with pytest.raises(PostingValidationError) as caught:

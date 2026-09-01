@@ -47,3 +47,11 @@ docs/journals/
 # --- Playwright (bộ đo hiệu năng lưới nhập liệu, spike S3) ---
 client/test-results/
 client/playwright-report/
+
+# --- Tài liệu nguồn nội bộ: không phân phối, không track ---
+# Bộ SRS, bản mirror MISA và Công báo TT99 là tài liệu nguồn để đối chiếu yêu cầu.
+# Chúng nằm ngoài git theo quyết định của user (2026-09-01) — mã và kế hoạch trỏ
+# vào chúng bằng đường dẫn, nên thư mục phải CÓ trên máy dev nhưng KHÔNG vào repo.
+/docs/srs/
+/docs/misa-kb/
+/docs/TT99/

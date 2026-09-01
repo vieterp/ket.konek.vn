@@ -48,8 +48,8 @@ INTEGRITY_VIEW: Final[str] = permission_code(
 
 
 class IntegrityCheckParams(BaseModel):
-    """Không tham số = chạy đủ 7 phép kiểm; `checks` thu hẹp khi cần lặp nhanh
-    một phép vừa sửa xong dữ liệu."""
+    """Không tham số = chạy đủ bộ trong `CHECKS`; `checks` thu hẹp khi cần lặp
+    nhanh một phép vừa sửa xong dữ liệu."""
 
     checks: list[str] | None = None
 

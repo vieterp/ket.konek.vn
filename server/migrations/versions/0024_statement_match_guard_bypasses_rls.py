@@ -46,9 +46,13 @@ trò từng dataset sẽ là **bản chép thứ hai** của danh sách quyền,
 `rebuild_dataset_grants` kể lại ("danh sách chép làm hai bản… không test nào
 đỏ"). Bề mặt hàm này hẹp tới mức ai gọi được cũng không đọc thêm được gì.
 
-Bước `_refresh_builtin_data` **GIỮ ở 0023**: migration này không thêm cột nào
-mà dataset báo cáo builtin đọc, nên nó không phải là "migration cuối chuỗi" theo
-nghĩa của doctrine 6B (cùng lối `0018`/`0019` giữ bước ấy ở `0017`).
+Bước `_refresh_builtin_data` KHÔNG ở revision này: migration này không thêm cột
+nào mà dataset báo cáo builtin đọc, nên nó không phải là "migration cuối chuỗi"
+theo nghĩa của doctrine 6B (cùng lối `0018`/`0019` giữ bước ấy ở `0017`). Lúc
+0024 được viết bước ấy nằm ở 0023; lát 7A đã dời nó xuống **`0025`** vì 0025
+thêm bảng `ar_ap_ledger` mà dataset `ar_ap_aging` đọc. Tra chỗ hiện tại của nó
+bằng `grep -rn "_refresh_builtin_data" migrations/versions/` chứ đừng tin con
+số trong một docstring cũ — nó đi theo đuôi chuỗi.
 """
 
 from __future__ import annotations

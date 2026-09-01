@@ -12,7 +12,7 @@ nằm ở `docs/system-architecture.md` — phần lớn nội dung ở đó ch�
 ## 1. Đang có gì
 
 `server/src/ket` ≈ **50.400 dòng Python**: **hạ tầng** (định tuyến dữ
-liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **posting engine + sổ cái hai sổ** (phase 4), **gói cấu hình TT99/TT133** (5A), **formula engine & statement builder** (5B), **report engine metadata-driven** (5C–5D), **render job nền** (5E), **protocol liên-module RT-18 + guards + auto-posting** (6A), **module quỹ tiền mặt (cash_book) hoàn chỉnh** (6B), **module ngân hàng (bank) + thủ quỹ (warehousing/treasurer) server** (6C), **sao kê + đối chiếu ngân hàng + số dư đầu kỳ ngân hàng** (6D), **BFF cashflow + 9 báo cáo phân hệ metadata-driven** (6E-1), **mẫu in chứng từ tiền 01-TT/02-TT/08a-TT** (6E-2), **chiều `bank_account` trên dòng sổ + RLS sao kê** (6G-1); phía client có **trọn bộ UI "Tiền vào tiền ra"** — thẻ + lưới + form phiếu, kiểm kê quỹ (6F-1), đối chiếu ngân hàng + thủ quỹ (6F-2); **CRUD hồ sơ sao kê + đóng băng kernel** (6G-2). **Chưa có** module mua/bán/kho/lương/thuế (phase 7–9).
+liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **posting engine + sổ cái hai sổ** (phase 4), **gói cấu hình TT99/TT133** (5A), **formula engine & statement builder** (5B), **report engine metadata-driven** (5C–5D), **render job nền** (5E), **protocol liên-module RT-18 + guards + auto-posting** (6A), **module quỹ tiền mặt (cash_book) hoàn chỉnh** (6B), **module ngân hàng (bank) + thủ quỹ (warehousing/treasurer) server** (6C), **sao kê + đối chiếu ngân hàng + số dư đầu kỳ ngân hàng** (6D), **BFF cashflow + 9 báo cáo phân hệ metadata-driven** (6E-1), **mẫu in chứng từ tiền 01-TT/02-TT/08a-TT** (6E-2), **chiều `bank_account` trên dòng sổ + RLS sao kê** (6G-1); phía client có **trọn bộ UI "Tiền vào tiền ra"** — thẻ + lưới + form phiếu, kiểm kê quỹ (6F-1), đối chiếu ngân hàng + thủ quỹ (6F-2); **CRUD hồ sơ sao kê + đóng băng kernel** (6G-2); **sổ phụ công nợ `ar_ap_ledger` + module `receivables`** (7A). **Chưa có** module mua/bán/kho/lương/thuế (phase 7B–9).
 
 | Có thật | Chưa có |
 | --- | --- |
@@ -106,7 +106,8 @@ liệu, phân quyền tầng DB, nhật ký, phép tính tiền, danh tính), **
 | **In chứng từ tiền** (6E-2) | `kernel/formatting.py` (chuyển từ `reporting/rendering/formats.py` — module không import ngược `reporting` được), `kernel/money_words.py` (đọc số thành chữ cho dòng "(Viết bằng chữ)" của 01-TT/02-TT, phần lẻ không làm tròn), `kernel/config/printing/`: `context.py` (`DocumentPrintDetails` sáu vùng của biểu mẫu giấy), `voucher_fields.py` (`money_side_amounts` — số tiền in ra là số THẬT vào/ra TK tiền, không phải tổng mọi dòng), `subjects.py` (registry bản in KHÔNG phải chứng từ → mã quyền `view` của phân hệ); hook `PostingDocumentType.print_details` + `modules/{cash_book,bank}/print_details.py`; 8 mẫu builtin (GLE, PT/PC theo 01-TT/02-TT, UNC/BC/SEC/CTNB bản in nội bộ vì thông tư không có mẫu, KKQ theo 08a-TT); `POST /cash-book/count-sheets/{id}/print` (không ghi `print_log`); migration 0021 chỉ gieo dữ liệu | Thêm mẫu in cho một phân hệ mới |
 | `api/routers/cashflow` | **Phase 6E-1** — BFF chỉ-đọc `/api/v1/cashflow/{overview,transactions}` cho màn hình "Tiền vào tiền ra": hàng thẻ quỹ + từng TK ngân hàng, lưới giao dịch đổi theo thẻ. Gộp hai module Ở TẦNG API (C3 vẫn cấm `cash_book` ↔ `bank` import nhau); **quyền theo TỪNG nửa** — thiếu quyền quỹ thì không thẻ quỹ, thiếu quyền ngân hàng thì `?source=bank` trả 403, thiếu cả hai mới 403 cả màn hình; `unassigned_deposit` phơi phần 112 chưa quy được TK ngân hàng | Màn hình dòng tiền U-Quỹ |
 | `modules/bank/balance_service` | **Phase 6E-1** — số dư từng TK ngân hàng tới một ngày (kind-1 opening + phát sinh); `deposit_owner_account()` đưa luật quy chủ TK ngân hàng (CTNB: dòng Nợ thuộc TK đích) về MỘT chỗ Python, dùng chung với `movement_source` | Thẻ tài khoản, carry-forward |
-| `modules/*` | `cash_book/` (6B–6C, +`balance_service` 6E-1); `bank/`, `warehousing/treasurer/` (6C–6E-1); `general_ledger/journal/` (phase 4); còn lại chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase 7–9 | — |
+| `modules/receivables/` | **Phase 7A** — chủ sở hữu `ar_ap_ledger` (sổ phụ công nợ theo từng chứng từ, PK **UUID** vì dòng là đích đối trừ). `ledger_service.py` cài `ArApSubledger` (ADR-021): `record` **thay trọn theo `voucher_id`** chứ không cộng dồn, `remove` từ chối khoản đã đối trừ, cả hai tự ghi vết vì `delete()` hàng loạt không qua listener `Audited`. `settlement_source.py` cài `SettlementTargetSource` cho hai loại hóa đơn + hai view **khóa cứng chiều** (`ReceivableProvider`/`PayableProvider`). Không có loại chứng từ riêng: dữ liệu do mua/bán sinh (7B/7C), do quỹ/ngân hàng tiêu thụ | Công nợ phải thu/phải trả |
+| `modules/*` | `cash_book/` (6B–6C, +`balance_service` 6E-1); `bank/`, `warehousing/treasurer/` (6C–6E-1); `general_ledger/journal/` (phase 4); `receivables/` (7A); còn lại chỉ có `contracts.py` rỗng — chỗ giữ sẵn cho phase 7B–9 | — |
 
 ### Ngoài server
 
@@ -239,7 +240,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 
 ---
 
-## 5. Bộ test (**server: 764 không-DB + 1119 DB (1.883 total); client: 267**) 
+## 5. Bộ test (**server: 767 không-DB + 1147 DB (1.914 total); client: 267**) 
 
 | Tệp | Chứng minh điều gì |
 | --- | --- |
@@ -285,7 +286,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_statement_layout_loader.py` (non-db) | **Lát 5B**: fail-closed loader — sai công thức, rowref, chu trình, TK không khớp accounts.csv; golden test B01/B02 khớp mẫu đúng thứ tự; chỉ tiêu ngoại lệ không cộng dương; layout income cấm hàm số dư |
 | `test_statement_builder_api.py` (db) | **Lát 5B**: dataset riêng `bctc5b` — statement builder lấy `opening_balances`+`gl_postings`, cột so sánh (N/A khi chưa lập), test BR-GLE-04/BR-RPT-01/BR-RPT-04; API `/api/v1/statements` + `/api/v1/statements/{layout_code}/preview` + quyền + 403/404 |
 
-Tổng **1.527 test** (891 cần PostgreSQL 16). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
+Tổng **1.914 test** (1.147 cần PostgreSQL). Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
 
 ---
 
@@ -293,7 +294,9 @@ Tổng **1.527 test** (891 cần PostgreSQL 16). Máy không có DB thì bỏ qu
 
 **Phase 6 XONG** (2026-08-31) — toàn bộ dòng tiền Quỹ & Ngân hàng đi trọn: chứng từ lập → cất → ghi sổ → lên báo cáo + bảng cân đối; hạ tầng trải rộng cho phase 7–9 (branch_scope, dimension_recompute, REFERENCE_GUARDS, frozen kernel API).
 
-Tiếp theo: **Phase 7 — Mua hàng (PUR)** — chứng từ đơn hàng → nhập hàng → hóa đơn với công nợ khoán, matching đối ứng qua protocol + guard; UI báo cáo + design system mở rộng lưới render (lát **2C-6** chờ phần cứng S4).
+**Phase 7 đang chạy**, chia 8 lát 7A→7H. **7A xong (2026-09-01)**: nền công nợ — `ar_ap_ledger`, module `receivables`, báo cáo tuổi nợ AR/AP, và bằng chứng cho tiêu chí liên-phase "màn thu tiền của phase 6 thấy hóa đơn phase 7 mà **`cash_book` không đổi một dòng nào**".
+
+Tiếp theo: **7B — module `purchase`** (5 loại chứng từ, `landed_cost` phân bổ, guard ngưỡng nợ FR-SYS-032), rồi **7C — `sales`** (giá + bậc chiết khấu, và **trả nốt check toàn vẹn 131/331** mà 7A phải hoãn). Cả hai gọi `ArApSubledger.record`/`remove` trong `after_post`/`after_unpost` — bất biến "dòng sổ phụ chỉ tồn tại khi chứng từ đã ghi sổ" là thứ giữ cho đường xóa an toàn.
 
 **Còn mở:**
 
@@ -307,3 +310,5 @@ Tiếp theo: **Phase 7 — Mua hàng (PUR)** — chứng từ đơn hàng → nh
 5. Bộ vai trò mẫu (`ke-toan`, `thu-quy`, `xem`) vẫn chờ gói cấu hình TT99/TT133
    ở phase 5 — hiện chỉ gieo `admin`.
 6. Setting `warning.cash_balance` (none/warn/block, mặc định none) được khai sẵn lát 6B; UI thực thi cảnh báo hoãn phase 6–7.
+7. **Bút toán GLE gõ thẳng vào TK công nợ 131/331 kèm chiều đối tác không sinh dòng sổ phụ** — thao tác hợp lệ hôm nay, và là lý do check toàn vẹn "sổ phụ khớp TK công nợ" chưa đăng ký được (bản thảo `posting/integrity/checks/arap_matches_control.sql` cố ý ngoài `CHECKS`). Câu hỏi sản phẩm cho 7C/10a: cấm, hay tự sinh khoản phải thu/phải trả? Giữ nguyên thì các khoản ấy vô hình với màn thu nợ.
+8. **Cụm dev có thể là PostgreSQL 18** (Ubuntu 26.04 không còn `postgresql-16`) trong khi CI chạy `postgres:16` — xanh ở máy không còn bảo đảm xanh ở CI. Đường dựng + đánh đổi ghi ở `deployment-guide.md` §1.

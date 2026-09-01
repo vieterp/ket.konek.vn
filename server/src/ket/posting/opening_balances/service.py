@@ -616,6 +616,7 @@ def write_staged(
             {
                 "id": uuid7(),
                 "opening_balance_id": parent_id,
+                "branch_id": branch_id,
                 "invoice_no": invoice.invoice_no,
                 "invoice_date": invoice.invoice_date,
                 "due_date": invoice.due_date,

@@ -169,6 +169,7 @@ def seed_open_invoice(
         session.flush()
         invoice = OpeningBalanceInvoice(
             opening_balance_id=parent.id,
+            branch_id=parent.branch_id,
             invoice_no=invoice_no,
             invoice_date=invoice_date,
             due_date=due_date,

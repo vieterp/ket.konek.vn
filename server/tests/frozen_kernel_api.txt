@@ -1,11 +1,16 @@
 # module ket.kernel.protocols
+class ket.kernel.protocols.ArApSubledger
+  record(self, session: 'Session', *, voucher_id: 'UUID', entries: 'Sequence[SubledgerEntry]') -> 'None'
+  remove(self, session: 'Session', *, voucher_id: 'UUID') -> 'None'
 class ket.kernel.protocols.CommitmentProvider
   committed_quantities(self, session: 'Session', *, item_ids: 'Sequence[int]', branch_id: 'int', warehouse_id: 'int | None' = None) -> 'Mapping[int, Decimal]'
 class ket.kernel.protocols.CrossModuleProviders
+  ar_ap_subledger(self) -> 'ArApSubledger | None'
   commitment_providers(self) -> 'tuple[CommitmentProvider, ...]'
   inventory_posting(self) -> 'InventoryPosting | None'
   payable_providers(self) -> 'tuple[PayableProvider, ...]'
   receivable_providers(self) -> 'tuple[ReceivableProvider, ...]'
+  register_ar_ap_subledger(self, implementation: 'ArApSubledger') -> 'None'
   register_commitment(self, provider: 'CommitmentProvider') -> 'None'
   register_inventory_posting(self, implementation: 'InventoryPosting') -> 'None'
   register_payable(self, provider: 'PayableProvider') -> 'None'
@@ -44,10 +49,12 @@ class ket.kernel.protocols.OpenInvoice
   field target_id: UUID
   field target_kind: SettlementTargetKind
 class ket.kernel.protocols.PROVIDERS: instance of
+  ar_ap_subledger(self) -> 'ArApSubledger | None'
   commitment_providers(self) -> 'tuple[CommitmentProvider, ...]'
   inventory_posting(self) -> 'InventoryPosting | None'
   payable_providers(self) -> 'tuple[PayableProvider, ...]'
   receivable_providers(self) -> 'tuple[ReceivableProvider, ...]'
+  register_ar_ap_subledger(self, implementation: 'ArApSubledger') -> 'None'
   register_commitment(self, provider: 'CommitmentProvider') -> 'None'
   register_inventory_posting(self, implementation: 'InventoryPosting') -> 'None'
   register_payable(self, provider: 'PayableProvider') -> 'None'
@@ -67,6 +74,20 @@ class ket.kernel.protocols.SettlementTargetSource
   apply(self, session: 'Session', *, target_id: 'UUID', amount_fc: 'Decimal', amount: 'Decimal') -> 'None'
   find(self, session: 'Session', *, target_ids: 'Sequence[UUID]') -> 'Sequence[OpenInvoice]'
   revert(self, session: 'Session', *, target_id: 'UUID', amount_fc: 'Decimal', amount: 'Decimal') -> 'None'
+class ket.kernel.protocols.SubledgerEntry
+  field account_id: int
+  field amount: Decimal
+  field amount_fc: Decimal
+  field currency_code: str
+  field description: str | None
+  field document_date: date
+  field document_no: str
+  field due_date: date | None
+  field exchange_rate: Decimal
+  field ledger: int
+  field partner_id: int
+  field partner_kind: PartnerKind
+  field target_kind: SettlementTargetKind
 class ket.kernel.protocols.TreasurerBookEntry
   field book_date: date
   field branch_id: int

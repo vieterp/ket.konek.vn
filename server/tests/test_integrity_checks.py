@@ -108,6 +108,7 @@ def test_registry_has_exactly_the_declared_checks() -> None:
         "opening_detail_matches_control",
         "usage_counter_accurate",
         "treasurer_book_matches_ledger",
+        "settlement_matches_subledger",
     )
     with pytest.raises(IntegrityCheckUnknownError):
         check_of("khong_ton_tai")
@@ -408,6 +409,7 @@ def test_opening_imbalance_and_invoice_drift_are_caught(
         session.add(
             OpeningBalanceInvoice(
                 opening_balance_id=parent.id,
+                branch_id=parent.branch_id,
                 invoice_no="HD-001",
                 amount_fc=Decimal(400_000),
                 amount=Decimal(400_000),
