@@ -7,7 +7,7 @@ do RT-18 nêu thẳng: phase 7 và 8 chạy song song sau phase 6, và ranh gi�
 sẻ duy nhất giữa chúng là kernel + posting đã đóng băng. Protocol khai muộn ở
 phase 7/8 là một lần mở kernel ra sửa — đúng thứ "đóng băng" cấm.
 
-Năm Protocol, ai cài — ai gọi:
+Sáu Protocol, ai cài — ai gọi:
 
 * `ReceivableProvider` / `PayableProvider` — nguồn "hóa đơn còn nợ" cho đối
   trừ công nợ khi thu/chi tiền (`docs/srs/03` §4). Phase 6: nguồn duy nhất là
@@ -21,6 +21,10 @@ Năm Protocol, ai cài — ai gọi:
   không import module kho; module `inventory` (phase 8) cài.
 * `CommitmentProvider` — "đã hứa giao" cho cột **Có thể bán** = tồn − đã hứa
   (U7, phase 8); module `sales` cài từ đơn hàng.
+* `ArApSubledger` (thêm ở lát 7A, ADR-021) — chiều GHI sổ phụ công nợ: chứng
+  từ mua/bán sinh và gỡ khoản nợ mà không import module `receivables` (cài).
+  Ba Protocol công nợ ở trên phủ chiều đọc và chiều đối trừ; lượt khai trước ở
+  phase 6 sót chiều này, và nó lộ ra ngay khi bắt tay lát 7A.
 * `TreasurerCashBook` / `TreasurerVoucherSource` (lát 6C) — cặp hai chiều giữa
   `cash_book` (chủ trạng thái thủ quỹ trên thân phiếu) và `warehousing` (chủ
   bảng sổ quỹ): hàng đợi thủ quỹ đọc phiếu chờ qua source, còn đường
@@ -49,7 +53,7 @@ from enum import IntEnum
 from typing import Final, Protocol
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from ket.kernel.contracts import PartnerKind
@@ -59,6 +63,7 @@ from ket.kernel.contracts import PartnerKind
 
 __all__ = [
     "PROVIDERS",
+    "ArApSubledger",
     "CommitmentProvider",
     "CrossModuleProviders",
     "InventoryMovementKind",
@@ -69,6 +74,7 @@ __all__ = [
     "ReceivableProvider",
     "SettlementTargetKind",
     "SettlementTargetSource",
+    "SubledgerEntry",
     "TreasurerBookEntry",
     "TreasurerCashBook",
     "TreasurerPendingVoucher",
@@ -208,6 +214,88 @@ class SettlementTargetSource(Protocol):
         self, session: Session, *, target_id: UUID, amount_fc: Decimal, amount: Decimal
     ) -> None:
         """Gỡ số đã trả khi chứng từ bỏ ghi sổ."""
+        ...
+
+
+class SubledgerEntry(BaseModel):
+    """Một khoản công nợ sắp ghi vào sổ phụ, nhìn từ phía chứng từ gốc.
+
+    Khác `OpenInvoice` ở chiều đi: `OpenInvoice` là thứ sổ phụ **trả ra** cho
+    màn chọn đối trừ (đã có phần đã trả), còn đây là thứ chứng từ mua/bán
+    **đưa vào** lúc ghi sổ — chưa ai trả đồng nào, nên không có `remaining`.
+    Hai hình dạng không gộp được: gộp lại thì người gọi phải điền hai trường
+    vô nghĩa và người đọc phải đoán trường nào có ý nghĩa ở chiều nào.
+
+    `amount_fc` (nguyên tệ) và `amount` (VND theo `exchange_rate`) đi thành
+    cặp vì cùng lý do với `paid_amount_fc`/`paid_amount` (xem `OpenInvoice`):
+    nhân lại từ nguyên tệ là làm tròn lần thứ hai, và hai lần làm tròn là hai
+    con số. Người gọi làm tròn đúng một lần, ở chỗ nó dựng bút toán.
+
+    `account_id` là TK công nợ mà khoản này treo lên (131/331/1388…) — lấy từ
+    chính bút toán vừa dựng, không đoán theo gói cấu hình: dòng chênh lệch tỷ
+    giá lúc thu/trả phải đâm vào đúng TK đó (FR-SYS-066).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    target_kind: SettlementTargetKind
+    """Phân hệ nào sinh ra khoản này — cũng là thứ quyết định **chiều** công
+    nợ (hóa đơn bán ⇒ phải thu, hóa đơn mua ⇒ phải trả). Suy chiều từ
+    `partner_kind` thì sai ngay ở nhân viên: một người vừa có thể được ứng
+    tiền vừa có thể nợ công ty."""
+
+    partner_kind: PartnerKind
+    partner_id: int
+    ledger: int = Field(ge=0, le=1)
+    account_id: int
+    document_no: str = Field(max_length=50)
+    document_date: date
+    due_date: date | None = None
+    currency_code: str = Field(min_length=3, max_length=3)
+    exchange_rate: Decimal
+    amount_fc: Decimal = Field(ge=0)
+    amount: Decimal = Field(ge=0)
+    description: str | None = Field(default=None, max_length=500)
+
+    # KHÔNG có `branch_id`: chi nhánh của khoản nợ là chi nhánh của CHỨNG TỪ,
+    # và bản cài đọc nó từ đó. Để người gọi truyền vào thì có một trạng thái
+    # biểu diễn được mà hệ thống không bao giờ đúng với nó — dòng sổ phụ ở chi
+    # nhánh B dưới chứng từ chi nhánh A. Nó không đối chiếu được với sổ cái
+    # (`gl_postings.branch_id` LUÔN lấy từ `vouchers.branch_id`, xem
+    # `posting/engine/service.py`), và nó vô hình với chính lượt bỏ ghi sổ của
+    # chứng từ — guard "đã đối trừ thì không xóa" chạy dưới RLS người gọi sẽ
+    # im lặng cho qua rồi xóa nửa vời. Bỏ trường đi thì trạng thái ấy không
+    # tồn tại để phải kiểm.
+
+
+class ArApSubledger(Protocol):
+    """Cửa duy nhất để chứng từ mua/bán ghi sổ phụ công nợ (ADR-021).
+
+    Đối xứng với `InventoryPosting`: phase 7 mua/bán **gọi**, module
+    `receivables` **cài**. Ba Protocol công nợ phía trên phủ chiều ĐỌC (còn nợ
+    gì) và chiều ĐỐI TRỪ (vừa trả vào đâu); Protocol này phủ chiều GHI — sinh
+    và gỡ chính dòng sổ phụ lúc chứng từ gốc ghi sổ / bỏ ghi sổ. Thiếu nó thì
+    `purchase` phải import `receivables`, và C3 cấm.
+    """
+
+    def record(
+        self, session: Session, *, voucher_id: UUID, entries: Sequence[SubledgerEntry]
+    ) -> None:
+        """Ghi các khoản công nợ của một chứng từ vừa ghi sổ.
+
+        **Thay trọn theo `voucher_id`**, không cộng dồn (ADR-021): ghi sổ → bỏ
+        ghi sổ → sửa → ghi sổ lại là đường đi thường ngày, và một bản cài cộng
+        dồn sẽ nhân đôi công nợ ở lượt thứ hai — hỏng âm thầm, chỉ lộ ra ở số
+        dư 131/331 nhiều kỳ sau.
+        """
+        ...
+
+    def remove(self, session: Session, *, voucher_id: UUID) -> None:
+        """Gỡ các khoản công nợ khi chứng từ bỏ ghi sổ.
+
+        Từ chối (ném `PostingValidationError`) khi có dòng đã bị đối trừ một
+        phần: xóa nó đi là bỏ lại phiếu thu/chi trỏ vào hư không.
+        """
         ...
 
 
@@ -381,9 +469,13 @@ class CrossModuleProviders:
     """Sổ đăng ký bản cài của một tiến trình — đối tượng để test dựng registry riêng.
 
     Công nợ và "đã hứa giao" là **danh sách**: số dư đầu kỳ, bán hàng, mua hàng
-    cùng là nguồn hợp lệ và kết quả là phép nối. `InventoryPosting` là **một**:
-    chỉ module kho ghi sổ kho, hai bản cài là hai nơi tranh nhau một bảng tồn —
-    đăng ký trùng ném ngay, cùng luật với `PostingDocumentRegistry`.
+    cùng là nguồn hợp lệ và kết quả là phép nối. `InventoryPosting` và
+    `ArApSubledger` là **một**: chỉ module kho ghi sổ kho, chỉ module công nợ
+    ghi sổ phụ công nợ, hai bản cài là hai nơi tranh nhau một bảng — đăng ký
+    trùng ném ngay, cùng luật với `PostingDocumentRegistry`.
+
+    Chiều ĐỌC là danh sách còn chiều GHI là một: nhiều phân hệ được phép *kể*
+    về công nợ của chúng, nhưng chỉ một phân hệ được *giữ* bảng.
     """
 
     def __init__(self) -> None:
@@ -391,6 +483,7 @@ class CrossModuleProviders:
         self._payable: list[PayableProvider] = []
         self._commitment: list[CommitmentProvider] = []
         self._inventory: InventoryPosting | None = None
+        self._ar_ap_subledger: ArApSubledger | None = None
         self._settlement_sources: dict[SettlementTargetKind, SettlementTargetSource] = {}
         self._treasurer_cash_book: TreasurerCashBook | None = None
         self._treasurer_voucher_source: TreasurerVoucherSource | None = None
@@ -408,6 +501,13 @@ class CrossModuleProviders:
         if self._inventory is not None:
             raise ValueError("InventoryPosting đã có bản cài — chỉ module kho được ghi sổ kho")
         self._inventory = implementation
+
+    def register_ar_ap_subledger(self, implementation: ArApSubledger) -> None:
+        if self._ar_ap_subledger is not None:
+            raise ValueError(
+                "ArApSubledger đã có bản cài — hai nơi ghi một sổ phụ công nợ (ADR-021)"
+            )
+        self._ar_ap_subledger = implementation
 
     def register_settlement_source(
         self, kind: SettlementTargetKind, source: SettlementTargetSource
@@ -444,6 +544,13 @@ class CrossModuleProviders:
         """`None` = chưa có module kho (trước phase 8) — nơi gọi phải từ chối
         rõ ràng ("chưa bật phân hệ kho") thay vì giả vờ đã ghi."""
         return self._inventory
+
+    def ar_ap_subledger(self) -> ArApSubledger | None:
+        """`None` = chưa có module công nợ (trước phase 7) — nơi gọi phải từ
+        chối ghi sổ chứng từ mua/bán rõ ràng, KHÔNG ghi bút toán rồi lặng lẽ
+        bỏ qua sổ phụ: đó đúng là hình dạng lệch mà check 131/331 sinh ra để
+        bắt, và bắt muộn hơn nhiều (ADR-021)."""
+        return self._ar_ap_subledger
 
     def settlement_source(self, kind: SettlementTargetKind) -> SettlementTargetSource | None:
         """`None` = loại đích chưa có chủ (hóa đơn bán/mua trước phase 7) —
