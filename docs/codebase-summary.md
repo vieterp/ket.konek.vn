@@ -296,14 +296,26 @@ hiện có hai: `test_password_policy.py` (khẳng định trên chính cấu h�
 production) và `test_auth_concurrency.py` (cửa sổ đua rộng đúng bằng thời gian
 băm, hạ băm là làm bài mất khả năng bắt lỗi).
 
-**Hai tệp có fixture actor phạm vi MODULE** (`test_master_data_merge.py`,
-`test_bank_statements_api.py`): người dùng "phạm vi toàn công ty" được gán MỌI
-chi nhánh, mỗi chi nhánh một lời gọi `assign_branch` (~56ms), mà chi nhánh tích
-lũy suốt lượt chạy — nên dựng lại mỗi bài tốn 4s ở cuối bộ. Dựng một lần cho cả
-tệp: bộ DB **868s → 764s**. Đổi lại hai tệp ấy mang hai bất biến mà 32 tệp API
-khác không có (không bài nào được tạo chi nhánh; cửa sổ hạn mức dùng chung nên
-phải tắt hạn mức) — **đừng chép `scope="module"` sang tệp mới mà không chép cả
-hai**, docstring của từng fixture ghi rõ. Một fixture autouse canh vế thứ nhất.
+**Bốn tệp có fixture actor phạm vi MODULE** (`test_master_data_merge.py`,
+`test_bank_statements_api.py`, `test_item_catalog_api.py`,
+`test_import_api.py`): người dùng "phạm vi toàn công ty" được gán MỌI chi
+nhánh, mỗi chi nhánh một lời gọi `assign_branch` (~56ms), mà chi nhánh tích lũy
+suốt lượt chạy (đo được tới **156**) — nên dựng lại mỗi bài tốn ~5s ở cuối bộ.
+Dựng một lần cho cả tệp: bộ DB **985s → 456s (7:36)** qua ba lát.
+
+Đổi lại bốn tệp ấy mang hai bất biến mà 30 tệp API khác không có — **đừng chép
+`scope="module"` sang tệp mới mà không chép cả hai**, docstring của từng fixture
+ghi rõ:
+
+1. không bài nào trong tệp được tạo chi nhánh;
+2. cửa sổ hạn mức dùng chung cả tệp nên phải tắt hạn mức.
+
+Fixture autouse `_shared_actor_still_spans_every_branch` canh vế thứ nhất —
+nhưng chỉ canh **số chi nhánh**, không canh phạm vi của chính người dùng dùng
+chung: gỡ chi nhánh khỏi người ấy (`DELETE /system/users/{id}/branches/{code}`)
+sẽ lọt lưới, và các bài sau đỏ bằng `scope_incomplete` trỏ nhầm vào mã
+production. Chưa bài nào làm thế; nếu thêm, hãy mở rộng canh gác sang
+`UserBranch` thay vì tin nó là đủ.
 
 Fixture băm rẻ phải ở phạm vi **hàm**, không phải phiên: bản đầu dùng phạm vi phiên và
 để tệp cần tham số thật "tắt" bằng cách khai trùng tên — cách ấy không gỡ được

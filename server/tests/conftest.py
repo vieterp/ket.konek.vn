@@ -462,6 +462,14 @@ def cheap_password_hashing(request: pytest.FixtureRequest, monkeypatch: pytest.M
 
     Phạm vi hàm + `monkeypatch` thì mỗi bài tự áp và tự gỡ, nên dấu miễn trừ
     có hiệu lực thật. Chi phí `setattr` mỗi bài là không đáng kể.
+
+    **Giới hạn đã biết:** pytest dựng fixture phạm vi module/phiên TRƯỚC fixture
+    phạm vi hàm, nên một fixture đăng nhập phạm vi module (bốn tệp có actor dùng
+    chung) chạy khi bản vá này chưa áp — nó trả tham số Argon2id THẬT, khoảng
+    một lượt băm + một lượt xác thực mỗi module. Không sai (argon2 đọc tham số
+    từ chính chuỗi hash), chỉ là không rẻ. **Đừng "sửa" bằng cách đưa fixture
+    này lên phạm vi phiên** — đó đúng là bản đã hỏng và đã bị gỡ, mô tả ở đoạn
+    trên.
     """
     if request.node.get_closest_marker("real_password_hashing"):
         return

@@ -44,6 +44,7 @@ from ket.kernel.master_data.models.item import ItemNature
 from ket.kernel.master_data.models.item_unit import ItemUnit
 from ket.kernel.master_data.models.item_variant import ItemVariant
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.models import Branch
 from ket.kernel.security.permissions import Action
 from ket.main import create_app
 from ket.settings import Settings
@@ -58,13 +59,81 @@ EDITOR_ROLE = "ke_toan_vat_tu"
 BRANCH_CODES = ["CN_VT_A", "CN_VT_B"]
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def client(
     test_settings: Settings, app_engine: Engine, session_factory: sessionmaker[Session]
 ) -> Iterator[TestClient]:
+    """`TestClient` dùng chung cho CẢ TỆP — kèm hai ràng buộc.
+
+    Phạm vi module để `editor` chỉ phải gán chi nhánh một lần (xem docstring
+    của nó). Đổi lại tệp này mang hai bất biến mà phần lớn tệp API khác không
+    có, nên **đừng chép dòng `scope="module"` sang tệp mới mà không chép cả
+    hai** — cùng bộ ràng buộc đã ghi ở `test_master_data_merge.py`:
+
+    1. **Không bài nào trong tệp được tạo chi nhánh mới** — người dùng dùng
+       chung được gán chi nhánh MỘT lần và không tự cập nhật. Ở tệp này chi
+       nhánh chỉ sinh ra trong `item_branches` (phạm vi module), và
+       `_shared_actor_still_spans_every_branch` canh cho điều đó còn đúng.
+    2. Cửa sổ hạn mức của `RateLimitMiddleware` là trạng thái trong tiến trình
+       của một app, nên nay nó dùng chung cho cả tệp thay vì mới lại mỗi bài.
+       Vì thế tắt hẳn hạn mức ở đây. Đo với hạn mức production bật lại: đỉnh
+       **204/600** ở bucket mặc định theo người gọi và 225/2400 theo IP trong
+       một cửa sổ — tệp vẫn xanh hôm nay, tức đây là chống-vỡ-về-sau chứ
+       **không** phải một `429` đã quan sát được. Ghi rõ để lần sau không ai
+       tưởng đã có flake thật. Hạn mức có bộ test riêng ở `test_rate_limit.py`
+       (gồm cả nhánh `0 = tắt` mà dòng này dựa vào); tệp này không nói gì về nó.
+    """
     assert app_engine is not None and session_factory is not None
-    with api_test_client(create_app(test_settings)) as instance:
+    unlimited = test_settings.model_copy(
+        update={"rate_limit_per_minute": 0, "rate_limit_auth_per_minute": 0}
+    )
+    with api_test_client(create_app(unlimited)) as instance:
         yield instance
+
+
+_BRANCH_SPAN: dict[str, int] = {}
+
+
+@pytest.fixture(autouse=True)
+def _shared_actor_still_spans_every_branch(request: pytest.FixtureRequest) -> None:
+    """Người dùng dùng chung được gán chi nhánh MỘT lần — canh cho nó còn trọn phạm vi.
+
+    `editor` là fixture phạm vi module: nó đọc "mọi chi nhánh" và ghi
+    `user_branches` đúng một lần, ở bài đầu tiên. Nếu một bài trong tệp này tạo
+    thêm chi nhánh, người dùng ấy **không** được cập nhật, và các bài sau đỏ
+    bằng `scope_incomplete` / `scope_insufficient` — một thông điệp trỏ thẳng
+    vào mã production, khiến bản sửa hấp dẫn nhất là nới lỏng chính phép kiểm
+    phạm vi đang đúng.
+
+    Bài kiểm này biến ca đó thành một câu nói rõ nguyên nhân.
+    """
+    # Bài KHÔNG mang dấu `db` không được kéo theo fixture cần PostgreSQL. Khai
+    # `session_factory`/`dataset_alpha` thành THAM SỐ là đủ để pytest dựng
+    # chúng TRƯỚC khi thân hàm chạy, nên một lệnh `return` sớm không cứu được.
+    # Hôm nay cả tệp mang `pytestmark = pytest.mark.db`, nhưng lấy lười bằng
+    # `getfixturevalue` giữ cho bài không-DB thêm sau này không nổ khó hiểu.
+    if request.node.get_closest_marker("db") is None:
+        return
+    session_factory: sessionmaker[Session] = request.getfixturevalue("session_factory")
+    dataset_alpha: DatasetRef = request.getfixturevalue("dataset_alpha")
+    with unit_of_work(
+        session_factory,
+        RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=()),
+    ) as session:
+        live = len(list(session.scalars(select(Branch.code)).all()))
+    seen = _BRANCH_SPAN.setdefault("n", live)
+    assert live == seen, (
+        f"Số chi nhánh đổi giữa chừng ({seen} → {live}), nên `editor` phạm vi "
+        "module — đã gán chi nhánh MỘT lần và không tự cập nhật — không còn "
+        "trọn phạm vi; các bài sau sẽ đỏ vì `scope_incomplete`.\n"
+        "Hai nguyên nhân, kiểm theo thứ tự này:\n"
+        "1. Một bài TRONG tệp vừa tạo chi nhánh. Chuyển việc ấy vào fixture "
+        "phạm vi module chạy trước khi dựng người dùng, đừng tạo trong bài.\n"
+        "2. Bạn đang chạy một lựa chọn bài ĐAN XEN nhiều tệp (ví dụ nêu đích "
+        "danh vài bài của tệp này lẫn tệp khác). Tệp kia tạo chi nhánh của "
+        "nó ở giữa, và người dùng dùng chung của tệp này thật sự đã cũ — "
+        "đây KHÔNG phải lỗi của tệp này. Chạy trọn từng tệp một."
+    )
 
 
 @pytest.fixture(scope="module")
@@ -87,7 +156,7 @@ def item_branches(session_factory: sessionmaker[Session], dataset_alpha: Dataset
     return ensure_branches(session_factory, dataset_alpha, BRANCH_CODES)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def editor(
     client: TestClient,
     session_factory: sessionmaker[Session],
@@ -97,11 +166,20 @@ def editor(
     item_branches: list[str],
     test_password: str,
 ) -> dict[str, str]:
-    """Kế toán kho có **phạm vi toàn công ty**.
+    """Kế toán kho có **phạm vi toàn công ty**, dùng chung cho CẢ TỆP.
 
     Phạm vi đầy đủ vì cùng tệp này gộp bản ghi, và gộp đòi đúng điều đó
     (`_ensure_company_wide_scope`, H63). Test về phạm vi hẹp đã có ở
     `test_master_data_merge.py`; ở đây phạm vi không phải thứ đang đo.
+
+    Phạm vi **module** chứ không phải hàm: `actor` gán từng chi nhánh một lời
+    gọi, và danh sách "mọi chi nhánh" dài ra theo số tệp test đã chạy trước
+    (đo được tới 156). Dựng lại người dùng ấy cho mỗi bài khiến riêng tệp này
+    tốn 244s trong một lượt chạy đầy đủ — 45 lần dựng, mỗi lần gán tới 88 chi
+    nhánh. Dùng chung là an toàn vì `api/dependencies.resolve_access` chạy lại
+    ở **mỗi** request: quyền đọc tươi từ DB chứ không đóng băng trong token,
+    nên một token dùng chung chứng minh đúng thứ mà token mới chứng minh.
+    Không bài nào trong tệp đổi vai trò, phạm vi hay mật khẩu của người này.
     """
     assert item_branches, "cần ít nhất một chi nhánh"
     return actor(
@@ -1079,7 +1157,17 @@ def two_branch_editor(
     item_branches: list[str],
     test_password: str,
 ) -> dict[str, str]:
-    """Người dùng được gán **hai** chi nhánh — phải gửi `X-Branch` để nói đang ở đâu."""
+    """Người dùng được gán **hai** chi nhánh — phải gửi `X-Branch` để nói đang ở đâu.
+
+    Phạm vi **hàm** và **đúng hai** chi nhánh, cả hai đều cố ý — **đừng nâng
+    fixture này lên `all_branch_codes` cho khớp `editor`**. Bài dùng nó kiểm
+    rằng bảng con của chi nhánh khác nằm ngoài tầm với; một người phạm vi toàn
+    công ty thấy mọi thứ nên bài ấy thành RỖNG, và đó chính là điểm mù đã để
+    đột biến M12 sống sót ba lần (xem docstring của
+    `test_the_child_tables_of_another_branch_item_are_out_of_reach`). Ở đây
+    "nhất quán với `editor`" là sai hướng: `editor` dùng chung để tiết kiệm chi
+    phí, fixture này hẹp để giữ khả năng bắt lỗi.
+    """
     return actor(
         client,
         session_factory,

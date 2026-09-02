@@ -155,11 +155,13 @@ def client(
        chung được gán chi nhánh MỘT lần và không tự cập nhật.
     2. Cửa sổ hạn mức của `RateLimitMiddleware` là trạng thái trong tiến trình
        của một app, nên nay nó dùng chung cho cả tệp thay vì mới lại mỗi bài.
-       Vì thế tắt hẳn hạn mức ở đây: đo được bucket `auth` chạm 68/600 ở bucket mặc định trong
-       một cửa sổ 60s, và mỗi fixture actor phạm vi hàm còn lại tốn thêm một
-       lượt đăng nhập. Đủ bài nữa là CI đỏ bằng một `429` ngẫu nhiên, chỉ trên
-       máy đủ nhanh để chạy hết tệp trong một cửa sổ. Hạn mức có bộ test riêng
-       ở `test_rate_limit.py`; tệp này không nói gì về nó.
+       Vì thế tắt hẳn hạn mức ở đây: đo được đỉnh **68/600** ở bucket mặc
+       định (theo người gọi) trong một cửa sổ 60s, và mỗi fixture actor phạm vi
+       hàm còn lại tốn thêm một lượt đăng nhập ở bucket `auth` — hai bucket
+       khác nhau, câu cũ gộp nhầm chúng làm một. Tệp vẫn xanh với hạn mức
+       production, tức đây là chống-vỡ-về-sau chứ không phải một `429` đã quan
+       sát được. Hạn mức có bộ test riêng ở `test_rate_limit.py`; tệp này
+       không nói gì về nó.
     """
     assert app_engine is not None and session_factory is not None
     unlimited = test_settings.model_copy(
