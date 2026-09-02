@@ -381,9 +381,15 @@ def test_password() -> str:
     return TEST_PASSWORD
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def user_factory(session_factory: sessionmaker[Session]) -> Callable[..., User]:
     """Tạo người dùng test với tên **duy nhất** cho mỗi lần gọi.
+
+    Phạm vi **phiên**, không phải hàm: nhà máy này không giữ trạng thái nào giữa
+    các lần gọi — mỗi lượt sinh một tên mới và chỉ dựa vào `session_factory`
+    (cũng phạm vi phiên). Phạm vi hàm là điều kiện đủ để một fixture phạm vi
+    module KHÔNG dựng được người dùng (pytest từ chối vì lệch phạm vi), mà đó
+    chính là thứ chặn việc dùng chung người dùng trong một tệp test.
 
     Tên duy nhất chứ không phải dọn bảng sau mỗi test: `users` là bảng điều
     khiển toàn cục và `control_audit_log` chỉ-thêm tham chiếu tới nó, nên xóa

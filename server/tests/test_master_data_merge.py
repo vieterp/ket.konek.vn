@@ -50,6 +50,7 @@ from ket.kernel.master_data.merge_service import (
 from ket.kernel.master_data.registry import REGISTRY
 from ket.kernel.master_data.usage import MASTER_DATA_USAGE_TABLE_NAME, record_use, usage_count_of
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.models import Branch
 from ket.kernel.security.permissions import Action
 from ket.main import create_app
 from ket.model_registry import DatasetBase
@@ -140,13 +141,74 @@ def test_a_child_table_with_a_unique_constraint_forces_its_catalog_to_declare_a_
 db = pytest.mark.db
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def client(
     test_settings: Settings, app_engine: Engine, session_factory: sessionmaker[Session]
 ) -> Iterator[TestClient]:
+    """`TestClient` dùng chung cho CẢ TỆP — kèm hai ràng buộc.
+
+    Phạm vi module để `editor` chỉ phải gán chi nhánh một lần (xem docstring
+    của nó). Đổi lại tệp này mang hai bất biến mà 32 tệp API khác không có, nên
+    **đừng chép dòng `scope="module"` sang tệp mới mà không chép cả hai**:
+
+    1. **Không bài nào trong tệp được tạo chi nhánh mới** — người dùng dùng
+       chung được gán chi nhánh MỘT lần và không tự cập nhật.
+    2. Cửa sổ hạn mức của `RateLimitMiddleware` là trạng thái trong tiến trình
+       của một app, nên nay nó dùng chung cho cả tệp thay vì mới lại mỗi bài.
+       Vì thế tắt hẳn hạn mức ở đây: đo được bucket `auth` chạm 68/600 ở bucket mặc định trong
+       một cửa sổ 60s, và mỗi fixture actor phạm vi hàm còn lại tốn thêm một
+       lượt đăng nhập. Đủ bài nữa là CI đỏ bằng một `429` ngẫu nhiên, chỉ trên
+       máy đủ nhanh để chạy hết tệp trong một cửa sổ. Hạn mức có bộ test riêng
+       ở `test_rate_limit.py`; tệp này không nói gì về nó.
+    """
     assert app_engine is not None and session_factory is not None
-    with api_test_client(create_app(test_settings)) as instance:
+    unlimited = test_settings.model_copy(
+        update={"rate_limit_per_minute": 0, "rate_limit_auth_per_minute": 0}
+    )
+    with api_test_client(create_app(unlimited)) as instance:
         yield instance
+
+
+@pytest.fixture(autouse=True)
+def _shared_actor_still_spans_every_branch(request: pytest.FixtureRequest) -> None:
+    """Người dùng dùng chung được gán chi nhánh MỘT lần — canh cho nó còn trọn phạm vi.
+
+    `editor` là fixture phạm vi module: nó đọc "mọi chi nhánh" và ghi
+    `user_branches` đúng một lần, ở bài đầu tiên. Nếu một bài trong tệp này tạo
+    thêm chi nhánh, người dùng ấy **không** được cập nhật, và các bài sau đỏ
+    bằng `scope_incomplete` / `scope_insufficient` — một thông điệp trỏ thẳng
+    vào mã production, khiến bản sửa hấp dẫn nhất là nới lỏng chính phép kiểm
+    phạm vi đang đúng.
+
+    Bài kiểm này biến ca đó thành một câu nói rõ nguyên nhân. Nó tốn một truy
+    vấn đếm mỗi bài; so với 19 lượt gán chi nhánh mà phạm vi module vừa cắt đi
+    thì không đáng kể.
+    """
+    # Bài KHÔNG mang dấu `db` không được kéo theo fixture cần PostgreSQL.
+    # Autouse áp cho MỌI bài trong tệp, kể cả hai bài kiểm bất biến schema chạy
+    # thuần trong bộ nhớ — và khai `session_factory`/`dataset_alpha` thành THAM
+    # SỐ là đủ để pytest dựng chúng TRƯỚC khi thân hàm chạy, nên một lệnh
+    # `return` sớm không cứu được. Phải lấy lười bằng `getfixturevalue` sau khi
+    # đã kiểm dấu. (Bản đầu mắc đúng lỗi này: `make server-test` đỏ 2 ERROR.)
+    if request.node.get_closest_marker("db") is None:
+        return
+    session_factory: sessionmaker[Session] = request.getfixturevalue("session_factory")
+    dataset_alpha: DatasetRef = request.getfixturevalue("dataset_alpha")
+    with unit_of_work(
+        session_factory,
+        RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=()),
+    ) as session:
+        live = len(list(session.scalars(select(Branch.code)).all()))
+    seen = _BRANCH_SPAN.setdefault("n", live)
+    assert live == seen, (
+        f"Tệp này tạo thêm chi nhánh giữa chừng ({seen} → {live}). "
+        "`editor` phạm vi module đã gán chi nhánh một lần và không tự cập "
+        "nhật, nên các bài sau sẽ đỏ vì thiếu phạm vi. Tạo chi nhánh trong "
+        "fixture phạm vi module trước khi dựng người dùng, đừng tạo trong bài."
+    )
+
+
+_BRANCH_SPAN: dict[str, int] = {}
 
 
 @pytest.fixture(scope="module")
@@ -175,7 +237,7 @@ def merge_branches(session_factory: sessionmaker[Session], dataset_alpha: Datase
     return ensure_branches(session_factory, dataset_alpha, BRANCH_CODES)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def editor(
     client: TestClient,
     session_factory: sessionmaker[Session],

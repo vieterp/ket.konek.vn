@@ -296,7 +296,16 @@ hiện có hai: `test_password_policy.py` (khẳng định trên chính cấu h�
 production) và `test_auth_concurrency.py` (cửa sổ đua rộng đúng bằng thời gian
 băm, hạ băm là làm bài mất khả năng bắt lỗi).
 
-Fixture phải ở phạm vi **hàm**, không phải phiên: bản đầu dùng phạm vi phiên và
+**Hai tệp có fixture actor phạm vi MODULE** (`test_master_data_merge.py`,
+`test_bank_statements_api.py`): người dùng "phạm vi toàn công ty" được gán MỌI
+chi nhánh, mỗi chi nhánh một lời gọi `assign_branch` (~56ms), mà chi nhánh tích
+lũy suốt lượt chạy — nên dựng lại mỗi bài tốn 4s ở cuối bộ. Dựng một lần cho cả
+tệp: bộ DB **868s → 764s**. Đổi lại hai tệp ấy mang hai bất biến mà 32 tệp API
+khác không có (không bài nào được tạo chi nhánh; cửa sổ hạn mức dùng chung nên
+phải tắt hạn mức) — **đừng chép `scope="module"` sang tệp mới mà không chép cả
+hai**, docstring của từng fixture ghi rõ. Một fixture autouse canh vế thứ nhất.
+
+Fixture băm rẻ phải ở phạm vi **hàm**, không phải phiên: bản đầu dùng phạm vi phiên và
 để tệp cần tham số thật "tắt" bằng cách khai trùng tên — cách ấy không gỡ được
 bản vá đã áp từ module chạy trước, nên tệp ấy xanh RỖNG trong mọi lượt chạy
 đầy đủ. `test_password_policy.py::test_the_real_argon2_parameters_are_live` là
