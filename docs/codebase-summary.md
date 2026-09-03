@@ -240,7 +240,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 
 ---
 
-## 5. Bộ test (**server: 768 không-DB + 1147 DB (1.915 total); client: 267**) 
+## 5. Bộ test (**server: 768 không-DB + 1149 DB (1.917 total); client: 267**) 
 
 | Tệp | Chứng minh điều gì |
 | --- | --- |
@@ -286,7 +286,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 | `test_statement_layout_loader.py` (non-db) | **Lát 5B**: fail-closed loader — sai công thức, rowref, chu trình, TK không khớp accounts.csv; golden test B01/B02 khớp mẫu đúng thứ tự; chỉ tiêu ngoại lệ không cộng dương; layout income cấm hàm số dư |
 | `test_statement_builder_api.py` (db) | **Lát 5B**: dataset riêng `bctc5b` — statement builder lấy `opening_balances`+`gl_postings`, cột so sánh (N/A khi chưa lập), test BR-GLE-04/BR-RPT-01/BR-RPT-04; API `/api/v1/statements` + `/api/v1/statements/{layout_code}/preview` + quyền + 403/404 |
 
-Tổng **1.915 test** (1.147 cần PostgreSQL).
+Tổng **1.917 test** (1.149 cần PostgreSQL).
 
 **Băm mật khẩu chạy tham số RẺ trong test.** `conftest.cheap_password_hashing`
 (autouse, phạm vi HÀM) hạ Argon2id xuống mức tối thiểu: hồ sơ cProfile cho thấy
@@ -322,6 +322,34 @@ Fixture băm rẻ phải ở phạm vi **hàm**, không phải phiên: bản đ�
 bản vá đã áp từ module chạy trước, nên tệp ấy xanh RỖNG trong mọi lượt chạy
 đầy đủ. `test_password_policy.py::test_the_real_argon2_parameters_are_live` là
 cổng canh chính chuyện đó. Máy không có DB thì bỏ qua; CI đặt `KET_TEST_REQUIRE_DB=1` để **đỏ** thay vì bỏ qua.
+
+**Job CI chạy bộ test trên BA SHARD song song** (`.github/workflows/ci.yml`,
+job `server-db`), mỗi shard một container `postgres:16` riêng. Chọn shard thay
+vì `pytest-xdist` vì `conftest` xóa/dựng lại vai trò ở phạm vi **cụm** và dùng
+dataset phạm vi phiên dùng chung — hai worker trong một tiến trình sẽ giẫm lên
+nhau, ba tiến trình với ba cụm thì không. Hai shard nhận danh sách tệp tường
+minh (17 tệp nặng nhất), shard thứ ba chạy phần còn lại bằng `--ignore` dựng
+**từ chính hai danh sách kia**, nên tệp test mới luôn có chỗ chạy.
+
+Chia shard có đúng một kiểu hỏng nghiêm trọng và im lặng: một tệp không thuộc
+shard nào thì bài của nó không chạy ở đâu cả và CI vẫn xanh.
+`.github/scripts/check_test_shards.py` canh đúng chuyện đó — cộng số bài trong
+junit XML của ba shard rồi so với số `pytest --collect-only` thu thập trên toàn
+bộ. Không con số nào viết cứng: thêm bài mới thì cả hai vế cùng tăng.
+
+Con số độ phủ đến từ job `server-db-coverage` sau `coverage combine`, không từ
+shard nào — báo cáo của một shard là báo cáo trên một phần ba bộ test.
+
+**Chờ khóa trong test hỏng sau 60 giây, không treo.** `tests/lock_diagnostics.py`
+đặt `lock_timeout` ở phạm vi **database** (`ALTER DATABASE ket_test SET …`), nên
+mọi connection thừa hưởng — kể cả connection do mã production tự dựng, và đó là
+chủ ý: một lượt CI từng chết ở trần 30 phút vì `bind_seed_schema` chờ
+`pg_advisory_xact_lock` vô hạn, và đường treo đi qua engine của
+`provision_dataset`. Khi ngưỡng nổ, hook `pytest_exception_interact` đính vào
+report bản đổ `pg_stat_activity` + `pg_locks` nêu đích danh phiên đang giữ khóa.
+Đừng chuyển ngưỡng này về `connect_args` của từng engine trong conftest —
+`test_lock_timeout_diagnostics.py` đỏ ngay, vì cách đó bỏ sót đúng những đường
+ít ai nhớ.
 
 ---
 

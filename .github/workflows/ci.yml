@@ -106,7 +106,10 @@ jobs:
           has '^client/src-tauri/'  && rust=true
           # Đổi chính CI hoặc Makefile thì kiểm lại mọi thứ — đó là lúc dễ tự
           # tay làm hỏng cổng chất lượng nhất.
-          if has '^\.github/workflows/' || has '^Makefile$'; then
+          # `scripts/` cũng vào đây: `check_test_shards.py` (cổng đếm bài của
+          # job chia shard) và `check-client-bundle.sh` là cổng CI thật — sửa
+          # chúng mà không chạy job nào thì cổng không bao giờ được thử.
+          if has '^\.github/(workflows|scripts)/' || has '^Makefile$'; then
             server=true; client=true; rust=true
           fi
 
@@ -250,22 +253,27 @@ jobs:
   # được — chúng là hành vi của PostgreSQL, nên job này chạy DB thật.
   # ---------------------------------------------------------------------------
   server-db:
-    name: server · test có PostgreSQL
+    name: server · test có PostgreSQL (shard ${{ matrix.shard }}/3)
     needs: changes
     if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
-    # 30 chứ không 20: một lượt KHỎE của bộ 1762 test đo được 17m22s trên
-    # runner GH (local 12m37s) — trần 20 chỉ chừa 13% dư địa, runner chậm một
-    # nhịp là job bị hủy trong khi test không sai. faulthandler_timeout=300
-    # (pyproject) đã canh chiều ngược lại: test treo thật sẽ tự in stack trace
-    # vào log trước khi trần này chạm.
+    # 30 chứ không 20: trần này canh cho một shard TREO, không cho một shard
+    # chậm. Trước khi chia shard, một lượt khỏe của cả bộ đo được 17m22s trên
+    # runner GH; nay mỗi shard chỉ chạy khoảng một phần ba số bài, nên 30 phút
+    # là dư địa rất rộng — và đó là chủ ý. Lượt 33658137670 chết ở đúng trần
+    # này vì `pg_advisory_xact_lock` chờ vô hạn, không vì test chậm; hạ trần
+    # xuống sát thời gian chạy thật sẽ biến mọi runner chậm thành đỏ giả mà
+    # không bắt sớm hơn được ca treo. Hai cơ chế khác canh chiều ấy:
+    # `faulthandler_timeout=300` (pyproject) in stack trace của khung đang treo,
+    # và `lock_timeout` phạm vi database (`tests/lock_diagnostics.py`) làm lần
+    # chờ khóa hỏng trong 60 giây kèm danh sách phiên đang chặn.
     timeout-minutes: 30
-    # Chỉ job này được ghi vào PR (bình luận độ phủ). Quyền cấp ở mức job chứ
-    # không ở mức workflow: các job còn lại — gồm cả job dựng Rust kéo về hàng
-    # trăm crate — không có lý do gì cần quyền ghi.
-    permissions:
-      contents: read
-      pull-requests: write
+    strategy:
+      # Một shard đỏ không được hủy hai shard kia: khi bộ test hỏng, biết nó
+      # hỏng ở ĐÂU quan trọng hơn tiết kiệm vài phút runner.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     defaults:
       run:
         working-directory: server
@@ -273,6 +281,10 @@ jobs:
     services:
       postgres:
         # Ghim phiên bản: hành vi RLS/quyền phải giống bản khách hàng chạy.
+        # Mỗi shard có service container RIÊNG — đó là toàn bộ lý do chọn chia
+        # shard thay vì `pytest-xdist`: `conftest` xóa/dựng lại vai trò ở phạm
+        # vi CỤM và dùng dataset phạm vi phiên dùng chung, nên hai worker trong
+        # một tiến trình sẽ giẫm lên nhau. Ba tiến trình, ba cụm thì không.
         image: postgres:16
         env:
           # Bộ test tự tạo `ket_owner`/`ket_app` **không mật khẩu** (bản cài
@@ -307,6 +319,74 @@ jobs:
       # `ket_app` sẽ xanh trong khi worker thật không giành nổi một job nào.
       KET_TEST_KET_WORKER_DSN: postgresql+psycopg://ket_worker@localhost:5432/ket_test
 
+      # Mỗi shard ghi dữ liệu độ phủ vào tệp riêng; job `server-db-coverage`
+      # gộp lại. Không đặt biến này thì cả ba shard cùng ghi `.coverage` và
+      # con số cuối chỉ phản ánh shard nào tải lên sau cùng.
+      COVERAGE_FILE: .coverage.shard${{ matrix.shard }}
+
+      # ---------------------------------------------------------------------
+      # Cách chia, và vì sao chia như vậy.
+      #
+      # Chia theo TỆP, không theo bài: bốn tệp có fixture actor phạm vi module
+      # (xem `docs/codebase-summary.md` §5) chỉ rẻ khi cả tệp chạy trong một
+      # tiến trình — cắt giữa tệp là dựng lại người dùng "phạm vi toàn công ty"
+      # thêm một lần, đúng thứ ba lát trước vừa bỏ công cắt đi.
+      #
+      # Chia theo THỜI LƯỢNG ĐO ĐƯỢC, không theo số tệp. Đo trên lượt chạy đầy
+      # đủ (`--durations=0`, 578,8s bài / 127 tệp) rồi mô phỏng từng cơ chế:
+      #
+      #     vòng tròn alphabet   → shard chậm nhất lệch 47,9%
+      #     băm crc32 tên tệp    → lệch 61,4%
+      #     theo thời lượng (17 tệp nặng nhất) → lệch 1,3%
+      #
+      # Chia "không cần biết thời lượng" hỏng vì shard CHẬM NHẤT quyết định
+      # wall-clock: lệch 48% ăn mất gần nửa phần lợi của việc song song.
+      #
+      # Chỉ liệt kê 17 tệp nặng nhất chứ không cả 127: liệt kê hết cho cân bằng
+      # hoàn hảo trên giấy nhưng đổi lại 127 dòng YAML phải sửa tay mỗi lần thêm
+      # tệp test. Shard 3 nhận phần còn lại bằng `--ignore`, nên **tệp test mới
+      # tự động có chỗ chạy** — không ai phải nhớ cập nhật danh sách này.
+      #
+      # ĐỪNG TIN CÁC CON SỐ CÂN BẰNG TRÊN. Diễn tập cục bộ ba shard cho:
+      #
+      #     shard 1: dự đoán 189,0s → THỰC 96,6s
+      #     shard 2: dự đoán 195,5s → THỰC 114,2s
+      #     shard 3: dự đoán 194,3s → THỰC 209,4s
+      #     tổng:    578,8s        → THỰC 420,2s  (nhanh hơn 171s)
+      #
+      # Dự đoán trượt vì đúng cơ chế mà cả loạt lát này đi sửa: chi phí fixture
+      # "phạm vi toàn công ty" là O(số chi nhánh TÍCH LŨY trong phiên). Thời
+      # lượng dùng để chia được đo TRONG lượt đầy đủ, nơi các tệp nặng đã bị
+      # tích lũy thổi phồng; tách ra shard riêng thì chúng rẻ hẳn. Nói cách
+      # khác: **thời lượng dùng để chia lại là hàm của cách chia**. Một lượt
+      # `--durations=0` trên bộ đầy đủ KHÔNG dự đoán được thời gian shard.
+      #
+      # Lệch hiện tại (96,6 / 114,2 / 209,4) là ~54% và **được chấp nhận có ý
+      # thức**: shard chậm nhất ước ~4:20 trên CI, còn mục tiêu là 10 phút. Cân
+      # lại chỉ khi shard chậm nhất chạm ~7 phút thật, và khi đó phải đo bằng
+      # một lượt chia shard THẬT — không phải bằng `--durations=0` của lượt
+      # không chia, vì con số đó đã sai một lần rồi.
+      # ---------------------------------------------------------------------
+      SHARD_1_FILES: >-
+        tests/test_gl_journal_api.py
+        tests/test_import_api.py
+        tests/test_master_data_api.py
+        tests/test_master_data_merge.py
+        tests/test_period_lock_and_pending_issues_api.py
+        tests/test_report_books_and_printing.py
+        tests/test_report_logo_upload.py
+        tests/test_voucher_print_api.py
+      SHARD_2_FILES: >-
+        tests/test_attachments_api.py
+        tests/test_cash_bank_book_reports.py
+        tests/test_config_packages_api.py
+        tests/test_import_template.py
+        tests/test_item_catalog_api.py
+        tests/test_opening_balances_api.py
+        tests/test_partner_catalog_api.py
+        tests/test_reports_api.py
+        tests/test_worker_runner.py
+
     steps:
       - uses: actions/checkout@v4
 
@@ -318,25 +398,154 @@ jobs:
       - name: Đồng bộ phụ thuộc
         run: uv sync --python ${{ env.PYTHON_VERSION }}
 
-      # Chạy TOÀN BỘ bộ test ở đây, không chỉ nhóm `db`, để con số độ phủ có
-      # nghĩa: phần lớn `kernel/security` và `kernel/datasets` chỉ chạy được khi
-      # có PostgreSQL, nên đo riêng nhóm không-DB sẽ cho ra một con số thấp giả.
-      # Nhóm không-DB vẫn chạy riêng ở job `server-tests` — ở đó câu hỏi khác:
-      # "còn chạy đúng trên Windows/macOS không".
-      - name: pytest toàn bộ + đo độ phủ
-        run: uv run pytest --cov --cov-report=term-missing
-
-      - name: Tổng hợp độ phủ
-        if: always()
+      # Chạy TOÀN BỘ bộ test qua ba shard, không chỉ nhóm `db`, để con số độ phủ
+      # có nghĩa: phần lớn `kernel/security` và `kernel/datasets` chỉ chạy được
+      # khi có PostgreSQL, nên đo riêng nhóm không-DB sẽ cho ra một con số thấp
+      # giả. Nhóm không-DB vẫn chạy riêng ở job `server-tests` — ở đó câu hỏi
+      # khác: "còn chạy đúng trên Windows/macOS không".
+      #
+      # `--cov-report=` (rỗng): báo cáo từng shard là báo cáo trên MỘT PHẦN ba
+      # bộ test, in nó ra chỉ mời người đọc tin một con số sai. Con số thật do
+      # `server-db-coverage` in sau khi gộp.
+      - name: pytest shard ${{ matrix.shard }}/3 + thu dữ liệu độ phủ
         shell: bash
         run: |
           set -euo pipefail
+          case "${{ matrix.shard }}" in
+            1) select=( $SHARD_1_FILES ) ;;
+            2) select=( $SHARD_2_FILES ) ;;
+            # Shard bắt-hết. Danh sách `--ignore` dựng TỪ CHÍNH hai biến trên,
+            # không chép lại: hai danh sách chép tay lệch nhau là cách duy nhất
+            # để một tệp không chạy ở shard nào mà CI vẫn xanh.
+            3) select=()
+               for f in $SHARD_1_FILES $SHARD_2_FILES; do select+=( "--ignore=$f" ); done ;;
+            *) echo "::error::shard không hợp lệ: ${{ matrix.shard }}"; exit 1 ;;
+          esac
+          # Mảng rỗng thì `"${select[@]}"` biến mất khỏi dòng lệnh và pytest rơi
+          # về `testpaths = ["tests"]` — shard ấy lặng lẽ chạy CẢ 1.917 bài, gần
+          # chạm trần 30 phút. Cổng đếm bài bắt được, nhưng chỉ sau khi ba lượt
+          # chạy đã tốn xong.
+          if [ ${#select[@]} -eq 0 ]; then
+            echo "::error::shard ${{ matrix.shard }} không chọn được tệp nào — kiểm SHARD_*_FILES"
+            exit 1
+          fi
+          uv run pytest --cov --cov-report= \
+            --junitxml="junit-shard${{ matrix.shard }}.xml" "${select[@]}"
+
+      # `if: always()`: shard đỏ thì junit XML của nó là thứ đáng đọc nhất, và
+      # cổng đếm bài ở job sau cần đủ ba tệp mới kết luận được.
+      #
+      # `include-hidden-files`: `.coverage.shard*` bắt đầu bằng dấu chấm, mà
+      # upload-artifact v4 bỏ tệp ẩn theo mặc định — thiếu cờ này thì độ phủ
+      # gộp lại im lặng bằng 0 và không có lỗi nào được in ra.
+      - name: Tải kết quả shard lên
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-db-shard-${{ matrix.shard }}
+          path: |
+            server/.coverage.shard${{ matrix.shard }}
+            server/junit-shard${{ matrix.shard }}.xml
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Gộp kết quả ba shard: một con số độ phủ, một bình luận PR, một cổng đếm bài.
+  #
+  # Tách khỏi `server-db` vì hai việc ở đây chỉ làm được khi **cả ba** shard đã
+  # xong. Cổng đếm bài là lý do quan trọng hơn: chia shard có đúng một kiểu hỏng
+  # nghiêm trọng và im lặng — một tệp không thuộc shard nào — và không shard nào
+  # tự phát hiện được điều đó.
+  #
+  # Đây cũng là job DUY NHẤT được ghi vào PR. Ba shard chạy song song không cần
+  # quyền ghi, nên chúng không có.
+  # ---------------------------------------------------------------------------
+  server-db-coverage:
+    name: server · gộp độ phủ + cổng đếm bài
+    needs: [changes, server-db]
+    # KHÔNG `always()`. Job này chỉ có nghĩa khi cả ba shard chạy trọn: gộp độ
+    # phủ từ hai trong ba shard cho ra một con số thấp hơn sự thật, và bước dán
+    # bình luận PR sửa TẠI CHỖ — nó sẽ ghi đè con số đúng của lần push trước
+    # bằng con số sai, ngay trên thứ mà người review đọc. Trước khi chia shard,
+    # `always()` an toàn vì một lượt hỏng vẫn cho dữ liệu độ phủ đầy đủ; chia
+    # shard làm giả định đó hết đúng.
+    #
+    # Bỏ `always()` cũng gỡ luôn hai vấn đề khác: job không còn chạy (và hỏng ở
+    # bước tải artifact) khi lượt CI bị `cancel-in-progress` hủy, và
+    # `$COVERAGE_TOTAL` không còn có đường trở thành biến chưa gán dưới `set -u`.
+    #
+    # Không mất cổng nào: shard đỏ ⇒ `server-db` đỏ ⇒ `ci-ok` đỏ. `ci-ok` chỉ
+    # tha cho `skipped`, mà job này chỉ `skipped` khi `server-db` cũng `skipped`.
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Đồng bộ phụ thuộc
+        run: uv sync --python ${{ env.PYTHON_VERSION }}
+
+      - name: Tải kết quả các shard về
+        uses: actions/download-artifact@v4
+        with:
+          pattern: server-db-shard-*
+          merge-multiple: true
+          path: server
+
+      - name: Cổng đếm bài — các shard cộng lại phải bằng bộ đầy đủ
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Không neo `^`: dòng tổng chỉ nằm ở đầu dòng nhờ `-q` trong `addopts`
+          # của pyproject. Ai đó thêm `-v` thì nó thành
+          # `====== 1917 tests collected ======`, và một cổng neo `^` sẽ hỏng
+          # bằng một pipeline rỗng — trỏ nhầm vào ci.yml thay vì vào chỗ thật sự
+          # đổi. Bắt cụm `<số> tests collected` ở bất kỳ đâu trên dòng rồi mới
+          # tách số. (`tests?` cho cả dạng số ít của pytest.)
+          #
+          # `|| true` để `set -e` không nuốt mất thông điệp bên dưới: pytest thu
+          # thập hỏng (lỗi import chẳng hạn) cũng rơi vào đúng nhánh này.
+          expected=$(uv run pytest --collect-only -p no:warnings \
+            | grep -oE '[0-9]+ tests? collected' | grep -oE '^[0-9]+' | tail -1) || true
+          if [ -z "$expected" ]; then
+            echo "::error::Không đọc được số bài từ \`pytest --collect-only\` — nhiều khả năng bước thu thập chính nó đã hỏng."
+            exit 1
+          fi
+          echo "pytest thu thập trên toàn bộ: $expected bài"
+          python3 ../.github/scripts/check_test_shards.py \
+            --expected "$expected" junit-shard1.xml junit-shard2.xml junit-shard3.xml
+
+      - name: Gộp độ phủ ba shard
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          data=( .coverage.shard* )
+          if [ ${#data[@]} -eq 0 ]; then
+            echo "::error::Không shard nào để lại dữ liệu độ phủ."
+            exit 1
+          fi
+          echo "Gộp: ${data[*]}"
+          uv run coverage combine "${data[@]}"
           total=$(uv run coverage report --format=total)
           {
             echo "## Độ phủ test: **${total}%**"
             echo
-            echo "Đo trên \`server/src/ket\` với toàn bộ bộ test (gồm nhóm cần PostgreSQL)."
-            echo "Tệp phủ 100% được ẩn cho gọn."
+            echo "Đo trên \`server/src/ket\`, gộp từ ${#data[@]} shard của toàn bộ bộ test"
+            echo "(gồm nhóm cần PostgreSQL). Tệp phủ 100% được ẩn cho gọn."
             echo
             uv run coverage report --format=markdown --skip-covered
           } >> "$GITHUB_STEP_SUMMARY"
@@ -347,7 +556,7 @@ jobs:
       # để tìm lại nó. Dùng `gh api` thay vì action bên thứ ba: ít một mắt xích
       # trong chuỗi cung ứng cho một việc chỉ có hai lệnh gọi.
       - name: Dán độ phủ vào PR
-        if: always() && github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -366,7 +575,7 @@ jobs:
             echo
             echo "</details>"
             echo
-            echo "_Đo trên \`server/src/ket\`, toàn bộ bộ test. Cập nhật ở mỗi lần push._"
+            echo "_Đo trên \`server/src/ket\`, gộp từ ba shard của toàn bộ bộ test. Cập nhật ở mỗi lần push._"
           } > /tmp/coverage-comment.md
 
           existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
@@ -719,6 +928,7 @@ jobs:
         server-quality,
         server-tests,
         server-db,
+        server-db-coverage,
         client,
         client-bench,
         api-types,
