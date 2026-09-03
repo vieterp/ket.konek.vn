@@ -43,6 +43,7 @@ from ket.kernel.security.grants import APP_ROLE, OWNER_ROLE
 from ket.kernel.security.keystore import SecretBox, generate_app_key
 from ket.kernel.security.rls import validate_identifier
 from ket.settings import Settings
+from lock_diagnostics import apply_lock_timeout, describe_blocking_sessions, is_lock_timeout
 
 SERVER_ROOT = Path(__file__).resolve().parent.parent
 DOMAIN_ROOT = SERVER_ROOT / "src" / "ket"
@@ -55,6 +56,40 @@ DESTRUCTIVE_CLUSTER_ENV = "KET_TEST_DESTRUCTIVE_CLUSTER"
 
 Xem `_drop_ket_roles` — nhóm test `db` xóa vai trò ở phạm vi cụm, và cụm chạy
 test thường là cụm cá nhân của lập trình viên, nơi có thể có bản cài khác."""
+
+
+_lock_dump_emitted = False
+"""Bản đổ chẩn đoán khóa đã in chưa — xem `pytest_exception_interact`."""
+
+
+def pytest_exception_interact(
+    node: pytest.Item | pytest.Collector,
+    call: pytest.CallInfo[object],
+    report: pytest.TestReport | pytest.CollectReport,
+) -> None:
+    """Bài nào chết vì chờ khóa quá hạn thì đính kèm danh sách phiên đang chặn.
+
+    Chỉ `lock_timeout` mới kích hoạt (`tests/lock_diagnostics.py` giải thích vì
+    sao món này tồn tại), nên mọi lỗi khác không phải trả thêm một lời gọi DB
+    nào. Bản đổ đi vào `report.sections` để nó nằm ngay dưới traceback của
+    chính bài đó — không lẫn vào log chung, nơi 1.917 bài đang cùng ghi.
+
+    **Đúng MỘT lần mỗi phiên**, và đây không phải chuyện cho gọn log. Cảnh mà
+    món này được dựng ra để phục vụ là chờ khóa trong `bind_seed_schema`, mà
+    `bind_seed_schema` chạy trong chuỗi fixture phạm vi **PHIÊN**. Fixture phạm
+    vi phiên hỏng thì pytest nhớ ngoại lệ và ném lại **chính nó** cho mọi bài
+    phụ thuộc — hook này sẽ nổ hàng nghìn lần cho cùng một nguyên nhân, mỗi lần
+    mở một connection mới. Không chặn thì bộ chẩn đoán tự biến thành đúng cái
+    nó sinh ra để ngăn: một job đứng im tới trần 30 phút. Bản đổ đầu tiên là
+    bản duy nhất có thông tin; phần còn lại là bản sao của một ngoại lệ đã cache.
+    """
+    global _lock_dump_emitted
+    if _lock_dump_emitted or not is_lock_timeout(call.excinfo.value if call.excinfo else None):
+        return
+    _lock_dump_emitted = True
+    report.sections.append(
+        ("Chẩn đoán khóa PostgreSQL", describe_blocking_sessions(_admin_dsn(), TEST_DATABASE))
+    )
 
 
 @pytest.fixture(scope="session")
@@ -239,6 +274,9 @@ def test_settings(postgres_available: bool, app_key: str) -> Settings:
         connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{TEST_DATABASE}"')
         _drop_ket_roles(connection)
         connection.exec_driver_sql(f'CREATE DATABASE "{TEST_DATABASE}"')
+        # Ngay sau khi tạo, trước khi bất kỳ engine nào nối vào: chờ khóa
+        # phải hỏng nhanh kèm SQLSTATE, không treo tới trần job CI.
+        apply_lock_timeout(connection, TEST_DATABASE)
 
     settings = Settings(
         database_url=_dsn_for("ket_app"),
