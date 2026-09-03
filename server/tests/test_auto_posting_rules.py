@@ -137,6 +137,47 @@ def test_reseeding_backfills_missing_rules_only(
     assert after == before
 
 
+def test_reseeding_backfills_only_document_types_without_rules(
+    owner_engine: Engine, dataset_alpha: DatasetRef
+) -> None:
+    """Dataset gieo ở lát trước có nghiệp vụ PC/PT nhưng chưa có PUR: lượt gieo
+    kế tiếp thêm đúng bộ PUR, KHÔNG nhân đôi các loại đã có, và không xem
+    "gói đã có dòng" là lý do bỏ qua."""
+    with owner_engine.begin() as connection:
+        bind_seed_schema(connection, dataset_alpha.schema_name)
+        package_id = connection.execute(
+            select(ConfigPackage.id).where(ConfigPackage.code == "TT99-2025")
+        ).scalar_one()
+        before = list(
+            connection.execute(
+                select(AutoPostingRule.document_type, AutoPostingRule.operation_code)
+                .where(AutoPostingRule.package_id == package_id)
+                .order_by(AutoPostingRule.document_type, AutoPostingRule.operation_code)
+            ).all()
+        )
+        assert any(document_type == "PUR" for document_type, _ in before)
+        connection.execute(
+            delete(AutoPostingRule).where(
+                AutoPostingRule.package_id == package_id, AutoPostingRule.document_type == "PUR"
+            )
+        )
+
+    with owner_engine.begin() as connection:
+        added = ensure_builtin_packages(connection, dataset_alpha.schema_name)
+    assert added == 0
+
+    with owner_engine.begin() as connection:
+        bind_seed_schema(connection, dataset_alpha.schema_name)
+        after = list(
+            connection.execute(
+                select(AutoPostingRule.document_type, AutoPostingRule.operation_code)
+                .where(AutoPostingRule.package_id == package_id)
+                .order_by(AutoPostingRule.document_type, AutoPostingRule.operation_code)
+            ).all()
+        )
+    assert after == before, "mỗi cặp (loại, nghiệp vụ) đúng một dòng — không thiếu, không đôi"
+
+
 def test_a_specific_document_type_default_beats_the_wildcard(
     session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
 ) -> None:

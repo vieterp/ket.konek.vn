@@ -18,3 +18,10 @@ document_type,purpose,account_code
 *,fx_gain,515
 *,fx_loss,635
 *,unexplained_shortage,1381
+*,inventory_goods,156
+*,raw_materials,152
+*,tools_supplies,153
+*,goods_in_transit,151
+*,outsourced_services,6421
+*,fixed_assets,2113
+*,prepaid_expenses,242

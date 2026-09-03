@@ -1,5 +1,6 @@
 -- BR-QUY-02 ở mặt SỐ ĐÃ TRẢ: số đối trừ ghi trên sổ phụ phải bằng đúng tổng
--- các dòng đối trừ của những chứng từ tiền ĐANG ghi sổ trỏ vào nó.
+-- các dòng đối trừ của những chứng từ ĐANG ghi sổ trỏ vào nó — chứng từ tiền
+-- (phiếu thu/chi, báo có/nợ) và chứng từ trả lại hàng mua (lát 7B).
 --
 -- Đây là phép kiểm khép kín — nó không hỏi sổ cái câu nào, nên không dính bốn
 -- nguồn báo-sai đã chặn `arap_matches_control.sql` (xem đầu tệp ấy). Thứ nó
@@ -62,6 +63,20 @@ WITH settlement_rows AS (
     FROM bank_settlements s
     JOIN vouchers v ON v.id = s.voucher_id
     WHERE v.status = 2
+    UNION ALL
+    -- Chứng từ trả lại hàng mua đối trừ vào hóa đơn gốc bằng cùng cơ chế với
+    -- phiếu chi (`purchase/settlement_service.py`), nên bảng đối trừ của nó
+    -- cũng là một nguồn cộng vào `settled` — thiếu nhánh này thì mỗi lượt trả
+    -- hàng là một dòng đỏ "sổ phụ có số, không có dòng đối trừ nào".
+    SELECT s.target_kind,
+           s.target_id,
+           s.amount_fc,
+           s.amount - s.fx_diff,
+           v.branch_id,
+           v.voucher_no
+    FROM purchase_settlements s
+    JOIN vouchers v ON v.id = s.voucher_id
+    WHERE v.status = 2
 ),
 settled AS (
     SELECT target_kind,
@@ -102,7 +117,7 @@ SELECT COALESCE(b.target_kind, s.target_kind) AS target_kind,
        COALESCE(b.recorded, 0)                AS recorded_settled,
        COALESCE(s.settlement_amount, 0)       AS settlement_rows_amount,
        -- Số chứng từ của các phiếu đang trỏ vào đích — U11: mỗi dòng lỗi phải
-       -- dẫn thẳng tới chỗ sửa, và ở đây chỗ sửa là những phiếu thu/chi ấy.
+       -- dẫn thẳng tới chỗ sửa, và ở đây chỗ sửa là chính những chứng từ ấy.
        s.voucher_nos                          AS settlement_voucher_nos
 FROM subledger b
 FULL JOIN settled s

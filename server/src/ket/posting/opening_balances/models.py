@@ -115,6 +115,15 @@ class OpeningBalance(DatasetBase, Audited):
             "bank_account_id",
             postgresql_where=text("bank_account_id IS NOT NULL"),
         ),
+        # Guard ngưỡng nợ hỏi công nợ đầu kỳ còn treo của MỘT đối tác qua
+        # `partner_open_debt` (0026) — không lọc niên độ trước, nên tiền tố của
+        # `ix_opening_balances_key` không dùng được.
+        Index(
+            "ix_opening_balances_partner",
+            "partner_kind",
+            "partner_id",
+            postgresql_where=text("partner_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

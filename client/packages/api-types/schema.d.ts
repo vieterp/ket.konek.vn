@@ -6641,6 +6641,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchase/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Purchase Invoice
+         * @description Cất hóa đơn mua; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.
+         *
+         *     `acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm đó (FR-SYS-062
+         *     mức "Cảnh báo" — ví dụ nhà cung cấp vượt ngưỡng nợ); mức "Chặn" không mở được.
+         */
+        post: operations["create_purchase_invoice_api_v1_purchase_invoices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchase/invoices/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Purchase Invoice */
+        get: operations["get_purchase_invoice_api_v1_purchase_invoices__voucher_id__get"];
+        /**
+         * Update Purchase Invoice
+         * @description Sửa hóa đơn Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).
+         */
+        put: operations["update_purchase_invoice_api_v1_purchase_invoices__voucher_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchase/open-invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Open Payables
+         * @description Hóa đơn mua còn nợ của một nhà cung cấp — picker cho chứng từ trả lại hàng.
+         *
+         *     Chỉ một chiều (phải trả) và chỉ loại đối tác NCC, khóa cứng thay vì nhận
+         *     tham số: màn hình này chỉ tồn tại để chọn hóa đơn gốc cho một chứng từ mua.
+         */
+        get: operations["list_open_payables_api_v1_purchase_open_invoices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports": {
         parameters: {
             query?: never;
@@ -10799,6 +10866,60 @@ export interface components {
         };
         JsonValue: unknown;
         /**
+         * LandedCostIn
+         * @description Một khoản chi phí mua hàng (vận chuyển, bốc xếp, thuế nhập khẩu…).
+         *
+         *     `credit_account_id` do người dùng chọn: 331 khi nợ một nhà cung cấp dịch
+         *     vụ (kèm `vendor_id`), 3333/3332 khi là thuế nhập khẩu/TTĐB, 111 khi đã chi
+         *     tiền — mỗi loại một TK, không đoán theo gói cấu hình.
+         */
+        LandedCostIn: {
+            /**
+             * Amount Fc
+             * @default 0
+             */
+            amount_fc: number | string;
+            /** Credit Account Id */
+            credit_account_id: number;
+            /** Description */
+            description: string;
+            /** Vat Account Id */
+            vat_account_id?: number | null;
+            /**
+             * Vat Amount Fc
+             * @default 0
+             */
+            vat_amount_fc: number | string;
+            /** Vat Rate */
+            vat_rate?: number | string | null;
+            /** Vendor Id */
+            vendor_id?: number | null;
+        };
+        /** LandedCostOut */
+        LandedCostOut: {
+            /** Amount Fc */
+            amount_fc: string;
+            /** Credit Account Id */
+            credit_account_id: number;
+            /** Description */
+            description: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Line No */
+            line_no: number;
+            /** Vat Account Id */
+            vat_account_id: number | null;
+            /** Vat Amount Fc */
+            vat_amount_fc: string;
+            /** Vat Rate */
+            vat_rate: string | null;
+            /** Vendor Id */
+            vendor_id: number | null;
+        };
+        /**
          * LedgerPostingListResponse
          * @description Một trang phát sinh + tổng số dòng khớp bộ lọc.
          */
@@ -12091,6 +12212,418 @@ export interface components {
             name_en?: string | null;
             /** Row Version */
             row_version: number;
+        };
+        /**
+         * PurchaseInvoiceIn
+         * @description Thân hóa đơn cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).
+         */
+        PurchaseInvoiceIn: {
+            /** Branch Id */
+            branch_id: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Due Date */
+            due_date?: string | null;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Kind */
+            kind: number;
+            /**
+             * Landed Cost Allocation
+             * @default 0
+             */
+            landed_cost_allocation: number;
+            /**
+             * Landed Costs
+             * @default []
+             */
+            landed_costs: components["schemas"]["LandedCostIn"][];
+            /** Lines */
+            lines: components["schemas"]["PurchaseInvoiceLineIn"][];
+            /** Operation Code */
+            operation_code: string;
+            /** Payable Account Id */
+            payable_account_id: number;
+            /** Payment Term Id */
+            payment_term_id?: number | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["PurchaseSettlementIn"][];
+            /** Vendor Id */
+            vendor_id: number;
+            /** Vendor Invoice Date */
+            vendor_invoice_date?: string | null;
+            /** Vendor Invoice Form */
+            vendor_invoice_form?: string | null;
+            /** Vendor Invoice No */
+            vendor_invoice_no?: string | null;
+            /** Vendor Invoice Serial */
+            vendor_invoice_serial?: string | null;
+            /**
+             * Vendor Invoice Status
+             * @default 0
+             */
+            vendor_invoice_status: number;
+        };
+        /**
+         * PurchaseInvoiceLineIn
+         * @description Một dòng hàng hóa / dịch vụ trên hóa đơn.
+         *
+         *     `amount_fc` là số người dùng chốt, không suy từ `quantity × unit_price_fc`:
+         *     hóa đơn của nhà cung cấp làm tròn theo cách của họ, và số trên chứng từ
+         *     gốc là số phải khớp — cặp số lượng/đơn giá chỉ để tính giá vốn nhập kho.
+         */
+        PurchaseInvoiceLineIn: {
+            /** Account Id */
+            account_id: number;
+            /** Amount */
+            amount?: number | string | null;
+            /** Amount Fc */
+            amount_fc: number | string;
+            /** Contract Id */
+            contract_id?: number | null;
+            /** Cost Object Id */
+            cost_object_id?: number | null;
+            /** Description */
+            description?: string | null;
+            /** Expense Item Id */
+            expense_item_id?: number | null;
+            /**
+             * Extended
+             * @default []
+             */
+            extended: components["schemas"]["ExtendedDimensionIn"][];
+            /** Item Id */
+            item_id?: number | null;
+            /**
+             * Landed Cost Fc
+             * @default 0
+             */
+            landed_cost_fc: number | string;
+            /** Order Id */
+            order_id?: number | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Quantity */
+            quantity?: number | string | null;
+            /** Unit Id */
+            unit_id?: number | null;
+            /** Unit Price Fc */
+            unit_price_fc?: number | string | null;
+            /** Vat Account Id */
+            vat_account_id?: number | null;
+            /**
+             * Vat Amount Fc
+             * @default 0
+             */
+            vat_amount_fc: number | string;
+            /** Vat Rate */
+            vat_rate?: number | string | null;
+            /** Warehouse Id */
+            warehouse_id?: number | null;
+        };
+        /** PurchaseInvoiceLineOut */
+        PurchaseInvoiceLineOut: {
+            /** Account Id */
+            account_id: number;
+            /** Amount Fc */
+            amount_fc: string;
+            /** Contract Id */
+            contract_id: number | null;
+            /** Cost Object Id */
+            cost_object_id: number | null;
+            /** Description */
+            description: string | null;
+            /** Expense Item Id */
+            expense_item_id: number | null;
+            /** Extended Dimensions */
+            extended_dimensions: {
+                [key: string]: number;
+            } | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Item Id */
+            item_id: number | null;
+            /** Landed Cost Fc */
+            landed_cost_fc: string;
+            /** Line No */
+            line_no: number;
+            /** Order Id */
+            order_id: number | null;
+            /** Project Id */
+            project_id: number | null;
+            /** Quantity */
+            quantity: string | null;
+            /** Unit Id */
+            unit_id: number | null;
+            /** Unit Price Fc */
+            unit_price_fc: string | null;
+            /** Vat Account Id */
+            vat_account_id: number | null;
+            /** Vat Amount Fc */
+            vat_amount_fc: string;
+            /** Vat Rate */
+            vat_rate: string | null;
+            /** Warehouse Id */
+            warehouse_id: number | null;
+        };
+        /**
+         * PurchaseInvoiceOut
+         * @description Header chứng từ + thân hóa đơn — client cần cả hai để vẽ lại form.
+         */
+        PurchaseInvoiceOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Cashflow Activity */
+            cashflow_activity: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Document Type */
+            document_type: string;
+            /** Due Date */
+            due_date?: string | null;
+            /** Entry Kind */
+            entry_kind: number;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @default 0
+             */
+            kind: number;
+            /**
+             * Landed Cost Allocation
+             * @default 0
+             */
+            landed_cost_allocation: number;
+            /**
+             * Landed Costs
+             * @default []
+             */
+            landed_costs: components["schemas"]["LandedCostOut"][];
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["PurchaseInvoiceLineOut"][];
+            /**
+             * Operation Code
+             * @default
+             */
+            operation_code: string;
+            /**
+             * Payable Account Id
+             * @default 0
+             */
+            payable_account_id: number;
+            /** Payment Term Id */
+            payment_term_id?: number | null;
+            /** Period Id */
+            period_id: number;
+            /** Posted At */
+            posted_at: string | null;
+            /** Posted By */
+            posted_by: number | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Row Version */
+            row_version: number;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["PurchaseSettlementOut"][];
+            /** Status */
+            status: number;
+            /**
+             * Total Before Tax Fc
+             * @default 0
+             */
+            total_before_tax_fc: string;
+            /**
+             * Total Fc
+             * @default 0
+             */
+            total_fc: string;
+            /**
+             * Total Landed Cost Fc
+             * @default 0
+             */
+            total_landed_cost_fc: string;
+            /**
+             * Total Vat Fc
+             * @default 0
+             */
+            total_vat_fc: string;
+            /**
+             * Vendor Id
+             * @default 0
+             */
+            vendor_id: number;
+            /** Vendor Invoice Date */
+            vendor_invoice_date?: string | null;
+            /** Vendor Invoice Form */
+            vendor_invoice_form?: string | null;
+            /** Vendor Invoice No */
+            vendor_invoice_no?: string | null;
+            /** Vendor Invoice Serial */
+            vendor_invoice_serial?: string | null;
+            /**
+             * Vendor Invoice Status
+             * @default 0
+             */
+            vendor_invoice_status: number;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /**
+         * PurchaseInvoiceUpdate
+         * @description PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).
+         */
+        PurchaseInvoiceUpdate: {
+            /** Branch Id */
+            branch_id: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Due Date */
+            due_date?: string | null;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Kind */
+            kind: number;
+            /**
+             * Landed Cost Allocation
+             * @default 0
+             */
+            landed_cost_allocation: number;
+            /**
+             * Landed Costs
+             * @default []
+             */
+            landed_costs: components["schemas"]["LandedCostIn"][];
+            /** Lines */
+            lines: components["schemas"]["PurchaseInvoiceLineIn"][];
+            /** Operation Code */
+            operation_code: string;
+            /** Payable Account Id */
+            payable_account_id: number;
+            /** Payment Term Id */
+            payment_term_id?: number | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Row Version */
+            row_version: number;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["PurchaseSettlementIn"][];
+            /** Vendor Id */
+            vendor_id: number;
+            /** Vendor Invoice Date */
+            vendor_invoice_date?: string | null;
+            /** Vendor Invoice Form */
+            vendor_invoice_form?: string | null;
+            /** Vendor Invoice No */
+            vendor_invoice_no?: string | null;
+            /** Vendor Invoice Serial */
+            vendor_invoice_serial?: string | null;
+            /**
+             * Vendor Invoice Status
+             * @default 0
+             */
+            vendor_invoice_status: number;
+        };
+        /**
+         * PurchaseSettlementIn
+         * @description Đối trừ khoản trả lại vào hóa đơn mua gốc — chỉ nhận `amount_fc`, số VND
+         *     và chênh lệch tỷ giá do server tính (FR-SYS-066).
+         */
+        PurchaseSettlementIn: {
+            /** Amount Fc */
+            amount_fc: number | string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            target_kind: components["schemas"]["SettlementTargetKind"];
+        };
+        /** PurchaseSettlementOut */
+        PurchaseSettlementOut: {
+            /** Amount */
+            amount: string;
+            /** Amount Fc */
+            amount_fc: string;
+            /** Fx Diff */
+            fx_diff: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /** Target Kind */
+            target_kind: number;
         };
         /**
          * ReconciliationResponse
@@ -23557,6 +24090,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrintTemplateListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_purchase_invoice_api_v1_purchase_invoices_post: {
+        parameters: {
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurchaseInvoiceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchaseInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_purchase_invoice_api_v1_purchase_invoices__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchaseInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_purchase_invoice_api_v1_purchase_invoices__voucher_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurchaseInvoiceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchaseInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_open_payables_api_v1_purchase_open_invoices_get: {
+        parameters: {
+            query: {
+                vendor_id: number;
+                branch_id: number;
+                as_of: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenInvoicesResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

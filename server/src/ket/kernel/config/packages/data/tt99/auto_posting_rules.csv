@@ -49,3 +49,11 @@ SEC,nop-bao-hiem,Nộp bảo hiểm,insurance,bank,0,,8
 SEC,tra-tien-vay,Trả các khoản vay,borrowings,bank,0,,9
 SEC,rut-tgnh-nhap-quy,Rút tiền gửi về nhập quỹ,cash,bank,0,,10
 SEC,chi-khac,Chi khác,,bank,0,,11
+PUR,mua-hang-nhap-kho,Mua hàng hóa nhập kho,inventory_goods,ap_trade,1,1,1
+PUR,mua-nguyen-vat-lieu,Mua nguyên vật liệu nhập kho,raw_materials,ap_trade,1,1,2
+PUR,mua-cong-cu-dung-cu,Mua công cụ dụng cụ nhập kho,tools_supplies,ap_trade,1,1,3
+PUR,hang-mua-dang-di-duong,Hàng mua đang đi đường,goods_in_transit,ap_trade,1,1,4
+PUR,mua-dich-vu,Mua dịch vụ / chi phí không qua kho,outsourced_services,ap_trade,1,1,5
+PUR,mua-tai-san-co-dinh,Mua tài sản cố định,fixed_assets,ap_trade,1,1,6
+PUR,chi-phi-tra-truoc,Mua dịch vụ chờ phân bổ,prepaid_expenses,ap_trade,1,1,7
+PUR,tra-lai-hang-mua,Trả lại hàng mua,ap_trade,inventory_goods,1,1,8

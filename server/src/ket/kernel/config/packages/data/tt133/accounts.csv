@@ -11,7 +11,7 @@ code,name,name_en,parent_code,balance_nature,is_summary,is_foreign_currency,deta
 1288,Các khoản đầu tư khác,,128,0,0,0,,0
 131,Phải thu của khách hàng,,,2,0,0,customer,1
 133,Thuế GTGT được khấu trừ,,,0,1,0,,1
-1331,"Thuế GTGT của hàng hóa, dịch vụ",,133,0,0,0,item,0
+1331,"Thuế GTGT của hàng hóa, dịch vụ",,133,0,0,0,,0
 1332,Thuế GTGT của TSCĐ,,133,0,0,0,,0
 136,Phải thu nội bộ,,,2,1,0,,1
 1361,Vốn kinh doanh ở đơn vị trực thuộc,,136,2,0,0,,0

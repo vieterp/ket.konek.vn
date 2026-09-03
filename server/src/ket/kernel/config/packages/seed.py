@@ -15,6 +15,11 @@ bỏ qua toàn bộ (không sửa, không thêm dòng) — kể cả khi `versio
 tác có kiểm soát riêng (gói mới = `code` mới, xem `activator.py`), không phải
 việc của đường gieo mầm chạy mỗi lần cấp dữ liệu kế toán.
 
+Riêng **hệ thống tài khoản của gói đã gieo thì backfill không đụng tới** — chỉ
+báo cáo và bộ nghiệp vụ định khoản có đường lấp chỗ trống. Sửa một TK đã gieo
+sai (như `1331` bỏ theo dõi `item` ở lát 7B) vì thế phải đi qua một bước sửa dữ
+liệu trong migration, chứ không nhờ được lượt gieo kế tiếp.
+
 **Gói dựng sẵn kích hoạt ngay lúc gieo** (`activated_at = now()`) — khác gói
 nhập qua `.zip` (`importer.py`), vốn nằm im (`activated_at = NULL`) cho tới khi
 có người bấm "kích hoạt". Một dữ liệu kế toán mới cấp phải **dùng được ngay**
@@ -27,6 +32,7 @@ không gán "người tạo" cho chiều dựng sẵn.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import structlog
@@ -35,7 +41,11 @@ from sqlalchemy import Connection, insert, select, update
 from ket.kernel.config.accounts_models import ChartOfAccount, ClosingAccountPair, DefaultAccount
 from ket.kernel.config.accounts_models import ConfigPackage as ConfigPackageModel
 from ket.kernel.config.auto_posting_models import AutoPostingRule
-from ket.kernel.config.packages.loader import LoadedPackage, load_builtin_package
+from ket.kernel.config.packages.loader import (
+    AutoPostingRuleRow,
+    LoadedPackage,
+    load_builtin_package,
+)
 from ket.kernel.config.statements.models import StatementLayout, StatementRow
 from ket.kernel.master_data.tree_path import ROOT_LEVEL, child_path, level_of
 from ket.kernel.persistence.seeding import bind_seed_schema
@@ -146,9 +156,9 @@ def _insert_default_accounts(
 
 
 def _insert_auto_posting_rules(
-    connection: Connection, package_id: int, loaded: LoadedPackage
+    connection: Connection, package_id: int, rows: Sequence[AutoPostingRuleRow]
 ) -> None:
-    if not loaded.auto_posting_rules:
+    if not rows:
         return
     connection.execute(
         insert(AutoPostingRule),
@@ -164,7 +174,7 @@ def _insert_auto_posting_rules(
                 "partner_kind": row.partner_kind,
                 "display_order": row.display_order,
             }
-            for row in loaded.auto_posting_rules
+            for row in rows
         ],
     )
 
@@ -248,20 +258,37 @@ def _ensure_statements_backfilled(
 def _ensure_auto_posting_backfilled(
     connection: Connection, package_id: int, loaded: LoadedPackage
 ) -> bool:
-    """Gieo nghiệp vụ định khoản tự động cho gói builtin **đã tồn tại từ trước
-    lát 6A** nhưng chưa có dòng nào — cùng doctrine với
-    `_ensure_statements_backfilled`: chỉ **thêm vào chỗ trống**, không ghi đè.
+    """Gieo nghiệp vụ định khoản tự động cho gói builtin **đã tồn tại từ trước**
+    — cùng doctrine với `_ensure_statements_backfilled`: chỉ **thêm vào chỗ
+    trống**, không ghi đè.
+
+    Chỗ trống tính theo **từng `document_type`**, không theo cả gói: mỗi lát
+    mở một loại chứng từ mới (PC/PT/UNC/BC rồi PUR, sau này SAL…) lại nộp thêm
+    một bộ nghiệp vụ, và một dataset đã gieo ở lát trước thì có dòng của các
+    loại cũ nhưng chưa có dòng của loại mới. Kiểm "gói đã có dòng nào chưa"
+    sẽ bỏ qua đúng những dataset ấy; còn chèn cả bộ thì nhân đôi các loại cũ.
+    Loại chứng từ đã có dòng — kể cả dòng người dùng sửa/xóa bớt — thì giữ
+    nguyên: gán lại nội dung là nâng cấp, việc của một gói `code` mới.
 
     Kèm theo là các `purpose` mới trong `default_accounts` mà bộ nghiệp vụ trỏ
-    tới (`borrowings`, `import_tax`, …): một bộ nghiệp vụ backfill mà thiếu
-    purpose thì resolver trả "không điền sẵn" ở đúng những nghiệp vụ đáng điền
-    nhất. Chỉ chèn khóa `(document_type, purpose)` **chưa có** — gán lại một
-    purpose đang tồn tại là nâng cấp nội dung, việc của một gói `code` mới.
+    tới (`borrowings`, `import_tax`, `inventory_goods`, …): một bộ nghiệp vụ
+    backfill mà thiếu purpose thì resolver trả "không điền sẵn" ở đúng những
+    nghiệp vụ đáng điền nhất. Chỉ chèn khóa `(document_type, purpose)` **chưa
+    có**.
     """
-    has_rules = connection.scalar(
-        select(AutoPostingRule.id).where(AutoPostingRule.package_id == package_id).limit(1)
+    if not loaded.auto_posting_rules:
+        return False
+    seeded_types = set(
+        connection.scalars(
+            select(AutoPostingRule.document_type)
+            .where(AutoPostingRule.package_id == package_id)
+            .distinct()
+        ).all()
     )
-    if has_rules is not None or not loaded.auto_posting_rules:
+    missing_rules = [
+        row for row in loaded.auto_posting_rules if row.document_type not in seeded_types
+    ]
+    if not missing_rules:
         return False
 
     existing_defaults = set(
@@ -289,11 +316,12 @@ def _ensure_auto_posting_backfilled(
                 for row in missing_defaults
             ],
         )
-    _insert_auto_posting_rules(connection, package_id, loaded)
+    _insert_auto_posting_rules(connection, package_id, missing_rules)
     logger.info(
         "config_package.seed_auto_posting_backfilled",
         package_code=loaded.manifest.code,
-        rules=len(loaded.auto_posting_rules),
+        document_types=sorted({row.document_type for row in missing_rules}),
+        rules=len(missing_rules),
         default_accounts_added=len(missing_defaults),
     )
     return True
@@ -334,7 +362,7 @@ def _seed_one(connection: Connection, slug: str) -> bool:
     _insert_default_accounts(connection, package_id, loaded)
     _insert_closing_pairs(connection, package_id, loaded)
     _insert_statements(connection, package_id, loaded)
-    _insert_auto_posting_rules(connection, package_id, loaded)
+    _insert_auto_posting_rules(connection, package_id, loaded.auto_posting_rules)
     return True
 
 

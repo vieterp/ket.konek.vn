@@ -145,6 +145,8 @@ WARNING_LEVELS: Final[frozenset[str]] = frozenset(
 chung cho MỌI khóa `warning.*` về sau (vượt dự toán, vượt ngưỡng nợ…), để màn
 thiết lập vẽ cùng một bộ ba lựa chọn cho cả nhóm."""
 
+PARTNER_DEBT_WARNING_KEY: Final[str] = "warning.partner_debt"
+
 TREASURER_ENABLED_KEY: Final[str] = "treasurer.enabled"
 
 PRINT_ALLOW_DRAFT_KEY: Final[str] = "print.allow_draft_vouchers"
@@ -304,6 +306,19 @@ CATALOG: Final[dict[str, SettingDefinition]] = {
             # khi số dư đã vào nề nếp.
             scopes=frozenset({SettingScope.SYSTEM}),
             description="Cảnh báo khi chi quá số tồn tiền mặt/tiền gửi (ba mức FR-SYS-062)",
+            choices=WARNING_LEVELS,
+        ),
+        SettingDefinition(
+            key=PARTNER_DEBT_WARNING_KEY,
+            value_type=ValueType.STRING,
+            default=WARNING_LEVEL_NONE,
+            # FR-SYS-032: đối tác vượt ngưỡng nợ (`partners.credit_limit`) hoặc
+            # đang có khoản nợ quá số ngày được nợ (`payment_terms.due_days`)
+            # mà chứng từ sắp ghi sổ lại tăng nợ thêm. Cùng ba mức và cùng lý
+            # do mặc định "none" với `warning.cash_balance`: sổ phụ công nợ của
+            # một bản cài mới còn đang nhập số dư đầu kỳ, chưa phải lúc chặn.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Cảnh báo khi đối tác vượt ngưỡng nợ hoặc nợ quá hạn (ba mức FR-SYS-032)",
             choices=WARNING_LEVELS,
         ),
         SettingDefinition(

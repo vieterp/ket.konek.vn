@@ -17,6 +17,9 @@
 --   cùng danh mục `company_bank_accounts`.
 -- * sao kê ngân hàng (`bank_statements`, nhánh bổ sung ở 6G-1): mỗi sao kê đã
 --   nhập giữ một tham chiếu tới TK ngân hàng của nó.
+-- * `purchase` (lát 7B): nhà cung cấp trên hóa đơn mua (header) và nhà cung
+--   cấp dịch vụ trên từng dòng chi phí mua hàng (`landed_costs.vendor_id`) —
+--   luôn là `partners`, cùng `_usage_of` của `modules/purchase/service.py`.
 --
 -- Bút toán tổng hợp (`gl_journal_lines`) cố ý ĐỨNG NGOÀI bộ đếm, như từ đầu:
 -- nó không gọi `record_use` cho chiều nào cả. Vì thế lượt chuyển số dư đầu năm
@@ -44,6 +47,13 @@ WITH partner_refs AS (
         SELECT partner_kind, partner_id
         FROM bank_voucher_lines
         WHERE partner_id IS NOT NULL
+        UNION ALL
+        SELECT 1, vendor_id
+        FROM purchase_invoices
+        UNION ALL
+        SELECT 1, vendor_id
+        FROM landed_costs
+        WHERE vendor_id IS NOT NULL
     ) refs
 ),
 bank_account_refs AS (
