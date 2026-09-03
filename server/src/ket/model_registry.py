@@ -46,6 +46,7 @@ from ket.kernel.security import models as security_models
 from ket.modules.bank import models as bank_models
 from ket.modules.cash_book import models as cash_book_models
 from ket.modules.general_ledger.journal import models as gl_journal_models
+from ket.modules.purchase import models as purchase_models
 from ket.modules.receivables import models as receivables_models
 from ket.modules.warehousing.treasurer import models as treasurer_models
 
@@ -103,6 +104,7 @@ __all__ = [
     "periods_registration",
     "print_log_models",
     "print_template_models",
+    "purchase_models",
     "receivables_models",
     "report_models",
     "report_permission_registration",

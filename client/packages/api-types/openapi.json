@@ -9800,6 +9800,172 @@
         "type": "object"
       },
       "JsonValue": {},
+      "LandedCostIn": {
+        "additionalProperties": false,
+        "description": "Một khoản chi phí mua hàng (vận chuyển, bốc xếp, thuế nhập khẩu…).\n\n`credit_account_id` do người dùng chọn: 331 khi nợ một nhà cung cấp dịch\nvụ (kèm `vendor_id`), 3333/3332 khi là thuế nhập khẩu/TTĐB, 111 khi đã chi\ntiền — mỗi loại một TK, không đoán theo gói cấu hình.",
+        "properties": {
+          "amount_fc": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Amount Fc"
+          },
+          "credit_account_id": {
+            "title": "Credit Account Id",
+            "type": "integer"
+          },
+          "description": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "vat_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Account Id"
+          },
+          "vat_amount_fc": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Vat Amount Fc"
+          },
+          "vat_rate": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,6}0*$)\\d{0,3}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Rate"
+          },
+          "vendor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Id"
+          }
+        },
+        "required": [
+          "description",
+          "credit_account_id"
+        ],
+        "title": "LandedCostIn",
+        "type": "object"
+      },
+      "LandedCostOut": {
+        "properties": {
+          "amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Fc",
+            "type": "string"
+          },
+          "credit_account_id": {
+            "title": "Credit Account Id",
+            "type": "integer"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "vat_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Account Id"
+          },
+          "vat_amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Amount Fc",
+            "type": "string"
+          },
+          "vat_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Rate"
+          },
+          "vendor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Id"
+          }
+        },
+        "required": [
+          "id",
+          "line_no",
+          "description",
+          "vendor_id",
+          "credit_account_id",
+          "amount_fc",
+          "vat_rate",
+          "vat_amount_fc",
+          "vat_account_id"
+        ],
+        "title": "LandedCostOut",
+        "type": "object"
+      },
       "LedgerPostingListResponse": {
         "description": "Một trang phát sinh + tổng số dòng khớp bộ lọc.",
         "properties": {
@@ -13214,6 +13380,1208 @@
         "title": "ProjectsUpdateRequest",
         "type": "object"
       },
+      "PurchaseInvoiceIn": {
+        "additionalProperties": false,
+        "description": "Thân hóa đơn cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "currency_code": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "exchange_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Exchange Rate"
+          },
+          "kind": {
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "landed_cost_allocation": {
+            "default": 0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Landed Cost Allocation",
+            "type": "integer"
+          },
+          "landed_costs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LandedCostIn"
+            },
+            "title": "Landed Costs",
+            "type": "array"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PurchaseInvoiceLineIn"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "payable_account_id": {
+            "title": "Payable Account Id",
+            "type": "integer"
+          },
+          "payment_term_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Term Id"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PurchaseSettlementIn"
+            },
+            "title": "Settlements",
+            "type": "array"
+          },
+          "vendor_id": {
+            "title": "Vendor Id",
+            "type": "integer"
+          },
+          "vendor_invoice_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice Date"
+          },
+          "vendor_invoice_form": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice Form"
+          },
+          "vendor_invoice_no": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice No"
+          },
+          "vendor_invoice_serial": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice Serial"
+          },
+          "vendor_invoice_status": {
+            "default": 0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Vendor Invoice Status",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "operation_code",
+          "vendor_id",
+          "payable_account_id",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "currency_code",
+          "lines"
+        ],
+        "title": "PurchaseInvoiceIn",
+        "type": "object"
+      },
+      "PurchaseInvoiceLineIn": {
+        "additionalProperties": false,
+        "description": "Một dòng hàng hóa / dịch vụ trên hóa đơn.\n\n`amount_fc` là số người dùng chốt, không suy từ `quantity × unit_price_fc`:\nhóa đơn của nhà cung cấp làm tròn theo cách của họ, và số trên chứng từ\ngốc là số phải khớp — cặp số lượng/đơn giá chỉ để tính giá vốn nhập kho.",
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_fc": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Amount Fc"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "cost_object_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Object Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expense_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expense Item Id"
+          },
+          "extended": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtendedDimensionIn"
+            },
+            "title": "Extended",
+            "type": "array"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "landed_cost_fc": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Landed Cost Fc"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "unit_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Id"
+          },
+          "unit_price_fc": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,18}|(?=[\\d.]{1,25}0*$)\\d{0,18}\\.\\d{0,6}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price Fc"
+          },
+          "vat_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Account Id"
+          },
+          "vat_amount_fc": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Vat Amount Fc"
+          },
+          "vat_rate": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,6}0*$)\\d{0,3}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Rate"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          }
+        },
+        "required": [
+          "amount_fc",
+          "account_id"
+        ],
+        "title": "PurchaseInvoiceLineIn",
+        "type": "object"
+      },
+      "PurchaseInvoiceLineOut": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Fc",
+            "type": "string"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "cost_object_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Object Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expense_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expense Item Id"
+          },
+          "extended_dimensions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extended Dimensions"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "landed_cost_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Landed Cost Fc",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "unit_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Id"
+          },
+          "unit_price_fc": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price Fc"
+          },
+          "vat_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Account Id"
+          },
+          "vat_amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Amount Fc",
+            "type": "string"
+          },
+          "vat_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Rate"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          }
+        },
+        "required": [
+          "id",
+          "line_no",
+          "description",
+          "item_id",
+          "unit_id",
+          "warehouse_id",
+          "quantity",
+          "unit_price_fc",
+          "amount_fc",
+          "vat_rate",
+          "vat_amount_fc",
+          "landed_cost_fc",
+          "account_id",
+          "vat_account_id",
+          "cost_object_id",
+          "project_id",
+          "order_id",
+          "contract_id",
+          "expense_item_id",
+          "extended_dimensions"
+        ],
+        "title": "PurchaseInvoiceLineOut",
+        "type": "object"
+      },
+      "PurchaseInvoiceOut": {
+        "description": "Header chứng từ + thân hóa đơn — client cần cả hai để vẽ lại form.",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "cashflow_activity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cashflow Activity"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "entry_kind": {
+            "title": "Entry Kind",
+            "type": "integer"
+          },
+          "exchange_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exchange Rate",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "default": 0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "landed_cost_allocation": {
+            "default": 0,
+            "title": "Landed Cost Allocation",
+            "type": "integer"
+          },
+          "landed_costs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LandedCostOut"
+            },
+            "title": "Landed Costs",
+            "type": "array"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PurchaseInvoiceLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "default": "",
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "payable_account_id": {
+            "default": 0,
+            "title": "Payable Account Id",
+            "type": "integer"
+          },
+          "payment_term_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Term Id"
+          },
+          "period_id": {
+            "title": "Period Id",
+            "type": "integer"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "posted_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted By"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PurchaseSettlementOut"
+            },
+            "title": "Settlements",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "total_before_tax_fc": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Before Tax Fc",
+            "type": "string"
+          },
+          "total_fc": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Fc",
+            "type": "string"
+          },
+          "total_landed_cost_fc": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Landed Cost Fc",
+            "type": "string"
+          },
+          "total_vat_fc": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Vat Fc",
+            "type": "string"
+          },
+          "vendor_id": {
+            "default": 0,
+            "title": "Vendor Id",
+            "type": "integer"
+          },
+          "vendor_invoice_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice Date"
+          },
+          "vendor_invoice_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice Form"
+          },
+          "vendor_invoice_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice No"
+          },
+          "vendor_invoice_serial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice Serial"
+          },
+          "vendor_invoice_status": {
+            "default": 0,
+            "title": "Vendor Invoice Status",
+            "type": "integer"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "document_type",
+          "voucher_no",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "period_id",
+          "currency_code",
+          "exchange_rate",
+          "description",
+          "status",
+          "cashflow_activity",
+          "entry_kind",
+          "created_at",
+          "created_by",
+          "posted_at",
+          "posted_by",
+          "row_version"
+        ],
+        "title": "PurchaseInvoiceOut",
+        "type": "object"
+      },
+      "PurchaseInvoiceUpdate": {
+        "additionalProperties": false,
+        "description": "PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "currency_code": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "exchange_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Exchange Rate"
+          },
+          "kind": {
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "landed_cost_allocation": {
+            "default": 0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Landed Cost Allocation",
+            "type": "integer"
+          },
+          "landed_costs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LandedCostIn"
+            },
+            "title": "Landed Costs",
+            "type": "array"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PurchaseInvoiceLineIn"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "payable_account_id": {
+            "title": "Payable Account Id",
+            "type": "integer"
+          },
+          "payment_term_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Term Id"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PurchaseSettlementIn"
+            },
+            "title": "Settlements",
+            "type": "array"
+          },
+          "vendor_id": {
+            "title": "Vendor Id",
+            "type": "integer"
+          },
+          "vendor_invoice_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice Date"
+          },
+          "vendor_invoice_form": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice Form"
+          },
+          "vendor_invoice_no": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice No"
+          },
+          "vendor_invoice_serial": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice Serial"
+          },
+          "vendor_invoice_status": {
+            "default": 0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Vendor Invoice Status",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "operation_code",
+          "vendor_id",
+          "payable_account_id",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "currency_code",
+          "lines",
+          "row_version"
+        ],
+        "title": "PurchaseInvoiceUpdate",
+        "type": "object"
+      },
+      "PurchaseSettlementIn": {
+        "additionalProperties": false,
+        "description": "Đối trừ khoản trả lại vào hóa đơn mua gốc — chỉ nhận `amount_fc`, số VND\nvà chênh lệch tỷ giá do server tính (FR-SYS-066).",
+        "properties": {
+          "amount_fc": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Amount Fc"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "$ref": "#/components/schemas/SettlementTargetKind"
+          }
+        },
+        "required": [
+          "target_kind",
+          "target_id",
+          "amount_fc"
+        ],
+        "title": "PurchaseSettlementIn",
+        "type": "object"
+      },
+      "PurchaseSettlementOut": {
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Fc",
+            "type": "string"
+          },
+          "fx_diff": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fx Diff",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "title": "Target Kind",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "target_kind",
+          "target_id",
+          "amount_fc",
+          "amount",
+          "fx_diff"
+        ],
+        "title": "PurchaseSettlementOut",
+        "type": "object"
+      },
       "ReconciliationResponse": {
         "description": "Hai phía lệch của FR-BNK-031 tính đến hết `as_of`.",
         "properties": {
@@ -15766,7 +17134,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.25.0"
+    "version": "0.26.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -31868,6 +33236,217 @@
         "summary": "List Print Templates",
         "tags": [
           "printing"
+        ]
+      }
+    },
+    "/api/v1/purchase/invoices": {
+      "post": {
+        "description": "Cất hóa đơn mua; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.\n\n`acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm đó (FR-SYS-062\nmức \"Cảnh báo\" — ví dụ nhà cung cấp vượt ngưỡng nợ); mức \"Chặn\" không mở được.",
+        "operationId": "create_purchase_invoice_api_v1_purchase_invoices_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "acknowledge_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledge Warnings",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseInvoiceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseInvoiceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Create Purchase Invoice",
+        "tags": [
+          "purchase"
+        ]
+      }
+    },
+    "/api/v1/purchase/invoices/{voucher_id}": {
+      "get": {
+        "operationId": "get_purchase_invoice_api_v1_purchase_invoices__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseInvoiceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Purchase Invoice",
+        "tags": [
+          "purchase"
+        ]
+      },
+      "put": {
+        "description": "Sửa hóa đơn Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).",
+        "operationId": "update_purchase_invoice_api_v1_purchase_invoices__voucher_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseInvoiceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseInvoiceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Update Purchase Invoice",
+        "tags": [
+          "purchase"
+        ]
+      }
+    },
+    "/api/v1/purchase/open-invoices": {
+      "get": {
+        "description": "Hóa đơn mua còn nợ của một nhà cung cấp — picker cho chứng từ trả lại hàng.\n\nChỉ một chiều (phải trả) và chỉ loại đối tác NCC, khóa cứng thay vì nhận\ntham số: màn hình này chỉ tồn tại để chọn hóa đơn gốc cho một chứng từ mua.",
+        "operationId": "list_open_payables_api_v1_purchase_open_invoices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "vendor_id",
+            "required": true,
+            "schema": {
+              "title": "Vendor Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": true,
+            "schema": {
+              "title": "Branch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "As Of",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenInvoicesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Open Payables",
+        "tags": [
+          "purchase"
         ]
       }
     },

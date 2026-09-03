@@ -1904,7 +1904,7 @@
         "direction": "chi"
       },
       "package_scheme": null,
-      "required_permission_module": "receivables"
+      "required_permission_module": "purchase"
     }
   ]
 }

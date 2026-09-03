@@ -73,6 +73,7 @@ from ket.api.routers.opening_balances import router as opening_balances_router
 from ket.api.routers.partners import router as partner_bank_accounts_router
 from ket.api.routers.period_lock import router as period_lock_router
 from ket.api.routers.printing import router as printing_router
+from ket.api.routers.purchase import router as purchase_router
 from ket.api.routers.reports import router as reports_router
 from ket.api.routers.setup import router as setup_router
 from ket.api.routers.statements import router as statements_router
@@ -302,6 +303,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(reports_router)
     # Lát 5D — in chứng từ theo mẫu + sổ theo dõi lần in (FR-RPT-008/011).
     app.include_router(printing_router)
+    # Lát 7B — hóa đơn mua hàng + chi phí mua hàng (SRS 04 §3); ghi sổ qua
+    # endpoint chứng từ dùng chung, sổ phụ công nợ qua `ArApSubledger`.
+    app.include_router(purchase_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

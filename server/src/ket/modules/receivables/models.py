@@ -108,16 +108,26 @@ class ArApLedgerEntry(DatasetBase, Audited):
             "document_id IS NOT NULL OR opening_invoice_id IS NOT NULL",
             name="has_a_source_document",
         ),
-        # `branch_id` DẪN ĐẦU, không phải đuôi: mọi cửa đọc bảng này lọc chi
-        # nhánh trước tiên — chính vị từ RLS `p_branch_scope`, hai dataset báo
-        # cáo tuổi nợ/dự báo, và check toàn vẹn `settlement_matches_subledger`
-        # (chạy mọi lượt job). Đặt `partner_kind` lên đầu thì cả ba rơi về seq
-        # scan trên một bảng mọc theo số hóa đơn. Thứ tự này phục vụ CẢ HAI
-        # hình dạng: tiền tố `branch_id` cho ba cửa trên, khớp đủ ba cột cho
-        # màn chọn đối trừ.
+        # `branch_id` DẪN ĐẦU, không phải đuôi: gần như mọi cửa đọc bảng này
+        # lọc chi nhánh trước tiên — chính vị từ RLS `p_branch_scope`, hai
+        # dataset báo cáo tuổi nợ/dự báo, và check toàn vẹn
+        # `settlement_matches_subledger` (chạy mọi lượt job). Đặt `partner_kind`
+        # lên đầu thì cả ba rơi về seq scan trên một bảng mọc theo số hóa đơn.
+        # Thứ tự này phục vụ CẢ HAI hình dạng: tiền tố `branch_id` cho ba cửa
+        # trên, khớp đủ ba cột cho màn chọn đối trừ. Cửa KHÔNG lọc chi nhánh —
+        # guard ngưỡng nợ, cố ý — đi bằng `ix_arap_open_partner` ngay dưới.
         Index(
             "ix_arap_open",
             "branch_id",
+            "partner_kind",
+            "partner_id",
+            postgresql_where=text("is_closed = FALSE"),
+        ),
+        # Chỉ số bán phần thứ hai, KHÔNG có `branch_id`: guard ngưỡng nợ hỏi
+        # tổng nợ của một đối tác trên mọi chi nhánh (`partner_open_debt`, 0026),
+        # nên nó không dùng được tiền tố của `ix_arap_open`.
+        Index(
+            "ix_arap_open_partner",
             "partner_kind",
             "partner_id",
             postgresql_where=text("is_closed = FALSE"),

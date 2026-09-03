@@ -13,7 +13,10 @@ Ba việc, ba thời điểm (giữ nguyên từ 6B):
   (kernel Protocol), kiểm khớp đối tác/chi nhánh/tiền tệ/số còn nợ (BR-QUY-02)
   + tổng đối trừ bằng tổng chứng từ (BR-QUY-03), rồi **định giá**: `amount` =
   VND theo tỷ giá chứng từ, `fx_diff` = chênh với VND theo tỷ giá ghi nhận.
-  Làm tròn xảy ra đúng một lần ở đây.
+  Làm tròn xảy ra đúng một lần ở đây. Module gọi được phép **chia lại phần
+  lẻ giữa các dòng** sau đó (giữ nguyên `amount − fx_diff` của từng dòng) khi
+  cách chẻ bút toán của nó khác cách chẻ đối trừ — xem
+  `modules.purchase.settlement_service.price_settlements`.
 * **Lúc ghi sổ** — `apply_settlement_rows`: cộng số đã trả vào từng đích
   (source tự khóa `FOR UPDATE` + kiểm vượt lần cuối).
 * **Lúc bỏ ghi sổ** — `revert_settlement_rows`: gỡ đúng số đã cộng.
@@ -56,6 +59,11 @@ SETTLEMENT_NO_SOURCE_CODE = "settlement.kind_unavailable"
 SETTLEMENT_TARGET_MISSING_CODE = "settlement.target_missing"
 SETTLEMENT_PARTNER_MISMATCH_CODE = "settlement.partner_mismatch"
 SETTLEMENT_BRANCH_MISMATCH_CODE = "settlement.branch_mismatch"
+SETTLEMENT_ACCOUNT_MISMATCH_CODE = "settlement.account_mismatch"
+"""Chứng từ nói rõ nó ghi giảm nợ trên TK nào (hóa đơn trả lại: TK phải trả của
+chính nó) mà khoản đích lại nằm trên TK khác — bút toán giảm một TK, sổ phụ
+giảm TK kia. Chỉ kiểm khi người gọi đưa `account_id`; phiếu thu/chi không đưa
+vì bút toán của chúng ghi thẳng lên `invoice.account_id`."""
 SETTLEMENT_CURRENCY_MISMATCH_CODE = "settlement.currency_mismatch"
 SETTLEMENT_OVER_REMAINING_CODE = "settlement.exceeds_remaining"
 SETTLEMENT_PARTNER_REQUIRED_CODE = "settlement.partner_required"
@@ -122,9 +130,14 @@ def price_settlements(
     currency_code: str,
     exchange_rate: Decimal,
     scale: int,
+    account_id: int | None = None,
 ) -> list[PricedSettlement]:
     """Kiểm + định giá toàn bộ dòng đối trừ của một chứng từ. Trả toàn bộ vi
-    phạm một lượt (triết lý bộ kiểm phase-04), không nhỏ giọt."""
+    phạm một lượt (triết lý bộ kiểm phase-04), không nhỏ giọt.
+
+    `account_id`: TK công nợ mà chứng từ ghi bút toán giảm nợ lên — đưa vào
+    thì mọi khoản đích phải nằm đúng TK ấy (`SETTLEMENT_ACCOUNT_MISMATCH_CODE`).
+    """
     if not settlements:
         return []
 
@@ -152,6 +165,7 @@ def price_settlements(
             partner_kind=partner_kind,
             branch_id=branch_id,
             currency_code=currency_code,
+            account_id=account_id,
             violations=violations,
         )
         amount = convert_currency(row.amount_fc, exchange_rate, scale)
@@ -247,6 +261,7 @@ def _check_target(
     partner_kind: PartnerKind | None,
     branch_id: int,
     currency_code: str,
+    account_id: int | None,
     violations: list[PostingViolation],
 ) -> None:
     if (
@@ -267,6 +282,16 @@ def _check_target(
                 SETTLEMENT_BRANCH_MISMATCH_CODE,
                 "Chứng từ công nợ thuộc chi nhánh khác với chi nhánh của chứng từ",
                 target_id=str(invoice.target_id),
+            )
+        )
+    if account_id is not None and invoice.account_id != account_id:
+        violations.append(
+            PostingViolation(
+                SETTLEMENT_ACCOUNT_MISMATCH_CODE,
+                "Chứng từ công nợ nằm trên tài khoản khác với tài khoản công nợ của chứng từ",
+                target_id=str(invoice.target_id),
+                invoice_account_id=invoice.account_id,
+                voucher_account_id=account_id,
             )
         )
     if invoice.currency_code != currency_code:

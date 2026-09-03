@@ -23,17 +23,17 @@ Ba việc, hai trong số đó là trả nợ:
    quyết định. Một `SELECT` thẳng từ bảng — báo cáo mới, truy vấn tay, một lát
    tương lai quên join cha — đọc được mọi chi nhánh và **không có gì đỏ**. Từ
    lát 7A số lượng cửa đọc công nợ tăng hẳn, nên vá trước khi mở cửa.
-
-3. **`_refresh_builtin_data` CHUYỂN TỪ 0023 SANG ĐÂY.** Bắt buộc, không phải
-   dọn dẹp: lát này thêm dataset báo cáo `ar_ap_aging` đọc bảng `ar_ap_ledger`
+3. **`_refresh_builtin_data` từng CHUYỂN TỪ 0023 SANG ĐÂY, rồi đi tiếp sang
+   0026.** Lát này thêm dataset báo cáo `ar_ap_aging` đọc bảng `ar_ap_ledger`
    vừa tạo ở bước 1. `refresh_builtin_reports` **dò SQL của mọi dataset builtin
    bằng `LIMIT 0`** trước khi ghi, nên chạy nó ở 0023 — trước khi bảng tồn tại
    — thì phép dò gãy; và để nguyên nó ở 0023 thì mọi dataset đã ở revision 0023
    trở lên **không bao giờ** thấy báo cáo tuổi nợ. Đây là bẫy "dataset cũ không
    nhận backfill" mà dự án đã sập **hai lần** (6A, 6G-1); bước làm-mới phải ở
-   cuối chuỗi mỗi khi chuỗi mọc thêm thứ dữ liệu builtin đọc.
+   cuối chuỗi mỗi khi chuỗi mọc thêm thứ dữ liệu builtin đọc — vì thế khi 0026
+   đổi metadata báo cáo, bước ấy lại dời sang 0026 và ở đây không còn.
 
-Thứ tự trong `upgrade()` vì thế bị ép: tạo bảng và cột trước, làm mới sau.
+Thứ tự bảng và cột ở đây vẫn đứng trước bước làm mới, nay nằm ở revision sau.
 """
 
 from __future__ import annotations
@@ -43,8 +43,6 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import context, op
 
-from ket.kernel.config.printing.seed import ensure_builtin_print_templates
-from ket.kernel.config.reports.seed import refresh_builtin_reports
 from ket.kernel.datasets.naming import role_name_for_schema
 from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 from ket.kernel.security.grants import grant_read_write
@@ -83,7 +81,6 @@ def upgrade() -> None:
     _create_ar_ap_ledger()
     _add_opening_invoice_branch()
     _apply_security()
-    _refresh_builtin_data()
 
 
 def _create_ar_ap_ledger() -> None:
@@ -228,19 +225,6 @@ def _apply_security() -> None:
         op.execute(statement)
     for statement in enable_branch_rls_statements("ar_ap_ledger"):
         op.execute(statement)
-
-
-def _refresh_builtin_data() -> None:
-    """Làm mới metadata báo cáo + mẫu in builtin — **CHUYỂN TỪ 0023** (xem
-    docstring đầu tệp: dataset `ar_ap_aging` đọc bảng vừa tạo ở trên, nên bước
-    này phải ở cuối chuỗi). Chỉ chạy online: bước đọc-rồi-ghi không diễn đạt
-    được thành SQL tĩnh của `upgrade --sql`."""
-    if context.is_offline_mode():
-        return
-    schema = _target_schema()
-    connection = op.get_bind()
-    refresh_builtin_reports(connection, schema)
-    ensure_builtin_print_templates(connection, schema)
 
 
 def downgrade() -> None:

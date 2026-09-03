@@ -12,6 +12,9 @@ một mã quyền:
   `cash_book` không đổi một dòng nào.
 * Một `REFERENCE_GUARDS` — "khoản nợ đã được trả một phần thì chứng từ gốc
   không bỏ ghi sổ / không xóa được".
+* Một `PostingGuard` — `PartnerDebtGuard` (FR-SYS-032): chứng từ làm tăng nợ
+  của đối tác đã vượt ngưỡng hoặc đang nợ quá hạn, ba mức theo
+  `warning.partner_debt`.
 
 Guard đặt ở bộ **dùng chung** của posting chứ không ở hook riêng của loại
 chứng từ, cùng lập luận với luật khớp sao kê (6G-2): luật thuộc về chủ bảng,
@@ -29,7 +32,8 @@ from sqlalchemy.orm import Session
 
 from ket.kernel.security.permissions import REGISTRY as PERMISSION_REGISTRY
 from ket.kernel.security.permissions import Action, DocumentType
-from ket.posting.contracts import REFERENCE_GUARDS
+from ket.modules.receivables.guards import PartnerDebtGuard
+from ket.posting.contracts import GUARD_REGISTRY, REFERENCE_GUARDS
 
 RECEIVABLES_PERMISSION_MODULE = "receivables"
 LEDGER_PERMISSION_CODE = "ledger"
@@ -90,3 +94,4 @@ def _register_settled_guard() -> None:
 
 _register_providers()
 _register_settled_guard()
+GUARD_REGISTRY.register(PartnerDebtGuard())
