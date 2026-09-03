@@ -381,9 +381,15 @@ def test_password() -> str:
     return TEST_PASSWORD
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def user_factory(session_factory: sessionmaker[Session]) -> Callable[..., User]:
     """Tạo người dùng test với tên **duy nhất** cho mỗi lần gọi.
+
+    Phạm vi **phiên**, không phải hàm: nhà máy này không giữ trạng thái nào giữa
+    các lần gọi — mỗi lượt sinh một tên mới và chỉ dựa vào `session_factory`
+    (cũng phạm vi phiên). Phạm vi hàm là điều kiện đủ để một fixture phạm vi
+    module KHÔNG dựng được người dùng (pytest từ chối vì lệch phạm vi), mà đó
+    chính là thứ chặn việc dùng chung người dùng trong một tệp test.
 
     Tên duy nhất chứ không phải dọn bảng sau mỗi test: `users` là bảng điều
     khiển toàn cục và `control_audit_log` chỉ-thêm tham chiếu tới nó, nên xóa
@@ -456,6 +462,14 @@ def cheap_password_hashing(request: pytest.FixtureRequest, monkeypatch: pytest.M
 
     Phạm vi hàm + `monkeypatch` thì mỗi bài tự áp và tự gỡ, nên dấu miễn trừ
     có hiệu lực thật. Chi phí `setattr` mỗi bài là không đáng kể.
+
+    **Giới hạn đã biết:** pytest dựng fixture phạm vi module/phiên TRƯỚC fixture
+    phạm vi hàm, nên một fixture đăng nhập phạm vi module (bốn tệp có actor dùng
+    chung) chạy khi bản vá này chưa áp — nó trả tham số Argon2id THẬT, khoảng
+    một lượt băm + một lượt xác thực mỗi module. Không sai (argon2 đọc tham số
+    từ chính chuỗi hash), chỉ là không rẻ. **Đừng "sửa" bằng cách đưa fixture
+    này lên phạm vi phiên** — đó đúng là bản đã hỏng và đã bị gỡ, mô tả ở đoạn
+    trên.
     """
     if request.node.get_closest_marker("real_password_hashing"):
         return

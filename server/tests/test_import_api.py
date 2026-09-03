@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from openpyxl import Workbook, load_workbook
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from catalog_api_support import (
@@ -50,6 +50,7 @@ from ket.kernel.master_data.models.warehouse import Warehouse
 from ket.kernel.master_data.registry import REGISTRY
 from ket.kernel.master_data.service import MasterDataService
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
+from ket.kernel.security.models import Branch
 from ket.kernel.security.permissions import Action
 from ket.main import create_app
 from ket.settings import Settings
@@ -78,13 +79,77 @@ def import_settings(test_settings: Settings, import_dir: Path) -> Settings:
     return test_settings.model_copy(update={"attachments_dir": import_dir})
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def client(
     import_settings: Settings, app_engine: Engine, session_factory: sessionmaker[Session]
 ) -> Iterator[TestClient]:
+    """`TestClient` dùng chung cho CẢ TỆP — kèm hai ràng buộc.
+
+    Phạm vi module để `importer`/`reader` chỉ phải gán chi nhánh một lần (xem
+    docstring của chúng). Đổi lại tệp này mang hai bất biến mà phần lớn tệp API
+    khác không có, nên **đừng chép dòng `scope="module"` sang tệp mới mà không
+    chép cả hai** — cùng bộ ràng buộc đã ghi ở `test_master_data_merge.py`:
+
+    1. **Không bài nào trong tệp được tạo chi nhánh mới** — người dùng dùng
+       chung được gán chi nhánh MỘT lần và không tự cập nhật. Ở tệp này chi
+       nhánh chỉ sinh ra trong `branches` (phạm vi module), và
+       `_shared_actor_still_spans_every_branch` canh cho điều đó còn đúng.
+    2. Cửa sổ hạn mức của `RateLimitMiddleware` là trạng thái trong tiến trình
+       của một app, nên nay nó dùng chung cho cả tệp thay vì mới lại mỗi bài.
+       Vì thế tắt hẳn hạn mức ở đây. Đo với hạn mức production bật lại: tệp
+       vẫn xanh, tức đây là chống-vỡ-về-sau chứ **không** phải một `429` đã
+       quan sát được. Hạn mức có bộ test riêng ở `test_rate_limit.py` (gồm cả
+       nhánh `0 = tắt` mà dòng này dựa vào); tệp này không nói gì về nó.
+    """
     assert app_engine is not None and session_factory is not None
-    with api_test_client(create_app(import_settings)) as instance:
+    unlimited = import_settings.model_copy(
+        update={"rate_limit_per_minute": 0, "rate_limit_auth_per_minute": 0}
+    )
+    with api_test_client(create_app(unlimited)) as instance:
         yield instance
+
+
+_BRANCH_SPAN: dict[str, int] = {}
+
+
+@pytest.fixture(autouse=True)
+def _shared_actor_still_spans_every_branch(request: pytest.FixtureRequest) -> None:
+    """`importer`/`reader` được gán chi nhánh MỘT lần — canh cho chúng còn trọn phạm vi.
+
+    Nếu một bài trong tệp này tạo thêm chi nhánh, hai người dùng dùng chung
+    **không** được cập nhật, và các bài sau đỏ bằng `scope_incomplete` /
+    `scope_insufficient` — một thông điệp trỏ thẳng vào mã production, khiến
+    bản sửa hấp dẫn nhất là nới lỏng chính phép kiểm phạm vi đang đúng. Bài
+    kiểm này biến ca đó thành một câu nói rõ nguyên nhân.
+    """
+    # Lấy lười bằng `getfixturevalue` sau khi kiểm dấu: khai thành THAM SỐ là đủ
+    # để pytest dựng fixture DB TRƯỚC khi thân hàm chạy, nên `return` sớm không
+    # cứu được. Hôm nay cả tệp mang `pytestmark = pytest.mark.db` nên nhánh
+    # `return` này chưa bao giờ chạy — nó giữ cho bài không-DB thêm sau này
+    # không nổ khó hiểu (bản đầu của lát trước mắc đúng lỗi ấy: 2 ERROR ở
+    # `make server-test`).
+    if request.node.get_closest_marker("db") is None:
+        return
+    session_factory: sessionmaker[Session] = request.getfixturevalue("session_factory")
+    dataset_alpha: DatasetRef = request.getfixturevalue("dataset_alpha")
+    with unit_of_work(
+        session_factory,
+        RequestScope(dataset_schema=dataset_alpha.schema_name, user_id=1, branch_ids=()),
+    ) as session:
+        live = len(list(session.scalars(select(Branch.code)).all()))
+    seen = _BRANCH_SPAN.setdefault("n", live)
+    assert live == seen, (
+        f"Số chi nhánh đổi giữa chừng ({seen} → {live}), nên `importer`/`reader` phạm vi "
+        "module — đã gán chi nhánh MỘT lần và không tự cập nhật — không còn "
+        "trọn phạm vi; các bài sau sẽ đỏ vì `scope_incomplete`.\n"
+        "Hai nguyên nhân, kiểm theo thứ tự này:\n"
+        "1. Một bài TRONG tệp vừa tạo chi nhánh. Chuyển việc ấy vào fixture "
+        "phạm vi module chạy trước khi dựng người dùng, đừng tạo trong bài.\n"
+        "2. Bạn đang chạy một lựa chọn bài ĐAN XEN nhiều tệp (ví dụ nêu đích "
+        "danh vài bài của tệp này lẫn tệp khác). Tệp kia tạo chi nhánh của "
+        "nó ở giữa, và người dùng dùng chung của tệp này thật sự đã cũ — "
+        "đây KHÔNG phải lỗi của tệp này. Chạy trọn từng tệp một."
+    )
 
 
 @pytest.fixture(scope="module")
@@ -120,7 +185,7 @@ def branches(session_factory: sessionmaker[Session], dataset_alpha: DatasetRef) 
     return ensure_branches(session_factory, dataset_alpha, BRANCH_CODES)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def importer(
     client: TestClient,
     session_factory: sessionmaker[Session],
@@ -130,6 +195,16 @@ def importer(
     test_password: str,
     branches: list[str],
 ) -> dict[str, str]:
+    """Người nhập liệu **phạm vi toàn công ty**, dùng chung cho CẢ TỆP.
+
+    Phạm vi **module** chứ không phải hàm: `actor` gán từng chi nhánh một lời
+    gọi, và danh sách "mọi chi nhánh" dài ra theo số tệp test đã chạy trước.
+    Dựng lại người dùng cho mỗi bài khiến riêng tệp này tốn 75s trong một lượt
+    chạy đầy đủ. Dùng chung là an toàn vì `api/dependencies.resolve_access`
+    chạy lại ở **mỗi** request: quyền đọc tươi từ DB chứ không đóng băng trong
+    token. Không bài nào trong tệp đổi vai trò, phạm vi hay mật khẩu của người
+    này, và bài kiểm phạm vi lượt xuất tự đặt `X-Branch` cho từng request.
+    """
     assert branches, "cần ít nhất một chi nhánh"
     headers = actor(
         client,
@@ -153,7 +228,7 @@ def importer(
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def reader(
     client: TestClient,
     session_factory: sessionmaker[Session],
@@ -163,6 +238,7 @@ def reader(
     test_password: str,
     branches: list[str],
 ) -> dict[str, str]:
+    """Người chỉ-xem, dùng chung cho CẢ TỆP — cùng lý do phạm vi như `importer`."""
     assert branches, "cần ít nhất một chi nhánh"
     return actor(
         client,
