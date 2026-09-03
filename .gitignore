@@ -13,6 +13,8 @@ server/.mypy_cache/
 server/.ruff_cache/
 server/.pytest_cache/
 server/.coverage
+server/.coverage.shard*
+server/junit-shard*.xml
 server/htmlcov/
 server/*.egg-info/
 
