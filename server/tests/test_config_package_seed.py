@@ -136,6 +136,25 @@ def test_seeded_tt99_accounts_have_the_expected_balance_nature(
         )
 
 
+def test_input_vat_account_is_not_tracked_by_item(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef
+) -> None:
+    """Thuế GTGT đầu vào không theo vật tư: `1331` theo dõi `item` làm mọi dòng
+    thuế của dịch vụ mua / chi phí mua hàng (không có vật tư) bị validator
+    chiều bắt buộc từ chối. Kiểm dữ liệu CSV đã gieo; bước sửa dữ liệu của
+    migration 0026 (dataset cấp trước lát này) không đi qua đường này — dataset
+    test cấp mới nên UPDATE ấy không gặp dòng nào."""
+    with unit_of_work(session_factory, _scope(dataset_alpha)) as session:
+        for slug in BUILTIN_PACKAGE_SLUGS:
+            row = session.scalar(
+                select(ChartOfAccount)
+                .join(ConfigPackage, ConfigPackage.id == ChartOfAccount.package_id)
+                .where(ConfigPackage.scheme == slug.upper(), ChartOfAccount.code == "1331")
+            )
+            assert row is not None, slug
+            assert not row.detail_tracking, (slug, row.detail_tracking)
+
+
 def test_seeding_twice_does_not_duplicate_rows(
     owner_engine: Engine, dataset_alpha: DatasetRef
 ) -> None:
