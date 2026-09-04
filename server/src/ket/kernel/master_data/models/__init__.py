@@ -15,8 +15,9 @@ lẻ (H50). Lát 3B-2 thêm đối tác (gộp khách hàng + nhà cung cấp, F
 bảng con tài khoản ngân hàng của nó, và nhân viên. Lát 3B-3 thêm vật tư hàng hóa
 cùng **hai** bảng con MUST của nó — đơn vị quy đổi (FR-SYS-041) và mã quy cách
 (FR-SYS-046, là trục khóa của bảng tồn kho phase 8 nên không hoãn được, H65);
-bảng giá, định mức nguyên vật liệu và bậc chiết khấu về phase 7/9 nơi có chỗ đọc
-chúng. Còn thiếu: hệ thống tài khoản (phase 5 — là gói cấu hình).
+định mức nguyên vật liệu về phase 9 nơi có chỗ đọc nó. Lát 7C-1 trả hai món còn
+lại của nợ ấy — bảng giá nhiều mức (FR-SYS-042) và bậc chiết khấu theo số lượng
+(FR-SYS-045) — cùng lúc dựng bộ định giá đọc chúng ở `modules/sales`. Còn thiếu: hệ thống tài khoản (phase 5 — là gói cấu hình).
 
 Danh sách `__all__` ở đây là **danh sách nạp model** cho `ket.model_registry`;
 thứ quyết định danh mục nào hiện ra API là `registry.py` bên cạnh.
@@ -35,12 +36,16 @@ from ket.kernel.master_data.models.excise_tax_table import ExciseTaxTable
 from ket.kernel.master_data.models.expense_item import ExpenseItem
 from ket.kernel.master_data.models.invoice_form import InvoiceForm
 from ket.kernel.master_data.models.item import Item
+from ket.kernel.master_data.models.item_discount_tier import ItemDiscountTier
+from ket.kernel.master_data.models.item_price_level import ItemPriceLevel
 from ket.kernel.master_data.models.item_unit import ItemUnit
 from ket.kernel.master_data.models.item_variant import ItemVariant
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.master_data.models.partner_bank_account import PartnerBankAccount
 from ket.kernel.master_data.models.payment_term import PaymentTerm
 from ket.kernel.master_data.models.pit_table import PitTable
+from ket.kernel.master_data.models.price_list import PriceList
+from ket.kernel.master_data.models.price_list_line import PriceListLine
 from ket.kernel.master_data.models.project import Project
 from ket.kernel.master_data.models.project_type import ProjectType
 from ket.kernel.master_data.models.resource_tax_table import ResourceTaxTable
@@ -61,12 +66,16 @@ __all__ = [
     "ExpenseItem",
     "InvoiceForm",
     "Item",
+    "ItemDiscountTier",
+    "ItemPriceLevel",
     "ItemUnit",
     "ItemVariant",
     "Partner",
     "PartnerBankAccount",
     "PaymentTerm",
     "PitTable",
+    "PriceList",
+    "PriceListLine",
     "Project",
     "ProjectType",
     "ResourceTaxTable",

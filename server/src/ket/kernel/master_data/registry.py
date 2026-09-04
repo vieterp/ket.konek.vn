@@ -34,6 +34,11 @@ from sqlalchemy.orm import Session
 from ket.kernel.bank_import.profile_merge import BankStatementProfileMergeHook
 from ket.kernel.master_data.bank_account_service import PartnerBankAccountMergeHook
 from ket.kernel.master_data.base import MasterDataRow
+from ket.kernel.master_data.item_discount_tier_service import ItemDiscountTierMergeHook
+from ket.kernel.master_data.item_price_level_service import (
+    ItemPriceLevelOfItemMergeHook,
+    UnitOfMeasurePriceMergeHook,
+)
 from ket.kernel.master_data.item_unit_service import (
     ItemUnitOfItemMergeHook,
     UnitOfMeasureMergeHook,
@@ -78,6 +83,11 @@ from ket.kernel.master_data.models.payment_term import (
     payment_term_row_rules,
 )
 from ket.kernel.master_data.models.pit_table import PitTable
+from ket.kernel.master_data.models.price_list import (
+    PriceList,
+    PriceListFields,
+    price_list_row_rules,
+)
 from ket.kernel.master_data.models.project import Project
 from ket.kernel.master_data.models.project_type import ProjectType
 from ket.kernel.master_data.models.resource_tax_table import ResourceTaxTable
@@ -89,6 +99,11 @@ from ket.kernel.master_data.models.tool_type import (
 )
 from ket.kernel.master_data.models.unit_of_measure import UnitOfMeasure
 from ket.kernel.master_data.models.warehouse import Warehouse
+from ket.kernel.master_data.price_list_line_service import (
+    PriceListLineOfItemMergeHook,
+    PriceListLineOfPriceListMergeHook,
+    PriceListLineOfUnitMergeHook,
+)
 from ket.kernel.master_data.row_rules import RowRule
 from ket.kernel.security.permissions import (
     CATALOG_ACTIONS,
@@ -453,18 +468,49 @@ def _register_all() -> None:
                 CatalogReference(field="base_unit_id", slug="units_of_measure"),
                 CatalogReference(field="warehouse_id", slug="warehouses"),
             ),
-            # Hook từ chối (`base_unit_differs`) đứng trước hook dọn dữ liệu.
-            merge_hooks=(ItemUnitOfItemMergeHook(), ItemVariantMergeHook()),
+            # Hook từ chối (`base_unit_differs`) đứng trước hook dọn dữ liệu, và
+            # hai hook giá dựa vào chính phép từ chối ấy: ngưỡng bậc chiết khấu và
+            # dòng giá "theo đơn vị chính" chỉ so được khi hai mã hàng cùng đơn vị
+            # chính.
+            merge_hooks=(
+                ItemUnitOfItemMergeHook(),
+                ItemVariantMergeHook(),
+                ItemPriceLevelOfItemMergeHook(),
+                ItemDiscountTierMergeHook(),
+                PriceListLineOfItemMergeHook(),
+            ),
             row_rules=item_row_rules(),
+        ),
+        CatalogSpec(
+            slug="price_lists",
+            model=PriceList,
+            title="Bảng giá",
+            extra_fields=PriceListFields,
+            references=(
+                CatalogReference(field="partner_id", slug="partners"),
+                CatalogReference(field="contract_id", slug="contracts"),
+            ),
+            # `price_list_lines` mang hai chỉ số duy nhất chứa `price_list_id`, nên
+            # gộp hai bảng giá đụng chúng ở mọi mã hàng cả hai cùng khai — mà hai
+            # bảng giá đáng gộp thì gần như chắc chắn có mã hàng chung.
+            merge_hooks=(PriceListLineOfPriceListMergeHook(),),
+            row_rules=price_list_row_rules(),
         ),
         CatalogSpec(slug="warehouses", model=Warehouse, title="Kho"),
         CatalogSpec(
             slug="units_of_measure",
             model=UnitOfMeasure,
             title="Đơn vị tính",
-            # `item_units` mang ràng buộc duy nhất theo **cả** `unit_id`, nên gộp
-            # hai đơn vị tính đụng nó ở mọi mã hàng đã khai tỷ lệ cho cả hai.
-            merge_hooks=(UnitOfMeasureMergeHook(),),
+            # `item_units` và `item_price_levels` đều mang ràng buộc duy nhất theo
+            # **cả** `unit_id`, nên gộp hai đơn vị tính đụng chúng ở mọi mã hàng đã
+            # khai tỷ lệ hoặc giá cho cả hai. Hook từ chối (`unit_factor_conflicts`)
+            # đứng trước: hook giá dọn dẹp dựa vào việc hai đơn vị đã chứng minh là
+            # một.
+            merge_hooks=(
+                UnitOfMeasureMergeHook(),
+                UnitOfMeasurePriceMergeHook(),
+                PriceListLineOfUnitMergeHook(),
+            ),
         ),
         # Tài sản
         CatalogSpec(

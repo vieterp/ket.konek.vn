@@ -152,15 +152,19 @@ export function ExtraFieldInput({ field, value, onChange, locked }: ExtraFieldIn
     )
   }
 
-  // text / integer / decimal — cùng một ô gõ, khác `inputMode` để bàn phím số
-  // hiện đúng; kiểm tra kiểu thật vẫn ở server (client không tính tiền, LD-03).
+  // text / integer / decimal / date — cùng một ô gõ. `date` mượn ô chọn ngày
+  // của trình duyệt (`type="date"`, cùng lối các form chứng từ dùng) nên giá trị
+  // gửi đi luôn là `YYYY-MM-DD`, đúng thứ server nhận. `inputMode` chỉ để bàn
+  // phím số hiện đúng; kiểm tra kiểu thật vẫn ở server (client không tính tiền,
+  // LD-03).
   return (
     <TextField
       label={t(field.labelKey)}
+      type={field.type === 'date' ? 'date' : undefined}
       value={value === null || typeof value === 'boolean' ? '' : String(value)}
       disabled={locked}
       hint={lockedHint}
-      inputMode={field.type === 'text' ? undefined : 'decimal'}
+      inputMode={field.type === 'text' || field.type === 'date' ? undefined : 'decimal'}
       onChange={(event) => {
         onChange(event.target.value === '' ? null : event.target.value)
       }}

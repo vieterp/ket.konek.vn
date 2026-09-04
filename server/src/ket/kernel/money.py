@@ -32,6 +32,19 @@ RATE_SCALE_DEFAULT: Final[int] = 6
 """Chữ số thập phân của tỷ giá (nguyên tệ → VND). Tỷ giá KHÔNG phải số tiền:
 nó được nhân rồi mới làm tròn, nên giữ nhiều chữ số hơn."""
 
+UNIT_PRICE_PRECISION: Final[int] = 24
+UNIT_PRICE_SCALE: Final[int] = 6
+"""Hình dạng cột của một **đơn giá** — trên dòng chứng từ cũng như trong bảng giá.
+
+Cùng lý do với tỷ giá và khác `MONEY_SCALE_*`: đơn giá được **nhân** với số lượng
+rồi thành tiền mới làm tròn, nên nó phải giữ nhiều chữ số hơn số tiền nó sinh ra.
+Sáu số lẻ vì hàng nhập khẩu báo giá 0.0125 USD/cái là chuyện thường.
+
+Ở kernel chứ không ở từng module: `item_price_levels` (danh mục) và dòng chứng từ
+mua/bán phải cùng một hình dạng, nếu không thì lượt chép giá từ bảng giá xuống
+dòng chứng từ là một phép làm tròn thầm lặng — và không ai đi tìm phép làm tròn
+ở một lượt gán."""
+
 ZERO: Final[Decimal] = Decimal(0)
 
 

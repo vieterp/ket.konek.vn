@@ -3373,6 +3373,28 @@
         "title": "Body_validate_import_api_v1_master_pit_tables_import_validate_post",
         "type": "object"
       },
+      "Body_validate_import_api_v1_master_price_lists_import_validate_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "missing_reference": {
+            "$ref": "#/components/schemas/MissingReferenceMode",
+            "default": "error"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "default": "create_only"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_api_v1_master_price_lists_import_validate_post",
+        "type": "object"
+      },
       "Body_validate_import_api_v1_master_project_types_import_validate_post": {
         "properties": {
           "file": {
@@ -8204,6 +8226,143 @@
         "title": "InvoiceFormsUpdateRequest",
         "type": "object"
       },
+      "ItemDiscountTierCreateRequest": {
+        "additionalProperties": false,
+        "description": "Thêm một bậc chiết khấu. Ngưỡng tính theo **đơn vị chính** của mã hàng.",
+        "properties": {
+          "discount_percent": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,6}0*$)\\d{0,3}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Discount Percent"
+          },
+          "min_quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Min Quantity"
+          }
+        },
+        "required": [
+          "min_quantity",
+          "discount_percent"
+        ],
+        "title": "ItemDiscountTierCreateRequest",
+        "type": "object"
+      },
+      "ItemDiscountTierListResponse": {
+        "description": "Toàn bộ bậc chiết khấu của một mã hàng — không phân trang, xem router.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemDiscountTierResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ItemDiscountTierListResponse",
+        "type": "object"
+      },
+      "ItemDiscountTierResponse": {
+        "description": "Một bậc chiết khấu theo số lượng của mã hàng.",
+        "properties": {
+          "discount_percent": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Discount Percent",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "min_quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Min Quantity",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "min_quantity",
+          "discount_percent",
+          "row_version"
+        ],
+        "title": "ItemDiscountTierResponse",
+        "type": "object"
+      },
+      "ItemDiscountTierUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Sửa một bậc — gửi **trọn** giá trị mới, có kiểm phiên bản.",
+        "properties": {
+          "discount_percent": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,6}0*$)\\d{0,3}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Discount Percent"
+          },
+          "min_quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Min Quantity"
+          },
+          "row_version": {
+            "minimum": 1.0,
+            "title": "Row Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "min_quantity",
+          "discount_percent",
+          "row_version"
+        ],
+        "title": "ItemDiscountTierUpdateRequest",
+        "type": "object"
+      },
       "ItemNature": {
         "description": "Tính chất vật tư hàng hóa — SRS §6.1, FR-SYS-040.\n\nBốn giá trị trả lời **hai** câu hỏi độc lập (\"có theo dõi tồn kho không\" và\n\"có phát sinh doanh thu/chi phí không\"), nên tại sao không hai cột boolean:\nvì ba trong bốn tổ hợp có tên nghiệp vụ mà kế toán viên dùng hàng ngày, còn\ntổ hợp thứ tư (theo dõi tồn nhưng không sinh doanh thu) **không tồn tại**.\nHai cột boolean sẽ cho khai được tổ hợp thứ tư ấy, và không màn hình nào\nbiết phải làm gì với nó.\n\nTách \"thành phẩm\" khỏi \"vật tư hàng hóa\" dù cả hai cùng trả lời ✔/✔: hai\ntính chất này đi vào hai tài khoản kho khác nhau (152/156 so với 155) và\nthành phẩm là **đầu ra** của tính giá thành ở phase 9, thứ hàng mua về bán\nkhông bao giờ là.",
         "enum": [
@@ -8214,6 +8373,210 @@
         ],
         "title": "ItemNature",
         "type": "string"
+      },
+      "ItemPriceLevelCreateRequest": {
+        "additionalProperties": false,
+        "description": "Thêm một mức giá.\n\n`unit_id` bỏ trống = giá theo **đơn vị chính**. Gửi id của đơn vị chính lên\nthì bị từ chối: đó là cách viết thứ hai cho cùng một dòng\n(`unit_priced_rows.ensure_unit_is_priceable`).",
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/PriceDirection"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "level": {
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Level",
+            "type": "integer"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,18}|(?=[\\d.]{1,25}0*$)\\d{0,18}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Price"
+          },
+          "unit_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Id"
+          }
+        },
+        "required": [
+          "direction",
+          "level",
+          "price"
+        ],
+        "title": "ItemPriceLevelCreateRequest",
+        "type": "object"
+      },
+      "ItemPriceLevelListResponse": {
+        "description": "Toàn bộ mức giá của một mã hàng — không phân trang, xem router.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemPriceLevelResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ItemPriceLevelListResponse",
+        "type": "object"
+      },
+      "ItemPriceLevelResponse": {
+        "description": "Một mức giá của mã hàng.",
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/PriceDirection"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          },
+          "price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Price",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "unit_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Id"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "unit_id",
+          "direction",
+          "level",
+          "price",
+          "label",
+          "row_version"
+        ],
+        "title": "ItemPriceLevelResponse",
+        "type": "object"
+      },
+      "ItemPriceLevelUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Sửa một mức giá — gửi **trọn** giá trị mới, có kiểm phiên bản.\n\nKế thừa thân request tạo mới chứ không khai lại từng trường, cùng lối\n`ItemFields` kế thừa `ItemEditableFields`: mọi luật miền giá trị vì thế áp cho\ncả hai đường, không có luật nào chỉ có ở một bên.",
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/PriceDirection"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "level": {
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Level",
+            "type": "integer"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,18}|(?=[\\d.]{1,25}0*$)\\d{0,18}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Price"
+          },
+          "row_version": {
+            "minimum": 1.0,
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "unit_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Id"
+          }
+        },
+        "required": [
+          "direction",
+          "level",
+          "price",
+          "row_version"
+        ],
+        "title": "ItemPriceLevelUpdateRequest",
+        "type": "object"
       },
       "ItemUnitCreateRequest": {
         "additionalProperties": false,
@@ -8537,6 +8900,17 @@
             ],
             "title": "Parent Id"
           },
+          "price_is_tax_inclusive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Giá bán là đơn giá sau thuế"
+          },
           "warehouse_id": {
             "anyOf": [
               {
@@ -8676,6 +9050,17 @@
             "title": "Path",
             "type": "string"
           },
+          "price_is_tax_inclusive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Giá bán là đơn giá sau thuế"
+          },
           "row_version": {
             "title": "Row Version",
             "type": "integer"
@@ -8756,6 +9141,17 @@
               }
             ],
             "title": "Name En"
+          },
+          "price_is_tax_inclusive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Giá bán là đơn giá sau thuế"
           },
           "row_version": {
             "minimum": 1.0,
@@ -12788,6 +13184,776 @@
         ],
         "title": "PreviewRowResponse",
         "type": "object"
+      },
+      "PriceDirection": {
+        "description": "Chiều của một mức giá — `item_price_levels.direction`.\n\n`IntEnum` chứ không hằng số rời như `PurchaseInvoiceKind`: khác với `kind` của\nchứng từ (mở rộng theo nghiệp vụ mới), chiều giá đóng ở đúng hai giá trị —\nmua và bán là hai đầu của một giao dịch, không có đầu thứ ba — nên bộ giá trị\nđóng của một enum là mô tả đúng, và nó cho bộ định giá một tham số gõ đúng\nkiểu thay vì một `int` trần.",
+        "enum": [
+          0,
+          1
+        ],
+        "title": "PriceDirection",
+        "type": "integer"
+      },
+      "PriceListLineCreateRequest": {
+        "additionalProperties": false,
+        "description": "Thêm một dòng giá.\n\n`unit_id` bỏ trống = giá theo **đơn vị chính** của mã hàng; gửi id của đơn vị\nchính lên thì bị từ chối (`unit_priced_rows.ensure_unit_is_priceable`).\n\n`min_quantity` mặc định 1 = \"áp cho mọi số lượng\". Bảng giá không phân theo số\nlượng chỉ là bảng giá mà mọi dòng để nguyên mặc định ấy.",
+        "properties": {
+          "item_id": {
+            "minimum": 1.0,
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "min_quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Min Quantity"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,18}|(?=[\\d.]{1,25}0*$)\\d{0,18}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Price"
+          },
+          "unit_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Id"
+          }
+        },
+        "required": [
+          "item_id",
+          "price"
+        ],
+        "title": "PriceListLineCreateRequest",
+        "type": "object"
+      },
+      "PriceListLineListResponse": {
+        "description": "Toàn bộ dòng của một bảng giá — không phân trang, xem router.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PriceListLineResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PriceListLineListResponse",
+        "type": "object"
+      },
+      "PriceListLineResponse": {
+        "description": "Một dòng của bảng giá.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "min_quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Min Quantity",
+            "type": "string"
+          },
+          "price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Price",
+            "type": "string"
+          },
+          "price_list_id": {
+            "title": "Price List Id",
+            "type": "integer"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "unit_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Id"
+          }
+        },
+        "required": [
+          "id",
+          "price_list_id",
+          "item_id",
+          "unit_id",
+          "min_quantity",
+          "price",
+          "row_version"
+        ],
+        "title": "PriceListLineResponse",
+        "type": "object"
+      },
+      "PriceListLineUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Sửa một dòng giá — gửi **trọn** giá trị mới, có kiểm phiên bản.",
+        "properties": {
+          "item_id": {
+            "minimum": 1.0,
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "min_quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Min Quantity"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,18}|(?=[\\d.]{1,25}0*$)\\d{0,18}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Price"
+          },
+          "row_version": {
+            "minimum": 1.0,
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "unit_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Id"
+          }
+        },
+        "required": [
+          "item_id",
+          "price",
+          "row_version"
+        ],
+        "title": "PriceListLineUpdateRequest",
+        "type": "object"
+      },
+      "PriceListsCreateRequest": {
+        "additionalProperties": false,
+        "description": "Bảng giá — tạo mới.",
+        "properties": {
+          "branch_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch Id"
+          },
+          "code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hợp đồng"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceDirection"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chiều giá"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hiệu lực từ ngày"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hiệu lực đến hết ngày"
+          },
+          "is_group": {
+            "default": false,
+            "title": "Is Group",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Đối tác hoặc nhóm đối tác"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "PriceListsCreateRequest",
+        "type": "object"
+      },
+      "PriceListsListResponse": {
+        "description": "Bảng giá — một trang bản ghi.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PriceListsResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "PriceListsListResponse",
+        "type": "object"
+      },
+      "PriceListsResponse": {
+        "description": "Bảng giá — một bản ghi.",
+        "properties": {
+          "branch_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch Id"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hợp đồng"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceDirection"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chiều giá"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hiệu lực từ ngày"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hiệu lực đến hết ngày"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_group": {
+            "title": "Is Group",
+            "type": "boolean"
+          },
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Đối tác hoặc nhóm đối tác"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "uid": {
+            "title": "Uid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "uid",
+          "code",
+          "name",
+          "name_en",
+          "parent_id",
+          "path",
+          "level",
+          "is_group",
+          "is_active",
+          "branch_id",
+          "row_version"
+        ],
+        "title": "PriceListsResponse",
+        "type": "object"
+      },
+      "PriceListsUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Bảng giá — sửa.",
+        "properties": {
+          "code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hợp đồng"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceDirection"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chiều giá"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hiệu lực từ ngày"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hiệu lực đến hết ngày"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Đối tác hoặc nhóm đối tác"
+          },
+          "row_version": {
+            "minimum": 1.0,
+            "title": "Row Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row_version",
+          "code",
+          "name",
+          "is_active"
+        ],
+        "title": "PriceListsUpdateRequest",
+        "type": "object"
+      },
+      "PriceQuoteRequest": {
+        "additionalProperties": false,
+        "description": "Hỏi đơn giá và chiết khấu cho **một** dòng chứng từ sắp lập.\n\nClient chỉ hiển thị kết quả — mọi luật chọn giá chạy ở server (plan §Chính\nsách giá & chiết khấu). Endpoint này là cách form mua/bán lấy con số ấy trước\nkhi có chứng từ nào được cất.",
+        "properties": {
+          "contract_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/PriceDirection"
+          },
+          "item_id": {
+            "minimum": 1.0,
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "level": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Level",
+            "type": "integer"
+          },
+          "on_date": {
+            "format": "date",
+            "title": "On Date",
+            "type": "string"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "price_list_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price List Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "tax_rate": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Tax Rate"
+          },
+          "unit_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Id"
+          }
+        },
+        "required": [
+          "item_id",
+          "quantity",
+          "direction",
+          "on_date"
+        ],
+        "title": "PriceQuoteRequest",
+        "type": "object"
+      },
+      "PriceQuoteResponse": {
+        "description": "Kết quả định giá, kèm **nguồn** đã trả lời.\n\nCó `source` vì người dùng thấy một đơn giá tự điền và câu hỏi đầu tiên của họ\nlà \"số này ở đâu ra\" — xem `kernel.pricing.PriceSource`.",
+        "properties": {
+          "discount_percent": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Discount Percent",
+            "type": "string"
+          },
+          "is_tax_inclusive": {
+            "title": "Is Tax Inclusive",
+            "type": "boolean"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "price_list_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price List Id"
+          },
+          "quoted_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quoted Price",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PriceSource"
+          },
+          "unit_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unit Price",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit_price",
+          "quoted_price",
+          "is_tax_inclusive",
+          "source",
+          "price_list_id",
+          "level",
+          "discount_percent"
+        ],
+        "title": "PriceQuoteResponse",
+        "type": "object"
+      },
+      "PriceSource": {
+        "description": "Tầng đã trả lời câu hỏi giá — đi kèm kết quả để màn hình nói được vì sao.\n\nNgười dùng thấy một đơn giá tự điền và câu hỏi đầu tiên của họ là \"số này ở\nđâu ra\". Trả về nguồn là cách rẻ nhất để trả lời mà không bắt họ mở ba màn\nhình khai báo.",
+        "enum": [
+          "price_list",
+          "item_level",
+          "item_default",
+          "none"
+        ],
+        "title": "PriceSource",
+        "type": "string"
       },
       "PrintTemplateListResponse": {
         "properties": {
@@ -17134,7 +18300,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.26.0"
+    "version": "0.27.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -26396,6 +27562,404 @@
         ]
       }
     },
+    "/api/v1/master/items/{item_id}/discount-tiers": {
+      "get": {
+        "description": "Bậc chiết khấu của một mã hàng, ngưỡng tăng dần.",
+        "operationId": "list_item_discount_tiers_api_v1_master_items__item_id__discount_tiers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDiscountTierListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — bậc chiết khấu theo số lượng",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "post": {
+        "description": "Thêm một bậc chiết khấu — thực hiện đúng một lần (FR-NFR-004).",
+        "operationId": "add_item_discount_tier_api_v1_master_items__item_id__discount_tiers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemDiscountTierCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDiscountTierResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — thêm bậc chiết khấu",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/items/{item_id}/discount-tiers/{row_id}": {
+      "delete": {
+        "description": "Xóa một bậc chiết khấu khỏi hồ sơ mã hàng.",
+        "operationId": "delete_item_discount_tier_api_v1_master_items__item_id__discount_tiers__row_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "row_id",
+            "required": true,
+            "schema": {
+              "title": "Row Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — xóa bậc chiết khấu",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "put": {
+        "description": "Sửa ngưỡng hoặc tỷ lệ của một bậc.",
+        "operationId": "update_item_discount_tier_api_v1_master_items__item_id__discount_tiers__row_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "row_id",
+            "required": true,
+            "schema": {
+              "title": "Row Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemDiscountTierUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDiscountTierResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — sửa bậc chiết khấu",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/items/{item_id}/prices": {
+      "get": {
+        "description": "Mức giá của một mã hàng — mua trước bán, đơn vị chính trước, mức tăng dần.\n\n**Không** phân trang: một mã hàng có vài mức giá, không phải vài nghìn — cùng\nlập luận `list_item_units`.",
+        "operationId": "list_item_prices_api_v1_master_items__item_id__prices_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemPriceLevelListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — bảng giá nhiều mức",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "post": {
+        "description": "Thêm một mức giá — thực hiện đúng một lần (FR-NFR-004).",
+        "operationId": "add_item_price_api_v1_master_items__item_id__prices_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemPriceLevelCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemPriceLevelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — thêm mức giá",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/items/{item_id}/prices/{row_id}": {
+      "delete": {
+        "description": "Xóa một mức giá khỏi hồ sơ mã hàng.",
+        "operationId": "delete_item_price_api_v1_master_items__item_id__prices__row_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "row_id",
+            "required": true,
+            "schema": {
+              "title": "Row Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — xóa mức giá",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "put": {
+        "description": "Sửa đơn vị, chiều, mức, đơn giá hoặc tên thang của một dòng.",
+        "operationId": "update_item_price_api_v1_master_items__item_id__prices__row_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "row_id",
+            "required": true,
+            "schema": {
+              "title": "Row Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemPriceLevelUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemPriceLevelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — sửa mức giá",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
     "/api/v1/master/items/{item_id}/units": {
       "get": {
         "description": "Đơn vị quy đổi của một mã hàng, tỷ lệ lớn trước.\n\n**Không** phân trang, khác đường đọc danh mục: một mã hàng có vài đơn vị, không\nphải vài nghìn. Thêm phân trang ở đây là thêm hai tham số mà mọi màn hình sẽ\ntruyền giá trị mặc định.",
@@ -28877,6 +30441,768 @@
           }
         },
         "summary": "Biểu tính thuế thu nhập cá nhân — chuyển nhánh",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/price_lists": {
+      "get": {
+        "description": "Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.\n\nHai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần\ntừng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi\ncả hai cùng có — nó là câu hỏi hẹp hơn.\n\nLát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả\nnợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại\nchỗ), cùng hợp đồng với `/accounts`:\n\n* `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**\n  bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.\n* `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang\n  hoạt động; `flag` vẫn áp (tra \"trang 1 khách hàng khớp 'an'\" là câu\n  hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu\n  là câu hỏi trên toàn danh mục, không phải trên một nhánh.\n\n**Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp\nđồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau\nlà một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D\nđang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**\nnó (FR-NFR-043 nói tới 10.000 dòng).\n\n`total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn\nvà để nói \"1–100 trong 3.412\", thứ không suy ra được từ độ dài trang.",
+        "operationId": "list_records_api_v1_master_price_lists_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "parent_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Parent Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subtree_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subtree Of"
+            }
+          },
+          {
+            "description": "Danh mục này không có bộ lọc nào",
+            "in": "query",
+            "name": "flag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Danh mục này không có bộ lọc nào",
+              "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceListsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — danh sách",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "post": {
+        "description": "Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).\n\nLần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã\ntrạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.",
+        "operationId": "create_record_api_v1_master_price_lists_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceListsCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceListsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — tạo mới",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/price_lists/actions/merge": {
+      "post": {
+        "description": "Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).\n\nQuyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi\n**biến mất**, và người được sửa tên một mã hàng không đương nhiên được\nlàm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.\n\nCó khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:\nlần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo\n`404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,\nlần gửi lại trả lại đúng báo cáo của lần đã chạy.",
+        "operationId": "merge_two_records_api_v1_master_price_lists_actions_merge_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterDataMergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterDataMergeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — gộp hai bản ghi trùng",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/price_lists/export": {
+      "get": {
+        "description": "Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).\n\nQuyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những\ndòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,\nchỉ khác định dạng.\n\n**Phạm vi chi nhánh không phải tham số của client** — cùng luật với\n`routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng\ndanh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.",
+        "operationId": "export_records_api_v1_master_price_lists_export_get",
+        "parameters": [
+          {
+            "description": "Kèm cả bản ghi đã ngừng theo dõi",
+            "in": "query",
+            "name": "include_inactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Kèm cả bản ghi đã ngừng theo dõi",
+              "title": "Include Inactive",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "422": {
+            "description": "Danh mục vượt trần số dòng của một tệp xuất"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — xuất dữ liệu ra Excel",
+        "tags": [
+          "master-data-export"
+        ]
+      }
+    },
+    "/api/v1/master/price_lists/import/commit": {
+      "post": {
+        "description": "Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).\n\nQuyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo\nra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương\nnhiên được tạo thêm mười nghìn mã hàng.\n\nThân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng\nloại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở\n`excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc\ncủa thân job, không của tầng HTTP.",
+        "operationId": "commit_import_api_v1_master_price_lists_import_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — ghi dữ liệu đã kiểm",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/price_lists/import/validate": {
+      "post": {
+        "description": "Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).\n\n`202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở\n`jobs.result` khi job xong.\n\nChế độ mặc định là `create_only` (H80). Client phải gửi tường minh\n`mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó\nsau khi người dùng đọc con số \"sẽ cập nhật N dòng\" của một lượt kiểm\ntrước đó.",
+        "operationId": "validate_import_api_v1_master_price_lists_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_api_v1_master_price_lists_import_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — kiểm tra tệp nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/price_lists/template": {
+      "get": {
+        "description": "Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).\n\nQuyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ\nmô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp\nrồi chuyển cho kế toán trưởng bấm nút.\n\nDựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một\ndescriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu\ncũ sống sót qua lần thêm cột ở phase 5.",
+        "operationId": "download_template_api_v1_master_price_lists_template_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Tệp .xlsx"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — tải tệp mẫu nhập liệu",
+        "tags": [
+          "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/price_lists/{price_list_id}/lines": {
+      "get": {
+        "description": "Dòng của một bảng giá — theo mã hàng, đơn vị chính trước, ngưỡng tăng dần.\n\n**Không** phân trang: màn hình của bảng giá là một lưới sửa tại chỗ, và phân\ntrang ở đó là bắt người sửa giá lật trang giữa hai lần gõ — xem\n`PriceListLineService.list_for`.",
+        "operationId": "list_price_list_lines_api_v1_master_price_lists__price_list_id__lines_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "price_list_id",
+            "required": true,
+            "schema": {
+              "title": "Price List Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceListLineListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — dòng giá",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "post": {
+        "description": "Thêm một dòng giá — thực hiện đúng một lần (FR-NFR-004).",
+        "operationId": "add_price_list_line_api_v1_master_price_lists__price_list_id__lines_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "price_list_id",
+            "required": true,
+            "schema": {
+              "title": "Price List Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceListLineCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceListLineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — thêm dòng giá",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/price_lists/{price_list_id}/lines/{row_id}": {
+      "delete": {
+        "description": "Xóa một dòng khỏi bảng giá.",
+        "operationId": "delete_price_list_line_api_v1_master_price_lists__price_list_id__lines__row_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "price_list_id",
+            "required": true,
+            "schema": {
+              "title": "Price List Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "row_id",
+            "required": true,
+            "schema": {
+              "title": "Row Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — xóa dòng giá",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "put": {
+        "description": "Sửa mã hàng, đơn vị, ngưỡng hoặc đơn giá của một dòng.",
+        "operationId": "update_price_list_line_api_v1_master_price_lists__price_list_id__lines__row_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "price_list_id",
+            "required": true,
+            "schema": {
+              "title": "Price List Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "row_id",
+            "required": true,
+            "schema": {
+              "title": "Row Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceListLineUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceListLineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — sửa dòng giá",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/price_lists/{record_id}": {
+      "delete": {
+        "description": "Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).\n\nBản ghi đã lên chứng từ thì dùng \"Ngừng theo dõi\" (`PUT` với\n`is_active = false`), đúng lối FR-SYS-012 chỉ ra.",
+        "operationId": "delete_record_api_v1_master_price_lists__record_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — xóa",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "get": {
+        "operationId": "get_record_api_v1_master_price_lists__record_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceListsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — một bản ghi",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "put": {
+        "description": "Sửa mô tả, cột riêng và cờ \"Ngừng theo dõi\" — một lượt ghi, một `row_version`.",
+        "operationId": "update_record_api_v1_master_price_lists__record_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceListsUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceListsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — sửa",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/price_lists/{record_id}/parent": {
+      "put": {
+        "description": "Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).",
+        "operationId": "move_record_api_v1_master_price_lists__record_id__parent_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterDataMoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceListsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Bảng giá — chuyển nhánh",
         "tags": [
           "master-data"
         ]
@@ -33185,6 +35511,48 @@
         "summary": "Unlock Period",
         "tags": [
           "periods"
+        ]
+      }
+    },
+    "/api/v1/pricing/quote": {
+      "post": {
+        "description": "Đơn giá và chiết khấu theo ba tầng nguồn giá — xem `kernel.pricing`.\n\nKhông tầng nào khai giá thì trả `source = \"none\"` kèm đơn giá `0`, **không**\nphải lỗi: mã hàng chưa khai giá là chuyện thường ngày và người lập chứng từ gõ\ntay đơn giá là đường hợp lệ.",
+        "operationId": "quote_api_v1_pricing_quote_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceQuoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceQuoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Định giá một dòng chứng từ",
+        "tags": [
+          "pricing"
         ]
       }
     },

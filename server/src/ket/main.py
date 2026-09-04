@@ -64,6 +64,7 @@ from ket.api.routers.exports import router as exports_router
 from ket.api.routers.fiscal_years import router as fiscal_years_router
 from ket.api.routers.gl_journal import router as gl_journal_router
 from ket.api.routers.imports import router as imports_router
+from ket.api.routers.items_prices import router as item_prices_router
 from ket.api.routers.items_units import router as item_units_router
 from ket.api.routers.items_variants import router as item_variants_router
 from ket.api.routers.jobs import router as jobs_router
@@ -72,6 +73,8 @@ from ket.api.routers.master_data import router as master_data_router
 from ket.api.routers.opening_balances import router as opening_balances_router
 from ket.api.routers.partners import router as partner_bank_accounts_router
 from ket.api.routers.period_lock import router as period_lock_router
+from ket.api.routers.price_list_lines import router as price_list_lines_router
+from ket.api.routers.pricing import router as pricing_router
 from ket.api.routers.printing import router as printing_router
 from ket.api.routers.purchase import router as purchase_router
 from ket.api.routers.reports import router as reports_router
@@ -273,6 +276,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(partner_bank_accounts_router)
     app.include_router(item_units_router)
     app.include_router(item_variants_router)
+    app.include_router(item_prices_router)
+    app.include_router(price_list_lines_router)
+    app.include_router(pricing_router)
     app.include_router(setup_router)
     app.include_router(dimensions_router)
     # Phase 4 — posting engine: chứng từ nghiệp vụ khác + hành động chứng từ

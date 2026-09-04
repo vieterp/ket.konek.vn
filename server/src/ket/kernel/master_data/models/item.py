@@ -40,11 +40,11 @@ from enum import StrEnum
 from typing import Final
 
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, Index, String, and_, or_
+from sqlalchemy import Boolean, CheckConstraint, Enum, ForeignKey, Index, String, and_, or_
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import SchemaItem
 
-from ket.kernel.errors import ItemWarehouseNotAllowedError
+from ket.kernel.errors import ItemGroupFieldNotAllowedError, ItemWarehouseNotAllowedError
 from ket.kernel.master_data.base import (
     MasterDataRow,
     master_data_table_args,
@@ -169,8 +169,12 @@ def _item_table_args() -> tuple[SchemaItem, ...]:
         # H-1). Hậu quả đến ở phase 8: mọi truy vấn tồn kho lọc theo
         # `nature IN (...)` sẽ cộng cả nút nhóm vào báo cáo, và không lần review
         # nào ở đó nghi ngờ danh mục. Đổi "miễn" thành "cấm" là chỗ này.
+        # `price_is_tax_inclusive` vào cùng danh sách từ lát 7C-1: cột thứ tư mà
+        # quên thêm là lỗ hổng "miễn chứ không cấm" y hệt, chỉ đến bằng một cột
+        # khác (review M-1 của lát ấy).
         CheckConstraint(
-            "NOT is_group OR (nature IS NULL AND base_unit_id IS NULL AND warehouse_id IS NULL)",
+            "NOT is_group OR (nature IS NULL AND base_unit_id IS NULL "
+            "AND warehouse_id IS NULL AND price_is_tax_inclusive IS NULL)",
             name="group_carries_no_item_data",
         ),
         # Hàng hóa và thành phẩm **phải** có đơn vị chính: mọi số tồn của chúng
@@ -222,6 +226,21 @@ class Item(MasterDataRow):
     description: Mapped[str | None] = mapped_column(String(DESCRIPTION_MAX_LENGTH), nullable=True)
     """Mô tả tự do — in lên báo giá và phiếu kho, không tham gia phép tính nào."""
 
+    price_is_tax_inclusive: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    """Giá bán khai cho mã hàng này là đơn giá **sau thuế** hay không (FR-SYS-043).
+
+    Ba trạng thái, không phải hai — `NULL` nghĩa **"theo thiết lập hệ thống"**
+    (`sales.price_is_tax_inclusive`), `TRUE`/`FALSE` là ghi đè cho riêng mã hàng.
+    SRS nói tùy chọn ấy có ở "cấp hệ thống **và** cấp từng mặt hàng", và một cột
+    hai trạng thái không diễn đạt được vế đầu: mọi mã hàng sẽ mang một câu trả
+    lời cụ thể ngay từ lúc tạo, nên lượt đổi mặc định hệ thống về sau không chạm
+    tới mã nào — tức thiết lập cấp hệ thống trở thành thứ chỉ có tác dụng với
+    dữ liệu chưa tồn tại.
+
+    Khi hiệu lực là "sau thuế", bộ định giá tách thuế ngược trước khi dựng dòng
+    chứng từ; cột này **không** đổi ý nghĩa của `item_price_levels.price`, nó chỉ
+    nói con số ấy đã gồm thuế hay chưa."""
+
 
 class ItemEditableFields(BaseModel):
     """Phần cột riêng **sửa được** qua `PUT` (`CatalogSpec.extra_update_fields`)."""
@@ -230,6 +249,11 @@ class ItemEditableFields(BaseModel):
     description: str | None = Field(
         title="Diễn giải", default=None, max_length=DESCRIPTION_MAX_LENGTH
     )
+    price_is_tax_inclusive: bool | None = Field(default=None, title="Giá bán là đơn giá sau thuế")
+    """`None` **không** phải "bỏ trống rồi giữ nguyên" mà là một giá trị thật —
+    "theo thiết lập hệ thống". Cùng khuôn với `warehouse_id`: thân request sửa
+    mang trọn giá trị mới, nên gửi thiếu trường là chọn về mặc định chung, đúng
+    thứ người dùng thấy khi họ bỏ chọn ô ấy trên màn hình."""
 
 
 class ItemUpdateGuard:
@@ -245,8 +269,20 @@ class ItemUpdateGuard:
     """
 
     def check(self, record: MasterDataRow, payload: BaseModel) -> None:
-        warehouse_id = getattr(payload, "warehouse_id", None)
-        if warehouse_id is None or not isinstance(record, Item):
+        if not isinstance(record, Item):
+            return
+        # Nhóm không nhận thứ gì của một mã hàng thật. Ở đường **tạo**, validator
+        # của `ItemFields` nói câu này; đường **sửa** không có `is_group` trong
+        # thân request nên nó phải đọc từ bản ghi — đúng lý do `UpdateGuard` tồn
+        # tại. Thiếu vế này thì `ck_items_group_carries_no_item_data` vẫn chặn,
+        # nhưng bằng tên một ràng buộc nội bộ (review M-1 của lát 7C-1).
+        if record.is_group and getattr(payload, "price_is_tax_inclusive", None) is not None:
+            raise ItemGroupFieldNotAllowedError(
+                "Nhóm vật tư chỉ để gom cây nên không nhận tùy chọn giá sau thuế",
+                entity_type=ITEM_TABLE_NAME,
+                entity_id=record.id,
+            )
+        if getattr(payload, "warehouse_id", None) is None:
             return
         if record.nature not in INVENTORY_NATURES:
             raise ItemWarehouseNotAllowedError(
@@ -290,10 +326,11 @@ class ItemFields(ItemEditableFields):
                 self.nature is not None
                 or self.base_unit_id is not None
                 or self.warehouse_id is not None
+                or self.price_is_tax_inclusive is not None
             ):
                 raise ValueError(
                     "Nhóm vật tư chỉ để gom cây nên không nhận tính chất, đơn vị tính "
-                    "chính hay kho ngầm định"
+                    "chính, kho ngầm định hay tùy chọn giá sau thuế"
                 )
             return self
         if self.nature is None:
@@ -332,13 +369,17 @@ def item_row_rules() -> tuple[RowRule, ...]:
         RowRule(
             constraint="group_carries_no_item_data",
             field="nature",
-            message="Nút nhóm không được khai tính chất, đơn vị chính hay kho ngầm định",
+            message=(
+                "Nút nhóm không được khai tính chất, đơn vị chính, kho ngầm định "
+                "hay tùy chọn giá sau thuế"
+            ),
             violated=lambda row: and_(
                 row.flag("is_group"),
                 or_(
                     row.value("nature").is_not(None),
                     row.value("base_unit_code").is_not(None),
                     row.value("warehouse_code").is_not(None),
+                    row.value("price_is_tax_inclusive").is_not(None),
                 ),
             ),
         ),

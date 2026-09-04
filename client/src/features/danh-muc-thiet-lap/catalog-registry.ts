@@ -1,5 +1,5 @@
 /**
- * Bản khách của registry danh mục — 20 danh mục, trùng một-một với
+ * Bản khách của registry danh mục — 22 danh mục, trùng một-một với
  * `server/src/ket/kernel/master_data/registry.py`.
  *
  * Vì sao chép tay thay vì sinh: thứ cần ở đây là **quyết định giao diện**
@@ -50,6 +50,43 @@ const PARTNER_FIELDS: readonly ExtraField[] = [
   },
 ]
 
+const PRICE_DIRECTION_OPTIONS: readonly { readonly value: string; readonly labelKey: TranslationKey }[] =
+  [
+    { value: '0', labelKey: 'catalog.field.priceDirectionPurchase' },
+    { value: '1', labelKey: 'catalog.field.priceDirectionSale' },
+  ]
+
+const PRICE_LIST_FIELDS: readonly ExtraField[] = [
+  // KHÔNG có `defaultValue`, cùng lối `nature` của vật tư hàng hóa: thân request
+  // bỏ khóa khi ô để trống, và nút **nhóm** bảng giá bị server cấm mang chiều giá
+  // (`group_has_no_pricing_fields`). Một giá trị mặc định ở đây sẽ khiến mọi lần
+  // tạo nhóm gửi kèm `direction` rồi ăn 422.
+  {
+    key: 'direction',
+    labelKey: 'catalog.field.priceDirection',
+    type: 'select',
+    options: PRICE_DIRECTION_OPTIONS,
+    essential: true,
+  },
+  // Trỏ được vào **nút nhóm** đối tác — đó là cách FR-SAL-020 diễn đạt "nhóm
+  // khách hàng", không cần cột thứ hai. Bỏ trống = áp cho mọi đối tác.
+  {
+    key: 'partner_id',
+    labelKey: 'catalog.field.priceListPartner',
+    type: 'lookup',
+    lookupSlug: 'partners',
+    essential: true,
+  },
+  {
+    key: 'contract_id',
+    labelKey: 'catalog.field.priceListContract',
+    type: 'lookup',
+    lookupSlug: 'contracts',
+  },
+  { key: 'effective_from', labelKey: 'catalog.field.effectiveFrom', type: 'date' },
+  { key: 'effective_to', labelKey: 'catalog.field.effectiveTo', type: 'date' },
+]
+
 const EMPLOYEE_FIELDS: readonly ExtraField[] = [
   { key: 'department', labelKey: 'catalog.field.department', type: 'text', essential: true },
   { key: 'position', labelKey: 'catalog.field.position', type: 'text' },
@@ -94,13 +131,32 @@ const ITEM_FIELDS: readonly ExtraField[] = [
     lookupSlug: 'warehouses',
   },
   { key: 'description', labelKey: 'catalog.field.description', type: 'text' },
+  // BA trạng thái (FR-SYS-043), nên `select` chứ không `checkbox`: ô trống =
+  // "theo thiết lập hệ thống" và drawer bỏ hẳn khóa khỏi thân request, đúng thứ
+  // server hiểu là `NULL`. Một checkbox chỉ nói được hai, và trạng thái thứ ba
+  // biến mất.
+  //
+  // Trường này BẮT BUỘC có mặt ở đây dù không ai sửa nó thường xuyên: drawer dựng
+  // thân request **chỉ** từ `extraFields`, nên một cột server sửa được mà client
+  // không khai sẽ bị ghi về `NULL` mỗi lần người dùng sửa tên mã hàng — mất cờ
+  // trong im lặng, và mọi chứng từ sau đó ra đơn giá cao hơn đúng một lần thuế
+  // suất (review H-3 của lát 7C-1).
+  {
+    key: 'price_is_tax_inclusive',
+    labelKey: 'catalog.field.priceIsTaxInclusive',
+    type: 'select',
+    options: [
+      { value: 'true', labelKey: 'catalog.field.priceIsTaxInclusiveYes' },
+      { value: 'false', labelKey: 'catalog.field.priceIsTaxInclusiveNo' },
+    ],
+  },
 ]
 
 function simple(slug: string, urlSegment: string, titleKey: TranslationKey): CatalogDef {
   return { slug, urlSegment, titleKey, flags: [], extraFields: [], listColumns: [] }
 }
 
-/** 20 danh mục — trùng registry server, canh bằng test đối chiếu OpenAPI. */
+/** 22 danh mục — trùng registry server, canh bằng test đối chiếu OpenAPI. */
 export const CATALOGS: readonly CatalogDef[] = [
   {
     slug: 'partners',
@@ -133,6 +189,15 @@ export const CATALOGS: readonly CatalogDef[] = [
   simple('projects', 'cong-trinh', 'catalog.title.projects'),
   simple('project_types', 'loai-cong-trinh', 'catalog.title.projectTypes'),
   simple('contracts', 'hop-dong', 'catalog.title.contracts'),
+  {
+    slug: 'price_lists',
+    urlSegment: 'bang-gia',
+    titleKey: 'catalog.title.priceLists',
+    sharedOnly: true,
+    flags: [],
+    extraFields: PRICE_LIST_FIELDS,
+    listColumns: ['direction'],
+  },
   {
     slug: 'asset_types',
     urlSegment: 'loai-tai-san',
@@ -227,7 +292,14 @@ export const CATALOG_GROUPS: readonly {
   { labelKey: 'catalog.group.assets', slugs: ['asset_types', 'tool_types'] },
   {
     labelKey: 'catalog.group.trading',
-    slugs: ['payment_terms', 'banks', 'company_bank_accounts', 'invoice_forms', 'document_types'],
+    slugs: [
+      'payment_terms',
+      'price_lists',
+      'banks',
+      'company_bank_accounts',
+      'invoice_forms',
+      'document_types',
+    ],
   },
   {
     labelKey: 'catalog.group.payrollTax',

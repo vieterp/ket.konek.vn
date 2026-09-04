@@ -45,6 +45,7 @@ from sqlalchemy import (
     cast,
     func,
     literal,
+    null,
     or_,
     select,
 )
@@ -150,9 +151,29 @@ def visible_to(table: FromClause, branch_id: int | None) -> ColumnElement[bool]:
     return or_(shared, table.c.branch_id == branch_id)
 
 
-def boolean_expression(field: str) -> ColumnElement[bool]:
-    """Ô boolean → `boolean`. Trống = `false`."""
-    return func.lower(func.coalesce(cell(field), "")).in_(TRUE_WORDS)
+def boolean_expression(field: str, *, nullable: bool = False) -> ColumnElement[bool]:
+    """Ô boolean → `boolean`. Trống = `false`, **trừ** cột cho phép `NULL`.
+
+    Hai cột boolean đầu tiên của danh mục (`is_group`, `is_active`) đều `NOT NULL`,
+    nên "trống = false" là câu trả lời đúng và duy nhất cho chúng. Lát 7C-1 thêm
+    cột boolean **nullable** đầu tiên — `items.price_is_tax_inclusive`, ba trạng
+    thái với `NULL` = "theo thiết lập hệ thống" (FR-SYS-043) — và với nó, ép trống
+    thành `false` **xóa mất trạng thái thứ ba**: mọi mã hàng nhập từ Excel sẽ mang
+    câu trả lời "giá chưa gồm thuế" thay vì "theo hệ thống", nên lượt đổi mặc định
+    hệ thống về sau không chạm tới mã nào.
+
+    Hậu quả đến ngay ở một chỗ khác nữa, và đó là cách nó bị bắt: ràng buộc "nút
+    nhóm không mang dữ liệu của mã hàng thật" đọc cột này, nên **mọi dòng nhóm**
+    nhập từ Excel đều bị từ chối — dòng nhóm không điền ô ấy, mà bước ghi vẫn dựng
+    ra `false`.
+    """
+    parsed = func.lower(func.coalesce(cell(field), "")).in_(TRUE_WORDS)
+    if not nullable:
+        return parsed
+    # `CASE` để giữ được `NULL`: `IN` không bao giờ trả `NULL` cho ô trống vì
+    # `coalesce` đã biến nó thành chuỗi rỗng, nên phải phân biệt ô trống **trước**
+    # khi so từ khóa.
+    return case((cell_or_null(field).is_(None), null()), else_=parsed)
 
 
 def is_active_expression() -> ColumnElement[bool]:
@@ -277,7 +298,9 @@ def column_source(
     if column.field == "is_active":
         return is_active_expression()
     if column.kind is CellKind.BOOLEAN:
-        return boolean_expression(column.field)
+        return boolean_expression(
+            column.field, nullable=bool(target is not None and target.nullable)
+        )
     value = cell_or_null(column.field)
     if target is None:
         return value

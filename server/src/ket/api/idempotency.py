@@ -100,6 +100,11 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         "/api/v1/bank/statements/{statement_id}/actions/auto-match",
         "/api/v1/bank/statements/lines/{line_id}/actions/match",
         "/api/v1/bank/statements/lines/{line_id}/actions/unmatch",
+        # Định giá một dòng chứng từ sắp lập (lát 7C-1): **không ghi gì cả**. Là
+        # POST chỉ vì đầu vào chín tham số — một `GET` với chín tham số truy vấn
+        # là chín chỗ để client dựng URL sai mà không nhận được lỗi theo trường.
+        # Cùng lối miễn trừ với biên bản kiểm kê quỹ ngay trên.
+        "/api/v1/pricing/quote",
     }
 )
 """Miễn trừ theo **đúng một đường dẫn**, cho thao tác tự nó đã idempotent.

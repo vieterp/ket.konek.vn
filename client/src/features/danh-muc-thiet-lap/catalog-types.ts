@@ -40,7 +40,7 @@ export interface CatalogPage {
 export interface ExtraField {
   readonly key: string
   readonly labelKey: TranslationKey
-  readonly type: 'text' | 'integer' | 'decimal' | 'checkbox' | 'select' | 'lookup'
+  readonly type: 'text' | 'integer' | 'decimal' | 'date' | 'checkbox' | 'select' | 'lookup'
   /** Cho `select`: danh sách giá trị đóng. */
   readonly options?: readonly { readonly value: string; readonly labelKey: TranslationKey }[]
   /** Cho `lookup`: slug danh mục đích. */
@@ -68,6 +68,15 @@ export interface CatalogDef {
   readonly slug: string
   /** Đoạn đường dẫn tiếng Việt không dấu trên URL của client. */
   readonly urlSegment: string
+  /**
+   * Danh mục **luôn dùng chung toàn công ty** — không khai riêng chi nhánh được.
+   *
+   * Bảng giá là danh mục đầu tiên như vậy: bộ định giá đọc thẳng bảng ấy bằng
+   * một đường không đi qua `_visible_to`, nên server ràng `branch_id IS NULL`.
+   * Không có cờ này thì ô 'riêng chi nhánh' vẫn hiện và người dùng tick vào sẽ
+   * ăn `422` — một cái chặn không giải thích được ngay tại chỗ họ bấm.
+   */
+  readonly sharedOnly?: boolean
   readonly titleKey: TranslationKey
   readonly flags: readonly CatalogFlagDef[]
   readonly extraFields: readonly ExtraField[]

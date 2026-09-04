@@ -147,6 +147,8 @@ thiết lập vẽ cùng một bộ ba lựa chọn cho cả nhóm."""
 
 PARTNER_DEBT_WARNING_KEY: Final[str] = "warning.partner_debt"
 
+PRICE_IS_TAX_INCLUSIVE_KEY: Final[str] = "sales.price_is_tax_inclusive"
+
 TREASURER_ENABLED_KEY: Final[str] = "treasurer.enabled"
 
 PRINT_ALLOW_DRAFT_KEY: Final[str] = "print.allow_draft_vouchers"
@@ -347,6 +349,30 @@ CATALOG: Final[dict[str, SettingDefinition]] = {
             # §3.3). Bật là lựa chọn của đơn vị muốn bỏ bước duyệt trung gian.
             scopes=frozenset({SettingScope.SYSTEM}),
             description="Cất chứng từ thì ghi sổ luôn trong cùng một lần lưu",
+        ),
+        SettingDefinition(
+            key=PRICE_IS_TAX_INCLUSIVE_KEY,
+            value_type=ValueType.BOOLEAN,
+            default=FALSE_LITERAL,
+            # Vế "cấp hệ thống" của FR-SYS-043; vế "cấp từng mặt hàng" là cột
+            # `items.price_is_tax_inclusive`, ba trạng thái với `NULL` = theo khóa
+            # này. Đơn giá bán khai trong bảng giá đã gồm thuế GTGT hay chưa.
+            #
+            # Cấp hệ thống, không theo người: giá là dữ liệu chung, và hai kế toán
+            # viên đọc cùng một bảng giá ra hai đơn giá trước thuế khác nhau là
+            # đúng thứ mục tiêu chất lượng số một cấm.
+            #
+            # Mặc định **tắt** (giá chưa gồm thuế) vì đó là cách ghi của hóa đơn
+            # GTGT: hóa đơn tách dòng tiền hàng và dòng thuế, nên bảng giá khai
+            # theo giá trước thuế thì không phép tách ngược nào phải chạy. Bật là
+            # lựa chọn của đơn vị bán lẻ niêm yết giá đã gồm thuế.
+            #
+            # KHÔNG `decided_once`: đổi khóa này **không** viết lại số nào đã ghi.
+            # Chứng từ chép đơn giá đã tách vào dòng của nó lúc lập, nên lượt đổi
+            # chỉ áp cho chứng từ lập từ đó về sau — khác hẳn `money.scale`, thứ
+            # đổi cách làm tròn của mọi phép tính về sau trên cùng dữ liệu cũ.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Đơn giá bán khai trong bảng giá là giá đã gồm thuế GTGT",
         ),
     )
 }

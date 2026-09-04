@@ -3840,6 +3840,105 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/master/items/{item_id}/discount-tiers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vật tư hàng hóa — bậc chiết khấu theo số lượng
+         * @description Bậc chiết khấu của một mã hàng, ngưỡng tăng dần.
+         */
+        get: operations["list_item_discount_tiers_api_v1_master_items__item_id__discount_tiers_get"];
+        put?: never;
+        /**
+         * Vật tư hàng hóa — thêm bậc chiết khấu
+         * @description Thêm một bậc chiết khấu — thực hiện đúng một lần (FR-NFR-004).
+         */
+        post: operations["add_item_discount_tier_api_v1_master_items__item_id__discount_tiers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{item_id}/discount-tiers/{row_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Vật tư hàng hóa — sửa bậc chiết khấu
+         * @description Sửa ngưỡng hoặc tỷ lệ của một bậc.
+         */
+        put: operations["update_item_discount_tier_api_v1_master_items__item_id__discount_tiers__row_id__put"];
+        post?: never;
+        /**
+         * Vật tư hàng hóa — xóa bậc chiết khấu
+         * @description Xóa một bậc chiết khấu khỏi hồ sơ mã hàng.
+         */
+        delete: operations["delete_item_discount_tier_api_v1_master_items__item_id__discount_tiers__row_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{item_id}/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vật tư hàng hóa — bảng giá nhiều mức
+         * @description Mức giá của một mã hàng — mua trước bán, đơn vị chính trước, mức tăng dần.
+         *
+         *     **Không** phân trang: một mã hàng có vài mức giá, không phải vài nghìn — cùng
+         *     lập luận `list_item_units`.
+         */
+        get: operations["list_item_prices_api_v1_master_items__item_id__prices_get"];
+        put?: never;
+        /**
+         * Vật tư hàng hóa — thêm mức giá
+         * @description Thêm một mức giá — thực hiện đúng một lần (FR-NFR-004).
+         */
+        post: operations["add_item_price_api_v1_master_items__item_id__prices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{item_id}/prices/{row_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Vật tư hàng hóa — sửa mức giá
+         * @description Sửa đơn vị, chiều, mức, đơn giá hoặc tên thang của một dòng.
+         */
+        put: operations["update_item_price_api_v1_master_items__item_id__prices__row_id__put"];
+        post?: never;
+        /**
+         * Vật tư hàng hóa — xóa mức giá
+         * @description Xóa một mức giá khỏi hồ sơ mã hàng.
+         */
+        delete: operations["delete_item_price_api_v1_master_items__item_id__prices__row_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/master/items/{item_id}/units": {
         parameters: {
             query?: never;
@@ -4759,6 +4858,299 @@ export interface paths {
          * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
          */
         put: operations["move_record_api_v1_master_pit_tables__record_id__parent_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/price_lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bảng giá — danh sách
+         * @description Con trực tiếp của một nút, cả nhánh dưới một nút, hoặc tra cứu phẳng.
+         *
+         *     Hai chế độ cây trong một endpoint vì màn hình cây dùng cả hai: mở dần
+         *     từng cấp lúc duyệt, lấy trọn nhánh lúc tìm kiếm. `subtree_of` thắng khi
+         *     cả hai cùng có — nó là câu hỏi hẹp hơn.
+         *
+         *     Lát 6A thêm hai chế độ **phẳng** cho ô tra cứu trên form chứng từ (trả
+         *     nợ 3D/4E — trước đây client nạp trọn danh mục qua trần 200 rồi lọc tại
+         *     chỗ), cùng hợp đồng với `/accounts`:
+         *
+         *     * `ids=` — dựng lại (hydrate) bản ghi theo id cho form sửa; **gồm cả**
+         *       bản ghi ngừng theo dõi; mọi tham số khác bị bỏ qua.
+         *     * `search=` — khớp tiền tố mã hoặc chứa trong tên, chỉ bản ghi đang
+         *       hoạt động; `flag` vẫn áp (tra "trang 1 khách hàng khớp 'an'" là câu
+         *       hỏi của máy chủ), còn `parent_id`/`subtree_of` bị bỏ qua — tra cứu
+         *       là câu hỏi trên toàn danh mục, không phải trên một nhánh.
+         *
+         *     **Có phân trang từ lát này**, dù mười bảy danh mục hiện tại đều nhỏ: hợp
+         *     đồng này đã sinh ra type TypeScript ở máy khách, nên thêm phân trang sau
+         *     là một breaking change cho cả mười bảy danh mục cùng lúc — đúng lúc 3D
+         *     đang dựng UI trên nó. Danh mục vật tư ở lát 3B-3 là cái đầu tiên **cần**
+         *     nó (FR-NFR-043 nói tới 10.000 dòng).
+         *
+         *     `total` là tổng **trước** khi cắt trang: màn hình cần nó để vẽ thanh cuộn
+         *     và để nói "1–100 trong 3.412", thứ không suy ra được từ độ dài trang.
+         */
+        get: operations["list_records_api_v1_master_price_lists_get"];
+        put?: never;
+        /**
+         * Bảng giá — tạo mới
+         * @description Tạo một bản ghi — **thực hiện đúng một lần** (FR-NFR-004).
+         *
+         *     Lần gửi lại trả `200` kèm chính bản ghi đã tạo, không phải `201`: mã
+         *     trạng thái là chỗ duy nhất client biết được lần này có tạo thêm gì không.
+         */
+        post: operations["create_record_api_v1_master_price_lists_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/price_lists/actions/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bảng giá — gộp hai bản ghi trùng
+         * @description Chuyển mọi tham chiếu của bản ghi nguồn sang đích rồi xóa nguồn (FR-SYS-016).
+         *
+         *     Quyền `delete` chứ không `edit`: kết quả của thao tác này là một bản ghi
+         *     **biến mất**, và người được sửa tên một mã hàng không đương nhiên được
+         *     làm biến mất một mã hàng khác cùng toàn bộ chứng từ của nó.
+         *
+         *     Có khóa idempotency vì nó **không lũy đẳng theo cách nguy hiểm nhất**:
+         *     lần gửi lại sau khi mạng rớt sẽ thấy bản ghi nguồn đã biến mất và báo
+         *     `404`, để người dùng ngồi đoán xem lần đầu có chạy hay không. Với khóa,
+         *     lần gửi lại trả lại đúng báo cáo của lần đã chạy.
+         */
+        post: operations["merge_two_records_api_v1_master_price_lists_actions_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/price_lists/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bảng giá — xuất dữ liệu ra Excel
+         * @description Dữ liệu danh mục theo đúng hình dạng tệp mẫu nhập liệu (FR-SYS-014).
+         *
+         *     Quyền `view`, cùng mức với đường đọc danh sách: tệp này chứa đúng những
+         *     dòng mà `GET /api/v1/master/{slug}` đã trả về cho chính người dùng ấy,
+         *     chỉ khác định dạng.
+         *
+         *     **Phạm vi chi nhánh không phải tham số của client** — cùng luật với
+         *     `routers/master_data.py`: lọc theo `acting_branch_id` của phiên, vì bảng
+         *     danh mục cố ý không bật RLS (H39) nên đây là lớp lọc duy nhất.
+         */
+        get: operations["export_records_api_v1_master_price_lists_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/price_lists/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bảng giá — ghi dữ liệu đã kiểm
+         * @description Xếp hàng lượt ghi cho một lượt kiểm đã đạt (H78).
+         *
+         *     Quyền `create` của chính danh mục, không phải `edit`: một lượt nhập tạo
+         *     ra hàng nghìn bản ghi mới, và người được sửa tên một mã hàng không đương
+         *     nhiên được tạo thêm mười nghìn mã hàng.
+         *
+         *     Thân job kiểm lại rằng lượt kiểm được trỏ tới **thuộc dataset này, đúng
+         *     loại, đã xong và không còn dòng lỗi** — bốn điều kiện ấy nằm ở
+         *     `excel/job.py` chứ không ở đây, vì chúng đọc `jobs.result` và đó là việc
+         *     của thân job, không của tầng HTTP.
+         */
+        post: operations["commit_import_api_v1_master_price_lists_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/price_lists/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bảng giá — kiểm tra tệp nhập liệu
+         * @description Tải tệp lên và xếp hàng lượt kiểm — **không ghi gì** (FR-SYS-081).
+         *
+         *     `202`: yêu cầu đã ghi nhận, kết quả chưa có. Báo cáo lỗi theo dòng nằm ở
+         *     `jobs.result` khi job xong.
+         *
+         *     Chế độ mặc định là `create_only` (H80). Client phải gửi tường minh
+         *     `mode=create_and_update` để bật đường ghi đè, và màn hình chỉ nên gửi nó
+         *     sau khi người dùng đọc con số "sẽ cập nhật N dòng" của một lượt kiểm
+         *     trước đó.
+         */
+        post: operations["validate_import_api_v1_master_price_lists_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/price_lists/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bảng giá — tải tệp mẫu nhập liệu
+         * @description Tệp mẫu của danh mục này: sheet Hướng dẫn + sheet dữ liệu (FR-SYS-080).
+         *
+         *     Quyền `view` chứ không `create`: tệp mẫu **không** chứa dữ liệu, nó chỉ
+         *     mô tả hình dạng. Đòi quyền tạo ở đây sẽ chặn đúng người hay chuẩn bị tệp
+         *     rồi chuyển cho kế toán trưởng bấm nút.
+         *
+         *     Dựng lại mỗi lần gọi thay vì cache: nó là vài chục kilobyte sinh từ một
+         *     descriptor nằm sẵn trong bộ nhớ, và một bản cache là một chỗ để tệp mẫu
+         *     cũ sống sót qua lần thêm cột ở phase 5.
+         */
+        get: operations["download_template_api_v1_master_price_lists_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/price_lists/{price_list_id}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bảng giá — dòng giá
+         * @description Dòng của một bảng giá — theo mã hàng, đơn vị chính trước, ngưỡng tăng dần.
+         *
+         *     **Không** phân trang: màn hình của bảng giá là một lưới sửa tại chỗ, và phân
+         *     trang ở đó là bắt người sửa giá lật trang giữa hai lần gõ — xem
+         *     `PriceListLineService.list_for`.
+         */
+        get: operations["list_price_list_lines_api_v1_master_price_lists__price_list_id__lines_get"];
+        put?: never;
+        /**
+         * Bảng giá — thêm dòng giá
+         * @description Thêm một dòng giá — thực hiện đúng một lần (FR-NFR-004).
+         */
+        post: operations["add_price_list_line_api_v1_master_price_lists__price_list_id__lines_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/price_lists/{price_list_id}/lines/{row_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Bảng giá — sửa dòng giá
+         * @description Sửa mã hàng, đơn vị, ngưỡng hoặc đơn giá của một dòng.
+         */
+        put: operations["update_price_list_line_api_v1_master_price_lists__price_list_id__lines__row_id__put"];
+        post?: never;
+        /**
+         * Bảng giá — xóa dòng giá
+         * @description Xóa một dòng khỏi bảng giá.
+         */
+        delete: operations["delete_price_list_line_api_v1_master_price_lists__price_list_id__lines__row_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/price_lists/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bảng giá — một bản ghi */
+        get: operations["get_record_api_v1_master_price_lists__record_id__get"];
+        /**
+         * Bảng giá — sửa
+         * @description Sửa mô tả, cột riêng và cờ "Ngừng theo dõi" — một lượt ghi, một `row_version`.
+         */
+        put: operations["update_record_api_v1_master_price_lists__record_id__put"];
+        post?: never;
+        /**
+         * Bảng giá — xóa
+         * @description Xóa thật — chỉ khi chưa ai dùng và không còn nhánh con (BR-SYS-02).
+         *
+         *     Bản ghi đã lên chứng từ thì dùng "Ngừng theo dõi" (`PUT` với
+         *     `is_active = false`), đúng lối FR-SYS-012 chỉ ra.
+         */
+        delete: operations["delete_record_api_v1_master_price_lists__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/price_lists/{record_id}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Bảng giá — chuyển nhánh
+         * @description Chuyển một nút và cả nhánh dưới nó sang nhóm cha khác (FR-SYS-011).
+         */
+        put: operations["move_record_api_v1_master_price_lists__record_id__parent_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -6605,6 +6997,30 @@ export interface paths {
          * @description Mở lại kỳ đã khóa — quyền riêng + lý do bắt buộc, ghi audit (FR-GLE-031).
          */
         post: operations["unlock_period_api_v1_periods__period_id__actions_unlock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pricing/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Định giá một dòng chứng từ
+         * @description Đơn giá và chiết khấu theo ba tầng nguồn giá — xem `kernel.pricing`.
+         *
+         *     Không tầng nào khai giá thì trả `source = "none"` kèm đơn giá `0`, **không**
+         *     phải lỗi: mã hàng chưa khai giá là chuyện thường ngày và người lập chứng từ gõ
+         *     tay đơn giá là đường hợp lệ.
+         */
+        post: operations["quote_api_v1_pricing_quote_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8611,6 +9027,15 @@ export interface components {
             /** @default create_only */
             mode: components["schemas"]["ImportMode"];
         };
+        /** Body_validate_import_api_v1_master_price_lists_import_validate_post */
+        Body_validate_import_api_v1_master_price_lists_import_validate_post: {
+            /** File */
+            file: string;
+            /** @default error */
+            missing_reference: components["schemas"]["MissingReferenceMode"];
+            /** @default create_only */
+            mode: components["schemas"]["ImportMode"];
+        };
         /** Body_validate_import_api_v1_master_project_types_import_validate_post */
         Body_validate_import_api_v1_master_project_types_import_validate_post: {
             /** File */
@@ -10330,6 +10755,52 @@ export interface components {
             row_version: number;
         };
         /**
+         * ItemDiscountTierCreateRequest
+         * @description Thêm một bậc chiết khấu. Ngưỡng tính theo **đơn vị chính** của mã hàng.
+         */
+        ItemDiscountTierCreateRequest: {
+            /** Discount Percent */
+            discount_percent: number | string;
+            /** Min Quantity */
+            min_quantity: number | string;
+        };
+        /**
+         * ItemDiscountTierListResponse
+         * @description Toàn bộ bậc chiết khấu của một mã hàng — không phân trang, xem router.
+         */
+        ItemDiscountTierListResponse: {
+            /** Items */
+            items: components["schemas"]["ItemDiscountTierResponse"][];
+        };
+        /**
+         * ItemDiscountTierResponse
+         * @description Một bậc chiết khấu theo số lượng của mã hàng.
+         */
+        ItemDiscountTierResponse: {
+            /** Discount Percent */
+            discount_percent: string;
+            /** Id */
+            id: number;
+            /** Item Id */
+            item_id: number;
+            /** Min Quantity */
+            min_quantity: string;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * ItemDiscountTierUpdateRequest
+         * @description Sửa một bậc — gửi **trọn** giá trị mới, có kiểm phiên bản.
+         */
+        ItemDiscountTierUpdateRequest: {
+            /** Discount Percent */
+            discount_percent: number | string;
+            /** Min Quantity */
+            min_quantity: number | string;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
          * ItemNature
          * @description Tính chất vật tư hàng hóa — SRS §6.1, FR-SYS-040.
          *
@@ -10347,6 +10818,75 @@ export interface components {
          * @enum {string}
          */
         ItemNature: "goods" | "finished_goods" | "service" | "description_only";
+        /**
+         * ItemPriceLevelCreateRequest
+         * @description Thêm một mức giá.
+         *
+         *     `unit_id` bỏ trống = giá theo **đơn vị chính**. Gửi id của đơn vị chính lên
+         *     thì bị từ chối: đó là cách viết thứ hai cho cùng một dòng
+         *     (`unit_priced_rows.ensure_unit_is_priceable`).
+         */
+        ItemPriceLevelCreateRequest: {
+            direction: components["schemas"]["PriceDirection"];
+            /** Label */
+            label?: string | null;
+            /** Level */
+            level: number;
+            /** Price */
+            price: number | string;
+            /** Unit Id */
+            unit_id?: number | null;
+        };
+        /**
+         * ItemPriceLevelListResponse
+         * @description Toàn bộ mức giá của một mã hàng — không phân trang, xem router.
+         */
+        ItemPriceLevelListResponse: {
+            /** Items */
+            items: components["schemas"]["ItemPriceLevelResponse"][];
+        };
+        /**
+         * ItemPriceLevelResponse
+         * @description Một mức giá của mã hàng.
+         */
+        ItemPriceLevelResponse: {
+            direction: components["schemas"]["PriceDirection"];
+            /** Id */
+            id: number;
+            /** Item Id */
+            item_id: number;
+            /** Label */
+            label: string | null;
+            /** Level */
+            level: number;
+            /** Price */
+            price: string;
+            /** Row Version */
+            row_version: number;
+            /** Unit Id */
+            unit_id: number | null;
+        };
+        /**
+         * ItemPriceLevelUpdateRequest
+         * @description Sửa một mức giá — gửi **trọn** giá trị mới, có kiểm phiên bản.
+         *
+         *     Kế thừa thân request tạo mới chứ không khai lại từng trường, cùng lối
+         *     `ItemFields` kế thừa `ItemEditableFields`: mọi luật miền giá trị vì thế áp cho
+         *     cả hai đường, không có luật nào chỉ có ở một bên.
+         */
+        ItemPriceLevelUpdateRequest: {
+            direction: components["schemas"]["PriceDirection"];
+            /** Label */
+            label?: string | null;
+            /** Level */
+            level: number;
+            /** Price */
+            price: number | string;
+            /** Row Version */
+            row_version: number;
+            /** Unit Id */
+            unit_id?: number | null;
+        };
         /**
          * ItemUnitCreateRequest
          * @description Thêm một đơn vị quy đổi.
@@ -10472,6 +11012,8 @@ export interface components {
             nature?: components["schemas"]["ItemNature"] | null;
             /** Parent Id */
             parent_id?: number | null;
+            /** Giá bán là đơn giá sau thuế */
+            price_is_tax_inclusive?: boolean | null;
             /** Kho ngầm định */
             warehouse_id?: number | null;
         };
@@ -10516,6 +11058,8 @@ export interface components {
             parent_id: number | null;
             /** Path */
             path: string;
+            /** Giá bán là đơn giá sau thuế */
+            price_is_tax_inclusive?: boolean | null;
             /** Row Version */
             row_version: number;
             /** Uid */
@@ -10538,6 +11082,8 @@ export interface components {
             name: string;
             /** Name En */
             name_en?: string | null;
+            /** Giá bán là đơn giá sau thuế */
+            price_is_tax_inclusive?: boolean | null;
             /** Row Version */
             row_version: number;
             /** Kho ngầm định */
@@ -11995,6 +12541,265 @@ export interface components {
             /** Label Span */
             label_span?: number | null;
         };
+        /**
+         * PriceDirection
+         * @description Chiều của một mức giá — `item_price_levels.direction`.
+         *
+         *     `IntEnum` chứ không hằng số rời như `PurchaseInvoiceKind`: khác với `kind` của
+         *     chứng từ (mở rộng theo nghiệp vụ mới), chiều giá đóng ở đúng hai giá trị —
+         *     mua và bán là hai đầu của một giao dịch, không có đầu thứ ba — nên bộ giá trị
+         *     đóng của một enum là mô tả đúng, và nó cho bộ định giá một tham số gõ đúng
+         *     kiểu thay vì một `int` trần.
+         * @enum {integer}
+         */
+        PriceDirection: 0 | 1;
+        /**
+         * PriceListLineCreateRequest
+         * @description Thêm một dòng giá.
+         *
+         *     `unit_id` bỏ trống = giá theo **đơn vị chính** của mã hàng; gửi id của đơn vị
+         *     chính lên thì bị từ chối (`unit_priced_rows.ensure_unit_is_priceable`).
+         *
+         *     `min_quantity` mặc định 1 = "áp cho mọi số lượng". Bảng giá không phân theo số
+         *     lượng chỉ là bảng giá mà mọi dòng để nguyên mặc định ấy.
+         */
+        PriceListLineCreateRequest: {
+            /** Item Id */
+            item_id: number;
+            /**
+             * Min Quantity
+             * @default 1
+             */
+            min_quantity: number | string;
+            /** Price */
+            price: number | string;
+            /** Unit Id */
+            unit_id?: number | null;
+        };
+        /**
+         * PriceListLineListResponse
+         * @description Toàn bộ dòng của một bảng giá — không phân trang, xem router.
+         */
+        PriceListLineListResponse: {
+            /** Items */
+            items: components["schemas"]["PriceListLineResponse"][];
+        };
+        /**
+         * PriceListLineResponse
+         * @description Một dòng của bảng giá.
+         */
+        PriceListLineResponse: {
+            /** Id */
+            id: number;
+            /** Item Id */
+            item_id: number;
+            /** Min Quantity */
+            min_quantity: string;
+            /** Price */
+            price: string;
+            /** Price List Id */
+            price_list_id: number;
+            /** Row Version */
+            row_version: number;
+            /** Unit Id */
+            unit_id: number | null;
+        };
+        /**
+         * PriceListLineUpdateRequest
+         * @description Sửa một dòng giá — gửi **trọn** giá trị mới, có kiểm phiên bản.
+         */
+        PriceListLineUpdateRequest: {
+            /** Item Id */
+            item_id: number;
+            /**
+             * Min Quantity
+             * @default 1
+             */
+            min_quantity: number | string;
+            /** Price */
+            price: number | string;
+            /** Row Version */
+            row_version: number;
+            /** Unit Id */
+            unit_id?: number | null;
+        };
+        /**
+         * PriceListsCreateRequest
+         * @description Bảng giá — tạo mới.
+         */
+        PriceListsCreateRequest: {
+            /** Branch Id */
+            branch_id?: number | null;
+            /** Code */
+            code: string;
+            /** Hợp đồng */
+            contract_id?: number | null;
+            /** Chiều giá */
+            direction?: components["schemas"]["PriceDirection"] | null;
+            /** Hiệu lực từ ngày */
+            effective_from?: string | null;
+            /** Hiệu lực đến hết ngày */
+            effective_to?: string | null;
+            /**
+             * Is Group
+             * @default false
+             */
+            is_group: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Đối tác hoặc nhóm đối tác */
+            partner_id?: number | null;
+        };
+        /**
+         * PriceListsListResponse
+         * @description Bảng giá — một trang bản ghi.
+         */
+        PriceListsListResponse: {
+            /** Items */
+            items: components["schemas"]["PriceListsResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * PriceListsResponse
+         * @description Bảng giá — một bản ghi.
+         */
+        PriceListsResponse: {
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Hợp đồng */
+            contract_id?: number | null;
+            /** Chiều giá */
+            direction?: components["schemas"]["PriceDirection"] | null;
+            /** Hiệu lực từ ngày */
+            effective_from?: string | null;
+            /** Hiệu lực đến hết ngày */
+            effective_to?: string | null;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Đối tác hoặc nhóm đối tác */
+            partner_id?: number | null;
+            /** Path */
+            path: string;
+            /** Row Version */
+            row_version: number;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * PriceListsUpdateRequest
+         * @description Bảng giá — sửa.
+         */
+        PriceListsUpdateRequest: {
+            /** Code */
+            code: string;
+            /** Hợp đồng */
+            contract_id?: number | null;
+            /** Chiều giá */
+            direction?: components["schemas"]["PriceDirection"] | null;
+            /** Hiệu lực từ ngày */
+            effective_from?: string | null;
+            /** Hiệu lực đến hết ngày */
+            effective_to?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Đối tác hoặc nhóm đối tác */
+            partner_id?: number | null;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * PriceQuoteRequest
+         * @description Hỏi đơn giá và chiết khấu cho **một** dòng chứng từ sắp lập.
+         *
+         *     Client chỉ hiển thị kết quả — mọi luật chọn giá chạy ở server (plan §Chính
+         *     sách giá & chiết khấu). Endpoint này là cách form mua/bán lấy con số ấy trước
+         *     khi có chứng từ nào được cất.
+         */
+        PriceQuoteRequest: {
+            /** Contract Id */
+            contract_id?: number | null;
+            direction: components["schemas"]["PriceDirection"];
+            /** Item Id */
+            item_id: number;
+            /**
+             * Level
+             * @default 1
+             */
+            level: number;
+            /**
+             * On Date
+             * Format: date
+             */
+            on_date: string;
+            /** Partner Id */
+            partner_id?: number | null;
+            /** Price List Id */
+            price_list_id?: number | null;
+            /** Quantity */
+            quantity: number | string;
+            /**
+             * Tax Rate
+             * @default 0
+             */
+            tax_rate: number | string;
+            /** Unit Id */
+            unit_id?: number | null;
+        };
+        /**
+         * PriceQuoteResponse
+         * @description Kết quả định giá, kèm **nguồn** đã trả lời.
+         *
+         *     Có `source` vì người dùng thấy một đơn giá tự điền và câu hỏi đầu tiên của họ
+         *     là "số này ở đâu ra" — xem `kernel.pricing.PriceSource`.
+         */
+        PriceQuoteResponse: {
+            /** Discount Percent */
+            discount_percent: string;
+            /** Is Tax Inclusive */
+            is_tax_inclusive: boolean;
+            /** Level */
+            level: number | null;
+            /** Price List Id */
+            price_list_id: number | null;
+            /** Quoted Price */
+            quoted_price: string;
+            source: components["schemas"]["PriceSource"];
+            /** Unit Price */
+            unit_price: string;
+        };
+        /**
+         * PriceSource
+         * @description Tầng đã trả lời câu hỏi giá — đi kèm kết quả để màn hình nói được vì sao.
+         *
+         *     Người dùng thấy một đơn giá tự điền và câu hỏi đầu tiên của họ là "số này ở
+         *     đâu ra". Trả về nguồn là cách rẻ nhất để trả lời mà không bắt họ mở ba màn
+         *     hình khai báo.
+         * @enum {string}
+         */
+        PriceSource: "price_list" | "item_level" | "item_default" | "none";
         /** PrintTemplateListResponse */
         PrintTemplateListResponse: {
             /** Templates */
@@ -19634,6 +20439,270 @@ export interface operations {
             };
         };
     };
+    list_item_discount_tiers_api_v1_master_items__item_id__discount_tiers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDiscountTierListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    add_item_discount_tier_api_v1_master_items__item_id__discount_tiers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemDiscountTierCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDiscountTierResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_item_discount_tier_api_v1_master_items__item_id__discount_tiers__row_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+                row_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemDiscountTierUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDiscountTierResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_item_discount_tier_api_v1_master_items__item_id__discount_tiers__row_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+                row_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_item_prices_api_v1_master_items__item_id__prices_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPriceLevelListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    add_item_price_api_v1_master_items__item_id__prices_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemPriceLevelCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPriceLevelResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_item_price_api_v1_master_items__item_id__prices__row_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+                row_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemPriceLevelUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPriceLevelResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_item_price_api_v1_master_items__item_id__prices__row_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+                row_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_item_units_api_v1_master_items__item_id__units_get: {
         parameters: {
             query?: never;
@@ -21255,6 +22324,506 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PitTablesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_records_api_v1_master_price_lists_get: {
+        parameters: {
+            query?: {
+                parent_id?: number | null;
+                subtree_of?: number | null;
+                /** @description Danh mục này không có bộ lọc nào */
+                flag?: string | null;
+                search?: string | null;
+                ids?: number[] | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListsListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_record_api_v1_master_price_lists_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceListsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    merge_two_records_api_v1_master_price_lists_actions_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataMergeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_records_api_v1_master_price_lists_export_get: {
+        parameters: {
+            query?: {
+                /** @description Kèm cả bản ghi đã ngừng theo dõi */
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Danh mục vượt trần số dòng của một tệp xuất */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    commit_import_api_v1_master_price_lists_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    validate_import_api_v1_master_price_lists_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_api_v1_master_price_lists_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportValidateResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_template_api_v1_master_price_lists_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp .xlsx */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_price_list_lines_api_v1_master_price_lists__price_list_id__lines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                price_list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListLineListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    add_price_list_line_api_v1_master_price_lists__price_list_id__lines_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                price_list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceListLineCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListLineResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_price_list_line_api_v1_master_price_lists__price_list_id__lines__row_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                price_list_id: number;
+                row_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceListLineUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListLineResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_price_list_line_api_v1_master_price_lists__price_list_id__lines__row_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                price_list_id: number;
+                row_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_record_api_v1_master_price_lists__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_record_api_v1_master_price_lists__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceListsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListsResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_record_api_v1_master_price_lists__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    move_record_api_v1_master_price_lists__record_id__parent_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListsResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -24059,6 +25628,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PeriodLockResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    quote_api_v1_pricing_quote_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceQuoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceQuoteResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

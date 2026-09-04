@@ -328,7 +328,7 @@ function DrawerBody({
           />
         )}
 
-        {!isEdit && actingBranchId !== null && (
+        {!isEdit && actingBranchId !== null && catalog.sharedOnly !== true && (
           <label className="flex items-center gap-2 text-sm text-text-default">
             <input
               type="checkbox"

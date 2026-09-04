@@ -814,6 +814,54 @@ class ItemWarehouseNotAllowedError(DomainError):
     error_code: ClassVar[str] = "item.warehouse_not_allowed"
 
 
+class ItemPriceUnitNotAllowedError(DomainError):
+    """Khai giá theo một đơn vị mã hàng **không** bán/mua theo (FR-SYS-042).
+
+    Giá của FR-SYS-042 là giá "theo từng đơn vị quy đổi", nên đơn vị hợp lệ là
+    một dòng `item_units` **đã khai** của chính mã hàng. Đơn vị chính thì khai
+    bằng cách để trống `unit_id` — nó không có dòng quy đổi nào (tỷ lệ luôn là 1)
+    nên gửi id của nó lên là một cách viết thứ hai cho cùng một dòng, và hai cách
+    viết thì hai chỉ số duy nhất riêng phần không thấy nhau.
+
+    `409`: yêu cầu hợp lệ, chỉ là phải khai đơn vị quy đổi ấy trước.
+    """
+
+    error_code: ClassVar[str] = "item.price_unit_not_allowed"
+    http_status: ClassVar[int] = 409
+
+
+class ItemDiscountTierBaseUnitMissingError(DomainError):
+    """Khai bậc chiết khấu cho mã hàng **chưa có đơn vị chính** (FR-SYS-045).
+
+    `min_quantity` tính theo đơn vị chính, và bộ chọn bậc quy đổi số lượng của
+    dòng chứng từ về đơn vị ấy trước khi so — xem `models/item_discount_tier.py`.
+    Không có đơn vị chính thì ngưỡng không quy về đâu cả, và bậc sẽ áp hay không
+    áp tùy người nhập gõ đơn vị nào.
+
+    Khác `ItemBaseUnitMissingError` ở **chỗ phải sửa**, nên là lớp riêng chứ
+    không dùng lại: câu ở đó nói về đơn vị quy đổi, câu ở đây nói về bậc chiết
+    khấu, và người nhập đang ở hai màn hình khác nhau.
+    """
+
+    error_code: ClassVar[str] = "item.discount_tier_base_unit_missing"
+    http_status: ClassVar[int] = 409
+
+
+class ItemGroupFieldNotAllowedError(DomainError):
+    """Khai dữ liệu của một mã hàng thật cho **nút nhóm**, ở đường sửa.
+
+    Nhóm chỉ để gom cây, không bao giờ lên chứng từ, nên mọi cột nghiệp vụ của nó
+    phải rỗng — `ck_items_group_carries_no_item_data` canh, và đây là chỗ **nói**
+    bằng tiếng Việt thay vì trả về tên một ràng buộc nội bộ.
+
+    Lớp riêng chứ không dùng lại `ItemWarehouseNotAllowedError`: mã lỗi đi vào hợp
+    đồng API và vào chỗ client bắt lỗi, nên một cờ về **giá** báo về dưới tên
+    `item.warehouse_not_allowed` là một mã lỗi nói sai chuyện đã xảy ra.
+    """
+
+    error_code: ClassVar[str] = "item.group_field_not_allowed"
+
+
 class ItemVariantNotSupportedError(DomainError):
     """Khai mã quy cách cho mã hàng **không theo dõi tồn kho** (FR-SYS-046).
 

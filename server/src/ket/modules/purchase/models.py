@@ -49,6 +49,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ket.kernel.auditing.listener import Audited
 from ket.kernel.config.auto_posting_models import OPERATION_CODE_MAX_LENGTH
 from ket.kernel.identifiers import uuid7
+from ket.kernel.money import UNIT_PRICE_PRECISION, UNIT_PRICE_SCALE
 from ket.kernel.persistence.base import DatasetBase
 from ket.kernel.protocols import SettlementTargetKind
 from ket.kernel.quantity import QUANTITY_PRECISION, QUANTITY_SCALE
@@ -62,10 +63,11 @@ VENDOR_INVOICE_FORM_MAX_LENGTH = 20
 VENDOR_INVOICE_SERIAL_MAX_LENGTH = 20
 VENDOR_INVOICE_NO_MAX_LENGTH = 50
 
-UNIT_PRICE_PRECISION = 24
-UNIT_PRICE_SCALE = 6
-"""Đơn giá nguyên tệ giữ 6 số lẻ: hàng nhập khẩu báo giá 0.0125 USD/cái là
-chuyện thường, còn thành tiền thì làm tròn về `AMOUNT_SCALE` như mọi số tiền."""
+"""Đơn giá nguyên tệ giữ 6 số lẻ (`money.UNIT_PRICE_*`): hàng nhập khẩu báo giá
+0.0125 USD/cái là chuyện thường, còn thành tiền thì làm tròn về `AMOUNT_SCALE`
+như mọi số tiền. Hình dạng ấy dời lên kernel ở 7C-1 khi bảng giá danh mục cần
+đúng nó — hai định nghĩa thì lượt chép giá xuống dòng chứng từ thành một phép
+làm tròn thầm lặng."""
 
 VAT_RATE_PRECISION = 5
 VAT_RATE_SCALE = 2
