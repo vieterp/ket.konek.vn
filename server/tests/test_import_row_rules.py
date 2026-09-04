@@ -27,6 +27,7 @@ from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.excel.descriptors import template_for
 from ket.kernel.excel.report import ImportMode, ImportReport
 from ket.kernel.excel.sql import table_for
+from ket.kernel.excel.staging import _StagedValues
 from ket.kernel.master_data.registry import REGISTRY, CatalogSpec
 from ket.kernel.persistence.unit_of_work import RequestScope
 
@@ -108,6 +109,38 @@ def test_every_row_rule_points_at_a_real_constraint(slug: str) -> None:
             f"Luật của {slug!r} trỏ tới ràng buộc {rule.constraint!r} không có "
             f"trên bảng. Ràng buộc hiện có: {sorted(declared)}"
         )
+
+
+@pytest.mark.parametrize("slug", [spec.slug for spec in REGISTRY.specs()])
+def test_every_column_a_rule_reads_exists_in_the_template(slug: str) -> None:
+    """Kể cả cột đọc **bên trong** `violated`, không chỉ cột `rule.field`.
+
+    Bài ngay dưới chỉ soi `rule.field`, và đó là một điểm mù thật: một luật khai
+    `field="direction"` (có trong tệp mẫu) nhưng đọc `row.value("partner_id")` ở
+    thân lambda đi lọt cả hai cổng không-DB và chỉ nổ ở bước kiểm thật — với một
+    `ValueError` từ sâu trong `staging`, cách xa dòng đã viết sai. Lát 7C-1 mắc
+    đúng lỗi ấy: tệp mẫu cho người điền gõ **mã**, không gõ khóa ngoại (H79), nên
+    cột `partner_id` không tồn tại ở bước kiểm — tên đúng là `partner_code`.
+
+    Cách đóng: dựng chính khung nhìn mà `staging` truyền vào luật rồi **gọi**
+    `violated`. Không cần PostgreSQL — dựng một biểu thức SQLAlchemy là việc thuần
+    Python, và phép chiếu cột là chỗ duy nhất có thể ném.
+    """
+    spec = spec_of(slug)
+    if not spec.row_rules:
+        return
+    values = _StagedValues(
+        descriptor=template_for(spec),
+        table=table_for(spec.model),
+        branch_id=None,
+        autocreate=frozenset(),
+        updating=False,
+    )
+    for rule in spec.row_rules:
+        try:
+            rule.violated(values)
+        except ValueError as error:  # pragma: no cover - chỉ chạy khi luật sai
+            pytest.fail(f"Luật {rule.constraint!r} của {slug!r}: {error}")
 
 
 @pytest.mark.parametrize("slug", [spec.slug for spec in REGISTRY.specs()])

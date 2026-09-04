@@ -76,6 +76,12 @@ _EXEMPT: dict[str, str] = {
     "items": "danh mục, NULL = dùng chung toàn công ty",
     # Lát 6A — danh mục thứ 21, cùng lập luận cả nhóm trên.
     "company_bank_accounts": "danh mục, NULL = dùng chung toàn công ty",
+    # Lát 7C-1 — danh mục thứ 22 (bảng giá theo đối tác/hợp đồng, FR-SAL-020),
+    # cùng lập luận cả nhóm trên. Ba bảng con của lát này (`item_price_levels`,
+    # `item_discount_tiers`, `price_list_lines`) KHÔNG có cột `branch_id` nên
+    # chúng không lọt vào phép đếm của cổng này — phạm vi của chúng là phạm vi
+    # của bản ghi danh mục chủ, đúng như `item_units`/`item_variants`.
+    "price_lists": "danh mục, NULL = dùng chung toàn công ty",
 }
 
 

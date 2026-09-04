@@ -84,6 +84,31 @@ describe('registry danh mục đối chiếu OpenAPI', () => {
     }
   })
 
+  it('mọi trường server SỬA được đều khai ở client — thiếu một trường là mất dữ liệu', () => {
+    // Chiều ngược của bài ngay trên, và nó tồn tại vì một lỗi cụ thể: drawer dựng
+    // thân request `PUT` **chỉ** từ `extraFields`, nên một cột server sửa được mà
+    // client không khai sẽ được gửi đi thiếu — và `None` mặc định của Pydantic ghi
+    // đè giá trị đang có. Lát 7C-1 thêm `items.price_is_tax_inclusive` mà quên khai
+    // ở đây; hậu quả là mỗi lần người dùng sửa **tên** một mã hàng, cờ "giá đã gồm
+    // thuế" bị xóa và mọi chứng từ sau đó ra đơn giá cao hơn đúng một lần thuế suất.
+    //
+    // Bài cũ chỉ canh chiều "khai ở client thì phải có ở server" nên nó không thấy.
+    const COMMON = new Set(['code', 'name', 'name_en', 'is_active', 'row_version'])
+    for (const { slug, extraFields } of CATALOGS) {
+      const declared = new Set(extraFields.map((field) => field.key))
+      for (const key of Object.keys(schemaProperties(`${pascal(slug)}UpdateRequest`))) {
+        if (COMMON.has(key)) {
+          continue
+        }
+        expect(
+          declared.has(key),
+          `${slug}: server sửa được "${key}" nhưng client không khai — mỗi lần sửa ` +
+            'bản ghi sẽ ghi đè cột đó về null',
+        ).toBe(true)
+      }
+    }
+  })
+
   it('trường chỉ-khai-lúc-tạo (H69) vắng mặt trong thân sửa; trường thường thì có', () => {
     for (const { slug, extraFields } of CATALOGS) {
       const updateProperties = schemaProperties(`${pascal(slug)}UpdateRequest`)

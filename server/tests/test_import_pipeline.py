@@ -402,9 +402,28 @@ def _item_row(
     warehouse: str | None = None,
     parent: str | None = None,
     is_group: str | None = None,
+    tax_inclusive: str | None = None,
 ) -> list[object]:
-    """Một dòng của tệp mẫu vật tư hàng hóa, theo đúng thứ tự cột."""
-    return [code, name, None, parent, is_group, None, warehouse, None, nature, base_unit]
+    """Một dòng của tệp mẫu vật tư hàng hóa, theo đúng **thứ tự cột**.
+
+    Thứ tự ở đây phải khớp `template_for(items).headers` từng ô một — một cột thêm
+    ở giữa mà quên chèn vào đây sẽ đẩy mọi giá trị sau nó sang phải, và triệu
+    chứng là một lỗi kiểu ở cột chẳng liên quan (`import.not_boolean` cho ô tính
+    chất). `test_import_template.PINNED_HEADERS` là chỗ thứ tự ấy được chốt.
+    """
+    return [
+        code,
+        name,
+        None,
+        parent,
+        is_group,
+        None,
+        warehouse,
+        None,
+        tax_inclusive,
+        nature,
+        base_unit,
+    ]
 
 
 @pytest.fixture
@@ -976,3 +995,57 @@ def test_an_over_long_value_never_reaches_the_database_truncated(
     assert "import.too_long" in {error.code for error in report.errors}
     with unit_of_work(session_factory, scope) as session:
         assert session.scalar(select(Bank).where(Bank.code == row[0])) is None
+
+
+def test_a_blank_cell_of_a_nullable_boolean_column_stays_null(
+    run: RunImport, a_unit: str, session_factory: sessionmaker[Session], scope: RequestScope
+) -> None:
+    """Ô trống của cột boolean **nullable** phải ra `NULL`, không phải `false`.
+
+    `boolean_expression` ép "trống = false" cho hai cột boolean đầu tiên của danh
+    mục (`is_group`, `is_active`), và với chúng đó là câu trả lời đúng — cả hai
+    `NOT NULL`. Lát 7C-1 thêm cột boolean **nullable** đầu tiên:
+    `items.price_is_tax_inclusive`, ba trạng thái với `NULL` = "theo thiết lập hệ
+    thống" (FR-SYS-043). Ép trống thành `false` ở đó **xóa mất trạng thái thứ ba**
+    — mọi mã hàng nhập từ Excel mang câu trả lời "giá chưa gồm thuế", nên lượt đổi
+    mặc định hệ thống về sau không chạm tới mã nào.
+
+    Hậu quả thứ hai là cách nó bị bắt lần đầu: ràng buộc "nút nhóm không mang dữ
+    liệu của mã hàng thật" đọc cột này, nên **mọi dòng nhóm** nhập từ Excel bị từ
+    chối — dòng nhóm không điền ô ấy mà bước ghi vẫn dựng ra `false`.
+    """
+    code = unique_code("VT_NULLBOOL")
+    report = run(ITEMS, [_item_row(code, "Vật tư", nature="goods", base_unit=a_unit)], commit=True)
+    assert report.is_valid and report.committed, report.errors
+
+    with unit_of_work(session_factory, scope) as session:
+        item = session.scalar(select(Item).where(Item.code == code))
+        assert item is not None
+        assert item.price_is_tax_inclusive is None
+
+
+def test_a_filled_cell_of_a_nullable_boolean_column_still_parses(
+    run: RunImport, a_unit: str, session_factory: sessionmaker[Session], scope: RequestScope
+) -> None:
+    """Và ô **có** điền vẫn đọc bình thường — `NULL` chỉ dành cho ô trống."""
+    code = unique_code("VT_TRUEBOOL")
+    report = run(
+        ITEMS,
+        [_item_row(code, "Vật tư", nature="goods", base_unit=a_unit, tax_inclusive="x")],
+        commit=True,
+    )
+    assert report.is_valid and report.committed, report.errors
+
+    with unit_of_work(session_factory, scope) as session:
+        item = session.scalar(select(Item).where(Item.code == code))
+        assert item is not None
+        assert item.price_is_tax_inclusive is True
+
+
+def test_a_group_item_imports_cleanly(
+    run: RunImport, session_factory: sessionmaker[Session], scope: RequestScope
+) -> None:
+    """Dòng **nhóm** nhập được: nó không điền ô nào của một mã hàng thật."""
+    code = unique_code("NVT_IMPORT")
+    report = run(ITEMS, [_item_row(code, "Nhóm hàng", is_group="x")], commit=True)
+    assert report.is_valid and report.committed, report.errors

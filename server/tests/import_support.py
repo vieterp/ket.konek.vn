@@ -69,6 +69,9 @@ MINIMUM_VALID_CELLS: dict[str, dict[str, object]] = {
     "partners": {"is_customer": "x"},  # CHECK (is_group OR is_customer OR is_vendor)
     "payment_terms": {"due_days": "0"},  # CHECK (due_days >= 0), NOT NULL
     "items": {"nature": "service"},  # dịch vụ: không cần đơn vị chính, không cần kho
+    # CHECK (is_group OR direction IS NOT NULL) — cùng hình dạng `nature` của vật
+    # tư: cột để trống hợp lệ với nút nhóm, bắt buộc với bảng giá thật.
+    "price_lists": {"direction": "1"},
     # Tham chiếu nhập theo MÃ của danh mục đích (`bank_code`, không `bank_id`).
     "company_bank_accounts": {"bank_code": "NH_MIN_IMPORT"},  # ngân hàng bắt buộc (6A)
 }
