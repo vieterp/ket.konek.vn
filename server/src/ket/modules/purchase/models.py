@@ -49,7 +49,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ket.kernel.auditing.listener import Audited
 from ket.kernel.config.auto_posting_models import OPERATION_CODE_MAX_LENGTH
 from ket.kernel.identifiers import uuid7
-from ket.kernel.money import UNIT_PRICE_PRECISION, UNIT_PRICE_SCALE
+from ket.kernel.money import (
+    UNIT_PRICE_PRECISION,
+    UNIT_PRICE_SCALE,
+    VAT_RATE_PRECISION,
+    VAT_RATE_SCALE,
+)
 from ket.kernel.persistence.base import DatasetBase
 from ket.kernel.protocols import SettlementTargetKind
 from ket.kernel.quantity import QUANTITY_PRECISION, QUANTITY_SCALE
@@ -68,9 +73,6 @@ VENDOR_INVOICE_NO_MAX_LENGTH = 50
 như mọi số tiền. Hình dạng ấy dời lên kernel ở 7C-1 khi bảng giá danh mục cần
 đúng nó — hai định nghĩa thì lượt chép giá xuống dòng chứng từ thành một phép
 làm tròn thầm lặng."""
-
-VAT_RATE_PRECISION = 5
-VAT_RATE_SCALE = 2
 
 
 class PurchaseInvoiceKind:

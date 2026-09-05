@@ -148,9 +148,19 @@ def test_declaring_a_dimension_needs_no_migration(session: Session) -> None:
     assert dimension.id is not None
     assert dimension.applies_to_accounts == ["511", "632"]
     # Cột `is_required`/`applies_to_accounts` **lưu** được từ v1; phần **ép**
-    # thuộc posting engine phase 4 (RT-20 hoãn tới v1.1).
+    # nay đã có thật (`validators/dimension_required.py`).
     assert dimension.is_required is True
     assert service.get_by_code(code).id == dimension.id
+
+    # Tắt lại trước khi rời bài: `dataset_alpha` dùng chung cả phiên, và một
+    # chiều BẮT BUỘC còn hiệu lực trên tiền tố `511`/`632` sẽ từ chối **mọi**
+    # lượt ghi sổ doanh thu hoặc giá vốn của các tệp chạy sau — `applies_to_
+    # accounts` khớp theo tiền tố, nên `511` phủ luôn `5111`/`5112`. Bài này
+    # đo lượt KHAI BÁO; giữ hiệu lực của nó sau khi đã đo xong là gài mìn cho
+    # phân hệ bán hàng, kho và mọi báo cáo doanh thu về sau. Validator lọc
+    # `is_active`, nên tắt là đủ và mọi assert ở trên vẫn nguyên.
+    dimension.is_active = False
+    session.flush()
 
 
 def test_values_form_a_tree_that_rolls_up(session: Session) -> None:

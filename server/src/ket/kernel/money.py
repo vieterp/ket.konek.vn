@@ -45,6 +45,16 @@ mua/bán phải cùng một hình dạng, nếu không thì lượt chép giá t
 dòng chứng từ là một phép làm tròn thầm lặng — và không ai đi tìm phép làm tròn
 ở một lượt gán."""
 
+VAT_RATE_PRECISION: Final[int] = 5
+VAT_RATE_SCALE: Final[int] = 2
+"""Hình dạng cột của một **thuế suất** GTGT, ghi bằng phần trăm (`10`, `8`, `5`).
+
+Ở kernel vì cùng lý do với đơn giá: dòng hóa đơn mua và dòng hóa đơn bán mang
+cùng một con số, mà luật C3 cấm hai module ấy nhìn thấy nhau — hai định nghĩa
+song song là hai chỗ để một bên nới chữ số mà bên kia không biết. Thuế suất
+KHÔNG phải số tiền: nó là hệ số nhân, và làm tròn nó theo `MONEY_SCALE_*` sẽ
+biến 8.25% thành 8.25 đồng."""
+
 ZERO: Final[Decimal] = Decimal(0)
 
 

@@ -54,6 +54,18 @@ WITH partner_refs AS (
         SELECT 1, vendor_id
         FROM landed_costs
         WHERE vendor_id IS NOT NULL
+        UNION ALL
+        -- Hóa đơn bán (lát 7C-2) đếm hai chiều: khách hàng luôn có, nhân viên
+        -- bán hàng khi được khai. `partner_kind = 2` là lối vào 'employees' ở
+        -- CASE bên trên — nhân viên bán hàng là tham chiếu đầu tiên tới bảng
+        -- ấy từ một chứng từ, nên trước lát này nhánh 'employees' của phép
+        -- kiểm chưa có nguồn nào.
+        SELECT 0, customer_id
+        FROM sales_invoices
+        UNION ALL
+        SELECT 2, salesperson_id
+        FROM sales_invoices
+        WHERE salesperson_id IS NOT NULL
     ) refs
 ),
 bank_account_refs AS (

@@ -36,6 +36,7 @@ from catalog_api_support import (
 )
 from conftest import api_test_client
 from ket.api.idempotency import IDEMPOTENCY_HEADER
+from ket.api.routers.price_list_schemas import BATCH_QUOTE_MAX_LINES
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.master_data.models.item import ItemNature
 from ket.kernel.master_data.models.item_price_level import PriceDirection
@@ -578,6 +579,71 @@ def test_the_quote_endpoint_needs_no_idempotency_key_because_it_writes_nothing(
     )
     assert response.status_code == 200, response.text
     assert response.json()["source"] == "none"
+
+
+def test_the_batch_quote_answers_every_line_in_order(
+    client: TestClient, editor: dict[str, str], price_list: int, item: int
+) -> None:
+    """Một chứng từ nhiều dòng hỏi giá bằng **một** request, không phải một
+    request mỗi dòng (số truy vấn mỗi dòng thì không đổi — xem
+    `PriceQuoteBatchRequest`).
+
+    Kết quả phải cùng thứ tự và cùng số phần tử với `lines` — client ghép theo
+    vị trí, nên một phần tử bị bỏ đi hoặc đảo chỗ là mọi dòng sau nó mang giá
+    của dòng khác. Dòng không tầng giá nào trả lời được vẫn có phần tử của nó
+    (`source = "none"`, đơn giá 0): một mã hàng chưa khai giá không được phép
+    chặn những dòng còn lại.
+    """
+    assert (
+        _post(client, editor, _lines(price_list), {"item_id": item, "price": "900"}).status_code
+        == 201
+    )
+    priced = {
+        "item_id": item,
+        "quantity": "1",
+        "direction": PriceDirection.SALE.value,
+        "on_date": "2026-06-15",
+    }
+    unpriced = {**priced, "item_id": item, "direction": PriceDirection.PURCHASE.value}
+
+    response = client.post(
+        "/api/v1/pricing/quote-batch",
+        json={"lines": [priced, unpriced, priced]},
+        headers=editor,
+    )
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert [row["source"] for row in items] == ["price_list", "none", "price_list"]
+    assert [Decimal(row["unit_price"]) for row in items] == [
+        Decimal(900),
+        Decimal(0),
+        Decimal(900),
+    ]
+    assert items[0]["price_list_id"] == price_list
+
+
+def test_the_batch_quote_refuses_an_empty_or_oversized_request(
+    client: TestClient, editor: dict[str, str], item: int
+) -> None:
+    """Trần dòng là một quyết định về tài nguyên: bộ định giá là 6–10 truy vấn
+    **mỗi dòng**, nên một lô không giới hạn giữ kết nối DB đủ lâu để chặn
+    người khác."""
+    line = {
+        "item_id": item,
+        "quantity": "1",
+        "direction": PriceDirection.SALE.value,
+        "on_date": "2026-06-15",
+    }
+    assert (
+        client.post("/api/v1/pricing/quote-batch", json={"lines": []}, headers=editor).status_code
+        == 422
+    )
+    too_many = client.post(
+        "/api/v1/pricing/quote-batch",
+        json={"lines": [line] * (BATCH_QUOTE_MAX_LINES + 1)},
+        headers=editor,
+    )
+    assert too_many.status_code == 422
 
 
 def test_a_price_list_may_not_be_scoped_to_one_branch(

@@ -78,6 +78,7 @@ from ket.api.routers.pricing import router as pricing_router
 from ket.api.routers.printing import router as printing_router
 from ket.api.routers.purchase import router as purchase_router
 from ket.api.routers.reports import router as reports_router
+from ket.api.routers.sales import router as sales_router
 from ket.api.routers.setup import router as setup_router
 from ket.api.routers.statements import router as statements_router
 from ket.api.routers.system import router as system_router
@@ -312,6 +313,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Lát 7B — hóa đơn mua hàng + chi phí mua hàng (SRS 04 §3); ghi sổ qua
     # endpoint chứng từ dùng chung, sổ phụ công nợ qua `ArApSubledger`.
     app.include_router(purchase_router)
+    app.include_router(sales_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

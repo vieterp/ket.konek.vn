@@ -1,4 +1,4 @@
-"""Định giá một dòng chứng từ sắp lập (FR-SAL §4.2, FR-SYS-042/043/045).
+"""Định giá dòng chứng từ sắp lập (FR-SAL §4.2, FR-SYS-042/043/045).
 
 "Toàn bộ là dữ liệu, tính ở **server**; client chỉ hiển thị kết quả" (plan §Chính
 sách giá & chiết khấu). Endpoint này là cách form mua/bán lấy đơn giá và tỷ lệ
@@ -28,7 +28,12 @@ from fastapi import APIRouter, Depends
 
 from ket.api.dependencies import AuthorizedRequest, SessionFactory, require_permission
 from ket.api.routers.price_list_lines import SPEC
-from ket.api.routers.price_list_schemas import PriceQuoteRequest, PriceQuoteResponse
+from ket.api.routers.price_list_schemas import (
+    PriceQuoteBatchRequest,
+    PriceQuoteBatchResponse,
+    PriceQuoteRequest,
+    PriceQuoteResponse,
+)
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.pricing import price_is_tax_inclusive_default, quote_price
 from ket.kernel.security.permissions import Action
@@ -72,3 +77,52 @@ def quote(
             tax_rate=payload.tax_rate,
         )
         return PriceQuoteResponse.model_validate(quoted)
+
+
+@router.post(
+    "/quote-batch",
+    response_model=PriceQuoteBatchResponse,
+    summary="Định giá nhiều dòng chứng từ trong một lượt",
+)
+def quote_batch(
+    payload: PriceQuoteBatchRequest,
+    authorized: PriceReader,
+    factory: SessionFactory,
+) -> PriceQuoteBatchResponse:
+    """Cùng luật với `/quote`, chạy cho cả chứng từ trong **một** transaction.
+
+    Cái nó gộp là **request và transaction**, không phải truy vấn: form bán hàng
+    (7H) hỏi giá cho cả hóa đơn bằng một lượt thay vì một lượt mỗi dòng, và tùy
+    chọn "giá đã gồm thuế" cấp hệ thống đọc đúng **một lần** cho cả lô. Số truy
+    vấn mỗi dòng vẫn nguyên — xem `PriceQuoteBatchRequest`, nơi ghi rõ phần nào
+    của nợ N+1 lát 7C-1 đã hết và phần nào còn.
+
+    Dòng nào không tầng giá nào trả lời được thì phần tử của nó mang `source =
+    "none"` và đơn giá `0` — cùng luật với `/quote`, không phải lỗi và không
+    làm hỏng cả lô: một mã hàng chưa khai giá không được phép chặn 49 dòng còn
+    lại.
+    """
+    with unit_of_work(factory, authorized.scope) as session:
+        tax_inclusive_default = price_is_tax_inclusive_default(
+            session, user_id=authorized.scope.user_id
+        )
+        quoted = [
+            quote_price(
+                session,
+                item_id=line.item_id,
+                unit_id=line.unit_id,
+                quantity=line.quantity,
+                direction=line.direction,
+                on_date=line.on_date,
+                tax_inclusive_default=tax_inclusive_default,
+                partner_id=line.partner_id,
+                contract_id=line.contract_id,
+                price_list_id=line.price_list_id,
+                level=line.level,
+                tax_rate=line.tax_rate,
+            )
+            for line in payload.lines
+        ]
+        return PriceQuoteBatchResponse(
+            items=tuple(PriceQuoteResponse.model_validate(row) for row in quoted)
+        )

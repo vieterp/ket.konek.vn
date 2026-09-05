@@ -20,13 +20,17 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ket.kernel.currency.models import CURRENCY_CODE_LENGTH, RATE_PRECISION
-from ket.kernel.money import RATE_SCALE_DEFAULT, UNIT_PRICE_PRECISION, UNIT_PRICE_SCALE
+from ket.kernel.money import (
+    RATE_SCALE_DEFAULT,
+    UNIT_PRICE_PRECISION,
+    UNIT_PRICE_SCALE,
+    VAT_RATE_PRECISION,
+    VAT_RATE_SCALE,
+)
 from ket.kernel.protocols import SettlementTargetKind
 from ket.kernel.quantity import QUANTITY_PRECISION, QUANTITY_SCALE
 from ket.modules.purchase.models import (
     DESCRIPTION_MAX_LENGTH,
-    VAT_RATE_PRECISION,
-    VAT_RATE_SCALE,
     VENDOR_INVOICE_FORM_MAX_LENGTH,
     VENDOR_INVOICE_NO_MAX_LENGTH,
     VENDOR_INVOICE_SERIAL_MAX_LENGTH,
