@@ -33,9 +33,10 @@ from ket.modules.general_ledger.journal import (
     JOURNAL_PERMISSION_CODE,
     JOURNAL_PERMISSION_MODULE,
 )
-from ket.modules.general_ledger.journal.models import JournalLine
+from ket.modules.general_ledger.journal.models import JournalLine, JournalSettlement
 from ket.modules.general_ledger.journal.schemas import (
     JournalLineOut,
+    JournalSettlementOut,
     JournalVoucherIn,
     JournalVoucherOut,
     JournalVoucherUpdate,
@@ -65,10 +66,15 @@ def _require_branch_in_scope(authorized: AuthorizedRequest, branch_id: int) -> N
         )
 
 
-def _to_response(voucher: Voucher, lines: list[JournalLine]) -> JournalVoucherOut:
+def _to_response(
+    voucher: Voucher, lines: list[JournalLine], settlements: list[JournalSettlement]
+) -> JournalVoucherOut:
     body = JournalVoucherOut.model_validate(voucher)
     return body.model_copy(
-        update={"lines": tuple(JournalLineOut.model_validate(line) for line in lines)}
+        update={
+            "lines": tuple(JournalLineOut.model_validate(line) for line in lines),
+            "settlements": tuple(JournalSettlementOut.model_validate(row) for row in settlements),
+        }
     )
 
 
@@ -102,14 +108,14 @@ def create_journal_voucher(
             user_id=authorized.scope.user_id,
             acknowledged_warnings=acknowledge_warnings,
         )
-        _, lines = service.get(voucher.id)
-        return _to_response(voucher, lines), IdempotentRef(
+        _, lines, settlements = service.get(voucher.id)
+        return _to_response(voucher, lines, settlements), IdempotentRef(
             result_type=Voucher.__tablename__, result_id=str(voucher.id)
         )
 
     def replay(session: Session, ref: IdempotentRef) -> JournalVoucherOut:
-        voucher, lines = JournalVoucherService(session).get(UUID(ref.result_id))
-        return _to_response(voucher, lines)
+        voucher, lines, settlements = JournalVoucherService(session).get(UUID(ref.result_id))
+        return _to_response(voucher, lines, settlements)
 
     created_body, created = execute_once(
         factory,
@@ -130,8 +136,8 @@ def get_journal_voucher(
     voucher_id: UUID, authorized: JournalReader, factory: SessionFactory
 ) -> JournalVoucherOut:
     with unit_of_work(factory, authorized.scope) as session:
-        voucher, lines = JournalVoucherService(session).get(voucher_id)
-        return _to_response(voucher, lines)
+        voucher, lines, settlements = JournalVoucherService(session).get(voucher_id)
+        return _to_response(voucher, lines, settlements)
 
 
 @router.put("/{voucher_id}", response_model=JournalVoucherOut)
@@ -156,5 +162,5 @@ def update_journal_voucher(
             expected_row_version=payload.row_version,
             user_id=authorized.scope.user_id,
         )
-        _, lines = service.get(voucher.id)
-        return _to_response(voucher, lines)
+        _, lines, settlements = service.get(voucher.id)
+        return _to_response(voucher, lines, settlements)

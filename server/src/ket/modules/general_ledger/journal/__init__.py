@@ -68,6 +68,18 @@ def _build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest
     return to_posting_request(session, voucher_id, lines)
 
 
+def _after_post(session: Session, voucher_id: UUID, user_id: int) -> None:
+    from ket.modules.general_ledger.journal.service import JournalVoucherService
+
+    JournalVoucherService(session).sync_after_post(voucher_id, user_id=user_id)
+
+
+def _after_unpost(session: Session, voucher_id: UUID, user_id: int) -> None:
+    from ket.modules.general_ledger.journal.service import JournalVoucherService
+
+    JournalVoucherService(session).clear_after_unpost(voucher_id)
+
+
 POSTING_DOCUMENT_REGISTRY.register(
     PostingDocumentType(
         code=JOURNAL_DOCUMENT_TYPE,
@@ -75,5 +87,12 @@ POSTING_DOCUMENT_REGISTRY.register(
         permission_name=JOURNAL_PERMISSION_CODE,
         title="Chứng từ nghiệp vụ khác",
         build_request=_build_posting_request,
+        # Bút toán gõ thẳng vào TK công nợ sinh dòng sổ phụ như hóa đơn mua/bán
+        # (quyết định user 2026-09-05, lát 7C-3) — `general_ledger.journal` là
+        # nguồn ghi `ar_ap_ledger` thứ ba. Không có `before_delete`: chứng từ
+        # này không giữ bộ đếm tham chiếu danh mục nào, và dòng sổ phụ chỉ tồn
+        # tại khi chứng từ ĐÃ ghi sổ — thứ xóa được thì không có dòng nào.
+        after_post=_after_post,
+        after_unpost=_after_unpost,
     )
 )

@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ket.kernel.currency.models import CURRENCY_CODE_LENGTH, RATE_PRECISION
 from ket.kernel.money import RATE_SCALE_DEFAULT
+from ket.kernel.protocols import SettlementTargetKind
 from ket.posting.contracts import AMOUNT_PRECISION, AMOUNT_SCALE, EntryKind, PartnerKind
 
 _ZERO = Decimal(0)
@@ -88,6 +89,23 @@ class JournalLineIn(BaseModel):
         return self
 
 
+class JournalSettlementIn(BaseModel):
+    """Một dòng đối trừ công nợ, gắn vào MỘT dòng định khoản của chứng từ.
+
+    `line_no` chứ không `line_id`: lúc tạo mới chưa có dòng nào trong DB, và
+    lúc sửa thì `service.update` thay trọn bộ dòng (id cũ biến mất). Số thứ tự
+    là thứ duy nhất ổn định qua cả hai đường, và nó cũng chính là thứ người
+    dùng nhìn thấy trên lưới.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    line_no: int = Field(ge=1)
+    target_kind: SettlementTargetKind
+    target_id: UUID
+    amount_fc: Decimal = Field(gt=_ZERO, max_digits=AMOUNT_PRECISION, decimal_places=AMOUNT_SCALE)
+
+
 class JournalVoucherIn(BaseModel):
     """Thân chứng từ cho cả tạo mới lẫn sửa (PUT gửi trọn bộ dòng thay thế)."""
 
@@ -108,11 +126,28 @@ class JournalVoucherIn(BaseModel):
     đây là màn hình đầu tiên cần khai cờ này — B02 lọc theo nó."""
 
     lines: tuple[JournalLineIn, ...] = Field(min_length=1)
+    settlements: tuple[JournalSettlementIn, ...] = ()
+    """Dòng đối trừ công nợ. Trống = chứng từ không giảm nợ khoản nào."""
 
     @model_validator(mode="after")
     def _rate_positive(self) -> JournalVoucherIn:
         if self.exchange_rate <= _ZERO:
             raise ValueError("Tỷ giá phải dương")
+        return self
+
+    @model_validator(mode="after")
+    def _settlements_sane(self) -> JournalVoucherIn:
+        targets = [(row.line_no, row.target_kind, row.target_id) for row in self.settlements]
+        if len(targets) != len(set(targets)):
+            # Cùng luật với UNIQUE của bảng, chặn ở cửa để lỗi nói tiếng nghiệp
+            # vụ thay vì IntegrityError.
+            raise ValueError("Một dòng chỉ đối trừ một chứng từ công nợ đúng một lần")
+        line_count = len(self.lines)
+        for row in self.settlements:
+            if row.line_no > line_count:
+                raise ValueError(
+                    f"Dòng đối trừ trỏ tới dòng định khoản {row.line_no} không tồn tại"
+                )
         return self
 
 
@@ -147,6 +182,18 @@ class JournalLineOut(BaseModel):
     description: str | None
 
 
+class JournalSettlementOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    journal_line_id: UUID
+    target_kind: int
+    target_id: UUID
+    amount_fc: Decimal
+    amount: Decimal
+    fx_diff: Decimal
+
+
 class JournalVoucherOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -169,3 +216,4 @@ class JournalVoucherOut(BaseModel):
     posted_by: int | None
     row_version: int
     lines: tuple[JournalLineOut, ...] = ()
+    settlements: tuple[JournalSettlementOut, ...] = ()

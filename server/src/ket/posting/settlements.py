@@ -57,6 +57,7 @@ from ket.posting.documents.models import Voucher
 
 SETTLEMENT_NO_SOURCE_CODE = "settlement.kind_unavailable"
 SETTLEMENT_TARGET_MISSING_CODE = "settlement.target_missing"
+SETTLEMENT_KIND_MISMATCH_CODE = "settlement.target_kind_mismatch"
 SETTLEMENT_PARTNER_MISMATCH_CODE = "settlement.partner_mismatch"
 SETTLEMENT_BRANCH_MISMATCH_CODE = "settlement.branch_mismatch"
 SETTLEMENT_ACCOUNT_MISMATCH_CODE = "settlement.account_mismatch"
@@ -245,6 +246,25 @@ def _find_input_targets(
                         SETTLEMENT_TARGET_MISSING_CODE,
                         "Chứng từ công nợ được đối trừ không còn tồn tại — chọn lại trên phiếu",
                         target_kind=kind.value,
+                        target_id=str(target_id),
+                    )
+                )
+            elif invoice.target_kind is not kind:
+                # LOẠI đích client gửi phải khớp loại THẬT của dòng tìm được.
+                # Một source phục vụ nhiều loại (`receivables` giữ bốn loại
+                # trên cùng `ar_ap_ledger`) nên `find` tra theo id và không tự
+                # kiểm được điều này. Bỏ qua nó thì dòng đối trừ lưu một
+                # `target_kind` khác loại thật của đích, và cặp
+                # `(target_kind, target_id)` ấy không nối được với sổ phụ —
+                # `settlement_matches_subledger` báo hai dòng đỏ trên dữ liệu
+                # ĐÚNG (một bên thừa, một bên thiếu).
+                violations.append(
+                    PostingViolation(
+                        SETTLEMENT_KIND_MISMATCH_CODE,
+                        "Loại chứng từ công nợ gửi lên không khớp với chứng từ được chọn "
+                        "— chọn lại trên phiếu",
+                        target_kind=kind.value,
+                        actual_target_kind=invoice.target_kind.value,
                         target_id=str(target_id),
                     )
                 )

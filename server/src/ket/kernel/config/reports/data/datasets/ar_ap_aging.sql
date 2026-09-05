@@ -33,8 +33,18 @@ WITH fy AS (
     WHERE :to_date >= start_date AND :to_date <= end_date
 ),
 open_items AS (
-    -- Nguồn 1: sổ phụ công nợ do chứng từ mua/bán sinh (phase 7).
-    SELECT CASE l.target_kind WHEN 0 THEN 'thu' ELSE 'chi' END AS direction,
+    -- Nguồn 1: sổ phụ công nợ (phase 7) — chứng từ mua/bán sinh, và từ lát
+    -- 7C-3 cả chứng từ nghiệp vụ khác gõ thẳng vào TK công nợ.
+    --
+    -- Chiều liệt kê THEO `target_kind`, nên mỗi loại đích mới phải có mặt ở
+    -- CẢ HAI chỗ: `CASE` ở đây và `WHERE` bên dưới. Nới mỗi `WHERE` thì khoản
+    -- phải thu ghi tay (3) rơi vào nhánh `ELSE` và hiện ở phía phải trả —
+    -- hỏng nặng hơn bỏ sót nó.
+    SELECT CASE l.target_kind
+               WHEN 0 THEN 'thu'   -- hóa đơn bán
+               WHEN 3 THEN 'thu'   -- phải thu ghi tay (GLE)
+               ELSE 'chi'          -- 1 hóa đơn mua, 4 phải trả ghi tay
+           END AS direction,
            l.partner_kind,
            l.partner_id,
            l.currency_code,
@@ -44,7 +54,7 @@ open_items AS (
            l.amount_fc - l.settled_fc AS remaining_fc,
            l.amount - l.settled       AS remaining
     FROM ar_ap_ledger l
-    WHERE l.target_kind IN (0, 1)
+    WHERE l.target_kind IN (0, 1, 3, 4)
       AND l.ledger = :ledger
       AND l.is_closed = FALSE
       AND l.document_date <= :to_date

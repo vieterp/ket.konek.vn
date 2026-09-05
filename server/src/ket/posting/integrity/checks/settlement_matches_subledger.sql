@@ -19,8 +19,9 @@
 -- check đỏ đúng ở những chứng từ khó nhất, nơi người ta cần nó im nhất.
 --
 -- **Hai sổ phụ, tách bằng `target_kind`** (`kernel.protocols.
--- SettlementTargetKind`): 0/1 (hóa đơn bán/mua) là `ar_ap_ledger`, 2 (số dư
--- đầu kỳ) là `opening_balance_invoices`. Dòng `ar_ap_ledger` mang
+-- SettlementTargetKind`): 0/1 (hóa đơn bán/mua) và 3/4 (khoản phải thu/phải
+-- trả ghi thẳng bằng chứng từ nghiệp vụ khác, lát 7C-3) là `ar_ap_ledger`,
+-- 2 (số dư đầu kỳ) là `opening_balance_invoices`. Dòng `ar_ap_ledger` mang
 -- `target_kind = 2` KHÔNG được nối vào đây: `target_id` của một dòng đối trừ
 -- loại 2 là `opening_balance_invoices.id`, không phải id của sổ phụ — nối
 -- nhầm thì hai bảng khác nhau tranh cùng một khóa.
@@ -89,6 +90,21 @@ WITH settlement_rows AS (
     FROM sales_settlements s
     JOIN vouchers v ON v.id = s.voucher_id
     WHERE v.status = 2
+    UNION ALL
+    -- Chứng từ nghiệp vụ khác (lát 7C-3): dòng ghi GIẢM một khoản công nợ đi
+    -- qua cùng cơ chế đối trừ, nên đây là nguồn thứ năm cộng vào `settled`.
+    -- Bù trừ 131 ↔ 331 của cùng một đối tác là hai dòng của nhánh này. Đối
+    -- trừ ở đây gắn vào DÒNG định khoản chứ không vào chứng từ, nhưng bảng
+    -- giữ sẵn `voucher_id` nên phép cộng không phải join thêm bảng dòng.
+    SELECT s.target_kind,
+           s.target_id,
+           s.amount_fc,
+           s.amount - s.fx_diff,
+           v.branch_id,
+           v.voucher_no
+    FROM gl_journal_settlements s
+    JOIN vouchers v ON v.id = s.voucher_id
+    WHERE v.status = 2
 ),
 settled AS (
     SELECT target_kind,
@@ -109,7 +125,10 @@ subledger AS (
            l.settled          AS recorded
     FROM ar_ap_ledger l
     WHERE l.branch_id = :branch_id
-      AND l.target_kind IN (0, 1)
+      -- Mọi loại đích sống trên bảng này, KHÔNG chỉ hai loại hóa đơn: bỏ sót
+      -- 3/4 thì mỗi khoản nợ ghi tay được đối trừ thành một dòng đỏ trên dữ
+      -- liệu ĐÚNG — vế đối trừ có số, vế sổ phụ không nộp đích nào để nối.
+      AND l.target_kind IN (0, 1, 3, 4)
     UNION ALL
     SELECT 2,
            i.id,
