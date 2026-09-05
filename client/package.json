@@ -1,7 +1,7 @@
 {
   "name": "ket-client",
   "private": true,
-  "version": "0.27.0",
+  "version": "0.28.0",
   "type": "module",
   "description": "Konek Két — client kế toán: Tauri desktop shell bọc web UI TypeScript/React",
   "scripts": {

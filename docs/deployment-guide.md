@@ -189,6 +189,28 @@ vì đoán: không có phiên bản cũ thì không suy được cần nâng c�
 sẽ cho ra một DB tự nhận là mới trong khi thiếu cột. Cách xử lý: khôi phục bản sao lưu
 gần nhất, hoặc ghi đúng phiên bản đang có bằng tay rồi chạy lại.
 
+#### Mã quyền mới và báo cáo đổi chủ sở hữu
+
+Migration dataset **không** gieo mã quyền: `permissions` được đồng bộ từ
+`PermissionRegistry` khi cấp dữ liệu mới hoặc khi chạy lại `ensure-cluster`. Một bản
+nâng cấp thêm phân hệ vì thế cần **hai** bước, không một: nâng cấp schema, rồi
+`ensure-cluster` để mã quyền của phân hệ mới trở nên **cấp phát được**. Bỏ bước hai
+thì vai trò không gán được quyền chưa tồn tại.
+
+Việc này thành **thay đổi phá vỡ** khi một báo cáo đổi module sở hữu, vì cổng quyền của
+báo cáo đọc `required_permission_module`:
+
+| Bản | Báo cáo | Chủ cũ | Chủ mới |
+| --- | --- | --- | --- |
+| 0026 | `tuoi-no-phai-tra` (tuổi nợ phải trả) | `receivables` | `purchase` |
+| 0028 | `tuoi-no-phai-thu` (tuổi nợ phải thu) | `receivables` | `sales` |
+
+Vai trò đang mở được hai báo cáo ấy nhờ `receivables.*.view` sẽ **mất quyền** sau khi
+nâng cấp. Sau `ensure-cluster`, gán thêm `purchase.invoice.view` / `sales.invoice.view`
+cho đúng những vai trò ấy. Lý do đổi: hai chiều tuổi nợ dùng chung một mã quyền khi chưa
+phân hệ nào của chúng tồn tại; giữ nguyên thì ai xem được công nợ phải thu cũng xem được
+công nợ phải trả.
+
 ### 2.2b Khóa mã hóa ứng dụng (ADR-019)
 
 ```bash
