@@ -7027,6 +7027,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pricing/quote-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Định giá nhiều dòng chứng từ trong một lượt
+         * @description Cùng luật với `/quote`, chạy cho cả chứng từ trong **một** transaction.
+         *
+         *     Cái nó gộp là **request và transaction**, không phải truy vấn: form bán hàng
+         *     (7H) hỏi giá cho cả hóa đơn bằng một lượt thay vì một lượt mỗi dòng, và tùy
+         *     chọn "giá đã gồm thuế" cấp hệ thống đọc đúng **một lần** cho cả lô. Số truy
+         *     vấn mỗi dòng vẫn nguyên — xem `PriceQuoteBatchRequest`, nơi ghi rõ phần nào
+         *     của nợ N+1 lát 7C-1 đã hết và phần nào còn.
+         *
+         *     Dòng nào không tầng giá nào trả lời được thì phần tử của nó mang `source =
+         *     "none"` và đơn giá `0` — cùng luật với `/quote`, không phải lỗi và không
+         *     làm hỏng cả lô: một mã hàng chưa khai giá không được phép chặn 49 dòng còn
+         *     lại.
+         */
+        post: operations["quote_batch_api_v1_pricing_quote_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/print-templates": {
         parameters: {
             query?: never;
@@ -7240,6 +7271,78 @@ export interface paths {
          *     render đồng bộ giữ transaction + RAM suốt lượt chạy).
          */
         post: operations["render_api_v1_reports__code__render_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Sales Invoice
+         * @description Cất hóa đơn bán; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.
+         *
+         *     `acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm đó (FR-SYS-062
+         *     mức "Cảnh báo" — ví dụ khách hàng vượt ngưỡng nợ, FR-SAL-034); mức "Chặn"
+         *     không mở được.
+         */
+        post: operations["create_sales_invoice_api_v1_sales_invoices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/invoices/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sales Invoice */
+        get: operations["get_sales_invoice_api_v1_sales_invoices__voucher_id__get"];
+        /**
+         * Update Sales Invoice
+         * @description Sửa hóa đơn Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).
+         */
+        put: operations["update_sales_invoice_api_v1_sales_invoices__voucher_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/open-invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Open Receivables
+         * @description Hóa đơn bán còn nợ của một khách hàng — picker cho chứng từ trả lại /
+         *     giảm giá hàng bán.
+         *
+         *     Chỉ một chiều (phải thu) và chỉ loại đối tác khách hàng, khóa cứng thay vì
+         *     nhận tham số: màn hình này chỉ tồn tại để chọn hóa đơn gốc cho một chứng từ
+         *     bán. Hóa đơn **đã thu đủ** không nằm trong danh sách — và đó chính là lý do
+         *     chứng từ giảm trừ cho một hóa đơn đã thu đủ không lập được: đường đúng lúc
+         *     ấy là trả tiền lại khách bằng phiếu chi.
+         */
+        get: operations["list_open_receivables_api_v1_sales_open_invoices_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -12731,6 +12834,35 @@ export interface components {
             row_version: number;
         };
         /**
+         * PriceQuoteBatchRequest
+         * @description Hỏi giá cho **cả chứng từ** trong một lượt (FR-SAL §4.2).
+         *
+         *     **Nó tiết kiệm cái gì, và không tiết kiệm cái gì** — nói thẳng để không ai
+         *     đọc nhầm: một form 50 dòng hỏi từng dòng là 50 request, mỗi request một
+         *     transaction và một lượt đọc tùy chọn "giá đã gồm thuế" cấp hệ thống. Gộp lô
+         *     đưa 50 request ấy về **một** request, một transaction, một lượt đọc tùy
+         *     chọn. Số truy vấn **mỗi dòng** thì **không đổi**: hàm định giá vẫn chạy
+         *     nguyên vẹn cho từng dòng, nên tổng truy vấn vẫn tuyến tính theo số dòng —
+         *     `BATCH_QUOTE_MAX_LINES` là thứ chặn trên nó.
+         *
+         *     Nợ N+1 mà 7C-1 ghi lại (review M-2) nói tới đường **cất chứng từ**; đường ấy
+         *     không còn gọi bộ định giá nữa (quyết định user 2026-09-04: đơn giá do client
+         *     chốt), nên nó không phải là chỗ N+1 chạm tới. Gom lô cho đường **hỏi giá**
+         *     của form là việc còn lại, và phần "làm phẳng truy vấn theo dòng" vẫn đang mở.
+         *
+         *     Kết quả trả về **cùng thứ tự và cùng số phần tử** với `lines` — client ghép
+         *     theo vị trí, không theo một khóa nào phải bịa ra.
+         */
+        PriceQuoteBatchRequest: {
+            /** Lines */
+            lines: components["schemas"]["PriceQuoteRequest"][];
+        };
+        /** PriceQuoteBatchResponse */
+        PriceQuoteBatchResponse: {
+            /** Items */
+            items: components["schemas"]["PriceQuoteResponse"][];
+        };
+        /**
          * PriceQuoteRequest
          * @description Hỏi đơn giá và chiết khấu cho **một** dòng chứng từ sắp lập.
          *
@@ -13673,6 +13805,441 @@ export interface components {
         RoleGrantRequest: {
             /** Role Code */
             role_code: string;
+        };
+        /**
+         * SalesInvoiceIn
+         * @description Thân hóa đơn cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).
+         */
+        SalesInvoiceIn: {
+            /** Branch Id */
+            branch_id: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Customer Id */
+            customer_id: number;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Due Date */
+            due_date?: string | null;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Invoice Date */
+            invoice_date?: string | null;
+            /** Invoice Form */
+            invoice_form?: string | null;
+            /** Invoice No */
+            invoice_no?: string | null;
+            /** Invoice Serial */
+            invoice_serial?: string | null;
+            /**
+             * Is Stock Issue
+             * @default false
+             */
+            is_stock_issue: boolean;
+            /** Kind */
+            kind: number;
+            /** Lines */
+            lines: components["schemas"]["SalesInvoiceLineIn"][];
+            /** Operation Code */
+            operation_code: string;
+            /** Payment Term Id */
+            payment_term_id?: number | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Price List Id */
+            price_list_id?: number | null;
+            /** Receivable Account Id */
+            receivable_account_id: number;
+            /** Recipient Name */
+            recipient_name?: string | null;
+            /** Salesperson Id */
+            salesperson_id?: number | null;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["SalesSettlementIn"][];
+            /** Ship To */
+            ship_to?: string | null;
+        };
+        /**
+         * SalesInvoiceLineIn
+         * @description Một dòng hàng hóa / dịch vụ trên hóa đơn bán.
+         *
+         *     `amount_fc` là doanh thu **sau** chiết khấu, tức con số in trên hóa đơn —
+         *     không suy từ `quantity × unit_price_fc − discount_amount_fc`: hóa đơn làm
+         *     tròn theo cách của nó, và cặp số lượng/đơn giá chỉ để bảng kê và báo cáo
+         *     bán hàng đọc lại.
+         */
+        SalesInvoiceLineIn: {
+            /** Account Id */
+            account_id: number;
+            /** Amount */
+            amount?: number | string | null;
+            /** Amount Fc */
+            amount_fc: number | string;
+            /** Cogs Account Id */
+            cogs_account_id?: number | null;
+            /** Contract Id */
+            contract_id?: number | null;
+            /** Cost Object Id */
+            cost_object_id?: number | null;
+            /** Description */
+            description?: string | null;
+            /**
+             * Discount Amount Fc
+             * @default 0
+             */
+            discount_amount_fc: number | string;
+            /** Discount Percent */
+            discount_percent?: number | string | null;
+            /** Expense Item Id */
+            expense_item_id?: number | null;
+            /**
+             * Extended
+             * @default []
+             */
+            extended: components["schemas"]["ExtendedDimensionIn"][];
+            /** Inventory Account Id */
+            inventory_account_id?: number | null;
+            /** Item Id */
+            item_id?: number | null;
+            /** Order Id */
+            order_id?: number | null;
+            /** Price List Id */
+            price_list_id?: number | null;
+            price_source?: components["schemas"]["PriceSource"] | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Quantity */
+            quantity?: number | string | null;
+            /** Unit Cost Fc */
+            unit_cost_fc?: number | string | null;
+            /** Unit Id */
+            unit_id?: number | null;
+            /** Unit Price Fc */
+            unit_price_fc?: number | string | null;
+            /** Vat Account Id */
+            vat_account_id?: number | null;
+            /**
+             * Vat Amount Fc
+             * @default 0
+             */
+            vat_amount_fc: number | string;
+            /** Vat Rate */
+            vat_rate?: number | string | null;
+            /** Warehouse Id */
+            warehouse_id?: number | null;
+        };
+        /** SalesInvoiceLineOut */
+        SalesInvoiceLineOut: {
+            /** Account Id */
+            account_id: number;
+            /** Amount Fc */
+            amount_fc: string;
+            /** Cogs Account Id */
+            cogs_account_id: number | null;
+            /** Contract Id */
+            contract_id: number | null;
+            /** Cost Object Id */
+            cost_object_id: number | null;
+            /** Description */
+            description: string | null;
+            /** Discount Amount Fc */
+            discount_amount_fc: string;
+            /** Discount Percent */
+            discount_percent: string | null;
+            /** Expense Item Id */
+            expense_item_id: number | null;
+            /** Extended Dimensions */
+            extended_dimensions: {
+                [key: string]: number;
+            } | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Inventory Account Id */
+            inventory_account_id: number | null;
+            /** Item Id */
+            item_id: number | null;
+            /** Line No */
+            line_no: number;
+            /** Order Id */
+            order_id: number | null;
+            /** Price List Id */
+            price_list_id: number | null;
+            /** Price Source */
+            price_source: string | null;
+            /** Project Id */
+            project_id: number | null;
+            /** Quantity */
+            quantity: string | null;
+            /** Unit Cost Fc */
+            unit_cost_fc: string | null;
+            /** Unit Id */
+            unit_id: number | null;
+            /** Unit Price Fc */
+            unit_price_fc: string | null;
+            /** Vat Account Id */
+            vat_account_id: number | null;
+            /** Vat Amount Fc */
+            vat_amount_fc: string;
+            /** Vat Rate */
+            vat_rate: string | null;
+            /** Warehouse Id */
+            warehouse_id: number | null;
+        };
+        /**
+         * SalesInvoiceOut
+         * @description Header chứng từ + thân hóa đơn — client cần cả hai để vẽ lại form.
+         */
+        SalesInvoiceOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Cashflow Activity */
+            cashflow_activity: number | null;
+            /**
+             * Cogs Posted
+             * @default false
+             */
+            cogs_posted: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number;
+            /** Currency Code */
+            currency_code: string;
+            /**
+             * Customer Id
+             * @default 0
+             */
+            customer_id: number;
+            /** Description */
+            description: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Document Type */
+            document_type: string;
+            /** Due Date */
+            due_date?: string | null;
+            /** Entry Kind */
+            entry_kind: number;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invoice Date */
+            invoice_date?: string | null;
+            /** Invoice Form */
+            invoice_form?: string | null;
+            /** Invoice No */
+            invoice_no?: string | null;
+            /** Invoice Serial */
+            invoice_serial?: string | null;
+            /**
+             * Is Stock Issue
+             * @default false
+             */
+            is_stock_issue: boolean;
+            /**
+             * Kind
+             * @default 0
+             */
+            kind: number;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["SalesInvoiceLineOut"][];
+            /**
+             * Operation Code
+             * @default
+             */
+            operation_code: string;
+            /** Payment Term Id */
+            payment_term_id?: number | null;
+            /** Period Id */
+            period_id: number;
+            /** Posted At */
+            posted_at: string | null;
+            /** Posted By */
+            posted_by: number | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Price List Id */
+            price_list_id?: number | null;
+            /**
+             * Receivable Account Id
+             * @default 0
+             */
+            receivable_account_id: number;
+            /** Recipient Name */
+            recipient_name?: string | null;
+            /** Row Version */
+            row_version: number;
+            /** Salesperson Id */
+            salesperson_id?: number | null;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["SalesSettlementOut"][];
+            /** Ship To */
+            ship_to?: string | null;
+            /** Status */
+            status: number;
+            /**
+             * Total Before Tax Fc
+             * @default 0
+             */
+            total_before_tax_fc: string;
+            /**
+             * Total Discount Fc
+             * @default 0
+             */
+            total_discount_fc: string;
+            /**
+             * Total Fc
+             * @default 0
+             */
+            total_fc: string;
+            /**
+             * Total Vat Fc
+             * @default 0
+             */
+            total_vat_fc: string;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /**
+         * SalesInvoiceUpdate
+         * @description PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).
+         */
+        SalesInvoiceUpdate: {
+            /** Branch Id */
+            branch_id: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Customer Id */
+            customer_id: number;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Due Date */
+            due_date?: string | null;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Invoice Date */
+            invoice_date?: string | null;
+            /** Invoice Form */
+            invoice_form?: string | null;
+            /** Invoice No */
+            invoice_no?: string | null;
+            /** Invoice Serial */
+            invoice_serial?: string | null;
+            /**
+             * Is Stock Issue
+             * @default false
+             */
+            is_stock_issue: boolean;
+            /** Kind */
+            kind: number;
+            /** Lines */
+            lines: components["schemas"]["SalesInvoiceLineIn"][];
+            /** Operation Code */
+            operation_code: string;
+            /** Payment Term Id */
+            payment_term_id?: number | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Price List Id */
+            price_list_id?: number | null;
+            /** Receivable Account Id */
+            receivable_account_id: number;
+            /** Recipient Name */
+            recipient_name?: string | null;
+            /** Row Version */
+            row_version: number;
+            /** Salesperson Id */
+            salesperson_id?: number | null;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["SalesSettlementIn"][];
+            /** Ship To */
+            ship_to?: string | null;
+        };
+        /**
+         * SalesSettlementIn
+         * @description Đối trừ khoản giảm trừ vào hóa đơn bán gốc — chỉ nhận `amount_fc`, số VND
+         *     và chênh lệch tỷ giá do server tính (FR-SYS-066).
+         */
+        SalesSettlementIn: {
+            /** Amount Fc */
+            amount_fc: number | string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            target_kind: components["schemas"]["SettlementTargetKind"];
+        };
+        /** SalesSettlementOut */
+        SalesSettlementOut: {
+            /** Amount */
+            amount: string;
+            /** Amount Fc */
+            amount_fc: string;
+            /** Fx Diff */
+            fx_diff: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /** Target Kind */
+            target_kind: number;
         };
         /**
          * SessionScope
@@ -25674,6 +26241,39 @@ export interface operations {
             };
         };
     };
+    quote_batch_api_v1_pricing_quote_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceQuoteBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceQuoteBatchResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_print_templates_api_v1_print_templates_get: {
         parameters: {
             query?: {
@@ -26030,6 +26630,140 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_sales_invoice_api_v1_sales_invoices_post: {
+        parameters: {
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SalesInvoiceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_sales_invoice_api_v1_sales_invoices__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_sales_invoice_api_v1_sales_invoices__voucher_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SalesInvoiceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_open_receivables_api_v1_sales_open_invoices_get: {
+        parameters: {
+            query: {
+                customer_id: number;
+                branch_id: number;
+                as_of: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenInvoicesResponse"];
+                };
             };
             /** @description Lỗi (RFC 7807) */
             default: {

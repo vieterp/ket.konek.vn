@@ -13775,6 +13775,43 @@
         "title": "PriceListsUpdateRequest",
         "type": "object"
       },
+      "PriceQuoteBatchRequest": {
+        "additionalProperties": false,
+        "description": "Hỏi giá cho **cả chứng từ** trong một lượt (FR-SAL §4.2).\n\n**Nó tiết kiệm cái gì, và không tiết kiệm cái gì** — nói thẳng để không ai\nđọc nhầm: một form 50 dòng hỏi từng dòng là 50 request, mỗi request một\ntransaction và một lượt đọc tùy chọn \"giá đã gồm thuế\" cấp hệ thống. Gộp lô\nđưa 50 request ấy về **một** request, một transaction, một lượt đọc tùy\nchọn. Số truy vấn **mỗi dòng** thì **không đổi**: hàm định giá vẫn chạy\nnguyên vẹn cho từng dòng, nên tổng truy vấn vẫn tuyến tính theo số dòng —\n`BATCH_QUOTE_MAX_LINES` là thứ chặn trên nó.\n\nNợ N+1 mà 7C-1 ghi lại (review M-2) nói tới đường **cất chứng từ**; đường ấy\nkhông còn gọi bộ định giá nữa (quyết định user 2026-09-04: đơn giá do client\nchốt), nên nó không phải là chỗ N+1 chạm tới. Gom lô cho đường **hỏi giá**\ncủa form là việc còn lại, và phần \"làm phẳng truy vấn theo dòng\" vẫn đang mở.\n\nKết quả trả về **cùng thứ tự và cùng số phần tử** với `lines` — client ghép\ntheo vị trí, không theo một khóa nào phải bịa ra.",
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PriceQuoteRequest"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines"
+        ],
+        "title": "PriceQuoteBatchRequest",
+        "type": "object"
+      },
+      "PriceQuoteBatchResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PriceQuoteResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PriceQuoteBatchResponse",
+        "type": "object"
+      },
       "PriceQuoteRequest": {
         "additionalProperties": false,
         "description": "Hỏi đơn giá và chiết khấu cho **một** dòng chứng từ sắp lập.\n\nClient chỉ hiển thị kết quả — mọi luật chọn giá chạy ở server (plan §Chính\nsách giá & chiết khấu). Endpoint này là cách form mua/bán lấy con số ấy trước\nkhi có chứng từ nào được cất.",
@@ -16313,6 +16350,1452 @@
           "role_code"
         ],
         "title": "RoleGrantRequest",
+        "type": "object"
+      },
+      "SalesInvoiceIn": {
+        "additionalProperties": false,
+        "description": "Thân hóa đơn cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "currency_code": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "customer_id": {
+            "title": "Customer Id",
+            "type": "integer"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "exchange_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Exchange Rate"
+          },
+          "invoice_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Date"
+          },
+          "invoice_form": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Form"
+          },
+          "invoice_no": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice No"
+          },
+          "invoice_serial": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Serial"
+          },
+          "is_stock_issue": {
+            "default": false,
+            "title": "Is Stock Issue",
+            "type": "boolean"
+          },
+          "kind": {
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SalesInvoiceLineIn"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "payment_term_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Term Id"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "price_list_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price List Id"
+          },
+          "receivable_account_id": {
+            "title": "Receivable Account Id",
+            "type": "integer"
+          },
+          "recipient_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Name"
+          },
+          "salesperson_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salesperson Id"
+          },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SalesSettlementIn"
+            },
+            "title": "Settlements",
+            "type": "array"
+          },
+          "ship_to": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ship To"
+          }
+        },
+        "required": [
+          "kind",
+          "operation_code",
+          "customer_id",
+          "receivable_account_id",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "currency_code",
+          "lines"
+        ],
+        "title": "SalesInvoiceIn",
+        "type": "object"
+      },
+      "SalesInvoiceLineIn": {
+        "additionalProperties": false,
+        "description": "Một dòng hàng hóa / dịch vụ trên hóa đơn bán.\n\n`amount_fc` là doanh thu **sau** chiết khấu, tức con số in trên hóa đơn —\nkhông suy từ `quantity × unit_price_fc − discount_amount_fc`: hóa đơn làm\ntròn theo cách của nó, và cặp số lượng/đơn giá chỉ để bảng kê và báo cáo\nbán hàng đọc lại.",
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_fc": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Amount Fc"
+          },
+          "cogs_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cogs Account Id"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "cost_object_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Object Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "discount_amount_fc": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Discount Amount Fc"
+          },
+          "discount_percent": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,6}0*$)\\d{0,3}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Percent"
+          },
+          "expense_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expense Item Id"
+          },
+          "extended": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtendedDimensionIn"
+            },
+            "title": "Extended",
+            "type": "array"
+          },
+          "inventory_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inventory Account Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "price_list_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price List Id"
+          },
+          "price_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "unit_cost_fc": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,18}|(?=[\\d.]{1,25}0*$)\\d{0,18}\\.\\d{0,6}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost Fc"
+          },
+          "unit_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Id"
+          },
+          "unit_price_fc": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,18}|(?=[\\d.]{1,25}0*$)\\d{0,18}\\.\\d{0,6}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price Fc"
+          },
+          "vat_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Account Id"
+          },
+          "vat_amount_fc": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Vat Amount Fc"
+          },
+          "vat_rate": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,6}0*$)\\d{0,3}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Rate"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          }
+        },
+        "required": [
+          "amount_fc",
+          "account_id"
+        ],
+        "title": "SalesInvoiceLineIn",
+        "type": "object"
+      },
+      "SalesInvoiceLineOut": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Fc",
+            "type": "string"
+          },
+          "cogs_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cogs Account Id"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "cost_object_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Object Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "discount_amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Discount Amount Fc",
+            "type": "string"
+          },
+          "discount_percent": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Percent"
+          },
+          "expense_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expense Item Id"
+          },
+          "extended_dimensions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extended Dimensions"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inventory_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inventory Account Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "price_list_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price List Id"
+          },
+          "price_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Source"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "unit_cost_fc": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost Fc"
+          },
+          "unit_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Id"
+          },
+          "unit_price_fc": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price Fc"
+          },
+          "vat_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Account Id"
+          },
+          "vat_amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Amount Fc",
+            "type": "string"
+          },
+          "vat_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Rate"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          }
+        },
+        "required": [
+          "id",
+          "line_no",
+          "description",
+          "item_id",
+          "unit_id",
+          "warehouse_id",
+          "quantity",
+          "unit_price_fc",
+          "discount_percent",
+          "discount_amount_fc",
+          "amount_fc",
+          "vat_rate",
+          "vat_amount_fc",
+          "account_id",
+          "vat_account_id",
+          "cogs_account_id",
+          "inventory_account_id",
+          "unit_cost_fc",
+          "price_list_id",
+          "price_source",
+          "cost_object_id",
+          "project_id",
+          "order_id",
+          "contract_id",
+          "expense_item_id",
+          "extended_dimensions"
+        ],
+        "title": "SalesInvoiceLineOut",
+        "type": "object"
+      },
+      "SalesInvoiceOut": {
+        "description": "Header chứng từ + thân hóa đơn — client cần cả hai để vẽ lại form.",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "cashflow_activity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cashflow Activity"
+          },
+          "cogs_posted": {
+            "default": false,
+            "title": "Cogs Posted",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "customer_id": {
+            "default": 0,
+            "title": "Customer Id",
+            "type": "integer"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "entry_kind": {
+            "title": "Entry Kind",
+            "type": "integer"
+          },
+          "exchange_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exchange Rate",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invoice_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Date"
+          },
+          "invoice_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Form"
+          },
+          "invoice_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice No"
+          },
+          "invoice_serial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Serial"
+          },
+          "is_stock_issue": {
+            "default": false,
+            "title": "Is Stock Issue",
+            "type": "boolean"
+          },
+          "kind": {
+            "default": 0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SalesInvoiceLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "default": "",
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "payment_term_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Term Id"
+          },
+          "period_id": {
+            "title": "Period Id",
+            "type": "integer"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "posted_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted By"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "price_list_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price List Id"
+          },
+          "receivable_account_id": {
+            "default": 0,
+            "title": "Receivable Account Id",
+            "type": "integer"
+          },
+          "recipient_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Name"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "salesperson_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salesperson Id"
+          },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SalesSettlementOut"
+            },
+            "title": "Settlements",
+            "type": "array"
+          },
+          "ship_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ship To"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "total_before_tax_fc": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Before Tax Fc",
+            "type": "string"
+          },
+          "total_discount_fc": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Discount Fc",
+            "type": "string"
+          },
+          "total_fc": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Fc",
+            "type": "string"
+          },
+          "total_vat_fc": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Vat Fc",
+            "type": "string"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "document_type",
+          "voucher_no",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "period_id",
+          "currency_code",
+          "exchange_rate",
+          "description",
+          "status",
+          "cashflow_activity",
+          "entry_kind",
+          "created_at",
+          "created_by",
+          "posted_at",
+          "posted_by",
+          "row_version"
+        ],
+        "title": "SalesInvoiceOut",
+        "type": "object"
+      },
+      "SalesInvoiceUpdate": {
+        "additionalProperties": false,
+        "description": "PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "currency_code": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "customer_id": {
+            "title": "Customer Id",
+            "type": "integer"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "exchange_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Exchange Rate"
+          },
+          "invoice_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Date"
+          },
+          "invoice_form": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Form"
+          },
+          "invoice_no": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice No"
+          },
+          "invoice_serial": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Serial"
+          },
+          "is_stock_issue": {
+            "default": false,
+            "title": "Is Stock Issue",
+            "type": "boolean"
+          },
+          "kind": {
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SalesInvoiceLineIn"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "payment_term_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Term Id"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "price_list_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price List Id"
+          },
+          "receivable_account_id": {
+            "title": "Receivable Account Id",
+            "type": "integer"
+          },
+          "recipient_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Name"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "salesperson_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salesperson Id"
+          },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SalesSettlementIn"
+            },
+            "title": "Settlements",
+            "type": "array"
+          },
+          "ship_to": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ship To"
+          }
+        },
+        "required": [
+          "kind",
+          "operation_code",
+          "customer_id",
+          "receivable_account_id",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "currency_code",
+          "lines",
+          "row_version"
+        ],
+        "title": "SalesInvoiceUpdate",
+        "type": "object"
+      },
+      "SalesSettlementIn": {
+        "additionalProperties": false,
+        "description": "Đối trừ khoản giảm trừ vào hóa đơn bán gốc — chỉ nhận `amount_fc`, số VND\nvà chênh lệch tỷ giá do server tính (FR-SYS-066).",
+        "properties": {
+          "amount_fc": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Amount Fc"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "$ref": "#/components/schemas/SettlementTargetKind"
+          }
+        },
+        "required": [
+          "target_kind",
+          "target_id",
+          "amount_fc"
+        ],
+        "title": "SalesSettlementIn",
+        "type": "object"
+      },
+      "SalesSettlementOut": {
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Fc",
+            "type": "string"
+          },
+          "fx_diff": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fx Diff",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "title": "Target Kind",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "target_kind",
+          "target_id",
+          "amount_fc",
+          "amount",
+          "fx_diff"
+        ],
+        "title": "SalesSettlementOut",
         "type": "object"
       },
       "SessionScope": {
@@ -35556,6 +37039,48 @@
         ]
       }
     },
+    "/api/v1/pricing/quote-batch": {
+      "post": {
+        "description": "Cùng luật với `/quote`, chạy cho cả chứng từ trong **một** transaction.\n\nCái nó gộp là **request và transaction**, không phải truy vấn: form bán hàng\n(7H) hỏi giá cho cả hóa đơn bằng một lượt thay vì một lượt mỗi dòng, và tùy\nchọn \"giá đã gồm thuế\" cấp hệ thống đọc đúng **một lần** cho cả lô. Số truy\nvấn mỗi dòng vẫn nguyên — xem `PriceQuoteBatchRequest`, nơi ghi rõ phần nào\ncủa nợ N+1 lát 7C-1 đã hết và phần nào còn.\n\nDòng nào không tầng giá nào trả lời được thì phần tử của nó mang `source =\n\"none\"` và đơn giá `0` — cùng luật với `/quote`, không phải lỗi và không\nlàm hỏng cả lô: một mã hàng chưa khai giá không được phép chặn 49 dòng còn\nlại.",
+        "operationId": "quote_batch_api_v1_pricing_quote_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceQuoteBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceQuoteBatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Định giá nhiều dòng chứng từ trong một lượt",
+        "tags": [
+          "pricing"
+        ]
+      }
+    },
     "/api/v1/print-templates": {
       "get": {
         "description": "Mẫu in đã đăng ký — hộp chọn mẫu của nút In.\n\nKhông nêu `document_type` thì trả mẫu của những loại người gọi in được —\ncùng luật danh-sách-trộn-không-vòng-qua-phân-quyền với `list_vouchers`.\n\nHai nguồn mã, một cột: loại chứng từ của posting (quyền `.print`) và **bản\nin không phải chứng từ** (`PRINT_SUBJECT_REGISTRY`, quyền `view` của phân\nhệ sở hữu — xem `kernel/config/printing/subjects.py`). Thiếu nguồn thứ hai\nthì mẫu biên bản kiểm kê tồn tại và in được nhưng không tra được, và tham\nsố `?template_code=` của nút In chỉ dùng được nếu đọc mã trong DB (review\n6E-2, M-3).",
@@ -36092,6 +37617,217 @@
         "summary": "Render",
         "tags": [
           "reports"
+        ]
+      }
+    },
+    "/api/v1/sales/invoices": {
+      "post": {
+        "description": "Cất hóa đơn bán; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.\n\n`acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm đó (FR-SYS-062\nmức \"Cảnh báo\" — ví dụ khách hàng vượt ngưỡng nợ, FR-SAL-034); mức \"Chặn\"\nkhông mở được.",
+        "operationId": "create_sales_invoice_api_v1_sales_invoices_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "acknowledge_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledge Warnings",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalesInvoiceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesInvoiceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Create Sales Invoice",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/invoices/{voucher_id}": {
+      "get": {
+        "operationId": "get_sales_invoice_api_v1_sales_invoices__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesInvoiceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Sales Invoice",
+        "tags": [
+          "sales"
+        ]
+      },
+      "put": {
+        "description": "Sửa hóa đơn Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).",
+        "operationId": "update_sales_invoice_api_v1_sales_invoices__voucher_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalesInvoiceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesInvoiceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Update Sales Invoice",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/open-invoices": {
+      "get": {
+        "description": "Hóa đơn bán còn nợ của một khách hàng — picker cho chứng từ trả lại /\ngiảm giá hàng bán.\n\nChỉ một chiều (phải thu) và chỉ loại đối tác khách hàng, khóa cứng thay vì\nnhận tham số: màn hình này chỉ tồn tại để chọn hóa đơn gốc cho một chứng từ\nbán. Hóa đơn **đã thu đủ** không nằm trong danh sách — và đó chính là lý do\nchứng từ giảm trừ cho một hóa đơn đã thu đủ không lập được: đường đúng lúc\nấy là trả tiền lại khách bằng phiếu chi.",
+        "operationId": "list_open_receivables_api_v1_sales_open_invoices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "customer_id",
+            "required": true,
+            "schema": {
+              "title": "Customer Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": true,
+            "schema": {
+              "title": "Branch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "As Of",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenInvoicesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Open Receivables",
+        "tags": [
+          "sales"
         ]
       }
     },

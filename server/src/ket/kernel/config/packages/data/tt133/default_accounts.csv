@@ -25,3 +25,6 @@ document_type,purpose,account_code
 *,outsourced_services,6421
 *,fixed_assets,2113
 *,prepaid_expenses,242
+*,revenue_goods,5111
+*,revenue_services,5112
+*,sales_deduction,5111

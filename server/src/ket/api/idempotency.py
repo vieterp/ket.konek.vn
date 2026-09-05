@@ -105,6 +105,9 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         # là chín chỗ để client dựng URL sai mà không nhận được lỗi theo trường.
         # Cùng lối miễn trừ với biên bản kiểm kê quỹ ngay trên.
         "/api/v1/pricing/quote",
+        # Cùng đường ấy, hỏi cả chứng từ một lượt (lát 7C-2) — vẫn không tạo
+        # gì, nên vẫn không có gì để một khóa idempotency bảo vệ.
+        "/api/v1/pricing/quote-batch",
     }
 )
 """Miễn trừ theo **đúng một đường dẫn**, cho thao tác tự nó đã idempotent.

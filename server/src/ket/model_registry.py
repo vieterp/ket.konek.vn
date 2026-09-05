@@ -48,6 +48,7 @@ from ket.modules.cash_book import models as cash_book_models
 from ket.modules.general_ledger.journal import models as gl_journal_models
 from ket.modules.purchase import models as purchase_models
 from ket.modules.receivables import models as receivables_models
+from ket.modules.sales import models as sales_models
 from ket.modules.warehousing.treasurer import models as treasurer_models
 
 # Hai gói không có model — import để đăng ký mã quyền (`posting.period.*`,
@@ -109,6 +110,7 @@ __all__ = [
     "report_models",
     "report_permission_registration",
     "report_render_job_registration",
+    "sales_models",
     "security_models",
     "statement_models",
     "statement_permission_registration",

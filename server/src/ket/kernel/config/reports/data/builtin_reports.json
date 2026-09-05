@@ -1888,7 +1888,7 @@
         "direction": "thu"
       },
       "package_scheme": null,
-      "required_permission_module": "receivables"
+      "required_permission_module": "sales"
     },
     {
       "code": "tuoi-no-phai-tra",

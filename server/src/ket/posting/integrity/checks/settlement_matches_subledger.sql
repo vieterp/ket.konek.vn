@@ -77,6 +77,18 @@ WITH settlement_rows AS (
     FROM purchase_settlements s
     JOIN vouchers v ON v.id = s.voucher_id
     WHERE v.status = 2
+    UNION ALL
+    -- Chứng từ trả lại hàng bán và giảm giá hàng bán (lát 7C-2) đối trừ hóa
+    -- đơn gốc bằng đúng cơ chế ấy, đổi chiều — nguồn thứ tư cộng vào `settled`.
+    SELECT s.target_kind,
+           s.target_id,
+           s.amount_fc,
+           s.amount - s.fx_diff,
+           v.branch_id,
+           v.voucher_no
+    FROM sales_settlements s
+    JOIN vouchers v ON v.id = s.voucher_id
+    WHERE v.status = 2
 ),
 settled AS (
     SELECT target_kind,

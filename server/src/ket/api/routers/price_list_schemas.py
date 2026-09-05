@@ -108,3 +108,45 @@ class PriceQuoteResponse(BaseModel):
     price_list_id: int | None
     level: int | None
     discount_percent: Decimal
+
+
+BATCH_QUOTE_MAX_LINES = 200
+"""Trần số dòng của một lượt hỏi giá theo lô.
+
+Trần này là một quyết định về **tài nguyên**, không phải về hình dạng dữ liệu:
+bộ định giá tốn 6–10 truy vấn **mỗi dòng** và lô chạy trong MỘT transaction, nên
+trần nhân thẳng vào thời gian một kết nối bị giữ. 200 dòng đã rộng hơn hóa đơn
+thật (hóa đơn dài đi kèm bảng kê, FR-SAL-010) mà vẫn chặn trên ~2 000 truy vấn
+cho một request.
+"""
+
+
+class PriceQuoteBatchRequest(BaseModel):
+    """Hỏi giá cho **cả chứng từ** trong một lượt (FR-SAL §4.2).
+
+    **Nó tiết kiệm cái gì, và không tiết kiệm cái gì** — nói thẳng để không ai
+    đọc nhầm: một form 50 dòng hỏi từng dòng là 50 request, mỗi request một
+    transaction và một lượt đọc tùy chọn "giá đã gồm thuế" cấp hệ thống. Gộp lô
+    đưa 50 request ấy về **một** request, một transaction, một lượt đọc tùy
+    chọn. Số truy vấn **mỗi dòng** thì **không đổi**: hàm định giá vẫn chạy
+    nguyên vẹn cho từng dòng, nên tổng truy vấn vẫn tuyến tính theo số dòng —
+    `BATCH_QUOTE_MAX_LINES` là thứ chặn trên nó.
+
+    Nợ N+1 mà 7C-1 ghi lại (review M-2) nói tới đường **cất chứng từ**; đường ấy
+    không còn gọi bộ định giá nữa (quyết định user 2026-09-04: đơn giá do client
+    chốt), nên nó không phải là chỗ N+1 chạm tới. Gom lô cho đường **hỏi giá**
+    của form là việc còn lại, và phần "làm phẳng truy vấn theo dòng" vẫn đang mở.
+
+    Kết quả trả về **cùng thứ tự và cùng số phần tử** với `lines` — client ghép
+    theo vị trí, không theo một khóa nào phải bịa ra.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    lines: tuple[PriceQuoteRequest, ...] = Field(min_length=1, max_length=BATCH_QUOTE_MAX_LINES)
+
+
+class PriceQuoteBatchResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: tuple[PriceQuoteResponse, ...]

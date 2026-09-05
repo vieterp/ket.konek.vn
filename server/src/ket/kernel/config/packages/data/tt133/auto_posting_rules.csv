@@ -57,3 +57,9 @@ PUR,mua-dich-vu,Mua dịch vụ / chi phí không qua kho,outsourced_services,ap
 PUR,mua-tai-san-co-dinh,Mua tài sản cố định,fixed_assets,ap_trade,1,1,6
 PUR,chi-phi-tra-truoc,Mua dịch vụ chờ phân bổ,prepaid_expenses,ap_trade,1,1,7
 PUR,tra-lai-hang-mua,Trả lại hàng mua,ap_trade,inventory_goods,1,1,8
+SAL,ban-hang-hoa,Bán hàng hóa trong nước,ar_trade,revenue_goods,1,0,1
+SAL,ban-dich-vu,Bán dịch vụ,ar_trade,revenue_services,1,0,2
+SAL,ban-hang-xuat-khau,Bán hàng xuất khẩu,ar_trade,revenue_goods,1,0,3
+SAL,ban-hang-dai-ly,Bán hàng qua đại lý,ar_trade,revenue_goods,1,0,4
+SAL,tra-lai-hang-ban,Hàng bán bị trả lại,sales_deduction,ar_trade,1,0,5
+SAL,giam-gia-hang-ban,Giảm giá hàng bán,sales_deduction,ar_trade,1,0,6
