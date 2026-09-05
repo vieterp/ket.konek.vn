@@ -117,11 +117,17 @@ def _carry_invoices(
     Một dòng hóa đơn **rơi** khi năm mới không còn dòng cha cho đối tượng đó
     (dư đã về 0 — các khoản thu/chi trong năm nguồn đã bù hết). Một dòng cha
     **bị vượt** khi tổng hóa đơn treo dưới nó lớn hơn dư bên còn-nợ của chính
-    nó (review 4C, M2): `paid_amount` chưa sống tới phase 7 nên các khoản trả
-    trong năm trừ vào dư cha mà không trừ vào hóa đơn nào — FR-OPB-007 sẽ lệch
-    đúng bằng chỗ đó, và con số này cho người dùng thấy lệch NGAY trên kết quả
-    job thay vì ở một báo cáo đối chiếu sau này. Cả ba con số phải tiến về
-    hành xử đúng ở phase 7 (đối trừ theo hóa đơn thật).
+    nó (review 4C, M2).
+
+    **Lập luận 4C của con số ấy đã hết đúng từ 6B** (đọc lại ở 7C-3): bản gốc
+    nói "`paid_amount` chưa sống tới phase 7 nên các khoản trả trong năm trừ
+    vào dư cha mà không trừ vào hóa đơn nào", nhưng `settlement_source.apply`
+    của chính gói này cộng cả `paid_amount` lẫn `paid_amount_fc` mỗi lượt đối
+    trừ từ 6B. Phần còn thật của cả `dropped` lẫn `overrun` là ca dư RÒNG của
+    đối tượng về 0 trong khi hóa đơn còn treo — tức là có khoản **ứng trước**
+    bù vào, và khoản ứng trước chưa có dòng sổ phụ nào (điều kiện #2 của
+    `posting/integrity/checks/arap_matches_control.sql`, đóng ở lát 7C-4).
+    Hai con số vì thế vẫn được báo cho người dùng NGAY trên kết quả job.
     """
     parent = OpeningBalance
     rows = session.execute(

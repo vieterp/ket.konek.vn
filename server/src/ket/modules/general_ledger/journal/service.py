@@ -24,10 +24,20 @@ from ket.kernel.money import convert_currency
 from ket.kernel.numbering.models import ResetRule
 from ket.kernel.numbering.service import NumberingRule
 from ket.kernel.persistence.versioning import require_row_version
+from ket.kernel.protocols import PROVIDERS, ArApSubledger
 from ket.modules.general_ledger.journal import JOURNAL_DOCUMENT_TYPE
-from ket.modules.general_ledger.journal.models import JournalLine
+from ket.modules.general_ledger.journal.models import JournalLine, JournalSettlement
 from ket.modules.general_ledger.journal.posting_mapper import to_posting_request
 from ket.modules.general_ledger.journal.schemas import JournalLineIn, JournalVoucherIn
+from ket.modules.general_ledger.journal.settlement_service import (
+    apply_settlements,
+    line_ids_by_no,
+    price_settlements,
+    revert_settlements,
+    stored_settlements,
+    subledger_entries,
+    write_settlements,
+)
 from ket.posting.contracts import (
     PostingService,
     Voucher,
@@ -86,6 +96,7 @@ class JournalVoucherService:
             user_id=user_id,
         )
         self._write_lines(voucher, payload)
+        self._write_settlements(voucher, payload, user_id=user_id)
 
         save_also_posts = value_of(self._session, key=SAVE_ALSO_POSTS_KEY, user_id=user_id)
         if save_also_posts is True:
@@ -141,28 +152,112 @@ class JournalVoucherService:
             self._session.delete(line)
         self._session.flush()
         self._write_lines(voucher, payload)
+        self._write_settlements(voucher, payload, user_id=user_id)
         return voucher
 
     def post(
         self, voucher_id: UUID, *, user_id: int, acknowledged_warnings: bool = False
     ) -> Voucher:
+        """Ghi sổ + ghi sổ phụ công nợ + cộng số đã đối trừ, một transaction.
+
+        Cùng mã với hook `after_post` trong registry — đường module và đường
+        hành động chung không được cho hai kết quả khác nhau (cùng luật với
+        `purchase`/`sales`).
+        """
         lines = self._lines_of(voucher_id)
-        return self._posting.post(
+        voucher = self._posting.post(
             to_posting_request(self._session, voucher_id, lines),
             user_id=user_id,
             acknowledged_warnings=acknowledged_warnings,
         )
+        self.sync_after_post(voucher_id, user_id=user_id)
+        return voucher
 
     def unpost(self, voucher_id: UUID, *, user_id: int) -> Voucher:
-        return self._posting.unpost(voucher_id, user_id=user_id)
+        voucher = self._posting.unpost(voucher_id, user_id=user_id)
+        self.clear_after_unpost(voucher_id)
+        return voucher
 
     def delete(self, voucher_id: UUID) -> None:
         """Xóa chứng từ Đã cất — dòng chi tiết đi theo `ON DELETE CASCADE`."""
         self._vouchers.delete(voucher_id)
 
-    def get(self, voucher_id: UUID) -> tuple[Voucher, list[JournalLine]]:
+    def get(self, voucher_id: UUID) -> tuple[Voucher, list[JournalLine], list[JournalSettlement]]:
         voucher = self._vouchers.require(voucher_id)
-        return voucher, self._lines_of(voucher_id)
+        return (
+            voucher,
+            self._lines_of(voucher_id),
+            list(stored_settlements(self._session, voucher_id)),
+        )
+
+    def sync_after_post(self, voucher_id: UUID, *, user_id: int) -> None:
+        """Việc sau ghi sổ — hook `after_post`.
+
+        Hai việc, theo đúng thứ tự ấy: ghi khoản nợ MỚI mà chứng từ sinh ra
+        vào sổ phụ, rồi cộng số đã trả vào các khoản mà nó ghi GIẢM. Không có
+        đường nào để dòng đối trừ trỏ vào chính khoản vừa sinh — đích được
+        định giá lúc cất, khi những khoản ấy còn chưa tồn tại.
+        """
+        voucher = self._vouchers.require(voucher_id)
+        lines = self._lines_of(voucher_id)
+        # Gọi vô điều kiện, kể cả khi chứng từ không chạm công nợ: `record`
+        # thay TRỌN theo `voucher_id`, nên nó cũng là lượt dọn dòng cũ của một
+        # chứng từ vừa được sửa từ "có công nợ" thành "không". Bỏ qua khi rỗng
+        # thì đúng những dòng ấy ở lại.
+        self._require_subledger().record(
+            self._session,
+            voucher_id=voucher_id,
+            entries=subledger_entries(
+                self._session, voucher, lines, scale=self._money_scale(user_id)
+            ),
+        )
+        apply_settlements(self._session, voucher_id=voucher_id)
+
+    def clear_after_unpost(self, voucher_id: UUID) -> None:
+        """Việc sau bỏ ghi sổ — hook `after_unpost`: gỡ đúng thứ đã ghi.
+
+        Gỡ ngược thứ tự: trả lại số đã đối trừ TRƯỚC, rồi mới xóa dòng sổ phụ
+        của chính chứng từ. Làm ngược lại thì guard "khoản đã có người trả thì
+        không xóa" đọc trạng thái nửa vời.
+        """
+        revert_settlements(self._session, voucher_id=voucher_id)
+        self._require_subledger().remove(self._session, voucher_id=voucher_id)
+
+    def _require_subledger(self) -> ArApSubledger:
+        """Cửa ghi sổ phụ công nợ — `receivables` cài, module này chỉ gọi (C3)."""
+        subledger = PROVIDERS.ar_ap_subledger()
+        if subledger is None:  # pragma: no cover - `model_registry` luôn nạp bản cài
+            raise RuntimeError("Chưa có bản cài sổ phụ công nợ (ArApSubledger)")
+        return subledger
+
+    def _money_scale(self, user_id: int) -> int:
+        scale = value_of(self._session, key=MONEY_SCALE_KEY, user_id=user_id)
+        if not isinstance(scale, int):  # pragma: no cover - catalog khai INTEGER
+            raise RuntimeError(f"money.scale phải là số nguyên, nhận {scale!r}")
+        return scale
+
+    def _write_settlements(
+        self, voucher: Voucher, payload: JournalVoucherIn, *, user_id: int
+    ) -> None:
+        """Định giá rồi lưu dòng đối trừ — chạy SAU `_write_lines`.
+
+        Sau chứ không trước: phép định giá đọc dòng đã lưu (xem
+        `settlement_service.classify`), và dòng đối trừ nối vào `id` của chúng.
+        """
+        lines = self._lines_of(voucher.id)
+        priced = price_settlements(
+            self._session,
+            lines=lines,
+            settlements=payload.settlements,
+            branch_id=payload.branch_id,
+            scale=self._money_scale(user_id),
+        )
+        write_settlements(
+            self._session,
+            voucher_id=voucher.id,
+            priced_by_line=priced,
+            line_ids_by_no=line_ids_by_no(self._session, voucher.id),
+        )
 
     def _lines_of(self, voucher_id: UUID) -> list[JournalLine]:
         return list(
@@ -218,9 +313,7 @@ class JournalVoucherService:
         theo luật làm tròn khác bị phát hiện **ngay lúc lưu**, chứ không phải
         lúc người dùng thấy màn hình hiện một số còn sổ mang số khác.
         """
-        scale = value_of(self._session, key=MONEY_SCALE_KEY, user_id=user_id)
-        if not isinstance(scale, int):  # pragma: no cover - catalog khai INTEGER
-            raise RuntimeError(f"money.scale phải là số nguyên, nhận {scale!r}")
+        scale = self._money_scale(user_id)
 
         violations: list[PostingViolation] = []
         for index, line in enumerate(payload.lines, start=1):

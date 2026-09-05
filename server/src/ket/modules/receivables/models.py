@@ -94,7 +94,7 @@ class ArApLedgerEntry(DatasetBase, Audited):
     __tablename__ = "ar_ap_ledger"
     __table_args__ = (
         CheckConstraint("partner_kind BETWEEN 0 AND 2", name="partner_kind_known"),
-        CheckConstraint("target_kind BETWEEN 0 AND 2", name="target_kind_known"),
+        CheckConstraint("target_kind BETWEEN 0 AND 4", name="target_kind_known"),
         CheckConstraint("ledger BETWEEN 0 AND 1", name="ledger_known"),
         CheckConstraint("amount >= 0 AND amount_fc >= 0", name="amounts_not_negative"),
         CheckConstraint("settled >= 0", name="settled_not_negative"),
@@ -144,7 +144,11 @@ class ArApLedgerEntry(DatasetBase, Audited):
 
     target_kind: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     """`kernel.protocols.SettlementTargetKind` — phân hệ chủ của khoản nợ, và
-    là thứ quyết định chiều: hóa đơn bán ⇒ phải thu, hóa đơn mua ⇒ phải trả.
+    là thứ quyết định chiều: hóa đơn bán ⇒ phải thu, hóa đơn mua ⇒ phải trả,
+    và từ 7C-3 thêm hai loại của chứng từ nghiệp vụ khác (`JOURNAL_RECEIVABLE`
+    / `JOURNAL_PAYABLE`) cho khoản nợ ghi thẳng vào TK công nợ. Hai giá trị chứ
+    không một: chiều phải nằm trong chính cột này thì hai view provider mới
+    khóa được chiều mà không đọc thêm cột nào.
     Cột này cũng là nửa còn lại của cặp `(target_kind, target_id)` mà dòng đối
     trừ ở `cash_settlements`/`bank_settlements` cầm."""
 

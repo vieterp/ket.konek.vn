@@ -39,8 +39,27 @@ from ket.modules.receivables.models import ArApLedgerEntry
 SETTLEMENT_TARGET_MISSING_CODE = "settlement.target_missing"
 SETTLEMENT_OVERPAID_CODE = "settlement.exceeds_remaining"
 
-_OWNED_KINDS = (SettlementTargetKind.SALES_INVOICE, SettlementTargetKind.PURCHASE_INVOICE)
-"""Hai loại đích bảng này làm chủ. `OPENING_BALANCE` thuộc về nguồn 4C."""
+_RECEIVABLE_KINDS = (
+    SettlementTargetKind.SALES_INVOICE,
+    SettlementTargetKind.JOURNAL_RECEIVABLE,
+)
+"""Loại đích mang chiều PHẢI THU — `_ReceivableView` liệt kê đúng bộ này."""
+
+_PAYABLE_KINDS = (
+    SettlementTargetKind.PURCHASE_INVOICE,
+    SettlementTargetKind.JOURNAL_PAYABLE,
+)
+"""Loại đích mang chiều PHẢI TRẢ."""
+
+_OWNED_KINDS = _RECEIVABLE_KINDS + _PAYABLE_KINDS
+"""Bốn loại đích bảng này làm chủ. `OPENING_BALANCE` thuộc về nguồn 4C.
+
+Khoản nợ ghi thẳng bằng chứng từ nghiệp vụ khác (7C-3) vào cùng bảng và cùng
+hai chiều: nó là một khoản nợ như mọi khoản khác, chỉ khác ở chỗ **không có
+hóa đơn gốc** — `document_id` trỏ chính chứng từ GLE. Để nó ngoài hai view thì
+phiếu thu/chi không bao giờ nhìn thấy nó, và một khoản nợ không đối trừ được
+là một khoản nợ treo vĩnh viễn trên báo cáo tuổi nợ.
+"""
 
 _FINANCIAL_LEDGER = 0
 """Chỉ sổ tài chính vào màn đối trừ: tiền thật chỉ trả một lần, và liệt kê cả
@@ -74,7 +93,7 @@ class ArApSettlementSource:
         self,
         session: Session,
         *,
-        target_kind: SettlementTargetKind,
+        target_kinds: Sequence[SettlementTargetKind],
         partner_kind: PartnerKind,
         partner_id: int,
         branch_id: int,
@@ -82,14 +101,16 @@ class ArApSettlementSource:
     ) -> Sequence[OpenInvoice]:
         """Khoản còn nợ của MỘT đối tác theo MỘT chiều, tính đến hết `as_of`.
 
-        `target_kind` do view khóa, nên hỏi nhầm chiều chỉ ra danh sách rỗng
-        chứ không rò dữ liệu sang chiều kia.
+        `target_kinds` do view khóa, nên hỏi nhầm chiều chỉ ra danh sách rỗng
+        chứ không rò dữ liệu sang chiều kia. Nhiều loại đích cho **một** chiều
+        kể từ 7C-3: hóa đơn bán và khoản phải thu ghi tay đứng cùng hàng trên
+        màn thu tiền, vì với người đi thu thì chúng là cùng một thứ.
         """
         rows = (
             session.execute(
                 select(ArApLedgerEntry)
                 .where(
-                    ArApLedgerEntry.target_kind == target_kind.value,
+                    ArApLedgerEntry.target_kind.in_([kind.value for kind in target_kinds]),
                     ArApLedgerEntry.ledger == _FINANCIAL_LEDGER,
                     ArApLedgerEntry.branch_id == branch_id,
                     ArApLedgerEntry.partner_kind == partner_kind.value,
@@ -198,7 +219,8 @@ class ArApSettlementSource:
 
 
 class _ReceivableView:
-    """`ReceivableProvider` khóa cứng vào hóa đơn BÁN — phải thu."""
+    """`ReceivableProvider` khóa cứng vào CHIỀU phải thu (hóa đơn bán + khoản
+    phải thu ghi tay)."""
 
     def __init__(self, source: ArApSettlementSource) -> None:
         self._source = source
@@ -214,7 +236,7 @@ class _ReceivableView:
     ) -> Sequence[OpenInvoice]:
         return self._source._open_invoices(
             session,
-            target_kind=SettlementTargetKind.SALES_INVOICE,
+            target_kinds=_RECEIVABLE_KINDS,
             partner_kind=partner_kind,
             partner_id=partner_id,
             branch_id=branch_id,
@@ -223,7 +245,8 @@ class _ReceivableView:
 
 
 class _PayableView:
-    """`PayableProvider` khóa cứng vào hóa đơn MUA — phải trả."""
+    """`PayableProvider` khóa cứng vào CHIỀU phải trả (hóa đơn mua + khoản
+    phải trả ghi tay)."""
 
     def __init__(self, source: ArApSettlementSource) -> None:
         self._source = source
@@ -239,7 +262,7 @@ class _PayableView:
     ) -> Sequence[OpenInvoice]:
         return self._source._open_invoices(
             session,
-            target_kind=SettlementTargetKind.PURCHASE_INVOICE,
+            target_kinds=_PAYABLE_KINDS,
             partner_kind=partner_kind,
             partner_id=partner_id,
             branch_id=branch_id,

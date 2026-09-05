@@ -3,40 +3,86 @@
 -- các TK công nợ, đo theo từng (sổ, TK, đối tượng).
 --
 -- ⚠️ **TỆP NÀY CHƯA NẰM TRONG `CHECKS`** (xem `registry.py`) — cố ý, không
--- phải quên. Nó là bản ghi của thiết kế và của bốn điều kiện phải đóng trước
--- khi đăng ký; đăng ký sớm thì check đỏ trên dữ liệu ĐÚNG, và một check kêu
--- sai là một check người ta học cách bỏ qua — tệ hơn không có check. Bốn điều
--- kiện, cả bốn đều bật ra trên dữ liệu hôm nay (lát 7A: `ar_ap_ledger` còn
--- rỗng, chỉ có số dư đầu kỳ + phiếu thu/chi):
+-- phải quên. Nó là bản ghi của thiết kế và của những điều kiện phải đóng
+-- trước khi đăng ký; đăng ký sớm thì check đỏ trên dữ liệu ĐÚNG, và một check
+-- kêu sai là một check người ta học cách bỏ qua — tệ hơn không có check.
 --
---  1. **Bút toán tổng hợp gõ thẳng vào 131/331.** `JournalVoucherService`
---     (FR-GLE-001) ghi `gl_postings` mang chiều đối tác vào TK công nợ mà
---     KHÔNG ghi sổ phụ nào — không có đường nào để nó ghi: `ArApSubledger`
---     chỉ có chủ là chứng từ mua/bán. Bù trừ 131 ↔ 331, xóa nợ, phân loại
---     lại đầu năm đều đi đường này và đều hợp lệ. Vế sổ cái nhích, vế sổ phụ
---     đứng yên, check đỏ. Đây là false positive KHÔNG né được bằng cách viết
---     lại câu SQL — nó là một lỗ hổng của mô hình, không của phép đo.
---  2. **Bên trái tính của TK lưỡng tính không có chi tiết.** 131/331 là
---     `BalanceNature.DUAL`; dòng số dư đầu kỳ ở bên NGƯỢC tính chất (khách
---     ứng trước tiền, trả trước cho người bán) hợp lệ nhưng không treo dòng
---     `opening_balance_invoices` nào — `service._stage_rows` chỉ gắn hóa đơn
---     cho `row.is_natural_side`. Sổ cái có số ấy, sổ phụ không.
---  3. **Lượt chuyển năm được phép làm rơi hóa đơn.** `carry_forward_job.
---     _carry_invoices` trả `invoices_dropped` (hóa đơn không tìm được dòng
---     cha năm mới) và `invoice_overrun_parents` — hai con số ấy tồn tại vì
---     lệch giữa dòng cha (dựng từ dư sổ cái) và tổng hóa đơn con là chuyện
---     ĐÃ BIẾT và đã được báo cho người dùng ngay trên kết quả job.
---  4. **Ranh giới năm chưa có mặt phẳng chung.** Số dư đầu kỳ được chuyển
---     năm (dòng cha + hóa đơn con mới, `paid` về 0), còn `ar_ap_ledger`
---     KHÔNG — một hóa đơn bán của năm N còn nợ sang năm N+1 nằm ở cả hai chỗ:
---     vế sổ cái năm N+1 nhận nó qua dòng số dư đầu kỳ, vế sổ phụ vẫn cầm dòng
---     `ar_ap_ledger` mang `document_date` của năm N. Cột `opening_invoice_id`
---     được khai sẵn cho đúng lượt gộp ấy (xem docstring `ArApLedgerEntry`)
---     nhưng đường ghi nó chưa tồn tại. Chừng nào chưa có, không có cách chọn
---     phạm vi năm nào cho ra một đẳng thức đúng ở cả hai năm.
+-- Bốn điều kiện đầu ghi ở lát 7A. Lát **7C-3** đóng ba, và trong lúc làm lộ
+-- ra điều kiện **thứ năm** — thứ duy nhất còn chặn lượt đăng ký:
+--
+--  1. ✅ **ĐÓNG Ở 7C-3.** Bút toán tổng hợp gõ thẳng vào 131/331 trước đây ghi
+--     `gl_postings` mang chiều đối tác mà KHÔNG ghi sổ phụ nào. Nay
+--     `general_ledger.journal` là nguồn ghi `ar_ap_ledger` thứ ba (quyết định
+--     user 2026-09-05): dòng ở bên THUẬN tính chất công nợ sinh một khoản mới
+--     (`JOURNAL_RECEIVABLE`/`JOURNAL_PAYABLE`), dòng ở bên NGƯỢC đi qua
+--     `gl_journal_settlements` như một lượt đối trừ. Bù trừ 131 ↔ 331 của cùng
+--     một đối tác vì thế là hai lượt đối trừ, không phải hai khoản nợ mới —
+--     phân biệt được hai ca ấy là chính điều kiện này.
+--
+--  2. ⚠️ **CÒN MỞ — và rộng hơn mô tả cũ.** Bản 7A viết điều kiện này ở phạm
+--     vi số dư đầu kỳ: dòng ở bên NGƯỢC tính chất của TK lưỡng tính (khách ứng
+--     trước, trả trước người bán) hợp lệ nhưng không treo dòng
+--     `opening_balance_invoices` nào — `parsing.py` còn CẤM nó ghi số chứng từ.
+--     Lát 7C-3 tìm thấy lỗ ấy không giới hạn ở số dư đầu kỳ: `settlements` của
+--     phiếu thu/chi (`cash_book/schemas.py`) là **tùy chọn**, và dimension đối
+--     tác gắn theo TỪNG DÒNG (`cash_book/posting_mapper.py`), nên một phiếu
+--     thu Nợ 111 / Có 131 mang đối tác mà không chọn đối trừ là một khoản ứng
+--     trước hợp lệ, làm nhích vế sổ cái mà không nhích vế sổ phụ. Chứng từ
+--     nghiệp vụ khác giữ đúng hành vi ấy ở 7C-3 (bên ngược không trỏ đích thì
+--     không sinh gì) — chặn ở một phân hệ mà thả ở phân hệ kia là hai luật cho
+--     cùng một hình dạng.
+--
+--     **Đây là điều kiện thứ năm, và là thứ duy nhất còn chặn.** Đóng nó nghĩa
+--     là khoản ứng trước cũng thành một dòng sổ phụ chiều ngược, đối trừ được
+--     với hóa đơn phát sinh sau — một cơ chế chưa tồn tại, vì đường đối trừ
+--     hiện có đi từ chứng từ TIỀN vào hóa đơn, không phải hóa đơn vào khoản
+--     ứng trước. Đã chốt tách thành lát **7C-4** (user, 2026-09-05).
+--
+--  3. ✅ **ĐÓNG Ở 7C-3, phần lớn là mô tả lỗi thời.** `carry_forward_job.
+--     _carry_invoices` trả `invoices_dropped` và `invoice_overrun_parents`;
+--     lập luận 4C của hai con số ấy là "`paid_amount` chưa sống tới phase 7
+--     nên các khoản trả trong năm trừ vào dư cha mà không trừ vào hóa đơn
+--     nào". Điều đó đã hết đúng từ **6B**: `opening_balances/
+--     settlement_source.py` cộng cả `paid_amount` lẫn `paid_amount_fc` mỗi
+--     lượt đối trừ. Phần `dropped` còn thật chỉ xảy ra khi dư RÒNG của đối
+--     tác về 0 trong lúc hóa đơn còn treo — tức là đúng ca có khoản ứng trước
+--     bù vào, tức là điều kiện #2.
+--
+--  4. ✅ **ĐÓNG Ở 7C-3 bằng lập luận, không bằng mã.** Nỗi lo 7A là một hóa
+--     đơn bán của năm N còn nợ sang năm N+1 nằm ở cả hai vế và không có phạm
+--     vi năm nào cho ra đẳng thức đúng ở cả hai năm. Đọc `sql/
+--     carry_forward.sql` cho thấy lo thừa: dòng cha năm N+1 được dựng theo
+--     TỪNG (TK, tiền tệ, đối tác) từ `opening_balances(N) + gl_postings(N)`,
+--     nên khoản nợ ấy vào vế SỔ CÁI năm N+1 qua dòng cha; còn vế SỔ PHỤ thì
+--     câu dưới đây **không lọc năm** trên `ar_ap_ledger`, nên chính dòng cũ
+--     vẫn được cộng. Hai vế khớp, ở mọi năm, mà không phải chuyển gì cả.
+--
+--     Vì thế cột `opening_invoice_id` (khai sẵn ở 7A cho lượt gộp ấy) **giữ
+--     nguyên trạng thái chưa có đường ghi** — quyết định user 2026-09-05.
+--     Đường ghi ấy chỉ cần khi muốn chi tiết số dư đầu kỳ năm mới liệt kê lại
+--     mọi khoản còn nợ (FR-OPB-007 ở dạng mạnh); lúc ấy nó thành đường ghi
+--     THỨ HAI vào `ar_ap_ledger`, và một sổ phụ hai cửa ghi là thứ làm chính
+--     check này mất ý nghĩa. Để ngỏ cho phase 10a quyết trên dữ liệu nhiều năm.
+--
+--  6. ⚠️ **CÒN MỞ — tìm thấy ở 7C-3, không phải lỗi của lát nào.** Câu dưới
+--     đây đo theo TỪNG SỔ, mà hai vế không sống trên cùng tập sổ: engine nhân
+--     đôi bút toán sang cả hai sổ (LD-07, `management_lines = None`), còn sổ
+--     phụ công nợ **chỉ ghi sổ tài chính** — `purchase`, `sales` và
+--     `general_ledger.journal` đều khóa `ledger = 0`, có chủ đích (nguồn đối
+--     trừ của `receivables` cũng chỉ cộng vào sổ ấy, nên dòng sổ quản trị sẽ
+--     không bao giờ đóng; xem docstring `purchase._subledger_entries`). Hệ quả:
+--     mỗi khoản công nợ để lại đúng một dòng lệch ở `ledger = 1`, bằng chính
+--     số dư của nó — với MỌI nguồn, không riêng chứng từ GLE.
+--
+--     Hai đường đóng, cả hai đều là lựa chọn thật: lọc `ledger = 0` ngay trong
+--     câu (thừa nhận check chỉ phủ sổ tài chính), hoặc cho sổ phụ ghi cả hai
+--     sổ (kéo theo phải định nghĩa lại đối trừ trên sổ quản trị). Neo bằng
+--     `tests/test_journal_subledger_flow.py::
+--     test_the_control_equation_balances_with_journal_debt`, bài ấy khẳng định
+--     sổ tài chính khớp từng đồng và mọi dòng lệch còn lại đều là sổ 1.
 --
 -- Câu dưới đây vì thế giả định **một năm tài chính đang chạy** (năm phủ
--- `CURRENT_DATE`) và bốn điều trên đã đóng. Đẳng thức nó đo, theo từng
+-- `CURRENT_DATE`) và điều kiện #2 + #6 đã đóng. Đẳng thức nó đo, theo từng
 -- (sổ, TK, đối tượng):
 --
 --     dư_sổ_cái = Σ opening_balances(năm).(debit − credit)
@@ -55,7 +101,9 @@
 -- nợ ở số hiệu khác là chuyện bình thường, và một câu SQL viết cứng số hiệu
 -- sẽ lặng lẽ đo 0 dòng ở đó (SRS 19 §9 #1). `employee` đứng ngoài: tạm ứng
 -- (141/334) chưa có đường đối trừ theo từng lần trong v1 (xem docstring
--- `opening_balances/settlement_source.py`).
+-- `opening_balances/settlement_source.py`). Cùng phạm vi ấy được
+-- `journal/settlement_service.py` giữ đúng: `_DIRECTION_BY_PARTNER_KIND`
+-- không có mặt `PartnerKind.EMPLOYEE`.
 --
 -- FULL JOIN chứ không INNER: một đối tượng chỉ có ở vế sổ cái (bút toán quên
 -- sổ phụ) và một đối tượng chỉ có ở vế sổ phụ (dòng sổ phụ mồ côi sau khi

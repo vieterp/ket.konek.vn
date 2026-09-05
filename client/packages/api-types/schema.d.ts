@@ -11384,6 +11384,53 @@ export interface components {
             warehouse_id: number | null;
         };
         /**
+         * JournalSettlementIn
+         * @description Một dòng đối trừ công nợ, gắn vào MỘT dòng định khoản của chứng từ.
+         *
+         *     `line_no` chứ không `line_id`: lúc tạo mới chưa có dòng nào trong DB, và
+         *     lúc sửa thì `service.update` thay trọn bộ dòng (id cũ biến mất). Số thứ tự
+         *     là thứ duy nhất ổn định qua cả hai đường, và nó cũng chính là thứ người
+         *     dùng nhìn thấy trên lưới.
+         */
+        JournalSettlementIn: {
+            /** Amount Fc */
+            amount_fc: number | string;
+            /** Line No */
+            line_no: number;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            target_kind: components["schemas"]["SettlementTargetKind"];
+        };
+        /** JournalSettlementOut */
+        JournalSettlementOut: {
+            /** Amount */
+            amount: string;
+            /** Amount Fc */
+            amount_fc: string;
+            /** Fx Diff */
+            fx_diff: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Journal Line Id
+             * Format: uuid
+             */
+            journal_line_id: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /** Target Kind */
+            target_kind: number;
+        };
+        /**
          * JournalVoucherIn
          * @description Thân chứng từ cho cả tạo mới lẫn sửa (PUT gửi trọn bộ dòng thay thế).
          */
@@ -11418,6 +11465,11 @@ export interface components {
              * Format: date
              */
             posting_date: string;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["JournalSettlementIn"][];
         };
         /** JournalVoucherOut */
         JournalVoucherOut: {
@@ -11470,6 +11522,11 @@ export interface components {
             posting_date: string;
             /** Row Version */
             row_version: number;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["JournalSettlementOut"][];
             /** Status */
             status: number;
             /** Voucher No */
@@ -11512,6 +11569,11 @@ export interface components {
             posting_date: string;
             /** Row Version */
             row_version: number;
+            /**
+             * Settlements
+             * @default []
+             */
+            settlements: components["schemas"]["JournalSettlementIn"][];
         };
         JsonValue: unknown;
         /**
@@ -14324,7 +14386,7 @@ export interface components {
          *     module: hai module ghi cùng một cột thì từ vựng phải có đúng một chỗ.
          * @enum {integer}
          */
-        SettlementTargetKind: 0 | 1 | 2;
+        SettlementTargetKind: 0 | 1 | 2 | 3 | 4;
         /**
          * SetupGroup
          * @description Một nhóm quyết định, phân theo **hệ quả** chứ không theo màn hình.

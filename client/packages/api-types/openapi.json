@@ -9878,6 +9878,95 @@
         "title": "JournalLineOut",
         "type": "object"
       },
+      "JournalSettlementIn": {
+        "additionalProperties": false,
+        "description": "Một dòng đối trừ công nợ, gắn vào MỘT dòng định khoản của chứng từ.\n\n`line_no` chứ không `line_id`: lúc tạo mới chưa có dòng nào trong DB, và\nlúc sửa thì `service.update` thay trọn bộ dòng (id cũ biến mất). Số thứ tự\nlà thứ duy nhất ổn định qua cả hai đường, và nó cũng chính là thứ người\ndùng nhìn thấy trên lưới.",
+        "properties": {
+          "amount_fc": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Amount Fc"
+          },
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "$ref": "#/components/schemas/SettlementTargetKind"
+          }
+        },
+        "required": [
+          "line_no",
+          "target_kind",
+          "target_id",
+          "amount_fc"
+        ],
+        "title": "JournalSettlementIn",
+        "type": "object"
+      },
+      "JournalSettlementOut": {
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Fc",
+            "type": "string"
+          },
+          "fx_diff": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fx Diff",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "journal_line_id": {
+            "format": "uuid",
+            "title": "Journal Line Id",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "title": "Target Kind",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "journal_line_id",
+          "target_kind",
+          "target_id",
+          "amount_fc",
+          "amount",
+          "fx_diff"
+        ],
+        "title": "JournalSettlementOut",
+        "type": "object"
+      },
       "JournalVoucherIn": {
         "additionalProperties": false,
         "description": "Thân chứng từ cho cả tạo mới lẫn sửa (PUT gửi trọn bộ dòng thay thế).",
@@ -9952,6 +10041,14 @@
             "format": "date",
             "title": "Posting Date",
             "type": "string"
+          },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/JournalSettlementIn"
+            },
+            "title": "Settlements",
+            "type": "array"
           }
         },
         "required": [
@@ -10072,6 +10169,14 @@
             "title": "Row Version",
             "type": "integer"
           },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/JournalSettlementOut"
+            },
+            "title": "Settlements",
+            "type": "array"
+          },
           "status": {
             "title": "Status",
             "type": "integer"
@@ -10182,6 +10287,14 @@
           "row_version": {
             "title": "Row Version",
             "type": "integer"
+          },
+          "settlements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/JournalSettlementIn"
+            },
+            "title": "Settlements",
+            "type": "array"
           }
         },
         "required": [
@@ -17951,7 +18064,9 @@
         "enum": [
           0,
           1,
-          2
+          2,
+          3,
+          4
         ],
         "title": "SettlementTargetKind",
         "type": "integer"
@@ -19783,7 +19898,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.28.0"
+    "version": "0.29.0"
   },
   "openapi": "3.1.0",
   "paths": {

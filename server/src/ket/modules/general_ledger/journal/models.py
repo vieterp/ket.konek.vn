@@ -24,6 +24,8 @@ from sqlalchemy import (
     Numeric,
     SmallInteger,
     String,
+    UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -33,6 +35,7 @@ from ket.kernel.currency.models import CURRENCY_CODE_LENGTH, RATE_PRECISION
 from ket.kernel.identifiers import uuid7
 from ket.kernel.money import RATE_SCALE_DEFAULT
 from ket.kernel.persistence.base import DatasetBase
+from ket.kernel.protocols import SettlementTargetKind
 from ket.posting.contracts import AMOUNT_PRECISION, AMOUNT_SCALE
 
 DESCRIPTION_MAX_LENGTH = 500
@@ -99,3 +102,73 @@ class JournalLine(DatasetBase, Audited):
     """
 
     description: Mapped[str | None] = mapped_column(String(DESCRIPTION_MAX_LENGTH), nullable=True)
+
+
+class JournalSettlement(DatasetBase, Audited):
+    """Một dòng đối trừ công nợ của chứng từ nghiệp vụ khác (lát 7C-3).
+
+    Cùng khuôn `cash_settlements` / `purchase_settlements` / `sales_settlements`,
+    khác đúng một cột: **`journal_line_id`**. Ba bảng kia gắn dòng đối trừ vào
+    *chứng từ*, vì mỗi chứng từ ấy chỉ có một đối tác và một TK công nợ. Chứng
+    từ GLE thì không — một bút toán bù trừ 131 ↔ 331 chạm hai TK công nợ, và
+    một bút toán phân loại lại đầu năm chạm nhiều đối tác cùng lúc. Đối trừ vì
+    thế thuộc về **dòng định khoản**, không thuộc về chứng từ: nó là thứ trả
+    lời "số Có 131 ở dòng 2 này giảm nợ của hóa đơn nào".
+
+    Hệ quả kéo theo: phép kiểm BR-QUY-03 ("tổng đối trừ = tổng tiền chứng từ")
+    áp cho **từng dòng**, không cho cả chứng từ — xem `settlement_service`.
+    """
+
+    __tablename__ = "gl_journal_settlements"
+    __table_args__ = (
+        CheckConstraint(
+            f"target_kind BETWEEN {SettlementTargetKind.SALES_INVOICE} "
+            f"AND {SettlementTargetKind.JOURNAL_PAYABLE}",
+            name="target_kind_known",
+        ),
+        CheckConstraint("amount_fc > 0", name="amount_fc_positive"),
+        CheckConstraint("amount > 0", name="amount_positive"),
+        # Duy nhất theo DÒNG chứ không theo chứng từ: hai dòng của cùng một
+        # bút toán bù trừ được phép trỏ vào cùng một hóa đơn đích (mỗi dòng
+        # giảm một phần), và chặn ở mức chứng từ sẽ cấm đúng nghiệp vụ ấy.
+        UniqueConstraint(
+            "journal_line_id",
+            "target_kind",
+            "target_id",
+            name="uq_gl_journal_settlements_line_target",
+        ),
+        Index("ix_gl_journal_settlements_voucher", "voucher_id"),
+        Index("ix_gl_journal_settlements_target", "target_kind", "target_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
+    voucher_id: Mapped[UUID] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False
+    )
+    """Giữ cả `voucher_id` lẫn `journal_line_id` dù cột đầu suy được từ cột
+    sau: mọi lượt đọc theo chứng từ (ghi sổ, bỏ ghi sổ, nộp nhánh cho check
+    toàn vẹn) sẽ phải join `gl_journal_lines` chỉ để lọc — và một trong số đó
+    chạy trên mọi lượt job toàn vẹn."""
+
+    journal_line_id: Mapped[UUID] = mapped_column(
+        ForeignKey("gl_journal_lines.id", ondelete="CASCADE"), nullable=False
+    )
+    target_kind: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    target_id: Mapped[UUID] = mapped_column(nullable=False)
+    amount_fc: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False)
+    fx_diff: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE),
+        nullable=False,
+        default=Decimal(0),
+        server_default=text("0"),
+    )
+    """Chênh lệch giữa tỷ giá chứng từ GLE và tỷ giá ghi nhận nợ.
+
+    **Lưu nhưng chưa sinh bút toán 515/635 ở lát này**: dòng định khoản của
+    chứng từ GLE do người dùng tự gõ, nên cặp bù chênh lệch tỷ giá cũng là thứ
+    người dùng tự gõ — hệ thống chèn thêm một cặp nữa là ghi đè lên bút toán
+    người ta cố ý lập. Cột giữ số để màn hình và báo cáo đối chiếu chỉ ra được
+    phần chênh, và để lát nào mở tự-động-hóa nó có sẵn dữ liệu."""

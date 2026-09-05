@@ -106,6 +106,20 @@ class SettlementTargetKind(IntEnum):
     OPENING_BALANCE = 2
     """Hóa đơn số dư đầu kỳ (`opening_balance_invoices`, phase 4C)."""
 
+    JOURNAL_RECEIVABLE = 3
+    """Khoản PHẢI THU ghi thẳng bằng chứng từ nghiệp vụ khác (module
+    `general_ledger`, lát 7C-3)."""
+
+    JOURNAL_PAYABLE = 4
+    """Khoản PHẢI TRẢ ghi thẳng bằng chứng từ nghiệp vụ khác.
+
+    Hai giá trị chứ không một-cộng-cột-chiều: bất biến của 7A là **mỗi
+    `target_kind` chỉ có đúng một chiều nợ**, và chính nó cho `_ReceivableView`
+    / `_PayableView` khóa được chiều mà không phải đọc thêm cột nào. Một khoản
+    nợ ghi tay không suy được chiều từ `partner_kind` (nhân viên vừa nợ vừa
+    được ứng) — chiều đến từ BÊN của dòng định khoản trên TK công nợ, và nó
+    được chốt đúng một lần, lúc ghi sổ."""
+
 
 class OpenInvoice(BaseModel):
     """Một chứng từ công nợ còn nợ, đã quy về hình dạng chung cho mọi nguồn.
