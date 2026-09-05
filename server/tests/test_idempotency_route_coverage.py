@@ -123,6 +123,7 @@ def test_the_exemption_list_is_exactly_what_was_reviewed() -> None:
             "/api/v1/bank/statements/lines/{line_id}/actions/match",
             "/api/v1/bank/statements/lines/{line_id}/actions/unmatch",
             "/api/v1/pricing/quote",
+            "/api/v1/pricing/quote-batch",
         }
     )
     # Cơ chế thứ ba, thêm ở lát 3C-1. Ghim nó ở đây vì chính docstring bên trên
