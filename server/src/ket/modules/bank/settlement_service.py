@@ -14,8 +14,18 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ket.modules.bank.models import BankSettlement
+from ket.modules.bank.models import (
+    MONEY_IN_BY_KIND,
+    BankSettlement,
+    BankVoucherLine,
+)
 from ket.modules.bank.schemas import BankVoucherIn
+from ket.posting.debt_lines import (
+    money_voucher_settles_advance,
+    record_pair_voucher_debt,
+    remove_voucher_debt,
+)
+from ket.posting.documents.models import Voucher
 from ket.posting.settlements import (
     PricedSettlement,
     apply_settlement_rows,
@@ -49,6 +59,51 @@ def price_settlements(
         currency_code=payload.currency_code,
         exchange_rate=payload.exchange_rate,
         scale=scale,
+        # Ủy nhiệm chi cho khách và giấy báo có của người bán tất toán khoản
+        # ỨNG TRƯỚC, không phải khoản nợ (lát 7C-4) — cùng luật phiếu thu/chi.
+        settles_advance=money_voucher_settles_advance(
+            money_in=MONEY_IN_BY_KIND.get(payload.kind, False),
+            partner_kind=payload.partner_kind,
+        ),
+    )
+
+
+def sync_subledger_after_post(session: Session, voucher_id: UUID, *, scale: int) -> None:
+    """Ghi khoản công nợ chứng từ sinh ra vào sổ phụ — SAU `PostingService.post`.
+
+    Giấy báo có Có 131 mang đối tác mà không chọn đối trừ là khoản khách **ứng
+    trước**: nó nhích số dư 131 trên sổ cái, nên phải nhích cả sổ phụ, nếu
+    không `arap_matches_control` đỏ trên dữ liệu ĐÚNG (điều kiện #2, mở từ 7A).
+    """
+    voucher = session.get(Voucher, voucher_id)
+    if voucher is None:  # pragma: no cover - engine vừa ghi sổ chính chứng từ này
+        raise RuntimeError(f"Không tìm thấy chứng từ tiền gửi {voucher_id} để ghi sổ phụ")
+    # Tiền tệ và tỷ giá đọc từ HEADER — xem chú thích cùng chỗ ở `cash_book`.
+    record_pair_voucher_debt(
+        session,
+        voucher=voucher,
+        lines=_lines_of(session, voucher_id),
+        currency_code=voucher.currency_code,
+        exchange_rate=voucher.exchange_rate,
+        scale=scale,
+        has_settlements=bool(_settlements_of(session, voucher_id)),
+    )
+
+
+def clear_subledger_after_unpost(session: Session, voucher_id: UUID) -> None:
+    """Gỡ dòng sổ phụ của chứng từ — chạy SAU `PostingService.unpost`."""
+    remove_voucher_debt(session, voucher_id=voucher_id)
+
+
+def _lines_of(session: Session, voucher_id: UUID) -> Sequence[BankVoucherLine]:
+    return (
+        session.execute(
+            select(BankVoucherLine)
+            .where(BankVoucherLine.voucher_id == voucher_id)
+            .order_by(BankVoucherLine.line_no)
+        )
+        .scalars()
+        .all()
     )
 
 

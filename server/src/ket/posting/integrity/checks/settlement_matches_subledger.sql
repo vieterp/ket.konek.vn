@@ -126,9 +126,10 @@ subledger AS (
     FROM ar_ap_ledger l
     WHERE l.branch_id = :branch_id
       -- Mọi loại đích sống trên bảng này, KHÔNG chỉ hai loại hóa đơn: bỏ sót
-      -- 3/4 thì mỗi khoản nợ ghi tay được đối trừ thành một dòng đỏ trên dữ
-      -- liệu ĐÚNG — vế đối trừ có số, vế sổ phụ không nộp đích nào để nối.
-      AND l.target_kind IN (0, 1, 3, 4)
+      -- 3/4 (nợ ghi tay, 7C-3) hay 5/6 (ứng trước, 7C-4) thì mỗi khoản loại ấy
+      -- được đối trừ thành một dòng đỏ trên dữ liệu ĐÚNG — vế đối trừ có số,
+      -- vế sổ phụ không nộp đích nào để nối.
+      AND l.target_kind IN (0, 1, 3, 4, 5, 6)
     UNION ALL
     SELECT 2,
            i.id,

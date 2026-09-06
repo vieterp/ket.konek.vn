@@ -67,6 +67,17 @@ class BankVoucherKind:
     """Chuyển tiền nội bộ giữa hai TK ngân hàng cùng đơn vị."""
 
 
+MONEY_IN_BY_KIND: dict[int, bool] = {
+    BankVoucherKind.CREDIT_ADVICE: True,
+    BankVoucherKind.PAYMENT_ORDER: False,
+    BankVoucherKind.CHEQUE: False,
+}
+"""Chiều TIỀN của từng loại chứng từ — mốc hướng lãi/lỗ tỷ giá (FR-SYS-066) và,
+từ lát 7C-4, mốc phân biệt "tất toán khoản nợ" với "tất toán khoản ứng trước".
+Chuyển tiền nội bộ vắng mặt: nó không có đối tác nên không có chiều nào để hỏi.
+"""
+
+
 class StatementMatchKind:
     """`bank_statement_lines.match_kind` (`docs/srs/04` §4.3, U5)."""
 
@@ -227,8 +238,13 @@ class BankSettlement(DatasetBase, Audited):
     __tablename__ = "bank_settlements"
     __table_args__ = (
         CheckConstraint(
+            # Tiền tất toán được MỌI loại đích: hóa đơn mua/bán, số dư đầu
+            # kỳ, khoản nợ ghi tay (7C-3) và khoản ứng trước (7C-4 — phiếu chi
+            # hoàn lại tiền khách đã ứng). Trần cũ dừng ở `OPENING_BALANCE`
+            # trong khi `receivables` đã cấp source cho hai loại ghi tay từ
+            # 7C-3, nên thu tiền một khoản phải thu ghi tay nổ CHECK ở DB.
             f"target_kind BETWEEN {SettlementTargetKind.SALES_INVOICE} "
-            f"AND {SettlementTargetKind.OPENING_BALANCE}",
+            f"AND {SettlementTargetKind.ADVANCE_TO_VENDOR}",
             name="target_kind_known",
         ),
         CheckConstraint("amount_fc > 0", name="amount_fc_positive"),

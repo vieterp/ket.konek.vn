@@ -347,8 +347,12 @@ class PurchaseSettlement(DatasetBase, Audited):
     __tablename__ = "purchase_settlements"
     __table_args__ = (
         CheckConstraint(
+            # Chứng từ giảm trừ ghi giảm một khoản NỢ, nên trần dừng trước
+            # hai loại ứng trước: giảm giá hàng bán không tất toán khoản khách
+            # đã ứng. Trần cũ dừng ở `OPENING_BALANCE` là bỏ sót khoản nợ ghi
+            # tay của 7C-3 — nó cũng là khoản nợ giảm trừ được.
             f"target_kind BETWEEN {SettlementTargetKind.SALES_INVOICE} "
-            f"AND {SettlementTargetKind.OPENING_BALANCE}",
+            f"AND {SettlementTargetKind.JOURNAL_PAYABLE}",
             name="target_kind_known",
         ),
         CheckConstraint("amount_fc > 0", name="amount_fc_positive"),

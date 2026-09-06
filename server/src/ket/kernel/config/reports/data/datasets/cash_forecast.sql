@@ -53,16 +53,24 @@ open_items AS (
 
     UNION ALL
 
-    -- `target_kind` 0 hóa đơn bán và 3 phải thu ghi tay → phải thu (nhóm 2);
-    -- 1 hóa đơn mua và 4 phải trả ghi tay → phải trả (nhóm 3). Ánh xạ về
-    -- `detail_kind` để phần trình bày bên dưới không phải biết có hai nguồn.
+    -- `target_kind` 0 hóa đơn bán, 3 phải thu ghi tay và 6 trả trước người
+    -- bán → phải thu (nhóm 2); 1 hóa đơn mua, 4 phải trả ghi tay và 5 khách
+    -- ứng trước → phải trả (nhóm 3). Ánh xạ về `detail_kind` để phần trình bày
+    -- bên dưới không phải biết có hai nguồn.
     --
     -- Mỗi loại đích mới phải có mặt ở CẢ HAI chỗ: `CASE` ở đây và `WHERE`
     -- bên dưới. Nới mỗi `WHERE` thì khoản phải thu ghi tay rơi vào nhánh
     -- `ELSE` và được dự báo thành một khoản CHI.
+    --
+    -- Khoản ứng trước đi NGƯỢC loại đối tác của chính nó, và nó KHÔNG sinh
+    -- dòng tiền nào nữa (tiền đã trao rồi) — nhưng nó vẫn phải có mặt: dự báo
+    -- bỏ nó ra thì khoản ứng trước biến mất khỏi công nợ trong khi 131 vẫn có
+    -- số. Không có hạn ⇒ rơi vào nhóm quá hạn/chưa đến hạn theo đúng luật
+    -- chung của dòng không hạn.
     SELECT CASE l.target_kind
                WHEN 0 THEN 2
                WHEN 3 THEN 2
+               WHEN 6 THEN 2
                ELSE 3
            END AS detail_kind,
            l.partner_kind,
@@ -74,7 +82,7 @@ open_items AS (
            l.amount_fc - l.settled_fc AS remaining_fc,
            l.amount - l.settled       AS remaining
     FROM ar_ap_ledger l
-    WHERE l.target_kind IN (0, 1, 3, 4)
+    WHERE l.target_kind IN (0, 1, 3, 4, 5, 6)
       AND l.ledger = :ledger
       AND l.is_closed = FALSE
       -- Nhánh 4C bị `JOIN fy` ghim vào năm chứa :to_date; sổ phụ không thuộc

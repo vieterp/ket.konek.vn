@@ -29,7 +29,6 @@ from sqlalchemy.orm import Session
 
 from ket.kernel.config.accounts_models import DEPOSIT_ACCOUNT_CODE_PREFIX
 from ket.kernel.config.accounts_provider import accounts_by_id
-from ket.kernel.protocols import SettlementTargetKind
 from ket.modules.general_ledger.journal.models import JournalLine, JournalSettlement
 from ket.posting.contracts import (
     ExtendedDimensionValue,
@@ -92,10 +91,12 @@ def _fx_lines(
     # Một dòng GLE ghi giảm khoản phải thu có thể trỏ vào hóa đơn số dư đầu kỳ,
     # và `OPENING_BALANCE` là loại đích duy nhất không tự mang chiều — suy theo
     # nó thì đúng ca ấy bị xếp sang chiều phải trả và lãi ghi thành lỗ.
-    # `classify` đã chốt chiều đúng một lần, ở đúng chỗ nó quan sát được.
+    # `DebtLine.money_in` chốt chiều từ chính bên của dòng: từ lát 7C-4 một dòng
+    # bên THUẬN cũng đối trừ được (khoản ứng trước), và ở ca ấy chiều tiền
+    # ngược với ca bên ngược của cùng loại đối tác.
+    id_by_line_no = {line.line_no: line.id for line in lines}
     money_in_by_line = {
-        line.line_id: line.target_kind is SettlementTargetKind.JOURNAL_RECEIVABLE
-        for line in classify(session, lines)
+        id_by_line_no[debt.line_no]: debt.money_in for debt in classify(session, lines)
     }
 
     adjustments: list[PostingLine] = []

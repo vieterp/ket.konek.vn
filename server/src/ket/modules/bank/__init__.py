@@ -108,15 +108,21 @@ def _build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest
 
 
 def _after_post(session: Session, voucher_id: UUID, user_id: int) -> None:
+    from ket.modules.bank.service import BankVoucherService
     from ket.modules.bank.settlement_service import apply_settlements
 
+    BankVoucherService(session).sync_subledger(voucher_id, user_id=user_id)
     apply_settlements(session, voucher_id=voucher_id)
 
 
 def _after_unpost(session: Session, voucher_id: UUID, user_id: int) -> None:
-    from ket.modules.bank.settlement_service import revert_settlements
+    from ket.modules.bank.settlement_service import (
+        clear_subledger_after_unpost,
+        revert_settlements,
+    )
 
     revert_settlements(session, voucher_id=voucher_id)
+    clear_subledger_after_unpost(session, voucher_id=voucher_id)
 
 
 def _before_delete(session: Session, voucher_id: UUID, user_id: int) -> None:
