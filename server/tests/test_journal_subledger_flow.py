@@ -32,7 +32,6 @@ from ket.modules.general_ledger.journal.schemas import (
 )
 from ket.modules.general_ledger.journal.service import JournalVoucherService
 from ket.modules.general_ledger.journal.settlement_service import (
-    SETTLEMENT_ON_INCREASE_CODE,
     SETTLEMENT_ON_NON_DEBT_CODE,
     SETTLEMENT_OVER_REMAINING_CODE,
 )
@@ -41,7 +40,10 @@ from ket.modules.receivables.models import ArApLedgerEntry
 from ket.posting.contracts import PartnerKind
 from ket.posting.integrity.checks.registry import check_of
 from ket.posting.integrity.runner import run_check
-from ket.posting.settlements import SETTLEMENT_KIND_MISMATCH_CODE
+from ket.posting.settlements import (
+    SETTLEMENT_DIRECTION_MISMATCH_CODE,
+    SETTLEMENT_KIND_MISMATCH_CODE,
+)
 from posting_support import USD_RATE, PostingContext, posting_scope, seed_posting_context
 from purchase_support import ensure_payment_term
 
@@ -50,7 +52,6 @@ pytestmark = pytest.mark.db
 ACTOR_ID = 1
 JAN_15 = date(2026, 1, 15)
 _FINANCIAL_LEDGER = 0
-_MANAGEMENT_LEDGER = 1
 DUE_DAYS = 30
 
 PARTNER_ID = 771_001
@@ -438,10 +439,16 @@ def test_a_receipt_screen_sees_a_debt_recorded_by_a_journal_voucher(
     run(work)
 
 
-def test_a_settlement_on_a_line_that_increases_debt_is_refused(
+def test_a_line_that_increases_debt_cannot_settle_a_debt(
     run: Runner, context: PostingContext
 ) -> None:
-    """Vừa ghi tăng nợ vừa tất toán là vô nghĩa — chặn từ lúc cất."""
+    """Dòng ghi TĂNG nợ chỉ tất toán được khoản ứng trước, không tất toán nợ.
+
+    Bản 7C-3 từ chối mọi lượt đối trừ trên dòng bên thuận. Lát 7C-4 giữ nguyên
+    kết quả cho ca này — trỏ vào một khoản NỢ vẫn bị từ chối — nhưng lý do hẹp
+    lại: thứ bị cấm là sai CHIỀU, không phải bản thân việc đối trừ trên bên
+    thuận (xem `test_an_advance_is_offset_against_a_later_invoice`).
+    """
 
     def work(session: Session) -> object:
         _ensure_partners(session)
@@ -466,7 +473,7 @@ def test_a_settlement_on_a_line_that_increases_debt_is_refused(
                 user_id=ACTOR_ID,
             )
         assert {violation.code for violation in error.value.violations} == {
-            SETTLEMENT_ON_INCREASE_CODE
+            SETTLEMENT_DIRECTION_MISMATCH_CODE
         }
         return None
 
@@ -623,16 +630,31 @@ def _drop_journal_branch(sql: str) -> str:
     return head + "\n)," + tail.split("\n),", 1)[1]
 
 
+def _control_sql() -> str:
+    """Bản thảo check 131/331 — nạp THẲNG từ gói, không qua `check_of`.
+
+    Nó cố ý chưa nằm trong `CHECKS` (ba điều kiện còn mở, xem đầu tệp `.sql`),
+    nên `check_of` sẽ ném. Đọc thẳng cho phép bài test canh phần đã đóng mà
+    không phải đăng ký sớm một câu còn kêu sai.
+    """
+    return (
+        resources.files("ket.posting.integrity.checks")
+        .joinpath("arap_matches_control.sql")
+        .read_text("utf-8")
+    )
+
+
 def test_the_control_equation_balances_with_journal_debt(
     run: Runner, context: PostingContext
 ) -> None:
-    """Bản thảo `arap_matches_control` không báo lệch nào trên dữ liệu của lát này.
+    """`arap_matches_control` không báo lệch nào trên dữ liệu của lát này.
 
-    Câu ấy CHƯA nằm trong `CHECKS` (điều kiện #2 — khoản ứng trước — còn mở,
-    xem đầu tệp `.sql`), nên nó được nạp thẳng từ gói thay vì qua `check_of`.
-    Bài này là bằng chứng cho điều kiện #1 đã đóng: trước 7C-3, một bút toán
-    gõ thẳng vào 131 làm nhích vế sổ cái mà không nhích vế sổ phụ, và chính
-    dòng đó sẽ hiện ra ở đây.
+    Bằng chứng cho điều kiện #1: trước 7C-3, một bút toán gõ thẳng vào 131 làm
+    nhích vế sổ cái mà không nhích vế sổ phụ, và chính dòng đó sẽ hiện ra ở đây.
+
+    Câu này vẫn CHƯA nằm trong `CHECKS`: lát 7C-4 đóng thêm hai điều kiện
+    nhưng review tìm ra ba cái nữa (xem đầu tệp `.sql`), và user chốt hoãn đăng
+    ký. Bài vẫn có giá trị: nó canh đúng phần đã đóng.
     """
 
     def work(session: Session) -> object:
@@ -666,25 +688,21 @@ def test_the_control_equation_balances_with_journal_debt(
         )
         _post(session, _payload(context, lines=_payable_lines(context, 250_000, PARTNER_ID)))
 
-        sql = (
-            resources.files("ket.posting.integrity.checks")
-            .joinpath("arap_matches_control.sql")
-            .read_text("utf-8")
-        )
+        sql = _control_sql()
         rows = list(session.execute(text(sql), {"branch_id": context.branch_id}).mappings())
+        assert rows == []
 
-        # Sổ TÀI CHÍNH khớp từng đồng — đó là thứ lát này đóng.
-        assert [row for row in rows if row["ledger"] == _FINANCIAL_LEDGER] == []
-
-        # Sổ QUẢN TRỊ thì không, và cố ý: `gl_postings` nhân đôi bút toán sang
-        # cả hai sổ (LD-07), còn sổ phụ công nợ chỉ ghi sổ tài chính — cùng
-        # luật ở `purchase`, `sales` và lát này. Đẳng thức per-ledger của bản
-        # thảo vì thế KHÔNG BAO GIỜ đúng ở sổ 1, với mọi nguồn công nợ chứ
-        # không riêng chứng từ GLE. Đây là điều kiện #6 ghi ở đầu tệp `.sql`,
-        # và bài test này là chỗ neo nó: ai đăng ký check ở 7C-4 sẽ thấy ngay
-        # con số phải xử, thay vì gặp một cổng đỏ không rõ nguồn.
-        assert {row["ledger"] for row in rows} == {_MANAGEMENT_LEDGER}
-        assert all(row["subledger_net"] == Decimal(0) for row in rows)
+        # Điều kiện #6, neo bằng cách TIÊM LẠI lỗi: bỏ ba mệnh đề `ledger = 0`
+        # thì câu gộp cả hai sổ vào một nhóm, và vế sổ cái phình gấp đôi trong
+        # khi vế sổ phụ đứng yên — engine nhân đôi bút toán sang cả hai sổ
+        # (LD-07) còn sổ phụ công nợ chỉ ghi sổ tài chính, ở MỌI nguồn. Đó là
+        # lý do phạm vi "sổ tài chính" là một phần hợp đồng của câu này, không
+        # phải một chỗ bỏ sót (quyết định user 2026-09-06).
+        unscoped = sql.replace("AND ob.ledger = 0", "").replace("AND p.ledger = 0", "")
+        unscoped = unscoped.replace("AND l.ledger = 0", "")
+        assert unscoped != sql
+        leaked = list(session.execute(text(unscoped), {"branch_id": context.branch_id}).mappings())
+        assert leaked, "bỏ lọc sổ mà vẫn xanh ⇒ câu check không còn đo điều kiện #6"
         return None
 
     run(work)
@@ -860,13 +878,8 @@ def test_the_control_equation_survives_a_foreign_currency_offset(
             ),
         )
 
-        sql = (
-            resources.files("ket.posting.integrity.checks")
-            .joinpath("arap_matches_control.sql")
-            .read_text("utf-8")
-        )
-        rows = list(session.execute(text(sql), {"branch_id": context.branch_id}).mappings())
-        assert [row for row in rows if row["ledger"] == _FINANCIAL_LEDGER] == []
+        sql = _control_sql()
+        assert list(session.execute(text(sql), {"branch_id": context.branch_id})) == []
         return None
 
     run(work)
