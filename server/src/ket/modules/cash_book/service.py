@@ -55,8 +55,10 @@ from ket.modules.cash_book.schemas import CashVoucherIn
 from ket.modules.cash_book.settlement_service import (
     PricedSettlement,
     apply_settlements,
+    clear_subledger_after_unpost,
     price_settlements,
     revert_settlements,
+    sync_subledger_after_post,
 )
 from ket.modules.cash_book.treasurer_source import clear_after_unpost, sync_after_post
 from ket.posting.contracts import (
@@ -240,15 +242,32 @@ class CashVoucherService:
             user_id=user_id,
             acknowledged_warnings=acknowledged_warnings,
         )
+        # Sổ phụ TRƯỚC, số đã trả SAU (cùng thứ tự với chứng từ nghiệp vụ
+        # khác): không có đường nào để dòng đối trừ trỏ vào chính khoản vừa
+        # sinh — đích được định giá lúc cất, khi khoản ấy còn chưa tồn tại.
+        self.sync_subledger(voucher_id, user_id=user_id)
         apply_settlements(self._session, voucher_id=voucher_id)
         sync_after_post(self._session, voucher_id, user_id)
         return voucher
 
     def unpost(self, voucher_id: UUID, *, user_id: int) -> Voucher:
         voucher = self._posting.unpost(voucher_id, user_id=user_id)
+        # Gỡ ngược thứ tự: trả lại số đã đối trừ TRƯỚC, rồi mới xóa dòng sổ phụ
+        # của chính phiếu — làm ngược lại thì guard "khoản đã có người trả thì
+        # không xóa" đọc trạng thái nửa vời.
         revert_settlements(self._session, voucher_id=voucher_id)
+        clear_subledger_after_unpost(self._session, voucher_id=voucher_id)
         clear_after_unpost(self._session, voucher_id, user_id)
         return voucher
+
+    def sync_subledger(self, voucher_id: UUID, *, user_id: int) -> None:
+        """Ghi sổ phụ công nợ của phiếu — hook `after_post` gọi vào đây.
+
+        Một cửa cho cả hai đường (dịch vụ và endpoint hành động chung), vì
+        chúng phải cho cùng kết quả: lát 7C-3 đã mất một vòng chạy vì
+        `JournalVoucherService.post` quên gọi phần chỉ hook mới chạy.
+        """
+        sync_subledger_after_post(self._session, voucher_id, scale=self._money_scale(user_id))
 
     def delete(self, voucher_id: UUID) -> None:
         """Xóa phiếu Đã cất — trả bộ đếm tham chiếu rồi để CASCADE dọn bảng con.

@@ -42,23 +42,34 @@ SETTLEMENT_OVERPAID_CODE = "settlement.exceeds_remaining"
 _RECEIVABLE_KINDS = (
     SettlementTargetKind.SALES_INVOICE,
     SettlementTargetKind.JOURNAL_RECEIVABLE,
+    SettlementTargetKind.ADVANCE_TO_VENDOR,
 )
-"""Loại đích mang chiều PHẢI THU — `_ReceivableView` liệt kê đúng bộ này."""
+"""Loại đích mang chiều PHẢI THU — `_ReceivableView` liệt kê đúng bộ này.
+
+Tiền đã trả trước cho người bán là một khoản **họ nợ ta**: nó đứng cùng hàng
+với hóa đơn bán trên màn thu tiền, và đó là đường để nhận lại tiền ứng khi
+đơn hàng không thành."""
 
 _PAYABLE_KINDS = (
     SettlementTargetKind.PURCHASE_INVOICE,
     SettlementTargetKind.JOURNAL_PAYABLE,
+    SettlementTargetKind.ADVANCE_FROM_CUSTOMER,
 )
-"""Loại đích mang chiều PHẢI TRẢ."""
+"""Loại đích mang chiều PHẢI TRẢ — kể cả tiền khách đã ứng trước cho ta."""
 
 _OWNED_KINDS = _RECEIVABLE_KINDS + _PAYABLE_KINDS
-"""Bốn loại đích bảng này làm chủ. `OPENING_BALANCE` thuộc về nguồn 4C.
+"""Sáu loại đích bảng này làm chủ. `OPENING_BALANCE` thuộc về nguồn 4C.
 
-Khoản nợ ghi thẳng bằng chứng từ nghiệp vụ khác (7C-3) vào cùng bảng và cùng
-hai chiều: nó là một khoản nợ như mọi khoản khác, chỉ khác ở chỗ **không có
-hóa đơn gốc** — `document_id` trỏ chính chứng từ GLE. Để nó ngoài hai view thì
-phiếu thu/chi không bao giờ nhìn thấy nó, và một khoản nợ không đối trừ được
-là một khoản nợ treo vĩnh viễn trên báo cáo tuổi nợ.
+Khoản nợ ghi thẳng vào TK công nợ (7C-3) và khoản ứng trước (7C-4) vào cùng
+bảng và cùng hai chiều: chúng là khoản nợ như mọi khoản khác, chỉ khác ở chỗ
+**không có hóa đơn gốc** — `document_id` trỏ chính chứng từ sinh ra chúng. Để
+chúng ngoài hai view thì không chứng từ nào nhìn thấy chúng, và một khoản
+không đối trừ được là một khoản treo vĩnh viễn trên báo cáo tuổi nợ.
+
+Chiều của khoản ứng trước NGƯỢC với chiều nợ của chính đối tác ấy — khách hàng
+ứng trước nằm ở nhóm phải trả. Đó là lý do hai loại chứ không một: bất biến 7A
+"mỗi `target_kind` đúng một chiều" là thứ cho hai view khóa được chiều mà không
+đọc thêm cột nào.
 """
 
 _FINANCIAL_LEDGER = 0

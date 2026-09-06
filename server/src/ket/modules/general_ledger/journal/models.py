@@ -122,8 +122,11 @@ class JournalSettlement(DatasetBase, Audited):
     __tablename__ = "gl_journal_settlements"
     __table_args__ = (
         CheckConstraint(
+            # Chứng từ nghiệp vụ khác tất toán được cả khoản ứng trước
+            # (7C-4): dòng bên THUẬN trỏ vào khoản ứng trước, dòng bên NGƯỢC
+            # trỏ vào hóa đơn — đó là đường bù hai thứ ấy với nhau.
             f"target_kind BETWEEN {SettlementTargetKind.SALES_INVOICE} "
-            f"AND {SettlementTargetKind.JOURNAL_PAYABLE}",
+            f"AND {SettlementTargetKind.ADVANCE_TO_VENDOR}",
             name="target_kind_known",
         ),
         CheckConstraint("amount_fc > 0", name="amount_fc_positive"),

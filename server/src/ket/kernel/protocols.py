@@ -107,11 +107,16 @@ class SettlementTargetKind(IntEnum):
     """Hóa đơn số dư đầu kỳ (`opening_balance_invoices`, phase 4C)."""
 
     JOURNAL_RECEIVABLE = 3
-    """Khoản PHẢI THU ghi thẳng bằng chứng từ nghiệp vụ khác (module
-    `general_ledger`, lát 7C-3)."""
+    """Khoản PHẢI THU ghi thẳng vào TK công nợ, **không có hóa đơn gốc**.
+
+    Tên mang chữ `JOURNAL` vì chứng từ nghiệp vụ khác là nguồn đầu tiên (lát
+    7C-3), nhưng loại đích này KHÔNG thuộc riêng module nào: từ lát 7C-4 phiếu
+    thu/chi và chứng từ ngân hàng cũng ghi nó, cho đúng cái dòng định khoản
+    gõ thẳng vào 131 mà không đi qua hóa đơn bán. Chủ dữ liệu vẫn là
+    `receivables` — thứ quyết định là **chiều nợ**, không phải phân hệ nào gõ."""
 
     JOURNAL_PAYABLE = 4
-    """Khoản PHẢI TRẢ ghi thẳng bằng chứng từ nghiệp vụ khác.
+    """Khoản PHẢI TRẢ ghi thẳng vào TK công nợ, không có hóa đơn gốc.
 
     Hai giá trị chứ không một-cộng-cột-chiều: bất biến của 7A là **mỗi
     `target_kind` chỉ có đúng một chiều nợ**, và chính nó cho `_ReceivableView`
@@ -119,6 +124,22 @@ class SettlementTargetKind(IntEnum):
     nợ ghi tay không suy được chiều từ `partner_kind` (nhân viên vừa nợ vừa
     được ứng) — chiều đến từ BÊN của dòng định khoản trên TK công nợ, và nó
     được chốt đúng một lần, lúc ghi sổ."""
+
+    ADVANCE_FROM_CUSTOMER = 5
+    """Khách ứng trước tiền — nghĩa vụ của ta, nên mang chiều **phải trả**.
+
+    Đặt tên theo CHIỀU chứ không theo nguồn: cả ba phân hệ tiền/ngân hàng/
+    nghiệp vụ khác đều sinh được nó, ở cùng một hình dạng (dòng nằm ở bên
+    NGƯỢC tính chất công nợ của TK mà không trỏ đích đối trừ nào). Trước lát
+    7C-4 hình dạng ấy không sinh gì cả — sổ cái nhích mà sổ phụ đứng yên, và
+    đó là điều kiện #2 chặn `arap_matches_control` suốt từ 7A."""
+
+    ADVANCE_TO_VENDOR = 6
+    """Ta trả trước người bán — quyền của ta, nên mang chiều **phải thu**.
+
+    Cặp đối xứng của `ADVANCE_FROM_CUSTOMER`, tách riêng vì cùng bất biến
+    "mỗi loại đích đúng một chiều": gộp hai chiều vào một giá trị thì khoản
+    ứng trước không hiện ở màn đối trừ nào."""
 
 
 class OpenInvoice(BaseModel):

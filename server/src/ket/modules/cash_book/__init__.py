@@ -77,9 +77,11 @@ def _build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest
 
 
 def _after_post(session: Session, voucher_id: UUID, user_id: int) -> None:
+    from ket.modules.cash_book.service import CashVoucherService
     from ket.modules.cash_book.settlement_service import apply_settlements
     from ket.modules.cash_book.treasurer_source import sync_after_post
 
+    CashVoucherService(session).sync_subledger(voucher_id, user_id=user_id)
     apply_settlements(session, voucher_id=voucher_id)
     # Thủ quỹ (lát 6C): xếp hàng đợi, hoặc phân hệ tắt thì vào thẳng sổ quỹ
     # (FR-WHK-021) — cùng transaction với ghi sổ kế toán.
@@ -87,10 +89,14 @@ def _after_post(session: Session, voucher_id: UUID, user_id: int) -> None:
 
 
 def _after_unpost(session: Session, voucher_id: UUID, user_id: int) -> None:
-    from ket.modules.cash_book.settlement_service import revert_settlements
+    from ket.modules.cash_book.settlement_service import (
+        clear_subledger_after_unpost,
+        revert_settlements,
+    )
     from ket.modules.cash_book.treasurer_source import clear_after_unpost
 
     revert_settlements(session, voucher_id=voucher_id)
+    clear_subledger_after_unpost(session, voucher_id=voucher_id)
     clear_after_unpost(session, voucher_id, user_id)
 
 

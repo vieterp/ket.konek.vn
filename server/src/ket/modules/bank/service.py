@@ -59,8 +59,10 @@ from ket.modules.bank.posting_mapper import build_posting_request
 from ket.modules.bank.schemas import BankVoucherIn
 from ket.modules.bank.settlement_service import (
     apply_settlements,
+    clear_subledger_after_unpost,
     price_settlements,
     revert_settlements,
+    sync_subledger_after_post,
 )
 from ket.posting.contracts import (
     PostingService,
@@ -257,6 +259,9 @@ class BankVoucherService:
             user_id=user_id,
             acknowledged_warnings=acknowledged_warnings,
         )
+        # Sổ phụ TRƯỚC, số đã trả SAU — cùng thứ tự với phiếu thu/chi và
+        # chứng từ nghiệp vụ khác.
+        self.sync_subledger(voucher_id, user_id=user_id)
         apply_settlements(self._session, voucher_id=voucher_id)
         return voucher
 
@@ -266,7 +271,11 @@ class BankVoucherService:
         # `PostingService.unpost`, nên cửa dịch vụ này và endpoint hành động
         # chung dùng chung đúng một bản — không còn hai chỗ phải nhớ.
         voucher = self._posting.unpost(voucher_id, user_id=user_id)
+        # Trả lại số đã đối trừ TRƯỚC, rồi mới xóa dòng sổ phụ của chính chứng
+        # từ — làm ngược lại thì guard "khoản đã có người trả thì không xóa"
+        # đọc trạng thái nửa vời.
         revert_settlements(self._session, voucher_id=voucher_id)
+        clear_subledger_after_unpost(self._session, voucher_id=voucher_id)
         return voucher
 
     def delete(self, voucher_id: UUID) -> None:
@@ -275,6 +284,14 @@ class BankVoucherService:
         if body is not None:
             self.release_usage(voucher_id)
         self._vouchers.delete(voucher_id)
+
+    def sync_subledger(self, voucher_id: UUID, *, user_id: int) -> None:
+        """Ghi sổ phụ công nợ của chứng từ — hook `after_post` gọi vào đây.
+
+        Một cửa cho cả hai đường (dịch vụ và endpoint hành động chung), vì
+        chúng phải cho cùng kết quả.
+        """
+        sync_subledger_after_post(self._session, voucher_id, scale=self._money_scale(user_id))
 
     def release_usage(self, voucher_id: UUID) -> None:
         """Trừ bộ đếm tham chiếu của một chứng từ sắp bị xóa — hook `before_delete`."""

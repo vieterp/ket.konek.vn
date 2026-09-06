@@ -19,10 +19,14 @@ Hợp đồng của một tệp check:
 
 Thư mục này có MỘT tệp `.sql` **không** nằm trong `CHECKS`:
 `arap_matches_control.sql` — bản thảo đối chiếu sổ phụ công nợ với số dư TK
-công nợ trên sổ cái. Nó đứng ngoài registry có chủ đích: trên dữ liệu đúng
-của hôm nay nó vẫn đỏ ở bốn tình huống hợp lệ, và đầu tệp ấy liệt kê cả bốn
-kèm điều kiện phải đóng trước khi thêm một dòng vào danh sách dưới đây. Một
-check kêu sai dạy người dùng bỏ qua mọi check còn lại.
+công nợ trên sổ cái. Nó đứng ngoài registry có chủ đích: trên dữ liệu ĐÚNG của
+hôm nay nó vẫn đỏ ở những tình huống hợp lệ, và đầu tệp ấy liệt kê từng cái kèm
+bằng chứng. Một check kêu sai dạy người dùng bỏ qua mọi check còn lại.
+
+Lát 7C-4 đóng thêm hai điều kiện (#2 ở vế chứng từ, #6) nhưng **không đăng ký**:
+review pre-landing tìm ra ba điều kiện nữa, một trong số đó có bài test đang
+xanh làm bằng chứng. Luật giữ nguyên qua bốn lát và nên giữ tiếp: **viết tệp
+trước, đăng ký sau, và chỉ đăng ký khi nó xanh trên dữ liệu đúng.**
 """
 
 from __future__ import annotations

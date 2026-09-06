@@ -53,11 +53,17 @@ from ket.kernel.protocols import (
     SettlementTargetSource,
 )
 from ket.posting.contracts import PostingDimensions, PostingLine
+from ket.posting.debt_lines import is_advance
 from ket.posting.documents.models import Voucher
 
 SETTLEMENT_NO_SOURCE_CODE = "settlement.kind_unavailable"
 SETTLEMENT_TARGET_MISSING_CODE = "settlement.target_missing"
 SETTLEMENT_KIND_MISMATCH_CODE = "settlement.target_kind_mismatch"
+SETTLEMENT_DIRECTION_MISMATCH_CODE = "settlement.target_direction_mismatch"
+"""Bên của dòng không tất toán được thứ nó đang trỏ tới: bên ghi TĂNG nợ chỉ
+tất toán được khoản ứng trước, bên ghi GIẢM nợ chỉ tất toán được khoản nợ.
+Khoản ứng trước của một khách hàng nằm trên CÙNG tài khoản và CÙNG đối tác với
+hóa đơn của chính khách ấy, nên không phép kiểm nào khác tách được hai thứ."""
 SETTLEMENT_PARTNER_MISMATCH_CODE = "settlement.partner_mismatch"
 SETTLEMENT_BRANCH_MISMATCH_CODE = "settlement.branch_mismatch"
 SETTLEMENT_ACCOUNT_MISMATCH_CODE = "settlement.account_mismatch"
@@ -132,12 +138,19 @@ def price_settlements(
     exchange_rate: Decimal,
     scale: int,
     account_id: int | None = None,
+    settles_advance: bool = False,
 ) -> list[PricedSettlement]:
     """Kiểm + định giá toàn bộ dòng đối trừ của một chứng từ. Trả toàn bộ vi
     phạm một lượt (triết lý bộ kiểm phase-04), không nhỏ giọt.
 
     `account_id`: TK công nợ mà chứng từ ghi bút toán giảm nợ lên — đưa vào
     thì mọi khoản đích phải nằm đúng TK ấy (`SETTLEMENT_ACCOUNT_MISMATCH_CODE`).
+
+    `settles_advance`: chứng từ đang tất toán một khoản **ứng trước** chứ không
+    một khoản nợ — tức bên ghi TĂNG nợ (lát 7C-4). Mặc định `False` vì đó là
+    hình dạng của mọi lượt gọi có trước: chứng từ giảm trừ mua/bán và chứng từ
+    tiền ghi giảm nợ. Chọn mặc định ở phía TỪ CHỐI để một phân hệ mới quên khai
+    thì hỏng bằng một thông báo, không bằng một dòng sổ phụ sai chiều.
     """
     if not settlements:
         return []
@@ -167,6 +180,7 @@ def price_settlements(
             branch_id=branch_id,
             currency_code=currency_code,
             account_id=account_id,
+            settles_advance=settles_advance,
             violations=violations,
         )
         amount = convert_currency(row.amount_fc, exchange_rate, scale)
@@ -282,6 +296,7 @@ def _check_target(
     branch_id: int,
     currency_code: str,
     account_id: int | None,
+    settles_advance: bool,
     violations: list[PostingViolation],
 ) -> None:
     if (
@@ -293,6 +308,19 @@ def _check_target(
             PostingViolation(
                 SETTLEMENT_PARTNER_MISMATCH_CODE,
                 "Chứng từ công nợ thuộc đối tác khác với đối tác trên chứng từ",
+                target_id=str(invoice.target_id),
+            )
+        )
+    if is_advance(invoice.target_kind) is not settles_advance:
+        violations.append(
+            PostingViolation(
+                SETTLEMENT_DIRECTION_MISMATCH_CODE,
+                (
+                    "Dòng ghi giảm công nợ không tất toán được khoản ứng trước"
+                    if not settles_advance
+                    else "Dòng ghi tăng công nợ chỉ tất toán được khoản ứng trước"
+                ),
+                target_kind=invoice.target_kind.value,
                 target_id=str(invoice.target_id),
             )
         )

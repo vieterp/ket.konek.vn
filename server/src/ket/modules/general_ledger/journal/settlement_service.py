@@ -5,27 +5,18 @@ nhưng từ nay `general_ledger.journal` là nguồn ghi `ar_ap_ledger` thứ ba
 cạnh `purchase` và `sales`. Khoản sinh từ đây là khoản nợ **không có hóa đơn
 gốc**: `document_id` trỏ chính chứng từ GLE.
 
-Cả module xoay quanh một phép phân loại duy nhất, `classify`: dòng nào trên
-chứng từ chạm công nợ, theo chiều nào, và làm TĂNG hay GIẢM khoản nợ.
+Phép phân loại dòng (dòng nào chạm công nợ, theo chiều nào, làm TĂNG hay GIẢM
+khoản nợ) **đã dời lên `ket.posting.debt_lines` ở lát 7C-4**, khi phiếu thu/chi
+và chứng từ ngân hàng ghi cùng sổ phụ theo cùng luật ấy — xem docstring tệp kia
+cho luật đầy đủ. Ở đây còn lại phần buộc vào bảng `gl_journal_settlements` và
+hình dạng payload chứng từ.
 
-* **Dòng chạm công nợ** = TK có `detail_tracking` khai đúng loại đối tác của
-  dòng (`customer` với khách hàng, `vendor` với nhà cung cấp). Đọc theo cấu
-  hình chứ không theo số hiệu `131`/`331`: số hiệu thuộc gói, và gói tự dựng
-  của khách đặt công nợ ở số khác là chuyện bình thường (SRS 19 §9 #1). Nhân
-  viên đứng ngoài — tạm ứng chưa có đường đối trừ theo từng lần trong v1.
-* **Bên thuận** (Nợ với phải thu, Có với phải trả) làm TĂNG nợ ⇒ sinh một
-  khoản mới trên sổ phụ.
-* **Bên ngược** làm GIẢM nợ ⇒ phải trỏ vào khoản đang treo, và đi đúng cơ chế
-  mà phiếu thu/chi dùng. Bù trừ 131 ↔ 331 của cùng một đối tác vì thế là **hai
-  dòng bên ngược**, tức hai lượt đối trừ — không phải hai khoản nợ mới. Không
-  phân biệt được hai ca này thì mỗi lượt bù trừ phình cả hai vế sổ phụ.
-
-**Bên ngược mà KHÔNG trỏ đích thì không sinh gì** — đó là khoản khách ứng
-trước / trả trước người bán, và nó là **lỗ đã biết**, chung với phiếu thu ứng
-trước của `cash_book` hôm nay (`settlements` ở đó cũng tùy chọn). Chặn ở đây
-mà thả ở phiếu thu là hai luật cho cùng một hình dạng. Lỗ ấy là điều kiện thứ
-năm ghi ở đầu `posting/integrity/checks/arap_matches_control.sql`, đóng ở lát
-7C-4 cùng lúc cho mọi phân hệ.
+Bù trừ 131 ↔ 331 của cùng một đối tác là **hai dòng bên ngược**, tức hai lượt
+đối trừ — không phải hai khoản nợ mới. Bù khoản khách ứng trước với hóa đơn
+phát sinh sau (7C-4, quyết định user 2026-09-06) là **một chứng từ của chính
+module này**: dòng bên thuận trỏ vào khoản ứng trước, dòng bên ngược trỏ vào
+hóa đơn — hai lượt đối trừ trên một chứng từ, sổ cái không đổi vì cả hai bút
+toán đã ghi từ trước.
 
 **BR-QUY-03 áp cho TỪNG DÒNG.** Ba phân hệ trước so tổng đối trừ với tổng tiền
 *chứng từ* vì mỗi chứng từ ấy chỉ có một đối tác và một TK công nợ. Chứng từ
@@ -39,24 +30,22 @@ vi phạm" của bộ kiểm phase-04.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
-from datetime import date, timedelta
+from dataclasses import replace
 from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ket.kernel.config.accounts_models import DetailTracking
-from ket.kernel.config.accounts_provider import accounts_by_id
 from ket.kernel.contracts import PartnerKind
 from ket.kernel.errors import PostingValidationError, PostingViolation
-from ket.kernel.master_data.models.partner import Partner
-from ket.kernel.master_data.models.payment_term import PaymentTerm
 from ket.kernel.money import convert_currency
 from ket.kernel.protocols import PROVIDERS, SettlementTargetKind, SubledgerEntry
 from ket.modules.general_ledger.journal.models import JournalLine, JournalSettlement
 from ket.modules.general_ledger.journal.schemas import JournalSettlementIn
+from ket.posting.debt_lines import DebtLine, DebtSide
+from ket.posting.debt_lines import classify as classify_sides
+from ket.posting.debt_lines import subledger_entries as build_subledger_entries
 from ket.posting.documents.models import Voucher
 from ket.posting.settlements import (
     PricedSettlement,
@@ -69,42 +58,39 @@ from ket.posting.settlements import (
 
 _ZERO = Decimal(0)
 
-SETTLEMENT_ON_INCREASE_CODE = "journal.settlement_on_increasing_line"
-"""Dòng làm TĂNG nợ mà lại trỏ đích đối trừ — vừa ghi nợ vừa tất toán."""
-
 SETTLEMENT_ON_NON_DEBT_CODE = "journal.settlement_on_non_debt_line"
 """Dòng không chạm TK công nợ mà lại trỏ đích đối trừ."""
 
 SETTLEMENT_OVER_REMAINING_CODE = "journal.settlement_exceeds_remaining"
 """Tổng đối trừ của nhiều DÒNG vào cùng một đích vượt số còn nợ."""
 
-_DIRECTION_BY_PARTNER_KIND: dict[PartnerKind, tuple[str, SettlementTargetKind, bool]] = {
-    # đối tác → (token `detail_tracking` phải có, loại đích, bên thuận là bên Nợ)
-    PartnerKind.CUSTOMER: (DetailTracking.CUSTOMER, SettlementTargetKind.JOURNAL_RECEIVABLE, True),
-    PartnerKind.VENDOR: (DetailTracking.VENDOR, SettlementTargetKind.JOURNAL_PAYABLE, False),
-}
-"""Nhân viên cố ý vắng mặt: `PartnerKind.EMPLOYEE` không có mặt ở đây nên dòng
-tạm ứng 141/334 đi qua `classify` mà không sinh gì — cùng phạm vi với check
-toàn vẹn 131/331, vốn cũng để nhân viên ngoài (xem `arap_matches_control.sql`)."""
 
+def _sides_of(lines: Sequence[JournalLine]) -> list[DebtSide]:
+    """Dòng định khoản **một bên** → hình dạng chung của `posting.debt_lines`.
 
-@dataclass(frozen=True)
-class DebtLine:
-    """Một dòng định khoản đã được nhận ra là chạm công nợ."""
-
-    line_no: int
-    line_id: UUID
-    account_id: int
-    partner_kind: PartnerKind
-    partner_id: int
-    target_kind: SettlementTargetKind
-    currency_code: str
-    exchange_rate: Decimal
-    amount_fc: Decimal
-    """Số tiền trên bên của chính dòng — luôn dương."""
-
-    increases_debt: bool
-    """Bên thuận tính chất công nợ: dòng làm khoản nợ lớn lên."""
+    Dòng GLE đã mang sẵn một bên (`debit_fc` hoặc `credit_fc`), tiền tệ và tỷ
+    giá đã rơi từ chứng từ lúc lưu — nên phép quy đổi ở đây chỉ là đổi tên
+    trường, không có luật nào.
+    """
+    sides: list[DebtSide] = []
+    for line in lines:
+        if line.partner_id is None or line.partner_kind is None:
+            continue
+        on_debit = line.debit_fc > _ZERO
+        amount_fc = line.debit_fc if on_debit else line.credit_fc
+        sides.append(
+            DebtSide(
+                line_no=line.line_no,
+                account_id=line.account_id,
+                partner_kind=PartnerKind(line.partner_kind),
+                partner_id=line.partner_id,
+                on_debit=on_debit,
+                amount_fc=amount_fc,
+                currency_code=line.currency_code,
+                exchange_rate=line.exchange_rate,
+            )
+        )
+    return sides
 
 
 def classify(session: Session, lines: Sequence[JournalLine]) -> list[DebtLine]:
@@ -112,43 +98,9 @@ def classify(session: Session, lines: Sequence[JournalLine]) -> list[DebtLine]:
 
     Đọc dòng **đã lưu** chứ không payload: `sync_after_post` chạy lúc ghi sổ
     và không có payload nào trong tay, nên hai đường (lúc cất, lúc ghi sổ) chỉ
-    khớp nhau chắc chắn khi cùng đọc một nguồn. Dòng đã lưu cũng đã giải xong
-    `currency_code`/`exchange_rate` rơi từ chứng từ, nên phép phân loại không
-    phải lặp lại luật rơi ấy lần thứ hai.
-
-    Một truy vấn cho cả chứng từ (`accounts_by_id`), cùng lối `posting_mapper`.
+    khớp nhau chắc chắn khi cùng đọc một nguồn.
     """
-    accounts = accounts_by_id(session, [line.account_id for line in lines])
-    debt_lines: list[DebtLine] = []
-    for line in lines:
-        if line.partner_id is None or line.partner_kind is None:
-            continue
-        rule = _DIRECTION_BY_PARTNER_KIND.get(PartnerKind(line.partner_kind))
-        if rule is None:
-            continue
-        tracking_token, target_kind, natural_is_debit = rule
-        account = accounts.get(line.account_id)
-        if account is None or tracking_token not in (account.detail_tracking or ()):
-            continue
-        on_debit = line.debit_fc > _ZERO
-        amount_fc = line.debit_fc if on_debit else line.credit_fc
-        if amount_fc <= _ZERO:
-            continue
-        debt_lines.append(
-            DebtLine(
-                line_no=line.line_no,
-                line_id=line.id,
-                account_id=line.account_id,
-                partner_kind=PartnerKind(line.partner_kind),
-                partner_id=line.partner_id,
-                target_kind=target_kind,
-                currency_code=line.currency_code,
-                exchange_rate=line.exchange_rate,
-                amount_fc=amount_fc,
-                increases_debt=(on_debit == natural_is_debit),
-            )
-        )
-    return debt_lines
+    return classify_sides(session, _sides_of(lines))
 
 
 def price_settlements(
@@ -184,16 +136,6 @@ def price_settlements(
                 )
             )
             continue
-        if debt.increases_debt:
-            violations.append(
-                PostingViolation(
-                    SETTLEMENT_ON_INCREASE_CODE,
-                    "Dòng này đang ghi tăng công nợ nên không đối trừ khoản nào — "
-                    "đưa số đối trừ sang dòng ghi giảm",
-                    line_no=line_no,
-                )
-            )
-            continue
         try:
             priced = price_settlement_inputs(
                 session,
@@ -210,6 +152,11 @@ def price_settlements(
                 # Khoản đích phải treo đúng TK mà dòng này ghi giảm — khác TK
                 # là sổ cái giảm một TK còn sổ phụ giảm TK kia.
                 account_id=debt.account_id,
+                # Bên THUẬN tất toán khoản ứng trước, bên NGƯỢC tất toán khoản
+                # nợ. Bản 7C-3 từ chối thẳng bên thuận vì lúc ấy khoản ứng
+                # trước chưa có dòng sổ phụ nào để trỏ tới; từ 7C-4 nó có, và
+                # chính chứng từ này là đường bù khoản ứng trước với hóa đơn.
+                settles_advance=debt.settles_advance,
             )
         except PostingValidationError as error:
             violations.extend(
@@ -318,60 +265,26 @@ def subledger_entries(
     *,
     scale: int,
 ) -> list[SubledgerEntry]:
-    """Khoản nợ MỚI mà chứng từ sinh ra — một dòng cho mỗi dòng ghi tăng nợ.
+    """Khoản MỚI mà chứng từ sinh ra — một dòng cho mỗi bên KHÔNG trỏ đích.
 
-    Không gộp theo (đối tác, TK) như hóa đơn mua: mỗi dòng của chứng từ GLE là
-    một khoản nợ người dùng cố ý tách ra, và gộp lại thì màn đối trừ mất đúng
-    cái ranh giới ấy — hai khoản phải thu ghi trong một bút toán phân loại lại
-    sẽ chỉ còn một dòng chọn được.
+    Bên thuận không đích ⇒ khoản nợ mới; bên ngược không đích ⇒ khoản ứng
+    trước (lát 7C-4 — trước đó ca ấy không sinh gì, và đó chính là lỗ #2 của
+    `arap_matches_control`). Bên có trỏ đích là một lượt ĐỐI TRỪ, không sinh
+    khoản nào, nên bị loại ở đây.
+
+    Đọc dòng đối trừ **đã lưu** chứ không payload, cùng lý do với `classify`:
+    hàm này chạy ở `sync_after_post`, nơi không có payload nào trong tay.
     """
-    return [
-        SubledgerEntry(
-            target_kind=line.target_kind,
-            partner_kind=line.partner_kind,
-            partner_id=line.partner_id,
-            ledger=_FINANCIAL_LEDGER,
-            account_id=line.account_id,
-            document_no=voucher.voucher_no,
-            document_date=voucher.document_date,
-            due_date=_due_date_of(session, line, voucher=voucher),
-            currency_code=line.currency_code,
-            exchange_rate=line.exchange_rate,
-            amount_fc=line.amount_fc,
-            amount=convert_currency(line.amount_fc, line.exchange_rate, scale),
-            description=voucher.description,
-        )
-        for line in classify(session, lines)
-        if line.increases_debt
-    ]
-
-
-_FINANCIAL_LEDGER = 0
-"""Chỉ sổ tài chính, cùng luật với `purchase`/`sales`: nguồn đối trừ của
-`receivables` chỉ cộng số đã trả vào sổ ấy, nên dòng sổ quản trị sẽ không bao
-giờ đóng — báo cáo tuổi nợ sổ quản trị vì thế trống thay vì sai."""
-
-
-def _due_date_of(session: Session, line: DebtLine, *, voucher: Voucher) -> date | None:
-    """Hạn thanh toán rơi về điều khoản của danh mục đối tác (quyết định Q1-B).
-
-    Chứng từ GLE không có ô điều khoản thanh toán, và một khoản nợ không có
-    hạn thì **không bao giờ kêu quá hạn** — nó nằm mãi ở cột "chưa đến hạn"
-    của báo cáo tuổi nợ và ngoài tầm guard ngưỡng nợ. Rơi về danh mục là cùng
-    luật FR-SAL-009 mà hóa đơn bán đã dùng từ 7C-2, đổi lấy nguồn: ở đó là
-    khách hàng của hóa đơn, ở đây là đối tác của chính dòng.
-
-    Đối tác chưa khai điều khoản → để trống, không đoán.
-    """
-    term_id = session.execute(
-        select(Partner.payment_term_id).where(Partner.id == line.partner_id)
-    ).scalar_one_or_none()
-    if term_id is None:
-        return None
-    term = session.get(PaymentTerm, term_id)
-    if term is None:
-        return None
-    return voucher.document_date + timedelta(days=term.due_days)
+    settled_line_ids = {row.journal_line_id for row in _stored(session, voucher.id)}
+    settled_line_nos = {line.line_no for line in lines if line.id in settled_line_ids}
+    return build_subledger_entries(
+        session,
+        voucher=voucher,
+        debt_lines=[
+            line for line in classify(session, lines) if line.line_no not in settled_line_nos
+        ],
+        scale=scale,
+    )
 
 
 def write_settlements(

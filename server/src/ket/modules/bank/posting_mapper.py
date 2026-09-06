@@ -34,6 +34,7 @@ from ket.kernel.config.accounts_models import (
 from ket.kernel.config.accounts_provider import accounts_by_id
 from ket.kernel.errors import PostingValidationError, PostingViolation
 from ket.modules.bank.models import (
+    MONEY_IN_BY_KIND,
     BankSettlement,
     BankVoucher,
     BankVoucherKind,
@@ -52,12 +53,6 @@ from ket.posting.settlements import fx_adjustment_lines
 LINE_SIDE_MISSING_CODE = "bank.line_side_missing"
 
 _EMPTY_DIMENSIONS = PostingDimensions()
-
-_MONEY_IN_BY_KIND = {
-    BankVoucherKind.CREDIT_ADVICE: True,
-    BankVoucherKind.PAYMENT_ORDER: False,
-    BankVoucherKind.CHEQUE: False,
-}
 
 MONEY_ACCOUNT_CODE_PREFIXES = (CASH_ON_HAND_CODE_PREFIX, DEPOSIT_ACCOUNT_CODE_PREFIX)
 """Nhóm TK tiền — bên không nhận chiều phân tích.
@@ -142,7 +137,7 @@ def build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest:
             "Chứng từ còn dòng định khoản thiếu bên Nợ hoặc bên Có", violations=violations
         )
 
-    money_in = _MONEY_IN_BY_KIND.get(body.kind)
+    money_in = MONEY_IN_BY_KIND.get(body.kind)
     if money_in is not None and settlements:
         posting_lines.extend(
             fx_adjustment_lines(session, voucher, money_in=money_in, settlements=settlements)
