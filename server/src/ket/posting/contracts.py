@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from ket.posting.documents.models import EntryKind, Voucher, VoucherStatus
 from ket.posting.documents.registry import (
+    EDIT_GUARDS,
     REFERENCE_GUARDS,
     PostingDocumentType,
 )
@@ -40,6 +41,7 @@ from ket.posting.engine.service import PostingService
 __all__ = [
     "AMOUNT_PRECISION",
     "AMOUNT_SCALE",
+    "EDIT_GUARDS",
     "GUARD_REGISTRY",
     "GUARD_WARNING_DETAIL",
     "POSTING_DOCUMENT_REGISTRY",

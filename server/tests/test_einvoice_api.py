@@ -1,0 +1,491 @@
+"""Phân hệ hóa đơn điện tử qua HTTP (lát 7D, đóng review H-4).
+
+`test_einvoice_flow.py` đi thẳng qua `session` nên nó không chạm bốn thứ chỉ
+tồn tại ở tầng API, và cả bốn đều là chỗ một lát sau dễ làm hỏng trong im lặng:
+
+* **Quyền** — FR-EIV-007 đòi quyền hóa đơn điện tử **tách khỏi** quyền kế toán.
+  Người có trọn quyền chứng từ bán mà không có `einvoice.invoice.*` phải bị 403.
+* **Lớp xác thực thứ hai** — cả hai mã quyền của phân hệ khai
+  `requires_second_factor`, nên vai trò cấp chúng bật `totp_required` cho người
+  giữ. Bài này đăng nhập bằng TOTP thật; nếu một lát sau ai đó gỡ cờ ấy đi thì
+  bước đăng ký TOTP ở đây thành thừa nhưng vẫn chạy — còn nếu cờ được giữ mà
+  đường đăng nhập hỏng, bài đỏ ngay.
+* **Phạm vi chi nhánh** — hồ sơ đăng ký nhận `branch_id` từ thân request, tức
+  người gọi tự khai; `_require_branch_in_scope` là thứ duy nhất chặn họ khai một
+  chi nhánh không phải của mình.
+* **Idempotency** — lượt gửi lại `POST /einvoices` phải trả `200` kèm **đúng
+  hóa đơn cũ**, không tạo tờ thứ hai.
+
+Ký hiệu và khối id của tệp này tách hẳn ba tệp kia (`einvoice_support` giải
+thích vì sao mỗi tệp phải có ký hiệu riêng).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from uuid import uuid4
+
+import pyotp
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
+
+from catalog_api_support import UserFactory, ensure_role
+from conftest import api_test_client
+from einvoice_support import ensure_active_registration, ensure_invoice_form
+from ket.api.idempotency import IDEMPOTENCY_HEADER
+from ket.api.routers.einvoice import router as einvoice_router
+from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.persistence.session import control_session
+from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.pricing import PriceSource
+from ket.kernel.security import account_service, role_service, totp
+from ket.kernel.security.keystore import SecretBox
+from ket.kernel.security.permissions import Action, permission_code
+from ket.main import create_app
+from ket.modules.einvoice import (
+    EINVOICE_PERMISSION_MODULE,
+    INVOICE_PERMISSION_CODE,
+    REGISTRATION_PERMISSION_CODE,
+)
+from ket.modules.einvoice.models import EInvoiceStatus, ErrorNoticeKind
+from ket.modules.sales import INVOICE_PERMISSION_CODE as SALES_INVOICE_CODE
+from ket.modules.sales import SALES_PERMISSION_MODULE
+from ket.modules.sales.models import SalesInvoiceKind
+from ket.modules.sales.schemas import SalesInvoiceIn, SalesInvoiceLineIn
+from ket.modules.sales.service import SalesInvoiceService
+from ket.settings import Settings
+from posting_support import PostingContext, posting_scope, seed_posting_context
+from sales_support import ensure_customer, ensure_salesperson, seed_sales_package_data
+
+pytestmark = pytest.mark.db
+
+ACTOR_ID = 1
+MAY_08 = "2026-05-08"
+
+CUSTOMER_ID = 9731
+SALESPERSON_ID = 9732
+FORM_ID = 8831
+SERIAL = "C26TAPI"
+
+EINVOICE_ROLE = "ke_toan_hoa_don_dien_tu"
+SALES_ONLY_ROLE = "ke_toan_ban_hang_khong_hoa_don"
+
+DATASET_HEADER = "X-Dataset"
+
+
+def _einvoice_permissions() -> list[str]:
+    invoice = [
+        permission_code(EINVOICE_PERMISSION_MODULE, INVOICE_PERMISSION_CODE, action)
+        for action in (
+            Action.VIEW,
+            Action.CREATE,
+            Action.EDIT,
+            Action.DELETE,
+            Action.PRINT,
+            Action.EXPORT,
+        )
+    ]
+    registration = [
+        permission_code(EINVOICE_PERMISSION_MODULE, REGISTRATION_PERMISSION_CODE, action)
+        for action in (Action.VIEW, Action.CREATE, Action.EDIT, Action.DELETE)
+    ]
+    return invoice + registration
+
+
+def _sales_permissions() -> list[str]:
+    return [
+        permission_code(SALES_PERMISSION_MODULE, SALES_INVOICE_CODE, action) for action in Action
+    ]
+
+
+@pytest.fixture(scope="module")
+def app_client(test_settings: Settings) -> Iterator[TestClient]:
+    with api_test_client(create_app(test_settings)) as client:
+        yield client
+
+
+@pytest.fixture(scope="module")
+def context(session_factory: sessionmaker[Session], dataset_alpha: DatasetRef) -> PostingContext:
+    return seed_posting_context(session_factory, dataset_alpha)
+
+
+@pytest.fixture(scope="module")
+def accounts(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef, context: PostingContext
+) -> dict[str, int]:
+    account_ids = seed_sales_package_data(session_factory, dataset_alpha, context)
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        ensure_customer(session, partner_id=CUSTOMER_ID, code="KH-7D-API")
+        ensure_salesperson(session, employee_id=SALESPERSON_ID, code="NV-7D-API")
+        form = ensure_invoice_form(session, form_id=FORM_ID, serial=SERIAL)
+        ensure_active_registration(session, branch_id=context.branch_id, invoice_form_id=form.id)
+    return account_ids
+
+
+def _login_with_totp(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset: DatasetRef,
+    user_factory: UserFactory,
+    secret_box: SecretBox,
+    test_password: str,
+    *,
+    role_code: str,
+    prefix: str,
+    branch_codes: list[str],
+) -> dict[str, str]:
+    """Người dùng có vai trò đòi 2FA, đã đăng ký TOTP, đã đăng nhập.
+
+    Không dùng được `catalog_api_support.actor`: nó đăng nhập bằng mật khẩu
+    trần, mà vai trò của phân hệ này bật `totp_required` nên lượt ấy chỉ nhận
+    được một phiên hạn chế (`SessionScope.TOTP_ENROLLMENT`). Đây chính là hệ quả
+    mà `deployment-guide` cảnh báo người vận hành: gán quyền hóa đơn điện tử là
+    bắt người giữ đăng ký TOTP.
+    """
+    user = user_factory(prefix)
+    role_service.grant_role(
+        session_factory,
+        dataset_schema=dataset.schema_name,
+        user_id=user.id,
+        role_code=role_code,
+        actor_user_id=user.id,
+        actor_permissions=None,
+    )
+    for branch_code in branch_codes:
+        role_service.assign_branch(
+            session_factory,
+            dataset_schema=dataset.schema_name,
+            user_id=user.id,
+            branch_code=branch_code,
+            actor_user_id=user.id,
+            actor_branch_ids=None,
+        )
+
+    with control_session(session_factory) as session:
+        enrolling = account_service.find_user(session, user.username)
+        uri = account_service.begin_totp_enrollment(session, user=enrolling, secret_box=secret_box)
+    secret = uri.split("secret=")[1].split("&")[0]
+    generator = pyotp.TOTP(secret, digits=totp.DIGITS, interval=totp.PERIOD_SECONDS)
+    with control_session(session_factory) as session:
+        account_service.confirm_totp_enrollment(
+            session,
+            user=account_service.find_user(session, user.username),
+            code=generator.now(),
+            secret_box=secret_box,
+        )
+
+    # Chu kỳ KHÁC mã vừa dùng để xác nhận: mã đã dùng bị từ chối dùng lại
+    # (`TotpCodeReusedError`), và đó là chống phát lại chứ không phải một lỗi.
+    later = datetime.now(UTC) + timedelta(seconds=totp.PERIOD_SECONDS)
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": user.username,
+            "password": test_password,
+            "totp_code": generator.at(later),
+        },
+    )
+    assert response.status_code == 200, response.text
+    return {
+        "Authorization": f"Bearer {response.json()['token']}",
+        DATASET_HEADER: dataset.code,
+    }
+
+
+@pytest.fixture(scope="module")
+def issuer_headers(
+    app_client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    secret_box: SecretBox,
+    test_password: str,
+    context: PostingContext,
+) -> dict[str, str]:
+    ensure_role(
+        session_factory,
+        dataset_alpha,
+        EINVOICE_ROLE,
+        _einvoice_permissions() + _sales_permissions(),
+    )
+    return _login_with_totp(
+        app_client,
+        session_factory,
+        dataset_alpha,
+        user_factory,
+        secret_box,
+        test_password,
+        role_code=EINVOICE_ROLE,
+        prefix="hoadon",
+        branch_codes=[context.branch_code],
+    )
+
+
+@pytest.fixture(scope="module")
+def sales_only_headers(
+    app_client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    test_password: str,
+    context: PostingContext,
+) -> dict[str, str]:
+    """Trọn quyền chứng từ bán, **không** một mã hóa đơn điện tử nào.
+
+    Đăng nhập bằng mật khẩu trần được, và đó chính là điều đang nói: vai trò này
+    không đòi 2FA vì nó không chạm tới hóa đơn.
+    """
+    from catalog_api_support import actor
+
+    ensure_role(session_factory, dataset_alpha, SALES_ONLY_ROLE, _sales_permissions())
+    return actor(
+        app_client,
+        session_factory,
+        dataset_alpha,
+        user_factory,
+        SALES_ONLY_ROLE,
+        "banhang",
+        test_password,
+        branch_codes=[context.branch_code],
+    )
+
+
+def _new_voucher_id(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> str:
+    payload = SalesInvoiceIn(
+        kind=SalesInvoiceKind.GOODS,
+        operation_code="ban-hang-hoa",
+        customer_id=CUSTOMER_ID,
+        receivable_account_id=accounts["131"],
+        branch_id=context.branch_id,
+        document_date=MAY_08,
+        posting_date=MAY_08,
+        currency_code="VND",
+        exchange_rate=Decimal(1),
+        salesperson_id=SALESPERSON_ID,
+        description="bán hàng cho bài API",
+        lines=(
+            SalesInvoiceLineIn(
+                description="Hàng A",
+                quantity=Decimal(1),
+                unit_price_fc=Decimal(300_000),
+                amount_fc=Decimal(300_000),
+                vat_rate=Decimal(10),
+                vat_amount_fc=Decimal(30_000),
+                account_id=accounts["5111"],
+                vat_account_id=accounts["33311"],
+                price_source=PriceSource.ITEM_DEFAULT,
+            ),
+        ),
+    )
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        return str(SalesInvoiceService(session).create(payload, user_id=ACTOR_ID).id)
+
+
+def _create_invoice(
+    client: TestClient, headers: dict[str, str], voucher_id: str, *, key: str | None = None
+) -> tuple[int, dict[str, object]]:
+    response = client.post(
+        "/api/v1/einvoices",
+        json={"source_voucher_id": voucher_id, "invoice_form_id": FORM_ID},
+        headers={**headers, IDEMPOTENCY_HEADER: key or str(uuid4())},
+    )
+    return response.status_code, response.json()
+
+
+def test_sales_permission_alone_does_not_issue_invoices(
+    app_client: TestClient,
+    sales_only_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """FR-EIV-007 — quyền hóa đơn điện tử tách khỏi quyền kế toán.
+
+    Người này lập được chứng từ bán và ghi sổ được nó; họ **không** được phát
+    hành hóa đơn đỏ. Gộp hai quyền là để cả phòng kế toán phát hành hóa đơn có
+    hệ quả pháp lý chỉ vì họ nhập được chứng từ.
+    """
+    voucher_id = _new_voucher_id(session_factory, dataset_alpha, context, accounts)
+    status_code, _ = _create_invoice(app_client, sales_only_headers, voucher_id)
+    assert status_code == 403
+
+    listed = app_client.get("/api/v1/einvoices", headers=sales_only_headers)
+    assert listed.status_code == 403
+
+
+def test_the_full_lifecycle_over_http(
+    app_client: TestClient,
+    issuer_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Lập → phát hành → xác nhận → hai văn bản → nộp → hủy, qua đúng các route thật."""
+    voucher_id = _new_voucher_id(session_factory, dataset_alpha, context, accounts)
+    status_code, created = _create_invoice(app_client, issuer_headers, voucher_id)
+    assert status_code == 201, created
+    invoice_id = created["id"]
+    assert created["invoice_no"] is None
+
+    issued = app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/issue",
+        json={"invoice_date": MAY_08},
+        headers={**issuer_headers, IDEMPOTENCY_HEADER: str(uuid4())},
+    )
+    assert issued.status_code == 200, issued.text
+    assert issued.json()["status"] == int(EInvoiceStatus.DANG_PHAT_HANH)
+    assert len(issued.json()["invoice_no"]) == 8
+
+    confirmed = app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/confirm",
+        json={"tax_authority_code": "M1-26-API", "lookup_code": "TRA-CUU-API"},
+        headers=issuer_headers,
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["status"] == int(EInvoiceStatus.DA_PHAT_HANH)
+
+    # Hủy khi chưa đủ hai văn bản đã nộp: 422, không phải 500.
+    refused = app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/cancel", headers=issuer_headers
+    )
+    assert refused.status_code == 422, refused.text
+
+    for kind, number in (
+        (ErrorNoticeKind.THONG_BAO_HUY, "TBH-API"),
+        (ErrorNoticeKind.BIEN_BAN_HUY, "BBH-API"),
+    ):
+        notice = app_client.post(
+            f"/api/v1/einvoices/{invoice_id}/notices",
+            json={"kind": int(kind), "notice_no": number, "notice_date": MAY_08},
+            headers=issuer_headers,
+        )
+        assert notice.status_code == 201, notice.text
+        submitted = app_client.post(
+            f"/api/v1/einvoices/notices/{notice.json()['id']}/actions/submit",
+            headers=issuer_headers,
+        )
+        assert submitted.status_code == 200, submitted.text
+
+    cancelled = app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/cancel", headers=issuer_headers
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == int(EInvoiceStatus.DA_HUY)
+
+
+def test_resending_the_create_request_returns_the_same_invoice(
+    app_client: TestClient,
+    issuer_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """FR-NFR-004 — gửi lại không sinh tờ hóa đơn thứ hai.
+
+    Và từ review H-1, lượt gửi lại **không thể** sinh tờ thứ hai kể cả khi
+    idempotency hỏng: chỉ mục riêng phần cho một chứng từ đúng một hóa đơn còn
+    hiệu lực. Hai lớp cho một luật; bài này đo lớp trên.
+    """
+    voucher_id = _new_voucher_id(session_factory, dataset_alpha, context, accounts)
+    key = str(uuid4())
+    first_code, first = _create_invoice(app_client, issuer_headers, voucher_id, key=key)
+    second_code, second = _create_invoice(app_client, issuer_headers, voucher_id, key=key)
+
+    assert first_code == 201
+    assert second_code == 200, second
+    assert second["id"] == first["id"]
+
+
+def test_a_second_invoice_for_one_voucher_is_refused(
+    app_client: TestClient,
+    issuer_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Khóa mới, cùng chứng từ (review H-1) — phải là lỗi nghiệp vụ, không 500."""
+    voucher_id = _new_voucher_id(session_factory, dataset_alpha, context, accounts)
+    first_code, _ = _create_invoice(app_client, issuer_headers, voucher_id)
+    second_code, body = _create_invoice(app_client, issuer_headers, voucher_id)
+
+    assert first_code == 201
+    assert second_code in {409, 422}, body
+
+
+def test_a_registration_for_a_branch_outside_the_scope_is_refused(
+    app_client: TestClient,
+    issuer_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+) -> None:
+    """`branch_id` do người gọi khai, nên phạm vi phải kiểm ở đúng chỗ nhận nó."""
+    other = seed_posting_context(session_factory, dataset_alpha)
+    response = app_client.post(
+        "/api/v1/einvoices/registrations",
+        json={
+            "branch_id": other.branch_id,
+            "invoice_form_id": FORM_ID,
+            "start_date": "2026-01-01",
+        },
+        headers={**issuer_headers, IDEMPOTENCY_HEADER: str(uuid4())},
+    )
+    assert response.status_code == 403, response.text
+
+
+def test_the_listing_pages_and_counts_the_whole_scope(
+    app_client: TestClient,
+    issuer_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """FR-EIV-015 — một trang, cộng số đếm của TOÀN phạm vi.
+
+    Thẻ lọc trên UI nói "còn bao nhiêu việc"; nếu nó đếm theo trang thì con số
+    tụt xuống mỗi lần người dùng lật trang.
+    """
+    voucher_id = _new_voucher_id(session_factory, dataset_alpha, context, accounts)
+    assert _create_invoice(app_client, issuer_headers, voucher_id)[0] == 201
+
+    response = app_client.get(
+        "/api/v1/einvoices",
+        params={"status": int(EInvoiceStatus.CHUA_PHAT_HANH), "page_size": 1},
+        headers=issuer_headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(body["items"]) <= 1
+    assert body["page_size"] == 1
+    assert body["total"] >= 1
+    assert body["counts_by_status"][str(int(EInvoiceStatus.CHUA_PHAT_HANH))] == body["total"]
+
+
+def test_there_is_no_route_that_edits_an_invoice() -> None:
+    """BR-EIV-01 ở tầng bề mặt API: **không có** đường sửa nào để mà thử.
+
+    Trigger DB là lớp thứ hai và `test_einvoice_flow` đo nó. Lớp thứ nhất là
+    việc endpoint ấy không tồn tại — và một lát sau thêm một `PUT` "cho tiện"
+    sẽ làm bài này đỏ trước khi kịp có ai dùng nó.
+    """
+    paths = {
+        str(route.path): set(getattr(route, "methods", set()))  # type: ignore[attr-defined]
+        for route in einvoice_router.routes
+    }
+    assert paths, "không tìm thấy route nào của phân hệ hóa đơn điện tử"
+    for path, methods in paths.items():
+        assert "PUT" not in methods and "PATCH" not in methods, path

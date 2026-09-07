@@ -155,6 +155,63 @@ class NumberingService:
             rule, scope_key=rule.scope_key(branch_id=branch_id, on_date=on_date), on_date=on_date
         )
 
+    def define_by_scope_key(
+        self,
+        scope_key: str,
+        *,
+        document_type: str,
+        prefix: str = "",
+        suffix: str = "",
+        padding: int = 5,
+        allow_gaps: bool = True,
+        start_value: int = 1,
+    ) -> NumberSequence:
+        """Khai một dãy mà khóa phạm vi **không** suy được từ `NumberingRule`.
+
+        Bạn đôi (`allocate_by_scope_key`) của phase 2 đã có; đây là vế khai ra
+        dãy ấy, và lát 7D là người dùng đầu tiên. `NumberingRule.scope_key` ghép
+        khóa từ (loại chứng từ, chi nhánh, chu kỳ) — ba trục đúng cho chứng từ
+        nội bộ. Dãy số **hóa đơn** thì phân theo (mẫu số, ký hiệu): hai trục
+        không nằm trong bộ ba đó, và chúng đến từ hồ sơ đăng ký với cơ quan
+        thuế chứ không từ định nghĩa loại chứng từ (BR-EIV-02).
+
+        `start_value` là thứ đường `define` cũ không diễn đạt nổi và cũng không
+        nên: bộ đếm chứng từ luôn bắt đầu từ 1, còn hóa đơn **đặt in** bắt đầu
+        từ số đầu dải đã thông báo phát hành (FR-INV-002) — dải `0000501–0001000`
+        mà đếm từ 1 là năm trăm số nằm ngoài thông báo.
+        """
+
+        def define() -> NumberSequence:
+            sequence = NumberSequence(
+                scope_key=scope_key,
+                document_type=document_type,
+                prefix=prefix,
+                suffix=suffix,
+                padding=padding,
+                allow_gaps=allow_gaps,
+                reset_rule=ResetRule.NEVER.value,
+                next_value=start_value,
+            )
+            self._session.add(sequence)
+            self._session.flush()
+            return sequence
+
+        # Cùng cuộc đua và cùng cách xử như `_define_or_relock`: hai người cùng
+        # kích hoạt hồ sơ đăng ký của một ký hiệu chưa có dãy đều thấy "chưa có
+        # dòng nào" và cùng `INSERT`. Người thua **không** được báo lỗi ra ngoài
+        # — với họ thì dãy đã tồn tại, đó là tất cả những gì họ cần. Savepoint
+        # chứ không `try` trần: một `IntegrityError` làm hỏng cả transaction ở
+        # PostgreSQL, nên bắt nó mà không có điểm quay lui thì mọi lệnh sau đó
+        # đều đổ theo.
+        try:
+            with self._session.begin_nested():
+                return define()
+        except IntegrityError:
+            sequence = self._lock_sequence(scope_key)
+            if sequence is None:
+                raise
+            return sequence
+
     def peek(self, scope_key: str) -> int | None:
         """Giá trị kế tiếp **không** khóa dòng — chỉ để hiển thị.
 

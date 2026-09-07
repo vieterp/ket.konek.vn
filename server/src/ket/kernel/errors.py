@@ -1700,3 +1700,108 @@ class BankReconciliationScopeError(DomainError):
 
     error_code: ClassVar[str] = "bank_statement.scope_insufficient"
     http_status: ClassVar[int] = 403
+
+
+class EInvoiceNotFoundError(DomainError):
+    """Không tìm thấy hóa đơn điện tử."""
+
+    error_code: ClassVar[str] = "einvoice.not_found"
+    http_status: ClassVar[int] = 404
+
+
+class EInvoiceTransitionError(DomainError):
+    """Thao tác không hợp lệ với trạng thái hiện tại của hóa đơn (SRS 07 §3).
+
+    Mang cả trạng thái lẫn thao tác bị từ chối, cùng lối `VoucherTransitionError`:
+    "hóa đơn đã phát hành nên không xóa được — muốn bỏ thì hủy" là câu client
+    dựng được từ hai vế ấy, còn một câu chung chung bắt người dùng tự đoán.
+    """
+
+    error_code: ClassVar[str] = "einvoice.invalid_transition"
+
+
+class EInvoiceRegistrationMissingError(DomainError):
+    """BR-EIV-03: chưa có hồ sơ đăng ký còn hiệu lực phủ ngày hóa đơn này.
+
+    Gộp hai ca — chưa đăng ký ký hiệu này ở chi nhánh này, và có đăng ký nhưng
+    ngày hóa đơn nằm trước ngày bắt đầu sử dụng — vì cách sửa của người dùng
+    giống nhau: mở hồ sơ đăng ký ra xem. `details` mang ngày bắt đầu sớm nhất
+    tìm được để thông điệp nói được nó là ca nào.
+    """
+
+    error_code: ClassVar[str] = "einvoice.registration_missing"
+
+
+class EInvoiceNumberRangeExhaustedError(DomainError):
+    """FR-INV-002: số kế tiếp đã vượt khỏi dải đã thông báo phát hành.
+
+    Chặn **trước** khi ghi chứ không sau: một hóa đơn giấy mang số ngoài dải đã
+    thông báo là hóa đơn không hợp lệ về thuế, và nó chỉ lộ ra ở kỳ quyết toán.
+    """
+
+    error_code: ClassVar[str] = "einvoice.number_range_exhausted"
+
+
+class InvoiceRegistrationOverlapError(DomainError):
+    """FR-INV-008: dải số mới chồng lấn một hồ sơ đã có của cùng ký hiệu.
+
+    Chồng lấn dải nghĩa là hai chi nhánh cùng được cấp một số hóa đơn — thứ chỉ
+    phát hiện được sau khi cả hai đã in ra.
+    """
+
+    error_code: ClassVar[str] = "invoice_registration.range_overlap"
+    http_status: ClassVar[int] = 409
+
+
+class InvoiceFormNotUsableError(DomainError):
+    """Ký hiệu hóa đơn không dùng để phát hành được: là nút nhóm, đã ngừng theo
+    dõi, hoặc thuộc chi nhánh khác."""
+
+    error_code: ClassVar[str] = "invoice_form.not_usable"
+
+
+class EInvoiceCancellationIncompleteError(DomainError):
+    """BR-EIV-04: hủy hóa đơn phải có **cả** thông báo hủy gửi cơ quan thuế lẫn
+    biên bản hủy thỏa thuận với người mua.
+
+    `details` nói rõ văn bản nào còn thiếu — người dùng đang ở giữa một quy
+    trình hai bước, và một câu "thiếu giấy tờ" không cho biết còn bước nào.
+    """
+
+    error_code: ClassVar[str] = "einvoice.cancellation_incomplete"
+
+
+class VoucherHasIssuedInvoiceError(DomainError):
+    """FR-EIV-035: chứng từ gốc đã có hóa đơn điện tử phát hành nên không sửa,
+    xóa hay bỏ ghi sổ được.
+
+    Đường đúng là xử lý ở phía hóa đơn — thay thế, điều chỉnh hoặc hủy — rồi
+    mới quay lại chứng từ. `details` mang số hóa đơn để người dùng tìm được nó.
+    """
+
+    error_code: ClassVar[str] = "voucher.has_issued_invoice"
+
+
+class InvoiceFormBranchConflictError(DomainError):
+    """Một ký hiệu hóa đơn thuộc đúng một chi nhánh (quyết định 2026-09-07).
+
+    Dãy số hóa đơn phân theo (mẫu số, ký hiệu) — đúng chữ BR-EIV-02 — còn dải
+    số đã thông báo phát hành thì phân theo chi nhánh (FR-INV-008). Hai trục
+    khác nhau cho cùng một con số nghĩa là chi nhánh này phát hành ra số thuộc
+    dải của chi nhánh kia. Buộc một ký hiệu về một chi nhánh làm hai trục ấy
+    trùng nhau; cách sửa của người dùng là khai một ký hiệu riêng.
+    """
+
+    error_code: ClassVar[str] = "invoice_form.branch_conflict"
+    http_status: ClassVar[int] = 409
+
+
+class EInvoiceNoticeSubmittedError(DomainError):
+    """Văn bản kèm hóa đơn đã nộp cơ quan thuế nên không xóa được.
+
+    Lập nhầm loại thì sửa được **trước** khi nộp; sau khi nộp thì thứ phải sửa
+    nằm ở phía cơ quan thuế, không ở sổ.
+    """
+
+    error_code: ClassVar[str] = "einvoice.notice_already_submitted"
+    http_status: ClassVar[int] = 409

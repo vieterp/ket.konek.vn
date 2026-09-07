@@ -1011,6 +1011,258 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/einvoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Einvoices
+         * @description Một trang hóa đơn, lọc theo trạng thái (FR-EIV-015/025).
+         */
+        get: operations["list_einvoices_api_v1_einvoices_get"];
+        put?: never;
+        /**
+         * Create Einvoice
+         * @description Lập hóa đơn điện tử từ một chứng từ gốc (FR-EIV-010).
+         */
+        post: operations["create_einvoice_api_v1_einvoices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/notices/{notice_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Error Notice
+         * @description Xóa văn bản **còn nháp** — đường sửa khi lập nhầm loại. Đã nộp thì không.
+         */
+        delete: operations["delete_error_notice_api_v1_einvoices_notices__notice_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/notices/{notice_id}/actions/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Error Notice
+         * @description Đánh dấu văn bản đã nộp cơ quan thuế — vế thứ hai của "lập rồi nộp".
+         *
+         *     Thiếu endpoint này thì một văn bản lập ở trạng thái nháp là ngõ cụt: không
+         *     nộp được, không lập lại được (chỉ mục duy nhất theo loại), không xóa được —
+         *     và hóa đơn ấy vĩnh viễn không hủy được (review 7D H-3).
+         */
+        post: operations["submit_error_notice_api_v1_einvoices_notices__notice_id__actions_submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/registrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Registration
+         * @description Lập hồ sơ đăng ký / thông báo phát hành (FR-EIV-002, FR-INV-001).
+         */
+        post: operations["create_registration_api_v1_einvoices_registrations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/registrations/by-form/{invoice_form_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Registrations
+         * @description Hồ sơ của một ký hiệu, trong phạm vi chi nhánh của người gọi (FR-INV-002).
+         */
+        get: operations["list_registrations_api_v1_einvoices_registrations_by_form__invoice_form_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/registrations/{registration_id}/actions/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate Registration
+         * @description Đưa hồ sơ vào hiệu lực; dãy số của ký hiệu được khai ngay tại đây.
+         */
+        post: operations["activate_registration_api_v1_einvoices_registrations__registration_id__actions_activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/{einvoice_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Einvoice */
+        get: operations["get_einvoice_api_v1_einvoices__einvoice_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Einvoice
+         * @description Xóa hóa đơn chưa phát hành.
+         */
+        delete: operations["delete_einvoice_api_v1_einvoices__einvoice_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/{einvoice_id}/actions/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Einvoice
+         * @description Hủy hóa đơn — đòi đủ thông báo hủy và biên bản hủy đã nộp (BR-EIV-04).
+         */
+        post: operations["cancel_einvoice_api_v1_einvoices__einvoice_id__actions_cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/{einvoice_id}/actions/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Einvoice
+         * @description Cơ quan thuế / nhà cung cấp đã nhận hóa đơn.
+         */
+        post: operations["confirm_einvoice_api_v1_einvoices__einvoice_id__actions_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/{einvoice_id}/actions/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue Einvoice
+         * @description Cấp số và đưa hóa đơn vào trạng thái đang phát hành (FR-EIV-013).
+         *
+         *     Lát 7E chèn lượt ký XAdES **trước** bước này và một dòng `einvoice_outbox`
+         *     **trong** cùng transaction (RT-10); phần cấp số ở đây không đổi.
+         */
+        post: operations["issue_einvoice_api_v1_einvoices__einvoice_id__actions_issue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/{einvoice_id}/actions/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Einvoice
+         * @description Bị từ chối. Số đã cấp **giữ nguyên** (ADR-013).
+         */
+        post: operations["reject_einvoice_api_v1_einvoices__einvoice_id__actions_reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/{einvoice_id}/notices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Error Notice
+         * @description Lập thông báo hủy hoặc biên bản hủy (FR-EIV-031/032).
+         */
+        post: operations["add_error_notice_api_v1_einvoices__einvoice_id__notices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/fiscal-years": {
         parameters: {
             query?: never;
@@ -10343,6 +10595,128 @@ export interface components {
             row_version: number;
         };
         /**
+         * EInvoiceConfirmIn
+         * @description Kết quả **chấp nhận** từ nhà cung cấp / cơ quan thuế.
+         *
+         *     Lát 7D nhận từ người dùng; lát 7E là `outbox` điền, cùng thân này.
+         */
+        EInvoiceConfirmIn: {
+            /** Mã tra cứu cho người mua */
+            lookup_code?: string | null;
+            /** Mã cơ quan thuế cấp */
+            tax_authority_code?: string | null;
+        };
+        /**
+         * EInvoiceIn
+         * @description Lập hóa đơn từ một chứng từ gốc (FR-EIV-010).
+         */
+        EInvoiceIn: {
+            /** Ký hiệu hóa đơn */
+            invoice_form_id: number;
+            /**
+             * Chứng từ gốc
+             * Format: uuid
+             */
+            source_voucher_id: string;
+        };
+        /**
+         * EInvoiceIssueIn
+         * @description Phát hành: cấp số cho hóa đơn (FR-EIV-013).
+         *
+         *     Chỉ một trường. Mẫu số và ký hiệu đã chốt lúc lập hóa đơn — chọn lại chúng
+         *     ở đây là cho phép đổi ký hiệu của một hóa đơn đã bị từ chối rồi phát hành
+         *     lại, tức để một tờ hóa đơn mang số của hai dãy.
+         */
+        EInvoiceIssueIn: {
+            /**
+             * Ngày hóa đơn
+             * Format: date
+             */
+            invoice_date: string;
+        };
+        /**
+         * EInvoiceListOut
+         * @description Một trang hóa đơn + số đếm theo trạng thái cho bộ lọc U3/FR-EIV-015.
+         *
+         *     Số đếm đi kèm danh sách chứ không là một endpoint riêng: màn hình vẽ các
+         *     thẻ lọc ("Chưa phát hành 12 · Phát hành lỗi 2") cùng lúc với lưới, và hai
+         *     lượt gọi cho một màn hình là hai ảnh chụp có thể lệch nhau.
+         *
+         *     `counts_by_status` đếm **toàn bộ** phạm vi người gọi, không riêng trang
+         *     đang xem — thẻ lọc nói "còn bao nhiêu việc", không nói "trang này có gì".
+         */
+        EInvoiceListOut: {
+            /** Counts By Status */
+            counts_by_status: {
+                [key: string]: number;
+            };
+            /** Items */
+            items: components["schemas"]["EInvoiceOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** EInvoiceOut */
+        EInvoiceOut: {
+            /** Adjusts Invoice Id */
+            adjusts_invoice_id: string | null;
+            /** Branch Id */
+            branch_id: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invoice Date */
+            invoice_date: string | null;
+            /** Invoice Form Id */
+            invoice_form_id: number;
+            /** Invoice No */
+            invoice_no?: string | null;
+            /** Issued At */
+            issued_at: string | null;
+            /** Lookup Code */
+            lookup_code: string | null;
+            /** Replaces Invoice Id */
+            replaces_invoice_id: string | null;
+            /**
+             * Source Voucher Id
+             * Format: uuid
+             */
+            source_voucher_id: string;
+            status: components["schemas"]["EInvoiceStatus"];
+            /** Tax Authority Code */
+            tax_authority_code: string | null;
+            /** Tax Authority Message */
+            tax_authority_message: string | null;
+            /** Tax Authority Status */
+            tax_authority_status: number | null;
+        };
+        /**
+         * EInvoiceRejectIn
+         * @description Kết quả **từ chối**. Lý do hiện thẳng lên cột gộp trạng thái (U3).
+         */
+        EInvoiceRejectIn: {
+            /** Lý do từ chối */
+            message: string;
+        };
+        /**
+         * EInvoiceStatus
+         * @description Vòng đời hóa đơn điện tử (`docs/srs/07` §3).
+         *
+         *     Ranh giới **bất biến** nằm ở `DA_PHAT_HANH`: từ giá trị này trở lên, nội
+         *     dung hóa đơn đã ra khỏi phần mềm — nó đã mang số, đã ký, đã tới cơ quan
+         *     thuế — nên mọi sửa đổi phải đi qua thay thế / điều chỉnh / hủy (BR-EIV-01).
+         *     Vì vậy thứ tự các thành viên **không** tùy tiện: `ISSUED_FLOOR` và trigger
+         *     DB đều so sánh bằng `>=`, và chèn một trạng thái mới vào giữa sẽ lặng lẽ
+         *     dời ranh giới ấy.
+         * @enum {integer}
+         */
+        EInvoiceStatus: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+        /**
          * EmployeesCreateRequest
          * @description Nhân viên — tạo mới.
          */
@@ -10472,6 +10846,74 @@ export interface components {
             row_version: number;
             /** Mã số thuế TNCN */
             tax_code?: string | null;
+        };
+        /**
+         * ErrorNoticeIn
+         * @description Thông báo hủy (CQT) hoặc biên bản hủy (người mua) — FR-EIV-031/032.
+         */
+        ErrorNoticeIn: {
+            /** Loại văn bản */
+            kind: components["schemas"]["ErrorNoticeKind"];
+            /**
+             * Ngày văn bản
+             * Format: date
+             */
+            notice_date: string;
+            /** Số văn bản */
+            notice_no: string;
+            /** Lý do */
+            reason?: string | null;
+            /** Mã lý do */
+            reason_code?: string | null;
+            /**
+             * Đã nộp
+             * @default false
+             */
+            submitted: boolean;
+        };
+        /**
+         * ErrorNoticeKind
+         * @description Loại văn bản kèm hóa đơn.
+         *
+         *     BR-EIV-04 đòi hủy hóa đơn phải có **cả hai**: thông báo gửi cơ quan thuế và
+         *     biên bản thỏa thuận với người mua. Phác thảo plan để hai cột `cancel_notice_id`
+         *     / `cancel_record_id` trên `einvoices`; lát này đảo chiều (quyết định user
+         *     2026-09-07) — văn bản trỏ về hóa đơn, kèm loại, và một chỉ mục duy nhất
+         *     `(einvoice_id, kind)`. Lý do: hai cột cùng trỏ một bảng thì **không có cách
+         *     nào ở tầng SQL** bắt cột thứ nhất phải là thông báo còn cột thứ hai phải là
+         *     biên bản — luật ấy tụt xuống mã service, tức thành thứ quên được. Đảo chiều
+         *     thì gắn nhầm loại là không biểu diễn được, và câu hỏi của state machine gọn
+         *     lại thành "đã có đủ hai loại chưa".
+         * @enum {integer}
+         */
+        ErrorNoticeKind: 0 | 1;
+        /** ErrorNoticeOut */
+        ErrorNoticeOut: {
+            /**
+             * Einvoice Id
+             * Format: uuid
+             */
+            einvoice_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["ErrorNoticeKind"];
+            /**
+             * Notice Date
+             * Format: date
+             */
+            notice_date: string;
+            /** Notice No */
+            notice_no: string;
+            /** Reason */
+            reason: string | null;
+            /** Reason Code */
+            reason_code: string | null;
+            status: components["schemas"]["NoticeStatus"];
+            /** Submitted At */
+            submitted_at: string | null;
         };
         /**
          * ExciseTaxTablesCreateRequest
@@ -10781,6 +11223,16 @@ export interface components {
             mode: components["schemas"]["ImportMode"];
         };
         /**
+         * InvoiceFormKind
+         * @description Hóa đơn của ký hiệu này thuộc hình thức nào.
+         *
+         *     `IntEnum` với bộ giá trị đóng: pháp luật hiện hành cho đúng ba hình thức, và
+         *     một hình thức thứ tư sẽ đi kèm cả một bộ quy định mới chứ không chỉ một giá
+         *     trị mới — nên đây là chỗ đáng khai đóng, khác `kind` của chứng từ mua/bán.
+         * @enum {integer}
+         */
+        InvoiceFormKind: 0 | 1 | 2;
+        /**
          * InvoiceFormsCreateRequest
          * @description Mẫu số hóa đơn — tạo mới.
          */
@@ -10789,17 +11241,23 @@ export interface components {
             branch_id?: number | null;
             /** Code */
             code: string;
+            /** Mẫu số */
+            form_no?: string | null;
             /**
              * Is Group
              * @default false
              */
             is_group: boolean;
+            /** Hình thức hóa đơn */
+            kind?: components["schemas"]["InvoiceFormKind"] | null;
             /** Name */
             name: string;
             /** Name En */
             name_en?: string | null;
             /** Parent Id */
             parent_id?: number | null;
+            /** Nhà cung cấp dịch vụ HĐĐT */
+            provider_code?: string | null;
         };
         /**
          * InvoiceFormsListResponse
@@ -10820,12 +11278,16 @@ export interface components {
             branch_id: number | null;
             /** Code */
             code: string;
+            /** Mẫu số */
+            form_no?: string | null;
             /** Id */
             id: number;
             /** Is Active */
             is_active: boolean;
             /** Is Group */
             is_group: boolean;
+            /** Hình thức hóa đơn */
+            kind?: components["schemas"]["InvoiceFormKind"] | null;
             /** Level */
             level: number;
             /** Name */
@@ -10836,6 +11298,8 @@ export interface components {
             parent_id: number | null;
             /** Path */
             path: string;
+            /** Nhà cung cấp dịch vụ HĐĐT */
+            provider_code?: string | null;
             /** Row Version */
             row_version: number;
             /** Uid */
@@ -10848,14 +11312,73 @@ export interface components {
         InvoiceFormsUpdateRequest: {
             /** Code */
             code: string;
+            /** Mẫu số */
+            form_no?: string | null;
             /** Is Active */
             is_active: boolean;
+            /** Hình thức hóa đơn */
+            kind?: components["schemas"]["InvoiceFormKind"] | null;
             /** Name */
             name: string;
             /** Name En */
             name_en?: string | null;
+            /** Nhà cung cấp dịch vụ HĐĐT */
+            provider_code?: string | null;
             /** Row Version */
             row_version: number;
+        };
+        /**
+         * InvoiceRegistrationIn
+         * @description Hồ sơ đăng ký sử dụng HĐĐT / thông báo phát hành (FR-EIV-002, FR-INV-001).
+         */
+        InvoiceRegistrationIn: {
+            /** Chi nhánh */
+            branch_id: number;
+            /** Ký hiệu hóa đơn */
+            invoice_form_id: number;
+            /** Ngày thông báo */
+            notice_date?: string | null;
+            /** Số thông báo phát hành */
+            notice_no?: string | null;
+            /** Số lượng hóa đơn */
+            quantity?: number | null;
+            /** Từ số */
+            range_from?: number | null;
+            /** Đến số */
+            range_to?: number | null;
+            /**
+             * Ngày bắt đầu sử dụng
+             * Format: date
+             */
+            start_date: string;
+        };
+        /** InvoiceRegistrationOut */
+        InvoiceRegistrationOut: {
+            /** Branch Id */
+            branch_id: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invoice Form Id */
+            invoice_form_id: number;
+            /** Notice Date */
+            notice_date: string | null;
+            /** Notice No */
+            notice_no: string | null;
+            /** Quantity */
+            quantity: number | null;
+            /** Range From */
+            range_from: number | null;
+            /** Range To */
+            range_to: number | null;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            status: components["schemas"]["RegistrationStatus"];
         };
         /**
          * ItemDiscountTierCreateRequest
@@ -11879,6 +12402,12 @@ export interface components {
             /** Table */
             table: string;
         };
+        /**
+         * NoticeStatus
+         * @description Văn bản đã nộp cơ quan thuế chưa.
+         * @enum {integer}
+         */
+        NoticeStatus: 0 | 1;
         /**
          * OpenInvoiceOut
          * @description Một chứng từ công nợ còn nợ cho picker đối trừ — chép phẳng từ
@@ -13645,6 +14174,12 @@ export interface components {
             /** Unmatched Vouchers */
             unmatched_vouchers: components["schemas"]["MatchCandidateOut"][];
         };
+        /**
+         * RegistrationStatus
+         * @description Trạng thái hồ sơ đăng ký / thông báo phát hành (SRS 08).
+         * @enum {integer}
+         */
+        RegistrationStatus: 0 | 1 | 2 | 3;
         /** ReportListResponse */
         ReportListResponse: {
             /** Reports */
@@ -16780,6 +17315,458 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DimensionValueResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_einvoices_api_v1_einvoices_get: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["EInvoiceStatus"][] | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EInvoiceListOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_einvoice_api_v1_einvoices_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EInvoiceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_error_notice_api_v1_einvoices_notices__notice_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    submit_error_notice_api_v1_einvoices_notices__notice_id__actions_submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorNoticeOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_registration_api_v1_einvoices_registrations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvoiceRegistrationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceRegistrationOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_registrations_api_v1_einvoices_registrations_by_form__invoice_form_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoice_form_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceRegistrationOut"][];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    activate_registration_api_v1_einvoices_registrations__registration_id__actions_activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceRegistrationOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_einvoice_api_v1_einvoices__einvoice_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                einvoice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_einvoice_api_v1_einvoices__einvoice_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                einvoice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cancel_einvoice_api_v1_einvoices__einvoice_id__actions_cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                einvoice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    confirm_einvoice_api_v1_einvoices__einvoice_id__actions_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                einvoice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EInvoiceConfirmIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    issue_einvoice_api_v1_einvoices__einvoice_id__actions_issue_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                einvoice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EInvoiceIssueIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    reject_einvoice_api_v1_einvoices__einvoice_id__actions_reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                einvoice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EInvoiceRejectIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    add_error_notice_api_v1_einvoices__einvoice_id__notices_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                einvoice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ErrorNoticeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorNoticeOut"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

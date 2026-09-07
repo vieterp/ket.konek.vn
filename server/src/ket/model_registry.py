@@ -45,6 +45,7 @@ from ket.kernel.security import auth_models
 from ket.kernel.security import models as security_models
 from ket.modules.bank import models as bank_models
 from ket.modules.cash_book import models as cash_book_models
+from ket.modules.einvoice import models as einvoice_models
 from ket.modules.general_ledger.journal import models as gl_journal_models
 from ket.modules.purchase import models as purchase_models
 from ket.modules.receivables import models as receivables_models
@@ -91,6 +92,7 @@ __all__ = [
     "currency_models",
     "dimension_models",
     "dimension_recompute_registration",
+    "einvoice_models",
     "excel_models",
     "gl_journal_models",
     "gl_posting_models",

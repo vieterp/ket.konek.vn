@@ -117,6 +117,9 @@ class ket.kernel.protocols.TreasurerVoucherSource
 # module ket.posting.contracts
 ket.posting.contracts.AMOUNT_PRECISION: int
 ket.posting.contracts.AMOUNT_SCALE: int
+class ket.posting.contracts.EDIT_GUARDS: instance of
+  check(self, session: 'Session', voucher_id: 'UUID') -> 'None'
+  register(self, guard: 'VoucherReferenceGuard') -> 'None'
 class ket.posting.contracts.EntryKind
 class ket.posting.contracts.ExtendedDimensionValue
   field dimension_id: int
@@ -154,6 +157,7 @@ class ket.posting.contracts.PostingDocumentType
   field before_delete: LifecycleHook | None
   field build_request: RequestBuilder
   field code: str
+  field invoiceable: bool
   field permission_module: str
   field permission_name: str
   field print_details: PrintDetailsBuilder | None

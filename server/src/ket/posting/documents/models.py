@@ -133,6 +133,12 @@ class Voucher(DatasetBase, Audited, RowVersioned):
         UniqueConstraint(
             "document_type", "branch_id", "voucher_no", name="uq_vouchers_type_branch_no"
         ),
+        # Đích cho khóa ngoại GHÉP của `einvoices` (lát 7D): hóa đơn điện tử
+        # mang `branch_id` riêng để RLS canh được, và ràng buộc này là thứ giữ
+        # nó không lệch khỏi chi nhánh của chứng từ gốc. Không thêm bảo đảm nào
+        # — `id` đã là khóa chính nên cặp này vốn duy nhất; nó chỉ nói điều đó
+        # ra để PostgreSQL chấp nhận một `REFERENCES vouchers (id, branch_id)`.
+        UniqueConstraint("id", "branch_id", name="uq_vouchers_id_branch"),
         Index("ix_vouchers_period", "period_id", "document_type", "status"),
         Index("ix_vouchers_posting_date", "posting_date"),
     )

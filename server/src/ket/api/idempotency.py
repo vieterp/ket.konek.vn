@@ -108,6 +108,28 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         # Cùng đường ấy, hỏi cả chứng từ một lượt (lát 7C-2) — vẫn không tạo
         # gì, nên vẫn không có gì để một khóa idempotency bảo vệ.
         "/api/v1/pricing/quote-batch",
+        # Ba cạnh trạng thái của hóa đơn điện tử (lát 7D), cùng họ với ba thao
+        # tác khớp/gỡ khớp sao kê ở trên: chúng lật một trạng thái, không tạo
+        # bản ghi. Lượt gửi lại đâm vào chính máy trạng thái
+        # (`einvoice.invalid_transition`, 422) vì trạng thái nguồn đã đổi — và
+        # lượt CẤP SỐ, thứ duy nhất ở phân hệ này mà một lần gửi lại có thể làm
+        # hỏng thật, nằm ở `actions/issue` và **có** khóa.
+        "/api/v1/einvoices/{einvoice_id}/actions/confirm",
+        "/api/v1/einvoices/{einvoice_id}/actions/reject",
+        "/api/v1/einvoices/{einvoice_id}/actions/cancel",
+        # Lập thông báo hủy / biên bản hủy (lát 7D): lượt gửi lại đâm vào unique
+        # `(einvoice_id, kind)` của bảng — mỗi hóa đơn tối đa một văn bản mỗi
+        # loại. Cùng lối miễn trừ với hồ sơ định dạng sao kê, và cùng lý do:
+        # ràng buộc DB khử trùng bền hơn một khóa có hạn.
+        "/api/v1/einvoices/{einvoice_id}/notices",
+        # Kích hoạt hồ sơ đăng ký (lát 7D): `activate` trả về ngay khi hồ sơ đã
+        # ở trạng thái hiệu lực, nên bản thân thao tác đã idempotent — cùng lối
+        # gán vai trò / gán chi nhánh ở đầu danh sách này.
+        "/api/v1/einvoices/registrations/{registration_id}/actions/activate",
+        # Lát 7D: đánh dấu văn bản đã nộp — trả về nguyên trạng khi gọi lại
+        # trên văn bản đã nộp (thời điểm nộp là sự kiện xảy ra một lần), nên
+        # thao tác tự nó đã idempotent; cùng họ gán vai trò ở đầu danh sách.
+        "/api/v1/einvoices/notices/{notice_id}/actions/submit",
     }
 )
 """Miễn trừ theo **đúng một đường dẫn**, cho thao tác tự nó đã idempotent.

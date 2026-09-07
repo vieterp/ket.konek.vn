@@ -81,6 +81,22 @@ class PostingDocumentType:
     Có hook thì đường in **không** phải phân nhánh theo mã loại: thêm phân hệ
     là thêm một hàm ở module, không sửa `routers/printing.py` dùng chung."""
 
+    invoiceable: bool = False
+    """Loại chứng từ này xuất được hóa đơn điện tử không (`docs/srs/07` §2, lát 7D).
+
+    Ở đây chứ không trong một danh sách mã chứng từ nằm bên `modules/einvoice`,
+    vì danh sách ấy trải qua ba phân hệ — bán hàng (7C), trả lại hàng mua (7B),
+    phiếu xuất kho kiêm vận chuyển và xuất gửi bán đại lý (phase 8) — và luật
+    C3 cấm module import module. Một cờ trên bản đăng ký của chính loại chứng
+    từ giữ câu trả lời cạnh nơi khai loại đó, nên phân hệ mới bật cờ của mình
+    là xong, không ai phải đi sửa một danh sách ở phân hệ khác.
+
+    Mặc định `False`: một chứng từ chỉ xuất hóa đơn được khi có người **nói ra**
+    rằng nó xuất được. Mặc định ngược lại biến mọi loại chứng từ tương lai —
+    phiếu kế toán, phiếu nhập kho, bảng lương — thành thứ phát hành hóa đơn đỏ
+    được cho tới khi có người nhớ ra mà tắt đi.
+    """
+
     def permission(self, action: Action) -> str:
         return permission_code(self.permission_module, self.permission_name, action)
 
@@ -160,6 +176,28 @@ class VoucherReferenceGuards:
 REFERENCE_GUARDS: Final[VoucherReferenceGuards] = VoucherReferenceGuards()
 """Bộ guard của tiến trình — module đăng ký lúc import, cùng chỗ với registry
 loại chứng từ."""
+
+
+EDIT_GUARDS: Final[VoucherReferenceGuards] = VoucherReferenceGuards()
+"""Guard chạy trước MỌI lượt sửa và MỌI lượt xóa chứng từ còn ở trạng thái Đã cất.
+
+Bộ **thứ hai**, không gộp vào `REFERENCE_GUARDS`, vì hai bộ canh hai loại chứng
+từ khác hẳn nhau và mỗi lời gọi thừa là một truy vấn trên đường nóng:
+
+* `REFERENCE_GUARDS` canh chứng từ **đã ghi sổ** — dòng sao kê đã khớp, khoản nợ
+  đã trả một phần. Điểm gọi ở `PostingService.unpost`, và docstring của nó giải
+  thích vì sao đường xóa nháp cố ý không gọi (review 6G-2 M-4: ở đó nó là mã
+  chết vì `ensure_editable` đã từ chối mọi trạng thái đã ghi sổ).
+* Bộ này canh chứng từ **chưa ghi sổ** — thứ mà chính docstring ấy đòi hỏi:
+  "guard nào cần canh chứng từ NHÁP phải tự đặt điểm gọi trước `ensure_editable`
+  và kèm test chứng minh đường ấy tới được". Người dùng đầu tiên là FR-EIV-035:
+  một chứng từ bán còn nháp vẫn có thể đã phát hành hóa đơn thật (FR-EIV-011
+  cho phát hành ngay sau khi lập chứng từ), và lúc ấy nội dung nó phải đứng yên.
+
+Điểm gọi là **đầu** `VoucherService.ensure_editable` — hàm mà cả đường sửa của
+từng module lẫn `VoucherService.delete` đều đi qua. Đặt ở từng service module
+thì mỗi phân hệ mới của phase 8–9 là một cơ hội quên, và chỗ quên đó im lặng.
+"""
 
 
 REGISTRY: Final[PostingDocumentRegistry] = PostingDocumentRegistry()

@@ -124,6 +124,21 @@ def test_the_exemption_list_is_exactly_what_was_reviewed() -> None:
             "/api/v1/bank/statements/lines/{line_id}/actions/unmatch",
             "/api/v1/pricing/quote",
             "/api/v1/pricing/quote-batch",
+            # Lát 7D: ba cạnh trạng thái của hóa đơn điện tử — lật một trạng
+            # thái, không tạo bản ghi; gửi lại đâm vào máy trạng thái (422).
+            # Lượt CẤP SỐ (`actions/issue`) thì **có** khóa, vì nó là thứ duy
+            # nhất ở phân hệ này mà một lần gửi lại làm hỏng thật.
+            "/api/v1/einvoices/{einvoice_id}/actions/confirm",
+            "/api/v1/einvoices/{einvoice_id}/actions/reject",
+            "/api/v1/einvoices/{einvoice_id}/actions/cancel",
+            # Lát 7D: lập thông báo hủy / biên bản hủy — unique
+            # `(einvoice_id, kind)` chặn nhân đôi, cùng lối hồ sơ định dạng sao kê.
+            "/api/v1/einvoices/{einvoice_id}/notices",
+            # Lát 7D: kích hoạt hồ sơ đăng ký — trả về ngay khi đã hiệu lực,
+            # nên thao tác tự nó đã idempotent (cùng họ gán vai trò).
+            "/api/v1/einvoices/registrations/{registration_id}/actions/activate",
+            # Lát 7D: đánh dấu văn bản đã nộp — gọi lại trả nguyên trạng.
+            "/api/v1/einvoices/notices/{notice_id}/actions/submit",
         }
     )
     # Cơ chế thứ ba, thêm ở lát 3C-1. Ghim nó ở đây vì chính docstring bên trên

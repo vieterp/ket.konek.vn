@@ -25,6 +25,7 @@ from ket.kernel.numbering.service import NumberingRule, NumberingService
 from ket.kernel.periods.models import AccountingPeriod
 from ket.kernel.periods.service import PeriodService
 from ket.posting.documents.models import EntryKind, Voucher, VoucherStatus
+from ket.posting.documents.registry import EDIT_GUARDS
 from ket.posting.documents.state_machine import VoucherAction, transition
 
 
@@ -96,11 +97,20 @@ class VoucherService:
         return voucher
 
     def ensure_editable(self, voucher: Voucher) -> None:
-        """Sửa được khi và chỉ khi: Đã cất, và kỳ còn mở (BR-GLE-06).
+        """Sửa được khi và chỉ khi: Đã cất, kỳ còn mở (BR-GLE-06), và không ai
+        giữ chứng từ này lại.
 
         Chứng từ đã ghi sổ muốn sửa thì bỏ ghi sổ trước — thông điệp phải nói
         đúng bước đó chứ không phải một câu "không sửa được" chung chung.
+
+        `EDIT_GUARDS` chạy **trước** hai phép kiểm ấy, có chủ đích: người giữ
+        chứng từ lại (hóa đơn điện tử đã phát hành, FR-EIV-035) nói được lý do
+        cụ thể và bước phải làm, còn "bỏ ghi sổ trước rồi mới sửa được" là một
+        lời khuyên sai khi lượt bỏ ghi sổ ấy cũng sẽ bị chặn. Xem docstring
+        `EDIT_GUARDS` về việc vì sao đây là bộ guard thứ hai chứ không phải một
+        lời gọi `REFERENCE_GUARDS` nữa.
         """
+        EDIT_GUARDS.check(self._session, voucher.id)
         status = VoucherStatus(voucher.status)
         if status is not VoucherStatus.DA_CAT:
             raise VoucherTransitionError(

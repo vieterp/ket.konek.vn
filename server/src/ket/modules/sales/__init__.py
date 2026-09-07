@@ -86,5 +86,10 @@ POSTING_DOCUMENT_REGISTRY.register(
         before_delete=_before_delete,
         # Bản in hóa đơn bán và phiếu giao hàng thuộc lát báo cáo/in (7G).
         print_details=None,
+        # `docs/srs/07` §2: hóa đơn bán hàng trong nước, bán đại lý đúng giá và
+        # giảm giá hàng bán đều phát hành HĐĐT được. Cả ba là `kind` của cùng
+        # loại chứng từ `SAL`, nên cờ đặt ở mức loại; luật riêng của từng `kind`
+        # (nếu có) thuộc về `modules/einvoice`, không về đây.
+        invoiceable=True,
     )
 )
