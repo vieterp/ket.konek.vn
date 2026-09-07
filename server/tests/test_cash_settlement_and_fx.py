@@ -17,7 +17,12 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from cash_book_support import seed_cash_book_package_data, seed_open_invoice
+from cash_book_support import (
+    seed_cash_book_package_data,
+    seed_open_invoice,
+    seed_opening_advance,
+)
+from ket.kernel.config.accounts_models import ChartOfAccount
 from ket.kernel.contracts import PartnerKind
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.errors import PostingValidationError
@@ -28,6 +33,8 @@ from ket.modules.cash_book.schemas import CashSettlementIn, CashVoucherIn, CashV
 from ket.modules.cash_book.service import CashVoucherService
 from ket.modules.cash_book.settlement_service import open_invoices
 from ket.posting.engine.models import GlPosting, Ledger
+from ket.posting.integrity.checks.registry import check_of
+from ket.posting.integrity.runner import run_check
 from ket.posting.opening_balances.models import OpeningBalanceInvoice, OpeningDetailKind
 from posting_support import USD_RATE, PostingContext, posting_scope, seed_posting_context
 
@@ -719,3 +726,410 @@ def test_settlement_target_lock_is_for_update() -> None:
 
     source = inspect.getsource(settlement_source.OpeningBalanceSettlementSource._lock)
     assert "with_for_update" in source
+
+
+def _mixed_receipt(
+    context: PostingContext,
+    accounts: dict[str, int],
+    *,
+    debt_amount_fc: Decimal,
+    other_amount_fc: Decimal,
+    settlements: tuple[CashSettlementIn, ...],
+) -> CashVoucherIn:
+    """Phiếu thu gộp: một dòng thu nợ khách + một dòng không chạm công nợ."""
+    return CashVoucherIn(
+        kind=CashVoucherKind.RECEIPT,
+        operation_code="thu-no-khach-hang",
+        cash_account_id=accounts["111"],
+        branch_id=context.branch_id,
+        document_date=JAN_20,
+        posting_date=JAN_20,
+        currency_code="VND",
+        exchange_rate=Decimal(1),
+        partner_kind=PartnerKind.CUSTOMER,
+        partner_id=CUSTOMER,
+        lines=(
+            CashVoucherLineIn(
+                debit_account_id=accounts["111"],
+                credit_account_id=accounts["131"],
+                amount_fc=debt_amount_fc,
+                partner_kind=PartnerKind.CUSTOMER,
+                partner_id=CUSTOMER,
+            ),
+            CashVoucherLineIn(
+                debit_account_id=accounts["111"],
+                credit_account_id=accounts["3381"],
+                amount_fc=other_amount_fc,
+                partner_kind=PartnerKind.CUSTOMER,
+                partner_id=CUSTOMER,
+            ),
+        ),
+        settlements=settlements,
+    )
+
+
+def test_settlement_total_is_measured_on_debt_lines_not_on_the_voucher(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    run: Runner,
+) -> None:
+    """Lát 7C-5, điều kiện #9: BR-QUY-03 đo trên DÒNG CÔNG NỢ.
+
+    Phiếu thu 150 gồm `Có 131 khách A 100` + `Có 3381 50` đối trừ 100 vào hóa
+    đơn của A là chứng từ ĐÚNG — sổ cái và sổ phụ cùng nhích 100. Bản trước lát
+    này bắt đối trừ đủ 150 (tổng MỌI dòng), tức bắt người dùng khai một con số
+    mà sổ cái không hề ghi.
+    """
+    invoice_id = seed_open_invoice(
+        session_factory,
+        dataset_alpha,
+        context,
+        partner_id=CUSTOMER,
+        amount_fc=Decimal("500000"),
+        invoice_no="HD-DEBTLINE",
+    )
+
+    def work(session: Session) -> object:
+        created = CashVoucherService(session).create(
+            _mixed_receipt(
+                context,
+                accounts,
+                debt_amount_fc=Decimal("100000"),
+                other_amount_fc=Decimal("50000"),
+                settlements=(_settle(invoice_id, Decimal("100000")),),
+            ),
+            user_id=ACTOR_ID,
+        )
+        assert created is not None
+
+        # Kiểm chứng ngược: đối trừ đủ tổng chứng từ (150) nay là VI PHẠM, vì
+        # sổ cái chỉ ghi giảm 100 trên TK công nợ.
+        with pytest.raises(PostingValidationError) as caught:
+            CashVoucherService(session).create(
+                _mixed_receipt(
+                    context,
+                    accounts,
+                    debt_amount_fc=Decimal("100000"),
+                    other_amount_fc=Decimal("50000"),
+                    settlements=(_settle(invoice_id, Decimal("150000")),),
+                ),
+                user_id=ACTOR_ID,
+            )
+        assert caught.value.violations[0].code == "settlement.total_mismatch"
+        return None
+
+    run(work)
+
+
+def test_debt_line_of_another_partner_is_refused_when_the_voucher_settles(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    run: Runner,
+) -> None:
+    """Khối đối trừ nhận đối tác ở HEADER còn sổ cái ghi theo đối tác từng dòng
+    — hai chỗ lệch nhau thì không vế nào của đẳng thức đo được cái kia."""
+    invoice_id = seed_open_invoice(
+        session_factory,
+        dataset_alpha,
+        context,
+        partner_id=CUSTOMER,
+        amount_fc=Decimal("500000"),
+        invoice_no="HD-OTHERPARTNER",
+    )
+
+    def work(session: Session) -> object:
+        payload = _voucher(
+            context,
+            accounts,
+            kind=CashVoucherKind.RECEIPT,
+            amount_fc=Decimal("100000"),
+            settlements=(_settle(invoice_id, Decimal("100000")),),
+        )
+        stray = payload.model_copy(
+            update={"lines": (payload.lines[0].model_copy(update={"partner_id": CUSTOMER + 1}),)}
+        )
+        with pytest.raises(PostingValidationError) as caught:
+            CashVoucherService(session).create(stray, user_id=ACTOR_ID)
+        assert [violation.code for violation in caught.value.violations] == [
+            "settlement.line_partner_mismatch"
+        ]
+        return None
+
+    run(work)
+
+
+def test_debt_lines_spread_over_two_accounts_are_refused_when_the_voucher_settles(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    run: Runner,
+) -> None:
+    """Đích đối trừ chỉ nhận MỘT `account_id` (mua/bán/GLE truyền từ 7B), nên
+    hai TK công nợ trên một chứng từ tiền là hai phạm vi không đo chung được."""
+    invoice_id = seed_open_invoice(
+        session_factory,
+        dataset_alpha,
+        context,
+        partner_id=CUSTOMER,
+        amount_fc=Decimal("500000"),
+        invoice_no="HD-TWOACCOUNTS",
+    )
+
+    def work(session: Session) -> object:
+        second = session.get(ChartOfAccount, accounts["1381"])
+        assert second is not None
+        second.detail_tracking = ["customer"]
+        session.flush()
+        try:
+            payload = _voucher(
+                context,
+                accounts,
+                kind=CashVoucherKind.RECEIPT,
+                amount_fc=Decimal("100000"),
+                settlements=(_settle(invoice_id, Decimal("150000")),),
+            )
+            spread = payload.model_copy(
+                update={
+                    "lines": (
+                        *payload.lines,
+                        CashVoucherLineIn(
+                            debit_account_id=accounts["111"],
+                            credit_account_id=accounts["1381"],
+                            amount_fc=Decimal("50000"),
+                            partner_kind=PartnerKind.CUSTOMER,
+                            partner_id=CUSTOMER,
+                        ),
+                    )
+                }
+            )
+            with pytest.raises(PostingValidationError) as caught:
+                CashVoucherService(session).create(spread, user_id=ACTOR_ID)
+            assert [violation.code for violation in caught.value.violations] == [
+                "settlement.line_account_spread"
+            ]
+        finally:
+            second.detail_tracking = None
+            session.flush()
+        return None
+
+    run(work)
+
+
+def test_opening_advance_is_listed_payable_and_settled_by_a_payment(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    run: Runner,
+) -> None:
+    """Điều kiện #7: khoản khách ứng trước ở SỐ DƯ ĐẦU KỲ đối trừ được.
+
+    Nó nằm trên dòng cha nhóm PHẢI THU nhưng mang chiều PHẢI TRẢ — tiền ta đang
+    giữ của khách — nên nó phải hiện ở view phải trả và tất toán bằng phiếu chi.
+    """
+    advance_id = seed_opening_advance(
+        session_factory,
+        dataset_alpha,
+        context,
+        partner_id=CUSTOMER,
+        amount=Decimal("300000"),
+    )
+
+    def work(session: Session) -> object:
+        payable = open_invoices(
+            session,
+            side="payable",
+            partner_kind=PartnerKind.CUSTOMER,
+            partner_id=CUSTOMER,
+            branch_id=context.branch_id,
+            as_of=JAN_20,
+        )
+        assert [invoice.target_id for invoice in payable] == [advance_id]
+        assert payable[0].target_kind is SettlementTargetKind.OPENING_ADVANCE
+        # Chiều ngược lại KHÔNG được thấy nó: liệt kê khoản ứng trước ở màn thu
+        # tiền là mời người dùng thu thêm một lần số tiền họ đang nợ lại khách.
+        # Đo bằng phép vắng mặt chứ không bằng danh sách rỗng — các bài khác
+        # của tệp đã gieo hóa đơn cho chính khách này vào dataset dùng chung.
+        receivable = open_invoices(
+            session,
+            side="receivable",
+            partner_kind=PartnerKind.CUSTOMER,
+            partner_id=CUSTOMER,
+            branch_id=context.branch_id,
+            as_of=JAN_20,
+        )
+        assert advance_id not in {invoice.target_id for invoice in receivable}
+        assert all(
+            invoice.target_kind is not SettlementTargetKind.OPENING_ADVANCE
+            for invoice in receivable
+        )
+
+        payment = _voucher(
+            context,
+            accounts,
+            kind=CashVoucherKind.PAYMENT,
+            amount_fc=Decimal("300000"),
+            settlements=(
+                CashSettlementIn(
+                    target_kind=SettlementTargetKind.OPENING_ADVANCE,
+                    target_id=advance_id,
+                    amount_fc=Decimal("300000"),
+                ),
+            ),
+        )
+        # Phiếu CHI trả lại tiền cho KHÁCH: nghiệp vụ "chi khác" (nghiệp vụ trả
+        # nợ NCC khóa loại đối tác là nhà cung cấp), dòng ghi Nợ 131 chứ không
+        # phải 331.
+        refund = payment.model_copy(
+            update={
+                "operation_code": "chi-khac",
+                "lines": (
+                    CashVoucherLineIn(
+                        debit_account_id=accounts["131"],
+                        credit_account_id=accounts["111"],
+                        amount_fc=Decimal("300000"),
+                        partner_kind=PartnerKind.CUSTOMER,
+                        partner_id=CUSTOMER,
+                    ),
+                ),
+            }
+        )
+        service = CashVoucherService(session)
+        created = service.create(refund, user_id=ACTOR_ID)
+        assert created is not None
+        settled = session.get(OpeningBalanceInvoice, advance_id)
+        assert settled is not None
+        assert settled.paid_amount_fc == Decimal(0)  # cộng lúc GHI SỔ, không lúc lập
+
+        # GHI SỔ thật, không dừng ở `create`: hai check toàn vẹn chỉ nhìn chứng
+        # từ `status = 2`, nên một bài dừng ở bản nháp không chứng minh được
+        # điều gì về chúng — và chính lỗ ấy để lọt việc
+        # `settlement_matches_subledger` đóng cứng loại đích 2 cho cả bảng chi
+        # tiết đầu kỳ (dòng ứng trước nộp loại 7).
+        service.post(created.id, user_id=ACTOR_ID)
+        session.flush()
+        session.refresh(settled)
+        assert settled.paid_amount_fc == Decimal("300000.00")
+        assert settled.paid_amount == Decimal("300000.00")
+
+        for code in ("settlement_matches_subledger", "arap_matches_control"):
+            outcome = run_check(session, check_of(code), branch_id=context.branch_id)
+            assert not [
+                row
+                for row in outcome.sample
+                if row.get("target_id") == str(advance_id) or row.get("partner_id") == CUSTOMER
+            ], (code, outcome.sample)
+        return None
+
+    run(work)
+
+
+def test_many_partners_on_one_voucher_stay_valid_without_a_settlement_block(
+    context: PostingContext,
+    accounts: dict[str, int],
+    run: Runner,
+) -> None:
+    """Phạm vi #9 chỉ áp khi chứng từ CÓ khối đối trừ.
+
+    Phiếu thu gộp tiền của hai khách trong một lượt, không đối trừ hóa đơn nào,
+    là chứng từ hợp lệ: mỗi dòng sinh một khoản sổ phụ riêng, và không có con
+    số ở mức chứng từ nào để hai vế phải khớp. Siết nó là cấm một hình dạng mà
+    lát này không có lý do đụng tới — bản đầu của lát đã cấm nhầm đúng ca này.
+    """
+
+    def work(session: Session) -> object:
+        payload = CashVoucherIn(
+            kind=CashVoucherKind.RECEIPT,
+            operation_code="thu-khac",
+            cash_account_id=accounts["111"],
+            branch_id=context.branch_id,
+            document_date=JAN_20,
+            posting_date=JAN_20,
+            currency_code="VND",
+            exchange_rate=Decimal(1),
+            partner_kind=PartnerKind.CUSTOMER,
+            partner_id=CUSTOMER,
+            lines=(
+                CashVoucherLineIn(
+                    debit_account_id=accounts["111"],
+                    credit_account_id=accounts["131"],
+                    amount_fc=Decimal("120000"),
+                    partner_kind=PartnerKind.CUSTOMER,
+                    partner_id=CUSTOMER,
+                ),
+                CashVoucherLineIn(
+                    debit_account_id=accounts["111"],
+                    credit_account_id=accounts["131"],
+                    amount_fc=Decimal("80000"),
+                    partner_kind=PartnerKind.CUSTOMER,
+                    partner_id=CUSTOMER + 2,
+                ),
+            ),
+            settlements=(),
+        )
+        created = CashVoucherService(session).create(payload, user_id=ACTOR_ID)
+        assert created is not None
+        return None
+
+    run(work)
+
+
+def test_debt_line_against_the_settlement_direction_is_refused(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    run: Runner,
+) -> None:
+    """Tổng dòng công nợ chỉ có nghĩa khi mọi dòng cùng CHIỀU với lượt đối trừ.
+
+    `settles_advance` là một giá trị cho cả chứng từ, còn dòng thì có chiều
+    riêng — và dòng không chạm quỹ được phép ở phiếu thu/chi. Phiếu thu gồm
+    `Có 131 khách A 100.000` **và** `Nợ 131 khách A 20.000` vì thế có tổng dòng
+    công nợ 120.000 trong khi sổ cái chỉ nhích 80.000: cộng không dấu thì đối
+    trừ 120.000 lọt cổng và `arap_matches_control` lệch 40.000.
+    """
+    invoice_id = seed_open_invoice(
+        session_factory,
+        dataset_alpha,
+        context,
+        partner_id=CUSTOMER,
+        amount_fc=Decimal("500000"),
+        invoice_no="HD-DIRECTION",
+    )
+
+    def work(session: Session) -> object:
+        payload = _voucher(
+            context,
+            accounts,
+            kind=CashVoucherKind.RECEIPT,
+            amount_fc=Decimal("100000"),
+            settlements=(_settle(invoice_id, Decimal("120000")),),
+        )
+        both_ways = payload.model_copy(
+            update={
+                "lines": (
+                    *payload.lines,
+                    CashVoucherLineIn(
+                        debit_account_id=accounts["131"],
+                        credit_account_id=accounts["3381"],
+                        amount_fc=Decimal("20000"),
+                        partner_kind=PartnerKind.CUSTOMER,
+                        partner_id=CUSTOMER,
+                    ),
+                )
+            }
+        )
+        with pytest.raises(PostingValidationError) as caught:
+            CashVoucherService(session).create(both_ways, user_id=ACTOR_ID)
+        assert [violation.code for violation in caught.value.violations] == [
+            "settlement.line_direction_mismatch"
+        ]
+        return None
+
+    run(work)

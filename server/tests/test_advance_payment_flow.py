@@ -1,7 +1,8 @@
 """Khoản ứng trước thành dòng sổ phụ chiều ngược, và check 131/331 (lát 7C-4).
 
-Quyết định user 2026-09-06: đóng hai điều kiện cuối của
-`arap_matches_control.sql` rồi **đăng ký** nó vào `CHECKS`.
+Lát 7C-4 định đóng hai điều kiện cuối của `arap_matches_control.sql` rồi đăng
+ký nó, nhưng review pre-landing tìm thêm ba điều kiện nữa và user chốt hoãn:
+câu vào `CHECKS` ở lát **7C-5**, sau khi #3/#7/#9 đóng nốt.
 
 * **#2 — khoản ứng trước.** Dòng ở bên NGƯỢC tính chất công nợ mà không trỏ
   đích đối trừ là khoản khách ứng trước / ta trả trước người bán. Trước lát này
@@ -260,8 +261,8 @@ def _entries(session: Session, voucher_id: UUID) -> list[ArApLedgerEntry]:
 def _control_rows(session: Session, context: PostingContext) -> list[dict[str, object]]:
     """Dòng lệch của bản thảo check 131/331 — CHỈ của đối tác thuộc tệp này.
 
-    Nạp thẳng từ gói: câu ấy chưa nằm trong `CHECKS` (ba điều kiện còn mở, xem
-    đầu tệp `.sql`). Lọc theo `PARTNER_ID` vì câu đo theo CHI NHÁNH còn dataset
+    Nạp thẳng từ gói — thói quen từ lúc câu chưa vào `CHECKS` (nó vào ở 7C-5),
+    và vẫn đúng ở đây. Lọc theo `PARTNER_ID` vì câu đo theo CHI NHÁNH còn dataset
     dùng chung cả phiên — khẳng định trên toàn chi nhánh sẽ đỏ vì dư lượng của
     tệp khác, đúng cái bẫy đã bắt bốn lát liền.
     """

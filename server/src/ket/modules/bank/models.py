@@ -244,7 +244,7 @@ class BankSettlement(DatasetBase, Audited):
             # trong khi `receivables` đã cấp source cho hai loại ghi tay từ
             # 7C-3, nên thu tiền một khoản phải thu ghi tay nổ CHECK ở DB.
             f"target_kind BETWEEN {SettlementTargetKind.SALES_INVOICE} "
-            f"AND {SettlementTargetKind.ADVANCE_TO_VENDOR}",
+            f"AND {SettlementTargetKind.OPENING_ADVANCE}",
             name="target_kind_known",
         ),
         CheckConstraint("amount_fc > 0", name="amount_fc_positive"),

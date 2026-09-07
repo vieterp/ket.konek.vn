@@ -14386,7 +14386,7 @@ export interface components {
          *     module: hai module ghi cùng một cột thì từ vựng phải có đúng một chỗ.
          * @enum {integer}
          */
-        SettlementTargetKind: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+        SettlementTargetKind: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
         /**
          * SetupGroup
          * @description Một nhóm quyết định, phân theo **hệ quả** chứ không theo màn hình.

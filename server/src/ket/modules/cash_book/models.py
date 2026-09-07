@@ -234,13 +234,16 @@ class CashSettlement(DatasetBase, Audited):
     __tablename__ = "cash_settlements"
     __table_args__ = (
         CheckConstraint(
-            # Tiền tất toán được MỌI loại đích: hóa đơn mua/bán, số dư đầu
-            # kỳ, khoản nợ ghi tay (7C-3) và khoản ứng trước (7C-4 — phiếu chi
-            # hoàn lại tiền khách đã ứng). Trần cũ dừng ở `OPENING_BALANCE`
-            # trong khi `receivables` đã cấp source cho hai loại ghi tay từ
-            # 7C-3, nên thu tiền một khoản phải thu ghi tay nổ CHECK ở DB.
+            # Tiền tất toán được MỌI loại đích: hóa đơn mua/bán, chứng từ đầu
+            # kỳ, khoản nợ ghi tay (7C-3), khoản ứng trước sinh từ chứng từ
+            # (7C-4 — phiếu chi hoàn lại tiền khách đã ứng) và khoản ứng trước
+            # ĐẦU KỲ (7C-5). Trần cũ dừng ở `OPENING_BALANCE` trong khi
+            # `receivables` đã cấp source cho hai loại ghi tay từ 7C-3, nên thu
+            # tiền một khoản phải thu ghi tay nổ CHECK ở DB — trần ở đây và ở
+            # migration phải đi cùng nhau, cổng `test_migrations_match_models`
+            # chỉ đối chiếu TÊN ràng buộc chứ không đối chiếu biểu thức.
             f"target_kind BETWEEN {SettlementTargetKind.SALES_INVOICE} "
-            f"AND {SettlementTargetKind.ADVANCE_TO_VENDOR}",
+            f"AND {SettlementTargetKind.OPENING_ADVANCE}",
             name="target_kind_known",
         ),
         CheckConstraint("amount_fc > 0", name="amount_fc_positive"),

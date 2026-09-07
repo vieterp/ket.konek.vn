@@ -113,21 +113,24 @@ def _carry_invoices(
 ) -> tuple[int, int, int]:
     """Chuyển chi tiết hóa đơn/tạm ứng còn nợ theo dòng cha năm mới.
 
-    Trả `(số dòng chuyển được, số dòng rơi, số dòng cha bị hóa đơn vượt dư)`.
-    Một dòng hóa đơn **rơi** khi năm mới không còn dòng cha cho đối tượng đó
-    (dư đã về 0 — các khoản thu/chi trong năm nguồn đã bù hết). Một dòng cha
-    **bị vượt** khi tổng hóa đơn treo dưới nó lớn hơn dư bên còn-nợ của chính
-    nó (review 4C, M2).
+    Trả `(số dòng chuyển được, số dòng rơi, số dòng cha bị chi tiết vượt dư)`.
+    Một dòng cha **bị vượt** khi tổng CÓ DẤU của chi tiết treo dưới nó lệch dư
+    ròng của chính nó (review 4C, M2).
 
-    **Lập luận 4C của con số ấy đã hết đúng từ 6B** (đọc lại ở 7C-3): bản gốc
-    nói "`paid_amount` chưa sống tới phase 7 nên các khoản trả trong năm trừ
-    vào dư cha mà không trừ vào hóa đơn nào", nhưng `settlement_source.apply`
-    của chính gói này cộng cả `paid_amount` lẫn `paid_amount_fc` mỗi lượt đối
-    trừ từ 6B. Phần còn thật của cả `dropped` lẫn `overrun` là ca dư RÒNG của
-    đối tượng về 0 trong khi hóa đơn còn treo — tức là có khoản **ứng trước**
-    bù vào, và khoản ứng trước chưa có dòng sổ phụ nào (điều kiện #2 của
-    `posting/integrity/checks/arap_matches_control.sql`, đóng ở lát 7C-4).
-    Hai con số vì thế vẫn được báo cho người dùng NGAY trên kết quả job.
+    **Không dòng chi tiết nào còn rơi từ lát 7C-5.** Bản 4C bỏ một dòng chi
+    tiết khi năm mới không có dòng cha cho đối tượng ấy, và ca ấy chỉ xảy ra
+    khi dư RÒNG về 0 trong lúc chứng từ còn treo — tức đúng ca có khoản ứng
+    trước bù vào. Bỏ chi tiết ở đó là để vế sổ phụ rỗng trong khi vế sổ cái
+    cũng rỗng, nhưng người dùng mất sạch chi tiết công nợ hai chiều đang còn
+    sống. Từ lát này job **dựng dòng cha dư ròng 0** cho đúng những đối tượng
+    ấy (quyết định user 2026-09-06) và chuyển cả hai chiều vào đó; `dropped`
+    vì thế còn lại 0 ở mọi đường đi bình thường, và một con số khác 0 là dấu
+    hiệu của dữ liệu đã lệch chứ không phải hành vi thiết kế.
+
+    Việc dựng dòng cha ở Python chứ không trong `sql/carry_forward.sql`: câu
+    SQL ấy tính từ số dư và phát sinh, nó không biết bảng chi tiết. Nới điều
+    kiện `net <> 0` của nó sẽ đẻ một dòng 0 cho **mọi** đối tác đã tất toán
+    xong, năm này qua năm khác.
     """
     parent = OpeningBalance
     rows = session.execute(
@@ -139,10 +142,13 @@ def _carry_invoices(
             OpeningBalanceInvoice.amount,
             OpeningBalanceInvoice.paid_amount,
             OpeningBalanceInvoice.paid_amount_fc,
+            OpeningBalanceInvoice.is_advance,
             parent.detail_kind,
             parent.account_id,
             parent.partner_id,
+            parent.partner_kind,
             parent.currency_code,
+            parent.exchange_rate,
         )
         .join(parent, OpeningBalanceInvoice.opening_balance_id == parent.id)
         .where(parent.fiscal_year_id == source_year_id)
@@ -190,12 +196,57 @@ def _carry_invoices(
     # Core executemany chứ không ORM `add_all`: chuyển năm là đường ghi hàng
     # loạt như nhập liệu — H84 đã chọn một dòng nhật ký tổng thay vì mỗi hóa
     # đơn một dòng "rỗng → giá trị" chôn mất lần sửa tay thật.
+    # Đối tượng còn chi tiết mà năm mới không có dòng cha: dư ròng đã về 0 vì
+    # hai chiều bù nhau. Dựng dòng cha dư 0 để chi tiết hai chiều có chỗ đậu —
+    # sổ cái năm mới cũng bằng 0 ở đó, nên hai vế vẫn khớp (lát 7C-5).
+    missing = {
+        (row.detail_kind, row.account_id, row.partner_id, row.currency_code): row
+        for row in rows
+        if (row.detail_kind, row.account_id, row.partner_id, row.currency_code) not in targets
+    }
+    if missing:
+        created = session.execute(
+            insert(OpeningBalance).returning(
+                OpeningBalance.id,
+                OpeningBalance.detail_kind,
+                OpeningBalance.account_id,
+                OpeningBalance.partner_id,
+                OpeningBalance.currency_code,
+                OpeningBalance.debit,
+                OpeningBalance.credit,
+                sort_by_parameter_order=True,
+            ),
+            [
+                {
+                    "fiscal_year_id": target_year_id,
+                    "ledger": ledger,
+                    "branch_id": branch_id,
+                    "account_id": row.account_id,
+                    "currency_code": row.currency_code,
+                    "exchange_rate": row.exchange_rate,
+                    "partner_id": row.partner_id,
+                    "partner_kind": row.partner_kind,
+                    "detail_kind": row.detail_kind,
+                }
+                for row in missing.values()
+            ],
+        )
+        for created_row in created:
+            targets[
+                (
+                    created_row.detail_kind,
+                    created_row.account_id,
+                    created_row.partner_id,
+                    created_row.currency_code,
+                )
+            ] = created_row
+
     carried: list[dict[str, object]] = []
     carried_total_by_parent: dict[int, Decimal] = {}
     dropped = 0
     for row in rows:
         target = targets.get((row.detail_kind, row.account_id, row.partner_id, row.currency_code))
-        if target is None:
+        if target is None:  # pragma: no cover - `missing` vừa lấp đúng những khóa này
             dropped += 1
             continue
         remaining: Decimal = row.amount - row.paid_amount
@@ -217,22 +268,29 @@ def _carry_invoices(
                 "amount": remaining,
                 "paid_amount": ZERO,
                 "paid_amount_fc": ZERO,
+                "is_advance": row.is_advance,
             }
         )
-        carried_total_by_parent[target.id] = (
-            carried_total_by_parent.get(target.id, ZERO) + remaining
-        )
+        # Tổng CÓ DẤU: khoản ứng trước là chiều ngược của chứng từ còn nợ, nên
+        # nó TRỪ vào phần dư mà chi tiết chiếm chỗ của dòng cha.
+        signed = -remaining if row.is_advance else remaining
+        carried_total_by_parent[target.id] = carried_total_by_parent.get(target.id, ZERO) + signed
     if carried:
         session.execute(insert(OpeningBalanceInvoice), carried)
 
     parents_by_id = {row.id: row for row in targets.values()}
     overrun = 0
-    for parent_id, invoice_total in carried_total_by_parent.items():
+    for parent_id, detail_total in carried_total_by_parent.items():
         target = parents_by_id[parent_id]
-        natural_amount = (
-            target.credit if target.detail_kind == OpeningDetailKind.PAYABLE else target.debit
+        # Dư ròng theo chiều còn-nợ của nhóm: nhóm phải trả dư Có, hai nhóm còn
+        # lại dư Nợ. So bằng `>` chứ không `<>` — chi tiết ÍT hơn dư là ca hợp
+        # lệ (một phần dư không gắn chứng từ nào), còn NHIỀU hơn là lệch.
+        net = (
+            target.credit - target.debit
+            if target.detail_kind == OpeningDetailKind.PAYABLE
+            else target.debit - target.credit
         )
-        if invoice_total > natural_amount:
+        if detail_total > net:
             overrun += 1
     return len(carried), dropped, overrun
 

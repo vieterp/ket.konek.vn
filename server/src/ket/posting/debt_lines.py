@@ -46,6 +46,7 @@ from sqlalchemy.orm import Session
 from ket.kernel.config.accounts_models import DetailTracking
 from ket.kernel.config.accounts_provider import accounts_by_id
 from ket.kernel.contracts import PartnerKind
+from ket.kernel.errors import PostingValidationError, PostingViolation
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.master_data.models.payment_term import PaymentTerm
 from ket.kernel.money import convert_currency
@@ -54,9 +55,14 @@ from ket.posting.documents.models import Voucher
 
 __all__ = [
     "FINANCIAL_LEDGER",
+    "SETTLEMENT_LINE_ACCOUNT_SPREAD_CODE",
+    "SETTLEMENT_LINE_DIRECTION_MISMATCH_CODE",
+    "SETTLEMENT_LINE_PARTNER_MISMATCH_CODE",
     "DebtLine",
     "DebtSide",
     "PairLine",
+    "SettlementScope",
+    "UnnumberedPairLine",
     "advance_kind",
     "classify",
     "due_date_of",
@@ -65,7 +71,9 @@ __all__ = [
     "open_debt_kind",
     "record_pair_voucher_debt",
     "remove_voucher_debt",
+    "settlement_scope_of",
     "sides_of_pairs",
+    "sides_of_payload_lines",
     "subledger_entries",
 ]
 
@@ -99,7 +107,15 @@ _ADVANCE_KIND: Final[dict[PartnerKind, SettlementTargetKind]] = {
     PartnerKind.VENDOR: SettlementTargetKind.ADVANCE_TO_VENDOR,
 }
 
-_ADVANCE_KINDS: Final[frozenset[SettlementTargetKind]] = frozenset(_ADVANCE_KIND.values())
+_ADVANCE_KINDS: Final[frozenset[SettlementTargetKind]] = frozenset(
+    (*_ADVANCE_KIND.values(), SettlementTargetKind.OPENING_ADVANCE)
+)
+"""Mọi loại đích mang chiều NGƯỢC với chiều nợ của đối tác.
+
+`OPENING_ADVANCE` không có trong `_ADVANCE_KIND`: bản đồ ấy trả loại đích mà
+một DÒNG chứng từ sinh ra, còn khoản ứng trước đầu kỳ đến từ lượt nhập số dư
+(lát 7C-5). Nó phải có mặt ở đây vì phép kiểm chiều đọc tập này — thiếu nó thì
+phiếu THU tất toán được đúng khoản khách vừa ứng trước cho ta."""
 
 
 def open_debt_kind(partner_kind: PartnerKind) -> SettlementTargetKind:
@@ -189,6 +205,49 @@ class DebtLine:
         return (self.partner_kind is PartnerKind.CUSTOMER) is not self.increases_debt
 
 
+class UnnumberedPairLine(Protocol):
+    """Thân dòng cặp Nợ/Có **trước khi ghi** — `PairLine` trừ đi `line_no`."""
+
+    @property
+    def debit_account_id(self) -> int | None: ...
+    @property
+    def credit_account_id(self) -> int | None: ...
+    @property
+    def amount_fc(self) -> Decimal: ...
+    @property
+    def partner_kind(self) -> int | None: ...
+    @property
+    def partner_id(self) -> int | None: ...
+
+
+@dataclass(frozen=True)
+class _NumberedLine:
+    """Gắn số dòng vào một dòng thân chứng từ để nó thành `PairLine`."""
+
+    line: UnnumberedPairLine
+    line_no: int
+
+    @property
+    def debit_account_id(self) -> int | None:
+        return self.line.debit_account_id
+
+    @property
+    def credit_account_id(self) -> int | None:
+        return self.line.credit_account_id
+
+    @property
+    def amount_fc(self) -> Decimal:
+        return self.line.amount_fc
+
+    @property
+    def partner_kind(self) -> int | None:
+        return self.line.partner_kind
+
+    @property
+    def partner_id(self) -> int | None:
+        return self.line.partner_id
+
+
 class PairLine(Protocol):
     """Hình dạng dòng **cặp Nợ/Có** mà `sides_of_pairs` đọc.
 
@@ -209,6 +268,25 @@ class PairLine(Protocol):
     def partner_kind(self) -> int | None: ...
     @property
     def partner_id(self) -> int | None: ...
+
+
+def sides_of_payload_lines(
+    lines: Sequence[UnnumberedPairLine],
+    *,
+    currency_code: str,
+    exchange_rate: Decimal,
+) -> list[DebtSide]:
+    """`sides_of_pairs` cho thân chứng từ **chưa ghi** (schema Pydantic).
+
+    Thân gửi lên chưa mang `line_no` — số dòng do đường ghi đánh, `enumerate`
+    từ 1 — nên phép kiểm chạy TRƯỚC lúc ghi phải tự đánh số theo đúng luật ấy,
+    nếu không thông điệp lỗi trỏ người dùng vào một dòng khác dòng họ gõ sai.
+    """
+    return sides_of_pairs(
+        [_NumberedLine(line, line_no) for line_no, line in enumerate(lines, start=1)],
+        currency_code=currency_code,
+        exchange_rate=exchange_rate,
+    )
 
 
 def sides_of_pairs(
@@ -281,6 +359,122 @@ def classify(session: Session, sides: Sequence[DebtSide]) -> list[DebtLine]:
             )
         )
     return debt_lines
+
+
+SETTLEMENT_LINE_PARTNER_MISMATCH_CODE = "settlement.line_partner_mismatch"
+SETTLEMENT_LINE_ACCOUNT_SPREAD_CODE = "settlement.line_account_spread"
+SETTLEMENT_LINE_DIRECTION_MISMATCH_CODE = "settlement.line_direction_mismatch"
+
+
+@dataclass(frozen=True)
+class SettlementScope:
+    """Phạm vi mà khối đối trừ của một chứng từ TIỀN được phép chạm tới.
+
+    `total_fc` là tổng nguyên tệ của các bên CÔNG NỢ, không phải tổng tiền
+    chứng từ; `account_id` là TK công nợ duy nhất mà chúng nằm trên.
+    """
+
+    total_fc: Decimal
+    account_id: int | None
+
+
+def settlement_scope_of(
+    session: Session,
+    *,
+    has_settlements: bool,
+    settles_advance: bool,
+    sides: Sequence[DebtSide],
+    partner_kind: PartnerKind | None,
+    partner_id: int | None,
+) -> SettlementScope:
+    """Phạm vi đối trừ của phiếu thu/chi và chứng từ ngân hàng (lát 7C-5).
+
+    Trước lát này hai phân hệ ấy đưa **tổng tiền chứng từ** vào BR-QUY-03 và
+    KHÔNG truyền `account_id`, trong khi `posting_mapper` ghi sổ cái theo đối
+    tác của TỪNG DÒNG. Không cổng nào buộc hai thứ bằng nhau, nên một phiếu thu
+    150 gồm `Có 131 khách A 100 + Có 511 50` đối trừ 150 vào hóa đơn của A là
+    chứng từ **lọt mọi cổng** hôm nay: sổ cái nhích 100, sổ phụ nhích 150. Đó
+    là điều kiện #9 chặn `arap_matches_control`, và cùng nó là lý do
+    `record_pair_voucher_debt` phải dùng một phép xấp xỉ.
+
+    Đo theo dòng công nợ đóng cả hai chuyện một lượt, và **nới** chứ không chỉ
+    siết: phiếu thu gộp thu nợ với doanh thu bán lẻ hôm nay không lập được (nó
+    buộc phải đối trừ cả phần doanh thu), từ lát này lập được — phần đối trừ
+    khớp đúng phần công nợ.
+
+    Ba vi phạm mới đóng nốt phần còn lại của hình dạng ấy: dòng công nợ mang
+    đối tác khác đối tác của chứng từ (khối đối trừ nhận đối tác ở HEADER, nên
+    hai chỗ lệch nhau là lệch cả phạm vi lẫn số), dòng công nợ trải trên nhiều
+    TK (đích đối trừ chỉ nhận được MỘT `account_id`, đúng như mua/bán/GLE đã
+    truyền từ 7B), và dòng công nợ **ngược chiều** với chiều đối trừ của chứng
+    từ.
+
+    Vế thứ ba là thứ giữ cho tổng có ý nghĩa. `settles_advance` là một giá trị
+    cho CẢ chứng từ (suy từ loại phiếu, `money_voucher_settles_advance`), còn
+    dòng thì có chiều riêng — nên nếu chỉ cộng số tiền thì một phiếu thu gồm
+    `Có 131 khách A 100` **và** `Nợ 131 khách A 20` có tổng dòng công nợ 120
+    trong khi sổ cái chỉ nhích 80: đối trừ 120 lọt cổng và hai vế lệch 40. Dòng
+    không chạm quỹ được phép ở phiếu thu/chi (`posting_mapper._split_pair` nói
+    thẳng), nên hình dạng ấy dựng được. Từ chối nó giữ đúng bất biến "mỗi loại
+    đích một chiều" mà 7A đặt ra: một chứng từ tất toán một chiều.
+
+    Ném ngay thay vì gom cùng vi phạm của `price_settlements`: chưa biết khối
+    đối trừ được phép chạm tới đâu thì "lệch tổng" chỉ là tiếng vọng — cùng lẽ
+    với vế `if not violations` của chính phép so tổng ấy.
+
+    **Chỉ áp khi chứng từ CÓ khối đối trừ** — cùng vế thoát sớm `if not
+    settlements` của `price_settlements`. Một chứng từ tiền chi cho ba nhà cung
+    cấp trong một lượt, không đối trừ hóa đơn nào, là chứng từ hợp lệ: mỗi dòng
+    của nó sinh một khoản sổ phụ riêng qua `record_pair_voucher_debt`, và ở đó
+    không có con số ở mức chứng từ nào để hai vế phải khớp. Áp phạm vi cho nó
+    là cấm một hình dạng mà lát này không có lý do gì đụng tới.
+    """
+    if not has_settlements:
+        return SettlementScope(total_fc=_ZERO, account_id=None)
+    debt_lines = classify(session, sides)
+    violations: list[PostingViolation] = []
+    if partner_id is not None and partner_kind is not None:
+        for line in debt_lines:
+            if line.partner_id != partner_id or line.partner_kind is not partner_kind:
+                violations.append(
+                    PostingViolation(
+                        SETTLEMENT_LINE_PARTNER_MISMATCH_CODE,
+                        "Dòng chạm tài khoản công nợ phải cùng đối tượng với chứng từ "
+                        "khi chứng từ có khối đối trừ",
+                        line_no=line.line_no,
+                        line_partner_id=str(line.partner_id),
+                        voucher_partner_id=str(partner_id),
+                    )
+                )
+    for line in debt_lines:
+        if line.settles_advance != settles_advance:
+            violations.append(
+                PostingViolation(
+                    SETTLEMENT_LINE_DIRECTION_MISMATCH_CODE,
+                    "Dòng công nợ đi ngược chiều đối trừ của chứng từ — tách nó sang "
+                    "chứng từ riêng",
+                    line_no=line.line_no,
+                    account_id=str(line.account_id),
+                )
+            )
+    accounts = {line.account_id for line in debt_lines}
+    if len(accounts) > 1:
+        violations.append(
+            PostingViolation(
+                SETTLEMENT_LINE_ACCOUNT_SPREAD_CODE,
+                "Các dòng công nợ của chứng từ nằm trên nhiều tài khoản — tách thành "
+                "chứng từ riêng cho mỗi tài khoản công nợ",
+                account_ids=",".join(str(account_id) for account_id in sorted(accounts)),
+            )
+        )
+    if violations:
+        raise PostingValidationError(
+            "Dòng công nợ của chứng từ chưa khớp khối đối trừ", violations=violations
+        )
+    return SettlementScope(
+        total_fc=sum((line.amount_fc for line in debt_lines), _ZERO),
+        account_id=next(iter(accounts), None),
+    )
 
 
 def due_date_of(session: Session, *, partner_id: int, document_date: date) -> date | None:
@@ -389,19 +583,14 @@ def record_pair_voucher_debt(
     chứng từ không có thì mọi dòng chạm công nợ là khoản mới — ứng trước ở bên
     ngược, khoản nợ ở bên thuận.
 
-    **Đây là một phép XẤP XỈ, không phải một bất biến.** BR-QUY-03 chỉ so tổng
-    đối trừ với tổng tiền của chứng từ — tổng MỌI dòng, không riêng dòng công
-    nợ — trong khi khối đối trừ của phiếu thu/chi và chứng từ ngân hàng nhận
-    `partner_id` của HEADER còn `posting_mapper` ghi sổ cái theo đối tác của
-    TỪNG DÒNG. Một phiếu thu 150 gồm Có 131 khách A 100 + Có 511 50, đối trừ
-    150 vào hóa đơn của A, vì thế lọt qua mọi cổng hôm nay và để lại vế sổ cái
-    nhích 100 trong khi vế sổ phụ nhích 150.
-
-    Xấp xỉ này đúng với mọi chứng từ mà form dựng ra, và nó là lý do
-    `arap_matches_control` **vẫn chưa** được đăng ký (điều kiện #9 ở đầu tệp
-    ấy). Đóng nó là siết cash/bank cho khớp mua/bán/GLE — đối tác và TK của
-    dòng công nợ phải khớp khối đối trừ — và đó là một thay đổi PHÁ VỠ với
-    chứng từ hợp lệ hôm nay, nên là quyết định sản phẩm chứ không phải bản vá.
+    Phép phân nhánh ấy là một **bất biến từ lát 7C-5**, trước đó là một xấp
+    xỉ: `settlement_scope_of` buộc tổng khối đối trừ bằng đúng tổng DÒNG CÔNG
+    NỢ (không phải tổng tiền chứng từ) và buộc mọi dòng công nợ cùng đối tác
+    với chứng từ, nên "có khối đối trừ" nay kéo theo "mọi chuyển động công nợ
+    đã đi qua `settled`". Bản trước so với tổng MỌI dòng, nên một phiếu thu 150
+    gồm Có 131 khách A 100 + Có 511 50 đối trừ 150 vào hóa đơn của A lọt mọi
+    cổng và để lại sổ cái nhích 100 trong khi sổ phụ nhích 150 — điều kiện #9
+    chặn `arap_matches_control` cho tới lát ấy.
 
     Gọi **vô điều kiện**, kể cả khi không có dòng nào: `record` thay TRỌN theo
     `voucher_id`, nên nó cũng là lượt dọn dòng cũ của một chứng từ vừa được sửa

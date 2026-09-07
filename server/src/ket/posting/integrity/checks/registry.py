@@ -18,15 +18,18 @@ Hợp đồng của một tệp check:
   về chứng từ được thì mang `voucher_id` — U11 đòi mỗi lỗi dẫn tới chỗ sửa.
 
 Thư mục này có MỘT tệp `.sql` **không** nằm trong `CHECKS`:
-`arap_matches_control.sql` — bản thảo đối chiếu sổ phụ công nợ với số dư TK
-công nợ trên sổ cái. Nó đứng ngoài registry có chủ đích: trên dữ liệu ĐÚNG của
-hôm nay nó vẫn đỏ ở những tình huống hợp lệ, và đầu tệp ấy liệt kê từng cái kèm
-bằng chứng. Một check kêu sai dạy người dùng bỏ qua mọi check còn lại.
+`opening_detail_matches_control.sql`. Nó đứng trong registry từ 4C và đỏ trên
+dữ liệu ĐÚNG suốt từ đó — lát 7C-5 phát hiện khi đi đóng điều kiện cuối của
+`arap_matches_control` và **gỡ nó ra** (quyết định user 2026-09-06); đầu tệp
+ghi đủ hai nguyên nhân và điều kiện đăng ký lại.
 
-Lát 7C-4 đóng thêm hai điều kiện (#2 ở vế chứng từ, #6) nhưng **không đăng ký**:
-review pre-landing tìm ra ba điều kiện nữa, một trong số đó có bài test đang
-xanh làm bằng chứng. Luật giữ nguyên qua bốn lát và nên giữ tiếp: **viết tệp
-trước, đăng ký sau, và chỉ đăng ký khi nó xanh trên dữ liệu đúng.**
+Chiều ngược lại xảy ra cùng lát: `arap_matches_control.sql` đứng ngoài registry
+suốt năm lát (7A → 7C-4) rồi **vào** ở 7C-5, sau khi chín điều kiện đóng hết.
+
+Một luật cho cả hai chiều, và cho mọi check sau: **viết tệp trước, đăng ký sau,
+và chỉ đăng ký khi nó xanh trên dữ liệu đúng** — một check kêu sai dạy người
+dùng bỏ qua mọi check còn lại. Luật ấy có hiệu lực **cả sau khi đã đăng ký**:
+tìm ra một ca đỏ oan là lý do đủ để gỡ một check đang chạy.
 """
 
 from __future__ import annotations
@@ -82,11 +85,6 @@ CHECKS: Final[tuple[IntegrityCheck, ...]] = (
         rule="BR-OPB-01",
     ),
     IntegrityCheck(
-        code="opening_detail_matches_control",
-        title="Chi tiết hóa đơn đầu kỳ khớp dòng số dư cha",
-        rule="BR-OPB-02",
-    ),
-    IntegrityCheck(
         code="usage_counter_accurate",
         title="Bộ đếm sử dụng danh mục khớp tham chiếu thực tế",
         rule="BR-SYS-02",
@@ -100,6 +98,11 @@ CHECKS: Final[tuple[IntegrityCheck, ...]] = (
         code="settlement_matches_subledger",
         title="Số đã đối trừ trên sổ phụ khớp dòng đối trừ của chứng từ đã ghi sổ",
         rule="BR-QUY-02",
+    ),
+    IntegrityCheck(
+        code="arap_matches_control",
+        title="Sổ phụ công nợ khớp số dư tài khoản công nợ trên sổ cái",
+        rule="BR-GLE-05",
     ),
 )
 

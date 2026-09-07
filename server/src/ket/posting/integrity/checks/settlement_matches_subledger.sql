@@ -19,12 +19,13 @@
 -- check đỏ đúng ở những chứng từ khó nhất, nơi người ta cần nó im nhất.
 --
 -- **Hai sổ phụ, tách bằng `target_kind`** (`kernel.protocols.
--- SettlementTargetKind`): 0/1 (hóa đơn bán/mua) và 3/4 (khoản phải thu/phải
--- trả ghi thẳng bằng chứng từ nghiệp vụ khác, lát 7C-3) là `ar_ap_ledger`,
--- 2 (số dư đầu kỳ) là `opening_balance_invoices`. Dòng `ar_ap_ledger` mang
--- `target_kind = 2` KHÔNG được nối vào đây: `target_id` của một dòng đối trừ
--- loại 2 là `opening_balance_invoices.id`, không phải id của sổ phụ — nối
--- nhầm thì hai bảng khác nhau tranh cùng một khóa.
+-- SettlementTargetKind`): 0/1 (hóa đơn bán/mua), 3/4 (khoản phải thu/phải trả
+-- ghi thẳng bằng chứng từ nghiệp vụ khác, lát 7C-3) và 5/6 (khoản ứng trước
+-- sinh từ chứng từ, lát 7C-4) là `ar_ap_ledger`; 2 (chứng từ đầu kỳ còn nợ) và
+-- 7 (khoản ứng trước đầu kỳ, lát 7C-5) là `opening_balance_invoices`. Dòng
+-- `ar_ap_ledger` mang `target_kind = 2` KHÔNG được nối vào đây: `target_id`
+-- của một dòng đối trừ loại 2 là `opening_balance_invoices.id`, không phải id
+-- của sổ phụ — nối nhầm thì hai bảng khác nhau tranh cùng một khóa.
 --
 -- **Chỉ chứng từ `status = 2`** (`VoucherStatus.DA_GHI_SO`): chứng từ mới Cất
 -- đã có dòng đối trừ nhưng chưa cộng vào sổ phụ, và một chứng từ vừa bỏ ghi sổ
@@ -131,7 +132,11 @@ subledger AS (
       -- vế sổ phụ không nộp đích nào để nối.
       AND l.target_kind IN (0, 1, 3, 4, 5, 6)
     UNION ALL
-    SELECT 2,
+    -- Cùng luật với nhánh trên, ở bảng kia: khoản ứng trước ĐẦU KỲ nộp đích
+    -- loại 7 chứ không 2 (lát 7C-5). Đóng cứng 2 cho cả bảng thì mỗi lượt tất
+    -- toán khoản ứng trước đầu kỳ đã ghi sổ để lại HAI dòng đỏ trên dữ liệu
+    -- ĐÚNG — `(7, id)` không có đích để nối, `(2, id)` không có ai trỏ tới.
+    SELECT CASE WHEN i.is_advance THEN 7 ELSE 2 END,
            i.id,
            'opening_balance_invoices',
            i.invoice_no,
