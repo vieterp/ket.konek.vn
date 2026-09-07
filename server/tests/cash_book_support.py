@@ -127,6 +127,54 @@ def seed_cash_book_package_data(
     return accounts
 
 
+def seed_opening_advance(
+    session_factory: sessionmaker[Session],
+    dataset: DatasetRef,
+    context: PostingContext,
+    *,
+    detail_kind: int = OpeningDetailKind.RECEIVABLE,
+    account_code: str = "131",
+    partner_kind: PartnerKind = PartnerKind.CUSTOMER,
+    partner_id: int = 71,
+    amount: Decimal = Decimal("300000"),
+) -> UUID:
+    """Dòng số dư công nợ chỉ có khoản ỨNG TRƯỚC; trả `id` dòng con (lát 7C-5).
+
+    Bên NGƯỢC của nhóm: khách ứng trước nằm bên Có của dòng cha nhóm phải thu,
+    ta trả trước người bán nằm bên Nợ của dòng cha nhóm phải trả.
+    """
+    scope = posting_scope(dataset, context, user_id=SEED_ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        advance_on_credit = detail_kind == OpeningDetailKind.RECEIVABLE
+        parent = OpeningBalance(
+            fiscal_year_id=context.fiscal_year_id,
+            ledger=0,
+            branch_id=context.branch_id,
+            account_id=context.accounts[account_code],
+            currency_code="VND",
+            exchange_rate=Decimal(1),
+            partner_id=partner_id,
+            partner_kind=partner_kind.value,
+            detail_kind=detail_kind,
+            debit_fc=Decimal(0) if advance_on_credit else amount,
+            credit_fc=amount if advance_on_credit else Decimal(0),
+            debit=Decimal(0) if advance_on_credit else amount,
+            credit=amount if advance_on_credit else Decimal(0),
+        )
+        session.add(parent)
+        session.flush()
+        advance = OpeningBalanceInvoice(
+            opening_balance_id=parent.id,
+            branch_id=parent.branch_id,
+            amount_fc=amount,
+            amount=amount,
+            is_advance=True,
+        )
+        session.add(advance)
+        session.flush()
+        return advance.id
+
+
 def seed_open_invoice(
     session_factory: sessionmaker[Session],
     dataset: DatasetRef,

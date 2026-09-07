@@ -11,7 +11,6 @@ Ba việc, ba thời điểm — xem docstring `ket.posting.settlements`.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
@@ -27,6 +26,8 @@ from ket.posting.debt_lines import (
     money_voucher_settles_advance,
     record_pair_voucher_debt,
     remove_voucher_debt,
+    settlement_scope_of,
+    sides_of_payload_lines,
 )
 from ket.posting.documents.models import Voucher
 from ket.posting.settlements import (
@@ -70,23 +71,41 @@ def price_settlements(
     session: Session, payload: CashVoucherIn, *, scale: int
 ) -> list[PricedSettlement]:
     """Kiểm + định giá toàn bộ dòng đối trừ của một phiếu (BR-QUY-02/03)."""
+    # Phạm vi đo theo DÒNG CÔNG NỢ, không theo tổng tiền chứng từ (lát 7C-5,
+    # điều kiện #9): khối đối trừ nhận đối tác ở header còn sổ cái ghi theo đối
+    # tác từng dòng, nên chỉ tổng dòng công nợ mới là thứ hai vế cùng nhích.
+    settles_advance = money_voucher_settles_advance(
+        money_in=payload.kind == CashVoucherKind.RECEIPT,
+        partner_kind=payload.partner_kind,
+    )
+    scope = settlement_scope_of(
+        session,
+        has_settlements=bool(payload.settlements),
+        settles_advance=settles_advance,
+        sides=sides_of_payload_lines(
+            payload.lines,
+            currency_code=payload.currency_code,
+            exchange_rate=payload.exchange_rate,
+        ),
+        partner_kind=payload.partner_kind,
+        partner_id=payload.partner_id,
+    )
     return price_settlement_inputs(
         session,
         settlements=payload.settlements,
-        lines_total_fc=sum((line.amount_fc for line in payload.lines), Decimal(0)),
+        lines_total_fc=scope.total_fc,
         partner_id=payload.partner_id,
         partner_kind=payload.partner_kind,
         branch_id=payload.branch_id,
         currency_code=payload.currency_code,
         exchange_rate=payload.exchange_rate,
+        account_id=scope.account_id,
         scale=scale,
         # Phiếu chi cho khách và phiếu thu của người bán tất toán khoản ỨNG
         # TRƯỚC, không phải khoản nợ (lát 7C-4): hai thứ ấy nằm trên cùng TK và
-        # cùng đối tác nên không phép kiểm nào khác tách được chúng.
-        settles_advance=money_voucher_settles_advance(
-            money_in=payload.kind == CashVoucherKind.RECEIPT,
-            partner_kind=payload.partner_kind,
-        ),
+        # cùng đối tác nên không phép kiểm nào khác tách được chúng. Cùng giá
+        # trị ấy khóa CHIỀU của dòng công nợ ở `settlement_scope_of` (7C-5).
+        settles_advance=settles_advance,
     )
 
 

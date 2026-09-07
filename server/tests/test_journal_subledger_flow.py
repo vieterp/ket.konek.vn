@@ -633,9 +633,9 @@ def _drop_journal_branch(sql: str) -> str:
 def _control_sql() -> str:
     """Bản thảo check 131/331 — nạp THẲNG từ gói, không qua `check_of`.
 
-    Nó cố ý chưa nằm trong `CHECKS` (ba điều kiện còn mở, xem đầu tệp `.sql`),
-    nên `check_of` sẽ ném. Đọc thẳng cho phép bài test canh phần đã đóng mà
-    không phải đăng ký sớm một câu còn kêu sai.
+    Viết ở 7C-3, lúc câu còn cố ý ngoài `CHECKS` nên `check_of` sẽ ném. Câu đã
+    vào registry ở 7C-5; đọc thẳng vẫn giữ vì bài này còn cắt bớt CTE để cô lập
+    phần nó muốn đo (xem `_control_sql` gọi ở đâu).
     """
     return (
         resources.files("ket.posting.integrity.checks")
@@ -652,9 +652,8 @@ def test_the_control_equation_balances_with_journal_debt(
     Bằng chứng cho điều kiện #1: trước 7C-3, một bút toán gõ thẳng vào 131 làm
     nhích vế sổ cái mà không nhích vế sổ phụ, và chính dòng đó sẽ hiện ra ở đây.
 
-    Câu này vẫn CHƯA nằm trong `CHECKS`: lát 7C-4 đóng thêm hai điều kiện
-    nhưng review tìm ra ba cái nữa (xem đầu tệp `.sql`), và user chốt hoãn đăng
-    ký. Bài vẫn có giá trị: nó canh đúng phần đã đóng.
+    Bài viết ở 7C-3, khi câu còn ngoài `CHECKS`; nó canh đúng phần điều kiện
+    #1 đã đóng lúc ấy. Câu vào registry ở lát 7C-5.
     """
 
     def work(session: Session) -> object:

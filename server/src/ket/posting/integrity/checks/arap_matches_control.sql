@@ -2,17 +2,11 @@
 -- kỳ `opening_balance_invoices` + `ar_ap_ledger`) phải bằng số dư sổ cái của
 -- các TK công nợ, đo theo từng (TK, đối tượng) trên **sổ tài chính**.
 --
--- ⚠️ **TỆP NÀY VẪN CHƯA NẰM TRONG `CHECKS`** (xem `registry.py`) — cố ý,
--- không phải quên. Trên dữ liệu ĐÚNG của hôm nay nó vẫn đỏ ở những tình huống
--- hợp lệ, và một check kêu sai là một check người ta học cách bỏ qua.
---
--- Lát **7C-4** đóng thêm hai điều kiện (#2 ở vế chứng từ, #6) và định đăng ký,
--- nhưng review pre-landing tìm ra **ba điều kiện nữa** — một trong số đó có
--- một bài test đang xanh làm bằng chứng. User chốt 2026-09-06: **hoãn đăng ký**,
--- giữ đúng luật đã theo suốt bốn lát (viết tệp trước, đăng ký sau, chỉ đăng ký
--- khi nó xanh trên dữ liệu đúng).
---
--- Điều kiện, và vì sao mỗi cái đóng hay còn mở:
+-- Tệp này viết ở 7A và **chỉ được đăng ký ở 7C-5**, sau năm lát: luật đã theo
+-- suốt là viết câu trước, đăng ký sau, và chỉ đăng ký khi nó xanh trên dữ liệu
+-- ĐÚNG — một check kêu sai là một check người ta học cách bỏ qua. Mười điều
+-- kiện phải đóng (chín ghi sẵn từ các lát trước, một tìm thấy lúc review
+-- pre-landing của chính 7C-5), và đây là chúng cùng cách đóng:
 --
 --  1. **Bút toán gõ thẳng vào TK công nợ** trước đây ghi `gl_postings` mang
 --     chiều đối tác mà KHÔNG ghi sổ phụ nào. Đóng ở 7C-3: `general_ledger.
@@ -21,26 +15,23 @@
 --     đối trừ. Bù trừ 131 ↔ 331 của cùng đối tác vì thế là hai lượt đối trừ,
 --     không phải hai khoản nợ mới.
 --
---  2. ✅ **ĐÓNG Ở 7C-4 cho khoản ứng trước sinh từ CHỨNG TỪ.** `settlements`
---     của phiếu thu/chi là TÙY CHỌN và chiều đối tác gắn theo từng dòng, nên
---     một phiếu thu Nợ 111 / Có 131 mang đối tác mà không chọn đối trừ là
---     khoản ứng trước hợp lệ, làm nhích vế sổ cái mà không nhích vế sổ phụ.
---     Luật chung ở `posting/debt_lines.py` đóng ca ấy cho cả ba phân hệ sinh
---     chuyển động công nợ (phiếu thu/chi, chứng từ ngân hàng, chứng từ nghiệp
---     vụ khác): bên ngược không trỏ đích sinh một dòng sổ phụ **chiều ngược**
---     (`ADVANCE_FROM_CUSTOMER`/`ADVANCE_TO_VENDOR`). Bù khoản ứng trước với
---     hóa đơn phát sinh sau đi bằng một chứng từ nghiệp vụ khác: dòng bên
---     thuận trỏ vào khoản ứng trước, dòng bên ngược trỏ vào hóa đơn.
+--  2. **Khoản ứng trước sinh từ CHỨNG TỪ.** Đóng ở 7C-4. `settlements` của
+--     phiếu thu/chi là TÙY CHỌN, nên một phiếu thu Nợ 111 / Có 131 mang đối
+--     tác mà không chọn đối trừ là khoản ứng trước hợp lệ, làm nhích vế sổ cái
+--     mà không nhích vế sổ phụ. Luật chung ở `posting/debt_lines.py` đóng ca
+--     ấy cho cả ba phân hệ sinh chuyển động công nợ: bên ngược không trỏ đích
+--     sinh một dòng sổ phụ **chiều ngược** (`ADVANCE_FROM_CUSTOMER`/
+--     `ADVANCE_TO_VENDOR`). Bù khoản ứng trước với hóa đơn phát sinh sau đi
+--     bằng một chứng từ nghiệp vụ khác: dòng bên thuận trỏ vào khoản ứng
+--     trước, dòng bên ngược trỏ vào hóa đơn.
 --
---     Khoản ứng trước có ở **số dư đầu kỳ** thì chưa — xem #7.
---
---  3. ⚠️ **CÒN MỞ, hẹp hơn mô tả 7C-3.** Lập luận 4C dựa vào "`paid_amount`
---     chưa sống tới phase 7" đã hết đúng từ **6B**, nên phần lớn điều kiện này
---     là mô tả lỗi thời. Phần `dropped` còn THẬT: `carry_forward_job.
---     _carry_invoices` bỏ hóa đơn khi dư RÒNG của đối tác về 0 trong lúc hóa
---     đơn còn treo — tức đúng ca có khoản ứng trước bù vào. 7C-3 khép nó vào
---     #2 và coi như đóng theo; nhưng #2 chỉ đóng vế CHỨNG TỪ, còn ca này sống
---     ở vế SỐ DƯ ĐẦU KỲ, nên nó đi cùng #7 chứ không đóng cùng #2.
+--  3. **Chi tiết công nợ rơi lúc chuyển năm.** Đóng ở 7C-5. Lập luận 4C
+--     ("`paid_amount` chưa sống tới phase 7") đã hết đúng từ 6B; phần còn thật
+--     là `carry_forward_job._carry_invoices` bỏ chứng từ con khi năm mới không
+--     có dòng cha cho đối tượng ấy — tức đúng ca dư RÒNG về 0 vì có khoản ứng
+--     trước bù vào. Từ 7C-5 job **dựng dòng cha dư ròng 0** cho những đối
+--     tượng ấy và chuyển cả hai chiều vào đó (quyết định user 2026-09-06), nên
+--     hai vế cùng bằng 0 thay vì vế sổ phụ rỗng một mình.
 --
 --  4. **Nợ mang sang năm sau.** Đóng ở 7C-3 bằng lập luận: dòng cha năm N+1
 --     dựng theo TỪNG (TK, tiền tệ, đối tác) từ `opening_balances(N) +
@@ -53,60 +44,48 @@
 --  6. **Đẳng thức không bao giờ đúng trên sổ quản trị.** Engine nhân đôi bút
 --     toán sang cả hai sổ (LD-07, `management_lines = None`), còn sổ phụ công
 --     nợ **chỉ ghi sổ tài chính** — mọi nguồn đều khóa `ledger = 0`, có chủ
---     đích (nguồn đối trừ của `receivables` cũng chỉ cộng vào sổ ấy). Mỗi
---     khoản công nợ vì thế để lại đúng một dòng lệch ở `ledger = 1` bằng chính
---     số dư của nó. Đóng ở **7C-4** bằng đường thứ nhất trong hai đường mà
---     7C-3 nêu: **lọc `ledger = 0` ngay trong câu** (quyết định user
+--     đích (nguồn đối trừ của `receivables` cũng chỉ cộng vào sổ ấy). Đóng ở
+--     7C-4 bằng **lọc `ledger = 0` ngay trong câu** (quyết định user
 --     2026-09-06). Đường kia — cho sổ phụ ghi cả hai sổ — kéo theo phải định
---     nghĩa lại đối trừ trên sổ quản trị, nơi tiền thật chỉ trả một lần.
---     Phạm vi ấy vì thế là một phần của HỢP ĐỒNG câu này, không phải thiếu
---     sót: công nợ chỉ sống trên sổ tài chính.
+--     nghĩa lại đối trừ trên sổ quản trị, nơi tiền thật chỉ trả một lần. Phạm
+--     vi ấy vì thế là một phần của HỢP ĐỒNG câu này: công nợ chỉ sống trên sổ
+--     tài chính.
 --
---  7. ⚠️ **MỞ — khoản ứng trước ở SỐ DƯ ĐẦU KỲ.** Bản 7C-4 đầu tiên khẳng định
---     bảng hóa đơn đầu kỳ không chứa khoản ứng trước nào vì `parsing.py` cấm
---     dòng bên ngược ghi số chứng từ. Khẳng định ấy SAI: `parsing.py` chỉ cấm
+--  7. **Khoản ứng trước ở SỐ DƯ ĐẦU KỲ.** Đóng ở 7C-5. `parsing.py` chỉ cấm
 --     dòng bên ngược **mang số chứng từ**, còn bản thân khoản ứng trước vẫn
---     vào cột `credit` của `opening_balances` — tức vế SỔ CÁI — mà không để
---     lại dòng `opening_balance_invoices` nào ở vế sổ phụ. BR-OPB-03 nói thẳng
---     rằng TK lưỡng tính được phép như vậy.
+--     vào cột dư ngược của `opening_balances` — tức vế SỔ CÁI — mà trước 7C-5
+--     không để lại dòng con nào ở vế sổ phụ; BR-OPB-03 nói thẳng rằng TK lưỡng
+--     tính được phép như vậy, và một bài test đang XANH
+--     (`test_dual_nature_partner_keeps_both_sides_on_one_parent`) làm bằng
+--     chứng. Từ 7C-5 bên ngược có dòng con của chính nó
+--     (`opening_balance_invoices.is_advance`, migration 0031 kèm backfill), đi
+--     ra ngoài bằng `SettlementTargetKind.OPENING_ADVANCE`.
 --
---     Bằng chứng nằm sẵn trong một bài test đang XANH:
---     `test_opening_balances_import.py::
---     test_dual_nature_partner_keeps_both_sides_on_one_parent` dựng dòng cha
---     `debit = 1.000.000` / `credit = 300.000` với đúng hai dòng hóa đơn tổng
---     1.000.000 ⇒ câu này trả `difference = -300.000` trên dữ liệu hợp lệ.
+--  8. **Ngày chạy job ngoài mọi năm tài chính.** Đóng ở 7C-4. Câu này neo vào
+--     năm phủ `CURRENT_DATE`, nhưng nhánh `ar_ap_ledger` cố ý KHÔNG lọc năm
+--     (#4) — đầu tháng 1 trước khi mở niên độ mới thì vế sổ cái RỖNG còn vế sổ
+--     phụ ĐẦY, và `FULL JOIN` biến **mọi** khoản công nợ đang treo thành một
+--     dòng đỏ. Sửa bằng một `CROSS JOIN current_year` không kèm vị từ ngày ở
+--     nhánh ấy: không lọc năm, nhưng tắt cùng lúc với vế kia.
 --
---     Đóng nó nghĩa là khoản ứng trước đầu kỳ cũng phải có mặt ở vế sổ phụ —
---     một đường ghi từ `opening_balances` vào `ar_ap_ledger` (kèm backfill cho
---     dữ liệu đã nhập), hoặc một cách đo khác cho phần đầu kỳ. Cả hai đều là
---     quyết định của phase 4C/10a, không phải một dòng sửa.
+-- 10. **Cửa sổ giữa "mở năm mới" và "chạy chuyển số dư".** Đóng ở 7C-5. Vế sổ
+--     cái neo vào năm phủ `CURRENT_DATE`, vế sổ phụ thì không lọc năm (#4) —
+--     lập luận của #4 ngầm giả định dòng cha năm mới ĐÃ tồn tại. Lượt chuyển
+--     năm là job thủ công chạy sau khi khóa sổ năm cũ, nên cửa sổ ấy dài thật,
+--     và trong đó mọi khoản công nợ đang treo thành một dòng đỏ. Cùng ca ấy
+--     xảy ra với bút toán lùi ngày vào năm cũ sau khi đã chuyển năm. Câu **tắt
+--     hẳn** trong cửa sổ đó (quyết định user 2026-09-06) thay vì kêu sai: một
+--     check kêu sai vài tháng mỗi năm là một check bị tắt vĩnh viễn.
 --
---  8. ✅ **ĐÓNG Ở 7C-4.** Câu này neo vào năm tài chính phủ `CURRENT_DATE`,
---     nhưng nhánh `ar_ap_ledger` của vế sổ phụ cố ý KHÔNG lọc năm (#4). Hai
---     điều đó cộng lại cho một ca hỏng im lặng: ngày chạy job không rơi vào
---     năm tài chính nào — đầu tháng 1 trước khi mở niên độ mới — thì vế sổ cái
---     RỖNG còn vế sổ phụ ĐẦY, và `FULL JOIN` biến **mọi** khoản công nợ đang
---     treo thành một dòng đỏ. Sửa bằng một `CROSS JOIN current_year` không
---     kèm vị từ ngày ở nhánh ấy: không lọc năm, nhưng tắt cùng lúc với vế kia.
---
---  9. ⚠️ **MỞ — đối trừ mức CHỨNG TỪ với đối tác/TK mức DÒNG.** Phiếu thu/chi
---     và chứng từ tiền gửi giữ khối đối trừ ở mức chứng từ: `price_settlements`
---     nhận `partner_id` của HEADER và (khác mua/bán/GLE) **không** truyền
---     `account_id`. Còn `posting_mapper` ghi `gl_postings` theo đối tác của
---     TỪNG DÒNG. Không validator nào buộc hai thứ bằng nhau, và BR-QUY-03 so
---     tổng đối trừ với tổng MỌI dòng chứ không riêng dòng công nợ.
---
---     Hệ quả: một phiếu thu 150 gồm Có 131 khách A 100 + Có 511 50, đối trừ
---     150 vào hóa đơn của A, là chứng từ hợp lệ hôm nay — sổ cái nhích 100,
---     sổ phụ nhích 150. Cùng hình dạng với hai dòng hai đối tác khác nhau, và
---     với một đích treo ở TK khác TK mà dòng ghi giảm.
---
---     `posting/debt_lines.record_pair_voucher_debt` vì thế dùng một phép XẤP
---     XỈ: "chứng từ có khối đối trừ ⇒ mọi chuyển động công nợ của nó đã đi qua
---     `settled`". Xấp xỉ ấy đúng với mọi chứng từ mà form dựng ra, và sai đúng
---     ở những hình dạng trên. Đóng nó là siết cash/bank cho khớp mua/bán/GLE
---     (đối tác + TK của dòng công nợ phải khớp khối đối trừ) — một thay đổi
---     PHÁ VỠ với chứng từ hợp lệ hôm nay, nên là quyết định sản phẩm.
+--  9. **Đối trừ mức CHỨNG TỪ với đối tác/TK mức DÒNG.** Đóng ở 7C-5. Phiếu
+--     thu/chi và chứng từ tiền gửi đưa **tổng tiền chứng từ** vào BR-QUY-03 và
+--     không truyền `account_id`, trong khi `posting_mapper` ghi sổ cái theo
+--     đối tác của TỪNG DÒNG — nên phiếu thu 150 gồm Có 131 khách A 100 + Có
+--     511 50, đối trừ 150 vào hóa đơn của A, là chứng từ hợp lệ để lại hai vế
+--     lệch. `posting/debt_lines.settlement_scope_of` đo theo **dòng công nợ**
+--     (quyết định user 2026-09-06): tổng đối trừ khớp tổng dòng công nợ, mọi
+--     dòng công nợ cùng đối tác với chứng từ và cùng một TK. Nó vừa siết vừa
+--     nới — phiếu thu gộp thu nợ với doanh thu trước đây không lập được.
 --
 -- Câu dưới đây giả định **một năm tài chính đang chạy** (năm phủ
 -- `CURRENT_DATE`). Đẳng thức nó đo, theo từng (TK, đối tượng):
@@ -117,12 +96,12 @@
 --               ± Σ ar_ap_ledger.(amount − settled)
 --
 -- Dấu của vế sổ phụ theo **CHIỀU của khoản**, không theo số hiệu TK: khoản
--- phải thu dư Nợ nên vào dương, khoản phải trả dư Có nên vào âm. Với hóa đơn
--- đầu kỳ chiều suy từ loại đối tác; với `ar_ap_ledger` chiều nằm sẵn trong
--- `target_kind` — và đó chính là chỗ khoản ứng trước phải đi ngược lại loại
--- đối tác của nó: tiền khách ứng trước là một khoản PHẢI TRẢ mang
--- `partner_kind = 0`. Suy dấu theo `partner_kind` ở đây sẽ cộng nó vào dương
--- và làm lệch đúng hai lần số dư của nó.
+-- phải thu dư Nợ nên vào dương, khoản phải trả dư Có nên vào âm. Với chi tiết
+-- đầu kỳ chiều suy từ loại đối tác **đảo theo `is_advance`**; với
+-- `ar_ap_ledger` chiều nằm sẵn trong `target_kind` — và đó chính là chỗ khoản
+-- ứng trước phải đi ngược lại loại đối tác của nó: tiền khách ứng trước là một
+-- khoản PHẢI TRẢ mang `partner_kind = 0`. Suy dấu theo `partner_kind` ở cả hai
+-- nhánh sẽ cộng nó vào dương và làm lệch đúng hai lần số tiền của nó.
 --
 -- **TK công nợ là TK nào**: TK có `detail_tracking` chứa `customer`/`vendor`
 -- (cùng cơ chế `detail_matches_control.sql`), KHÔNG phải literal '131'/'331'.
@@ -141,6 +120,29 @@ WITH current_year AS (
     SELECT y.id, y.start_date, y.end_date
     FROM fiscal_years y
     WHERE CURRENT_DATE BETWEEN y.start_date AND y.end_date
+      -- **Cửa sổ chưa chuyển năm** (điều kiện #10): năm mới mở nhưng lượt
+      -- chuyển số dư chưa chạy — job thủ công, thực tế chạy sau khi khóa sổ
+      -- năm cũ, có khi vài tháng sau. Lúc ấy vế sổ cái chỉ có phát sinh của
+      -- năm mới còn vế sổ phụ mang mọi khoản treo từ các năm trước (nhánh
+      -- `ar_ap_ledger` cố ý không lọc năm, #4), nên MỌI khoản công nợ đang
+      -- treo thành một dòng đỏ. Câu tắt hẳn thay vì kêu: cùng cách #8 giải
+      -- bài toán ngược lại, hai vế phải bật/tắt cùng nhau.
+      --
+      -- Điều kiện là "có năm trước mà năm này chưa có số dư", không phải
+      -- "chưa có số dư": doanh nghiệp năm đầu tiên không có số dư đầu kỳ nào
+      -- là chuyện bình thường và vẫn phải được đo (vế sổ cái = phát sinh, vế
+      -- sổ phụ = `ar_ap_ledger`, hai vế vẫn khớp từng đồng).
+      AND (
+          EXISTS (
+              SELECT 1 FROM opening_balances ob
+              WHERE ob.fiscal_year_id = y.id
+                AND ob.branch_id = :branch_id
+                AND ob.ledger = 0
+          )
+          OR NOT EXISTS (
+              SELECT 1 FROM fiscal_years prior WHERE prior.start_date < y.start_date
+          )
+      )
 ),
 -- Một dòng cho mỗi (TK công nợ, loại đối tác mà TK ấy theo dõi). `unnest` +
 -- lọc hai token: cùng cách đọc `detail_tracking` với `detail_matches_control`,
@@ -175,11 +177,14 @@ ledger_side AS (
     GROUP BY p.account_id, c.partner_kind, p.partner_id
 ),
 subledger_side AS (
-    -- Hóa đơn đầu kỳ: chiều suy từ loại đối tác, vì bảng CON này chỉ chứa
-    -- khoản nợ. Khoản ứng trước đầu kỳ nằm ở cột `credit` của dòng CHA và
-    -- không có dòng con nào — đó chính là điều kiện #7 còn mở.
+    -- Chi tiết đầu kỳ: chiều suy từ loại đối tác rồi **đảo ở dòng ứng trước**
+    -- (`is_advance`, lát 7C-5). Trước lát ấy bảng con chỉ chứa khoản nợ, còn
+    -- khoản ứng trước nằm ở cột dư ngược của dòng CHA mà không có dòng con nào
+    -- — điều kiện #7.
     SELECT ob.account_id, c.partner_kind, ob.partner_id,
-           SUM((i.amount - i.paid_amount) * CASE c.partner_kind WHEN 0 THEN 1 ELSE -1 END) AS net
+           SUM((i.amount - i.paid_amount)
+               * CASE c.partner_kind WHEN 0 THEN 1 ELSE -1 END
+               * CASE WHEN i.is_advance THEN -1 ELSE 1 END) AS net
     FROM opening_balance_invoices i
     JOIN opening_balances ob ON ob.id = i.opening_balance_id
     JOIN current_year y ON y.id = ob.fiscal_year_id

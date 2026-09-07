@@ -211,6 +211,29 @@ cho đúng những vai trò ấy. Lý do đổi: hai chiều tuổi nợ dùng c
 phân hệ nào của chúng tồn tại; giữ nguyên thì ai xem được công nợ phải thu cũng xem được
 công nợ phải trả.
 
+#### Hợp đồng đối trừ của chứng từ tiền đổi (bản 0031)
+
+Phiếu thu/chi và chứng từ tiền gửi trước đây bắt **tổng đối trừ bằng tổng tiền
+chứng từ**; từ bản 0031 chúng bắt tổng đối trừ bằng tổng các **dòng chạm tài
+khoản công nợ**, và buộc mọi dòng công nợ của chứng từ cùng đối tượng với
+chứng từ và cùng một tài khoản công nợ. Hai mã vi phạm mới:
+`settlement.line_partner_mismatch` và `settlement.line_account_spread`.
+
+Đây là **thay đổi phá vỡ** với chứng từ do máy khách khác hoặc script tự dựng:
+một phiếu thu gộp tiền bán lẻ với tiền thu nợ, trước đây phải khai đối trừ
+bằng cả tổng phiếu, nay phải khai đúng phần công nợ (và trước đây con số ấy
+không khớp bút toán mà chính phiếu ghi lên tài khoản công nợ). Chiều ngược lại
+là một nới lỏng: hình dạng phiếu gộp ấy trước đây không lập được.
+
+Bản 0031 còn có **bước dữ liệu**: mỗi dòng số dư công nợ đầu kỳ có dư ở bên
+ngược (khách ứng trước, tiền trả trước người bán) sinh một dòng chi tiết
+`is_advance`. Không cần thao tác tay khi nâng cấp.
+
+`downgrade` của bản này **có mất mát**: nó xóa những dòng chi tiết ấy cùng các
+dòng đối trừ trỏ vào chúng. Lượt nâng cấp lại dựng lại được số tiền từ dòng
+cha, nhưng không dựng lại được phần đã tất toán — hạ cấp một dữ liệu đang chạy
+vì thế phải đi kèm khôi phục sao lưu (§3.2), không chạy `downgrade` một mình.
+
 ### 2.2b Khóa mã hóa ứng dụng (ADR-019)
 
 ```bash

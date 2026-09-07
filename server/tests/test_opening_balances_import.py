@@ -404,6 +404,30 @@ def test_dual_nature_partner_keeps_both_sides_on_one_parent(
         assert row.debit == Decimal("1000000.00")
         assert row.credit == Decimal("300000.00")
 
+        # Lát 7C-5: bên NGƯỢC cũng để lại dòng con, đánh dấu `is_advance`. Trước
+        # đó nó chỉ vào cột `credit` của dòng cha — vế sổ cái nhích mà vế sổ phụ
+        # đứng yên, đúng điều kiện #7 của `arap_matches_control`.
+        children = (
+            session.execute(
+                select(OpeningBalanceInvoice)
+                .where(OpeningBalanceInvoice.opening_balance_id == row.id)
+                .order_by(OpeningBalanceInvoice.is_advance, OpeningBalanceInvoice.invoice_no)
+            )
+            .scalars()
+            .all()
+        )
+        assert [(child.invoice_no, child.amount, child.is_advance) for child in children] == [
+            ("HD-1", Decimal("800000.00"), False),
+            ("HD-2", Decimal("200000.00"), False),
+            (None, Decimal("300000.00"), True),
+        ]
+        # Tổng CÓ DẤU của chi tiết bằng đúng dư ròng của dòng cha — bất biến mà
+        # `opening_detail_matches_control` đo.
+        assert (
+            sum(-child.amount if child.is_advance else child.amount for child in children)
+            == row.debit - row.credit
+        )
+
 
 def test_lookup_and_sheet_mismatch_errors(
     session_factory: sessionmaker[Session],

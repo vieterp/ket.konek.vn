@@ -345,3 +345,85 @@ def test_carry_forward_preserves_foreign_currency_detail(
         assert usd.debit_fc == Decimal("100.00")
         assert usd.debit == Decimal("2500000.00")
         assert usd.exchange_rate == Decimal("25000.000000")
+
+
+def test_carry_forward_keeps_both_directions_when_the_partner_nets_to_zero(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+) -> None:
+    """Lát 7C-5, điều kiện #3: dư ròng về 0 không được làm rơi chi tiết.
+
+    Một nhà cung cấp vừa còn nợ 400.000 vừa đã được ta trả trước 400.000 có dư
+    ròng bằng 0, nên `sql/carry_forward.sql` (lọc `net <> 0`) không sinh dòng
+    cha nào cho họ — bản 4C bỏ luôn cả hai dòng con. Job phải dựng dòng cha dư
+    0 để chi tiết hai chiều có chỗ đậu: sổ cái năm mới cũng bằng 0 ở đó, nên
+    hai vế của `arap_matches_control` vẫn khớp, và người dùng không mất chi tiết
+    công nợ đang còn sống.
+    """
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        vendor = MasterDataService(session, Partner).create(
+            code=f"NCC-CF0-{context.branch_code}", name="NCC bù trừ", extra={"is_vendor": True}
+        )
+        source_year_id = ensure_fiscal_year(session, "2088", date(2088, 1, 1))
+        target_year_id = ensure_fiscal_year(session, "2089", date(2089, 1, 1))
+        parent = OpeningBalance(
+            fiscal_year_id=source_year_id,
+            ledger=Ledger.FINANCIAL.value,
+            branch_id=context.branch_id,
+            account_id=context.accounts["331"],
+            currency_code=VND,
+            partner_id=vendor.id,
+            partner_kind=PartnerKind.VENDOR.value,
+            credit=Decimal("400000.00"),
+            credit_fc=Decimal("400000.00"),
+            debit=Decimal("400000.00"),
+            debit_fc=Decimal("400000.00"),
+            detail_kind=OpeningDetailKind.PAYABLE,
+        )
+        session.add(parent)
+        session.flush()
+        session.add_all(
+            [
+                OpeningBalanceInvoice(
+                    opening_balance_id=parent.id,
+                    branch_id=parent.branch_id,
+                    invoice_no="HD-NET0",
+                    invoice_date=date(2087, 12, 1),
+                    amount=Decimal("400000.00"),
+                    amount_fc=Decimal("400000.00"),
+                ),
+                OpeningBalanceInvoice(
+                    opening_balance_id=parent.id,
+                    branch_id=parent.branch_id,
+                    amount=Decimal("400000.00"),
+                    amount_fc=Decimal("400000.00"),
+                    is_advance=True,
+                ),
+            ]
+        )
+        session.flush()
+
+        result = carry_forward(session, dataset_alpha, context, from_fiscal_year_id=source_year_id)
+        assert result["invoices_carried"] == 2
+        assert result["invoices_dropped"] == 0
+
+        (carried_parent,) = target_rows(session, context, target_year_id, ledger=Ledger.FINANCIAL)
+        assert carried_parent.partner_id == vendor.id
+        assert carried_parent.debit == Decimal("0.00")
+        assert carried_parent.credit == Decimal("0.00")
+
+        children = list(
+            session.execute(
+                select(OpeningBalanceInvoice)
+                .where(OpeningBalanceInvoice.opening_balance_id == carried_parent.id)
+                .order_by(OpeningBalanceInvoice.is_advance)
+            )
+            .scalars()
+            .all()
+        )
+        assert [(child.invoice_no, child.amount, child.is_advance) for child in children] == [
+            ("HD-NET0", Decimal("400000.00"), False),
+            (None, Decimal("400000.00"), True),
+        ]

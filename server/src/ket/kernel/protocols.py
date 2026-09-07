@@ -141,6 +141,19 @@ class SettlementTargetKind(IntEnum):
     "mỗi loại đích đúng một chiều": gộp hai chiều vào một giá trị thì khoản
     ứng trước không hiện ở màn đối trừ nào."""
 
+    OPENING_ADVANCE = 7
+    """Khoản ứng trước nằm trong SỐ DƯ ĐẦU KỲ (`opening_balance_invoices`).
+
+    Tách khỏi `OPENING_BALANCE` chứ không dùng chung: hai thứ ấy ở cùng bảng
+    và chỉ khác nhau ở cột `is_advance`, nhưng phép kiểm CHIỀU của đích
+    (`posting.debt_lines.is_advance`) đọc **loại đích**, không đọc bảng nguồn —
+    dùng chung một giá trị thì phiếu thu tất toán được khoản khách đã ứng, tức
+    đúng chiều ngược.
+
+    Chiều của nó ngược với chiều nợ của dòng cha: ứng trước trên dòng cha PHẢI
+    THU mang chiều phải trả, và ngược lại. Cùng luật với `ADVANCE_FROM_CUSTOMER`
+    /`ADVANCE_TO_VENDOR` ở sổ phụ chứng từ, chỉ khác nguồn."""
+
 
 class OpenInvoice(BaseModel):
     """Một chứng từ công nợ còn nợ, đã quy về hình dạng chung cho mọi nguồn.

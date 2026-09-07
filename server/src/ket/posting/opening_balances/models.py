@@ -18,6 +18,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     ForeignKey,
@@ -191,9 +192,9 @@ class OpeningBalanceInvoice(DatasetBase, Audited):
 
     Bảng con của một dòng `opening_balances` nhóm 2/3/4: hóa đơn của phải
     thu/phải trả, và **từng lần tạm ứng** của nhóm nhân viên — SRS đòi chi tiết
-    theo lần cho cả ba. Tổng các dòng con phải khớp bên còn-nợ của dòng cha
-    (BR-OPB-02 — đúng theo cách dựng ở lượt nhập; lượt chuyển năm đo lệch bằng
-    `invoice_overrun_parents`). Mang `branch_id` chép từ dòng cha từ lát 7A —
+    theo lần cho cả ba. Từ lát 7C-5 bảng chứa **cả hai chiều**: tổng CÓ DẤU của
+    dòng con (nợ dương, ứng trước âm) phải khớp dư ròng của dòng cha
+    (BR-OPB-02, đo bằng `opening_detail_matches_control`). Mang `branch_id` chép từ dòng cha từ lát 7A —
     xem docstring của chính cột.
     """
 
@@ -204,6 +205,13 @@ class OpeningBalanceInvoice(DatasetBase, Audited):
         CheckConstraint("paid_amount <= amount", name="paid_within_amount"),
         CheckConstraint("paid_amount_fc >= 0", name="paid_fc_not_negative"),
         CheckConstraint("paid_amount_fc <= amount_fc", name="paid_fc_within_amount"),
+        # Khoản ứng trước không có chứng từ gốc để gắn số/ngày — `parsing.py`
+        # cấm dòng bên ngược mang số chứng từ từ 4C, và đây là chỗ luật ấy
+        # sống được cả với đường ghi không đi qua tệp Excel (chuyển năm).
+        CheckConstraint(
+            "NOT is_advance OR (invoice_no IS NULL AND invoice_date IS NULL)",
+            name="advance_has_no_invoice_ref",
+        ),
         Index("ix_opening_balance_invoices_parent", "opening_balance_id"),
         Index("ix_opening_balance_invoices_branch", "branch_id"),
     )
@@ -222,6 +230,23 @@ class OpeningBalanceInvoice(DatasetBase, Audited):
     hỏi tới: một truy vấn đọc thẳng bảng vượt được ranh giới chi nhánh mà không
     có gì đỏ. Mọi đường ghi phải điền cột này bằng `branch_id` của dòng cha —
     lệch nó là lệch phạm vi, và bản chép chỉ đúng lúc nó được ghi."""
+
+    is_advance: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    """Dòng con này là khoản ỨNG TRƯỚC chứ không phải chứng từ còn nợ (lát 7C-5).
+
+    TK lưỡng tính được phép vừa còn nợ vừa có khoản ứng trước trên cùng một
+    dòng cha (BR-OPB-03) — bên còn-nợ vào `debit`, bên ứng trước vào `credit`
+    của dòng cha với nhóm phải thu, ngược lại với nhóm phải trả. Trước lát này
+    bên ứng trước **không để lại dòng con nào**: nó nhích vế sổ cái mà không
+    nhích vế sổ phụ, và đó là điều kiện #7 chặn `arap_matches_control`.
+
+    Cột boolean chứ không một bảng thứ hai: khoản ứng trước đầu kỳ đi qua đúng
+    những đường mà hóa đơn đầu kỳ đã đi — cùng phạm vi năm, cùng lượt chuyển
+    năm, cùng nguồn đối trừ — nên tách bảng là nhân đôi bốn đường ghi để phân
+    biệt một chiều. Chiều suy từ cột này cộng `detail_kind` của dòng cha, và
+    `SettlementTargetKind.OPENING_ADVANCE` là cách nó đi ra ngoài."""
 
     invoice_no: Mapped[str | None] = mapped_column(String(50), nullable=True)
     invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)

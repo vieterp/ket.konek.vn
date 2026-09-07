@@ -101,6 +101,10 @@ class _AggregatedRow:
     debit: Decimal = ZERO
     credit: Decimal = ZERO
     invoices: list[ParsedOpeningRow] = field(default_factory=list)
+    """Dòng con của nhóm công nợ — **cả hai chiều** từ lát 7C-5: dòng bên
+    còn-nợ thành chứng từ công nợ, dòng bên ngược thành khoản ứng trước
+    (`is_advance`). Tên giữ nguyên vì bảng đích vẫn là
+    `opening_balance_invoices`."""
 
 
 @dataclass(frozen=True)
@@ -507,7 +511,12 @@ def validate_rows(
         bucket.credit += row.credit
         # Chỉ nhóm công nợ (2/3/4) treo chi tiết chứng từ; nhóm ngân hàng (1)
         # có dòng dư Có hợp lệ (thấu chi) nhưng không có hóa đơn để treo.
-        if row.kind in PARTNER_KIND_BY_DETAIL and row.is_natural_side:
+        #
+        # **Cả hai bên** từ lát 7C-5: bên còn-nợ thành dòng chứng từ, bên ngược
+        # thành dòng ứng trước. Trước đó bên ngược chỉ vào cột dư của dòng cha
+        # và không để lại dòng con nào — vế sổ cái nhích mà vế sổ phụ đứng yên
+        # (điều kiện #7 của `posting/integrity/checks/arap_matches_control.sql`).
+        if row.kind in PARTNER_KIND_BY_DETAIL:
             bucket.invoices.append(row)
 
     report.error_rows = len(failed)
@@ -516,7 +525,10 @@ def validate_rows(
 
     for bucket in staged_rows:
         report.rows_by_kind[bucket.kind] = report.rows_by_kind.get(bucket.kind, 0) + 1
-        report.invoice_rows += len(bucket.invoices)
+        # Đếm chứng từ còn nợ, KHÔNG đếm dòng ứng trước: con số này đi thẳng
+        # lên màn kết quả nhập liệu dưới nhãn "số chứng từ công nợ", và một
+        # khoản ứng trước không phải một chứng từ người dùng vừa khai.
+        report.invoice_rows += sum(1 for row in bucket.invoices if row.is_natural_side)
     report.replaced_kinds = list(replaced)
 
     untouched = session.execute(
@@ -623,6 +635,7 @@ def write_staged(
                 "amount_fc": invoice.debit_fc + invoice.credit_fc,
                 "amount": invoice.debit + invoice.credit,
                 "paid_amount": ZERO,
+                "is_advance": not invoice.is_natural_side,
             }
             for parent_id, bucket in zip(parent_ids, staged.rows, strict=True)
             for invoice in bucket.invoices
