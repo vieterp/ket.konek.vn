@@ -59,6 +59,7 @@ from ket.modules.einvoice.models import (
     NoticeStatus,
 )
 from ket.modules.einvoice.numbering import scope_key_for
+from ket.modules.einvoice.providers.internal import INTERNAL_PROVIDER_CODE
 from ket.modules.einvoice.registration_service import InvoiceRegistrationService
 from ket.modules.einvoice.state_machine import EInvoiceAction, transition, transition_to
 from ket.posting.documents.models import Voucher
@@ -79,6 +80,10 @@ class UsableInvoiceForm:
     id: int
     form_no: str
     serial: str
+    provider_code: str | None
+    """Nhà cung cấp mà ký hiệu này khai (`0032`). `None` = không qua bên thứ ba
+    nào — hóa đơn đặt in, tự in, hoặc bản cài dùng `internal`; đó cũng là điều
+    kiện duy nhất quyết định dãy số cục bộ có được cấp hay không."""
 
 
 _NOTICE_TITLES: dict[ErrorNoticeKind, str] = {
@@ -124,31 +129,44 @@ class EInvoiceService:
     def issue(self, einvoice_id: UUID, *, invoice_date: date) -> EInvoice:
         """Cấp số và đưa hóa đơn vào trạng thái đang phát hành (FR-EIV-013).
 
-        **Cấp số chỉ xảy ra lần đầu.** Phát hành lại một hóa đơn đã bị từ chối
-        dùng lại đúng số cũ (ADR-013): số đã tiêu, đã nằm trong
-        `allocated_numbers`, và cấp thêm một số nữa cho cùng tờ hóa đơn là bỏ
-        lại một số không thuộc về ai — đúng cái lỗ mà dãy `gap_free` sinh ra để
-        chặn. Trigger DB canh chiều còn lại nếu đường ghi nào lách được chỗ này.
+        **Ai cấp số phụ thuộc ký hiệu** (quyết định user 2026-09-08). Ký hiệu
+        khai `provider_code` thì **nhà cung cấp cấp số** — nó tới cùng câu trả
+        lời của lượt phát hành, và `reconcile` điền vào. Ký hiệu không khai (hóa
+        đơn đặt in, tự in, hoặc nhà cung cấp `internal`) thì dãy `gap_free` cục
+        bộ cấp, đúng như 7D dựng: với chúng không có bên thứ ba nào cấp số, nên
+        dãy ấy là sự thật duy nhất.
 
-        `invoice_date` cũng chỉ nhận ở lượt cấp số đầu: BR-EIV-03 đã kiểm nó một
-        lần, và đổi ngày của một tờ hóa đơn đã mang số là sửa nội dung hóa đơn.
+        **Mốc "đã làm lượt đầu" là `issued_at`, không phải `invoice_no`.** Với
+        hóa đơn qua nhà cung cấp, số còn `NULL` suốt cả lượt phát hành đầu tiên,
+        nên đọc `invoice_no` sẽ khiến lượt phát hành **lại** (sau khi bị từ
+        chối) chạy lại trọn phần kiểm hồ sơ đăng ký và ghi đè ngày hóa đơn — tức
+        sửa nội dung một tờ hóa đơn đã gửi đi.
+
+        Phát hành lại một hóa đơn đã bị từ chối dùng lại đúng số cũ (ADR-013):
+        số đã tiêu, đã nằm trong `allocated_numbers`, và cấp thêm một số nữa cho
+        cùng tờ hóa đơn là bỏ lại một số không thuộc về ai. Trigger DB canh
+        chiều còn lại nếu đường ghi nào lách được chỗ này.
+
+        `invoice_date` cũng chỉ nhận ở lượt đầu: BR-EIV-03 đã kiểm nó một lần,
+        và đổi ngày của một tờ hóa đơn đã phát hành là sửa nội dung hóa đơn.
         """
         invoice = self.require(einvoice_id)
         target = transition_to(EInvoiceStatus(invoice.status), EInvoiceAction.ISSUE)
 
-        if invoice.invoice_no is None:
+        if invoice.issued_at is None:
             form = self._require_usable_form(invoice.invoice_form_id)
             self._require_registration(
                 invoice_form_id=form.id, branch_id=invoice.branch_id, on_date=invoice_date
             )
-            number = self._allocate_number(invoice, form=form)
-            self._refuse_out_of_range(
-                number,
-                invoice_form_id=form.id,
-                branch_id=invoice.branch_id,
-                on_date=invoice_date,
-            )
-            invoice.invoice_no = number
+            if form.provider_code is None:
+                number = self._allocate_number(invoice, form=form)
+                self._refuse_out_of_range(
+                    number,
+                    invoice_form_id=form.id,
+                    branch_id=invoice.branch_id,
+                    on_date=invoice_date,
+                )
+                invoice.invoice_no = number
             invoice.invoice_date = invoice_date
             invoice.issued_at = datetime.now(UTC)
 
@@ -162,15 +180,26 @@ class EInvoiceService:
         *,
         tax_authority_code: str | None = None,
         lookup_code: str | None = None,
+        invoice_no: str | None = None,
     ) -> EInvoice:
         """Cơ quan thuế / nhà cung cấp đã nhận hóa đơn.
 
-        Ở 7E đây là chỗ `outbox` gọi khi provider trả về thành công; ở lát này
-        nó là một thao tác tường minh, đủ để mọi bất biến "sau khi phát hành"
-        được đo trên dữ liệu thật thay vì xanh vì chưa ai tới được trạng thái ấy.
+        Đây là chỗ `outbox` gọi khi nhà cung cấp trả về thành công, và cũng là
+        thao tác tay của người đã tra cứu trên cổng cơ quan thuế.
+
+        **Số hóa đơn có thể tới ở chính lượt này.** Với ký hiệu khai nhà cung
+        cấp thì họ cấp số (quyết định user 2026-09-08), và số về cùng câu trả
+        lời của lượt phát hành — xem `issue`.
         """
         invoice = self.require(einvoice_id)
         invoice.status = transition_to(EInvoiceStatus(invoice.status), EInvoiceAction.CONFIRM)
+        if invoice.invoice_no is None and invoice_no is not None:
+            # Số do nhà cung cấp cấp, điền **một lần** (quyết định user
+            # 2026-09-08). Điều kiện `is None` không phải phòng thủ thừa: trigger
+            # `einvoices_immutable_after_issue` chặn mọi lượt đổi một số đã có,
+            # nên không có nó thì một lượt xác nhận lại của hóa đơn cấp số cục bộ
+            # sẽ đâm vào trigger và làm kẹt hàng đợi thay vì đi qua.
+            invoice.invoice_no = invoice_no
         invoice.tax_authority_status = 2
         invoice.tax_authority_code = tax_authority_code
         invoice.lookup_code = lookup_code
@@ -348,7 +377,12 @@ class EInvoiceService:
             )
         if not form.is_active:
             raise InvoiceFormNotUsableError("Ký hiệu hóa đơn này đã ngừng theo dõi")
-        return UsableInvoiceForm(id=form.id, form_no=form.form_no, serial=form.code)
+        return UsableInvoiceForm(
+            id=form.id,
+            form_no=form.form_no,
+            serial=form.code,
+            provider_code=form.provider_code,
+        )
 
     def _require_registration(
         self, *, invoice_form_id: int, branch_id: int, on_date: date
@@ -427,3 +461,22 @@ class EInvoiceService:
             select(EInvoice.status, func.count()).group_by(EInvoice.status)
         ).all()
         return {int(status): count for status, count in rows}
+
+    def provider_code_for(self, einvoice_id: UUID) -> str:
+        """Nhà cung cấp mà ký hiệu của tờ hóa đơn này khai (FR-EIV-001).
+
+        `invoice_forms.provider_code` là chỗ duy nhất giữ lời khai ấy — `0032`
+        đã đặt nó ở đó cùng ràng buộc `provider_only_for_electronic`, nên một ký
+        hiệu hóa đơn đặt in không mang nhà cung cấp nào là đúng theo cấu trúc.
+
+        Trống thì trả `internal`: bản cài chưa ký hợp đồng với nhà cung cấp nào
+        vẫn phải phát hành được trong phần mềm — xem `providers/internal.py`. Đó
+        là một mặc định có chủ đích, không phải một lượt né lỗi: đường thay thế
+        duy nhất là từ chối phát hành, và nó biến việc chưa cấu hình một tích
+        hợp thành việc không dùng được phần mềm.
+        """
+        invoice = self.require(einvoice_id)
+        form = self._session.get(InvoiceForm, invoice.invoice_form_id)
+        if form is None or form.provider_code is None:
+            return INTERNAL_PROVIDER_CODE
+        return form.provider_code

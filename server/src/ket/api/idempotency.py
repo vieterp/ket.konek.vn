@@ -130,6 +130,19 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         # trên văn bản đã nộp (thời điểm nộp là sự kiện xảy ra một lần), nên
         # thao tác tự nó đã idempotent; cùng họ gán vai trò ở đầu danh sách.
         "/api/v1/einvoices/notices/{notice_id}/actions/submit",
+        # Dọn hàng đợi truyền tải theo yêu cầu (lát 7E-1): **xếp hàng**, y như
+        # `/api/v1/jobs` — nó tạo một *yêu cầu dọn*, không cấp số và không tạo
+        # bản ghi kế toán nào. Lượt gửi lại chỉ xếp thêm một lượt quét, và một
+        # lượt quét thừa không gửi gì thêm: mọi dòng bộ bơm chạm tới đều đi qua
+        # `query_status` trước (xem `modules/einvoice/outbox.py`). Lượt CẤP SỐ,
+        # thứ duy nhất ở phân hệ này mà một lần gửi lại làm hỏng thật, nằm ở
+        # `actions/issue` và **có** khóa.
+        "/api/v1/einvoices/outbox/actions/pump",
+        # Khai hồ sơ đăng nhập nhà cung cấp (lát 7E-2): `PUT` **đặt** một dòng
+        # cho mỗi nhà cung cấp, nên gọi lại cùng thân yêu cầu cho ra đúng cùng
+        # một trạng thái — thao tác tự nó đã lũy đẳng, cùng lối gán vai trò ở
+        # đầu danh sách này.
+        "/api/v1/einvoices/provider-profiles",
     }
 )
 """Miễn trừ theo **đúng một đường dẫn**, cho thao tác tự nó đã idempotent.

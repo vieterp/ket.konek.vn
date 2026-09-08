@@ -489,3 +489,146 @@ def test_there_is_no_route_that_edits_an_invoice() -> None:
     assert paths, "không tìm thấy route nào của phân hệ hóa đơn điện tử"
     for path, methods in paths.items():
         assert "PUT" not in methods and "PATCH" not in methods, path
+
+
+# --- hồ sơ nhà cung cấp và lượt dọn hàng đợi (lát 7E-2) ---------------------
+
+
+def test_a_provider_profile_round_trip_never_returns_the_password(
+    app_client: TestClient, issuer_headers: dict[str, str]
+) -> None:
+    """Khai hồ sơ đăng nhập rồi đọc lại — mật khẩu **không** ở bất kỳ đâu.
+
+    Bí mật lưu đã mã hóa, nhưng bản mã vẫn là thứ mang đi thử ngoại tuyến được,
+    nên nó cũng không được ra khỏi API. Bài này khẳng định trên **toàn bộ thân
+    response** chứ không trên một trường cụ thể: thêm một trường mới vô tình chở
+    nó ra sẽ đỏ, còn một `assert "password" not in body` thì không.
+    """
+    secret = "mat-khau-rat-bi-mat-7e2"
+    payload = {
+        "provider_code": "easyinvoice",
+        "base_url": "https://sandbox.easyinvoice.example.vn",
+        "username": "nguoi-dung-ei",
+        "password": secret,
+        "tax_code": "0101234567",
+    }
+
+    created = app_client.put(
+        "/api/v1/einvoices/provider-profiles", json=payload, headers=issuer_headers
+    )
+    assert created.status_code == 200, created.text
+    assert secret not in created.text
+
+    listed = app_client.get("/api/v1/einvoices/provider-profiles", headers=issuer_headers)
+    assert listed.status_code == 200, listed.text
+    assert secret not in listed.text
+    rows = listed.json()
+    mine = [row for row in rows if row["provider_code"] == "easyinvoice"]
+    assert len(mine) == 1, "một dòng cho mỗi nhà cung cấp"
+    assert mine[0]["username"] == "nguoi-dung-ei"
+    assert "password" not in mine[0]
+
+
+def test_declaring_the_same_provider_twice_updates_instead_of_duplicating(
+    app_client: TestClient, issuer_headers: dict[str, str]
+) -> None:
+    """`PUT` **đặt**, không thêm.
+
+    Hai dòng cho một nhà cung cấp thì `invoice_forms.provider_code` không còn trỏ
+    được vào đâu cả — ràng buộc duy nhất ở tầng bảng canh chiều ấy, và bài này
+    canh chiều API không bao giờ chạm tới nó.
+    """
+    base = {
+        "provider_code": "easyinvoice",
+        "base_url": "https://sandbox.easyinvoice.example.vn",
+        "username": "lan-mot",
+        "password": "mk-1",
+        "tax_code": "0101234567",
+    }
+    first = app_client.put("/api/v1/einvoices/provider-profiles", json=base, headers=issuer_headers)
+    assert first.status_code == 200, first.text
+
+    second = app_client.put(
+        "/api/v1/einvoices/provider-profiles",
+        json={**base, "username": "lan-hai", "password": "mk-2"},
+        headers=issuer_headers,
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["id"] == first.json()["id"], "phải sửa đúng dòng cũ"
+    assert second.json()["username"] == "lan-hai"
+
+
+def test_a_provider_profile_over_plain_http_is_refused(
+    app_client: TestClient, issuer_headers: dict[str, str]
+) -> None:
+    """Địa chỉ không mã hóa bị từ chối.
+
+    Header xác thực của nhà cung cấp mang mật khẩu **dạng rõ** theo đặc tả của
+    họ, nên `http://` để lộ nó trên đường truyền.
+    """
+    refused = app_client.put(
+        "/api/v1/einvoices/provider-profiles",
+        json={
+            "provider_code": "ncc-khong-ma-hoa",
+            "base_url": "http://khong-ma-hoa.example.vn",
+            "username": "u",
+            "password": "p",
+            "tax_code": "0101234567",
+        },
+        headers=issuer_headers,
+    )
+    assert refused.status_code >= 400, refused.text
+
+
+def test_declaring_a_provider_profile_needs_the_registration_permission(
+    app_client: TestClient, sales_only_headers: dict[str, str]
+) -> None:
+    """Người chỉ có quyền bán hàng không khai được hồ sơ.
+
+    Khai sai địa chỉ máy chủ là đổi nơi **mọi** tờ hóa đơn của doanh nghiệp được
+    gửi tới — cùng mức hệ quả với việc tự cấp cho mình một dải số, nên nó dùng
+    quyền hồ sơ đăng ký (có lớp xác thực thứ hai).
+    """
+    refused = app_client.put(
+        "/api/v1/einvoices/provider-profiles",
+        json={
+            "provider_code": "easyinvoice",
+            "base_url": "https://sandbox.easyinvoice.example.vn",
+            "username": "u",
+            "password": "p",
+            "tax_code": "0101234567",
+        },
+        headers=sales_only_headers,
+    )
+    assert refused.status_code == 403, refused.text
+
+
+def test_pumping_the_outbox_queues_a_job(
+    app_client: TestClient, issuer_headers: dict[str, str]
+) -> None:
+    """Nút dọn hàng đợi xếp một lượt bơm và trả về id của nó.
+
+    Đây là đường **duy nhất** đưa một dòng `needs_reconcile` về đích khi chi
+    nhánh chưa phát hành thêm hóa đơn nào: loại job ấy khai `direct_enqueue=False`
+    nên `POST /api/v1/jobs` không xếp được, và bản cài chưa có bộ lập lịch nào.
+    """
+    accepted = app_client.post("/api/v1/einvoices/outbox/actions/pump", headers=issuer_headers)
+
+    assert accepted.status_code == 202, accepted.text
+    assert accepted.json()["job_id"]
+
+
+def test_reading_the_outbox_needs_only_view_permission(
+    app_client: TestClient, issuer_headers: dict[str, str]
+) -> None:
+    """Panel hàng đợi là cửa **đọc** — và nó không lộ khóa chống trùng.
+
+    `client_ref` là khóa dùng với nhà cung cấp; lộ nó ra API là mời một client
+    tự dựng lượt gửi mang đúng khóa ấy, tức đi vòng qua chính cơ chế chống trùng.
+    """
+    listed = app_client.get("/api/v1/einvoices/outbox", headers=issuer_headers)
+
+    assert listed.status_code == 200, listed.text
+    body = listed.json()
+    assert "due_now" in body
+    assert "client_ref" not in listed.text

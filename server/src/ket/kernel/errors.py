@@ -1805,3 +1805,41 @@ class EInvoiceNoticeSubmittedError(DomainError):
 
     error_code: ClassVar[str] = "einvoice.notice_already_submitted"
     http_status: ClassVar[int] = 409
+
+
+class EInvoiceProviderUnknownError(DomainError):
+    """Dòng hàng đợi mang mã nhà cung cấp mà bản cài chưa cài đặt.
+
+    Không phải lỗi lập trình dù nó trông giống: mã nhà cung cấp là **cấu hình**,
+    và một bản cài nâng cấp lên bản gỡ mất adapter cũ sẽ có đúng tình huống này
+    với những dòng còn treo. Người vận hành sửa được — cài lại adapter hoặc lập
+    biên bản hủy số — nên nó phải nói ra tên nhà cung cấp thay vì nổ trong worker.
+    """
+
+    error_code: ClassVar[str] = "einvoice.provider_unknown"
+    http_status: ClassVar[int] = 409
+
+
+class EInvoiceOutboxStateError(DomainError):
+    """Thao tác không hợp lệ với chặng hiện tại của dòng hàng đợi.
+
+    Ca đáng nói nhất: gửi lại một dòng `needs_reconcile` mà **chưa** hỏi
+    `query_status`. Đó là đường sinh ra tờ hóa đơn thứ hai, nên nó bị chặn ở
+    tầng dịch vụ chứ không để lại cho người gọi nhớ thứ tự — xem `reconcile.py`.
+    """
+
+    error_code: ClassVar[str] = "einvoice.outbox_state_invalid"
+    http_status: ClassVar[int] = 409
+
+
+class EInvoiceProviderNotConfiguredError(DomainError):
+    """Ký hiệu hóa đơn khai một nhà cung cấp mà bản cài chưa khai hồ sơ đăng nhập.
+
+    Riêng khỏi `EInvoiceProviderUnknownError`: ở đó adapter không tồn tại trong
+    bản đang chạy (việc của người cài đặt phần mềm), còn ở đây adapter có sẵn mà
+    doanh nghiệp chưa điền tài khoản với nhà cung cấp (việc của người dùng). Hai
+    câu trả lời khác nhau cho câu hỏi "giờ tôi phải làm gì".
+    """
+
+    error_code: ClassVar[str] = "einvoice.provider_not_configured"
+    http_status: ClassVar[int] = 409

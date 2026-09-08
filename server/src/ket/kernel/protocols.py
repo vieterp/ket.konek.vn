@@ -7,7 +7,7 @@ do RT-18 nêu thẳng: phase 7 và 8 chạy song song sau phase 6, và ranh gi�
 sẻ duy nhất giữa chúng là kernel + posting đã đóng băng. Protocol khai muộn ở
 phase 7/8 là một lần mở kernel ra sửa — đúng thứ "đóng băng" cấm.
 
-Sáu Protocol, ai cài — ai gọi:
+Bảy Protocol, ai cài — ai gọi:
 
 * `ReceivableProvider` / `PayableProvider` — nguồn "hóa đơn còn nợ" cho đối
   trừ công nợ khi thu/chi tiền (`docs/srs/03` §4). Phase 6: nguồn duy nhất là
@@ -31,7 +31,18 @@ Sáu Protocol, ai cài — ai gọi:
   "phân hệ tắt thì ghi thẳng sổ quỹ" (FR-WHK-021) ghi qua cash-book Protocol.
   Phase 8 lặp lại đúng khuôn này cho thủ kho (nguồn phiếu nhập/xuất).
 
+* `EInvoiceSource` (thêm ở lát 7E-2, ADR-022) — chiều ĐỌC nội dung chứng từ
+  gốc để dựng bản XML gửi nhà cung cấp: tên hàng, đơn vị tính và số lượng là ba
+  trường bắt buộc của mọi dòng hóa đơn mà `gl_postings` không giữ. `sales` cài,
+  `einvoice` gọi.
+
 **KHÔNG** khai `InventoryValuation` — RT-18 xóa vì không có consumer thật.
+
+**Hai lần mở kernel trong hai lát liên tiếp** (ADR-021 rồi ADR-022) là một tín
+hiệu đáng ghi: lượt khai trước của RT-18 liệt kê theo **quan hệ ghi sổ** giữa các
+phân hệ, nên nó phủ kín chiều ấy mà bỏ trống chiều **đọc chéo để dựng một chứng
+từ đi ra ngoài**. Phase 8/9 nên soi trục đó trước khi bắt đầu — bản in, tờ khai
+thuế và bảng lương đều nằm trên nó.
 
 Registry ở cuối tệp theo đúng khuôn `posting.documents.registry`: module đăng
 ký bản cài lúc import (qua `ket.model_registry`), nơi gọi chỉ biết Protocol.
@@ -347,6 +358,91 @@ class ArApSubledger(Protocol):
         ...
 
 
+# ------------------------------------------------- hóa đơn điện tử (ADR-022)
+
+
+class EInvoiceSourceLine(BaseModel):
+    """Một dòng hàng như nó sẽ in trên tờ hóa đơn giá trị gia tăng.
+
+    Ba trường đầu là **bắt buộc theo pháp luật** trên mọi dòng hóa đơn (NĐ123
+    §10): tên hàng hóa dịch vụ, đơn vị tính, số lượng. Chúng cũng chính là ba
+    thứ không suy được từ `gl_postings` — lý do Protocol này phải tồn tại thay
+    vì `einvoice` đọc bút toán (ADR-022).
+
+    Số tiền đi bằng **nguyên tệ** (`_fc`) chứ không VND: bản XML gửi cơ quan
+    thuế mang đúng đồng tiền ghi trên hóa đơn, kèm tỷ giá riêng ở đầu chứng từ.
+    Quy đổi ở đây rồi để nơi gọi nhân ngược lại là làm tròn hai lần.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    description: str = Field(min_length=1, max_length=500)
+    """Tên hàng hóa, dịch vụ. Bản cài chịu trách nhiệm đã phân giải từ danh mục
+    vật tư sang chuỗi in được — `einvoice` không tra danh mục hộ."""
+
+    unit: str | None = Field(default=None, max_length=50)
+    """Đơn vị tính. `None` hợp lệ cho dòng dịch vụ không đo bằng đơn vị nào;
+    bộ dựng XML tự quyết cách biểu diễn khoảng trống ấy."""
+
+    quantity: Decimal | None = None
+    unit_price_fc: Decimal | None = None
+    discount_amount_fc: Decimal = Decimal(0)
+    amount_fc: Decimal
+    """Thành tiền trước thuế, đã trừ chiết khấu."""
+
+    vat_rate: Decimal | None = None
+    """Thuế suất phần trăm. `None` = dòng **không khai thuế suất nào** — khác
+    hẳn `0`, và bộ dựng XML của từng nhà cung cấp ánh xạ hai thứ ấy sang hai mã
+    khác nhau vì hệ quả khấu trừ đầu vào khác nhau."""
+
+    vat_amount_fc: Decimal = Decimal(0)
+
+
+class EInvoiceSourceDocument(BaseModel):
+    """Nội dung tờ hóa đơn, đọc từ chứng từ gốc đã ghi sổ.
+
+    **Không mang số hóa đơn, ký hiệu hay mẫu số.** Ba thứ ấy thuộc về chính tờ
+    hóa đơn điện tử (`einvoices` + danh mục ký hiệu), không thuộc chứng từ bán
+    hàng — và với hóa đơn qua nhà cung cấp thì số còn chưa tồn tại lúc đọc.
+
+    Bên bán cũng không có ở đây: nó là thông tin của **bản cài** (hồ sơ nhà cung
+    cấp giữ mã số thuế), giống nhau cho mọi tờ hóa đơn, nên hỏi chứng từ về nó
+    là hỏi nhầm chỗ.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    partner_kind: PartnerKind
+    partner_id: int
+    """Người mua, tra tiếp ở danh mục đối tác của `kernel` — nơi gọi đọc thẳng
+    được, nên Protocol không chép lại tên và địa chỉ."""
+
+    document_date: date
+    currency_code: str = Field(min_length=3, max_length=3)
+    exchange_rate: Decimal
+    total_before_tax_fc: Decimal
+    total_vat_fc: Decimal
+    total_fc: Decimal
+    lines: tuple[EInvoiceSourceLine, ...]
+
+
+class EInvoiceSource(Protocol):
+    """Cửa duy nhất để `einvoice` đọc nội dung chứng từ gốc (ADR-022).
+
+    Phân hệ bán hàng **cài**, `modules.einvoice` **gọi** lúc dựng bản XML gửi
+    nhà cung cấp. Thiếu nó thì `einvoice` phải import `sales`, và C3 cấm.
+    """
+
+    def read(self, session: Session, *, voucher_id: UUID) -> EInvoiceSourceDocument | None:
+        """Nội dung tờ hóa đơn của chứng từ này, hoặc `None` nếu không phải của mình.
+
+        `None` chứ không ném: nhiều phân hệ có thể cùng cài Protocol này về sau
+        (7F có hóa đơn lập trực tiếp), và "chứng từ này không thuộc về tôi" là
+        câu trả lời bình thường chứ không phải sai sót.
+        """
+        ...
+
+
 # ----------------------------------------------------------------- kho vận
 
 
@@ -535,6 +631,7 @@ class CrossModuleProviders:
         self._settlement_sources: dict[SettlementTargetKind, SettlementTargetSource] = {}
         self._treasurer_cash_book: TreasurerCashBook | None = None
         self._treasurer_voucher_source: TreasurerVoucherSource | None = None
+        self._einvoice_sources: list[EInvoiceSource] = []
 
     def register_receivable(self, provider: ReceivableProvider) -> None:
         self._receivable.append(provider)
@@ -578,6 +675,22 @@ class CrossModuleProviders:
                 "TreasurerVoucherSource đã có bản cài — trạng thái thủ quỹ sống một chỗ"
             )
         self._treasurer_voucher_source = source
+
+    def register_einvoice_source(self, source: EInvoiceSource) -> None:
+        """Nguồn nội dung hóa đơn — **danh sách**, không phải một (ADR-022).
+
+        Khác `ArApSubledger`: ở đó nhiều phân hệ tranh nhau ghi **một bảng**, nên
+        hai bản cài là một lỗi. Ở đây mỗi bản cài trả lời về **chứng từ của
+        chính nó** và trả `None` cho phần còn lại, nên 7F thêm nguồn hóa đơn lập
+        trực tiếp là chuyện bình thường — cùng hình dạng với danh sách nguồn
+        công nợ.
+        """
+        self._einvoice_sources.append(source)
+
+    def einvoice_sources(self) -> tuple[EInvoiceSource, ...]:
+        """Rỗng = chưa phân hệ nào cài. Nơi gọi phải từ chối **rõ ràng** thay vì
+        dựng một bản XML thiếu dòng và gửi nó tới cơ quan thuế."""
+        return tuple(self._einvoice_sources)
 
     def receivable_providers(self) -> tuple[ReceivableProvider, ...]:
         return tuple(self._receivable)

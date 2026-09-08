@@ -12181,6 +12181,138 @@
         "title": "OpeningValidateResponse",
         "type": "object"
       },
+      "OutboxListOut": {
+        "description": "Một trang hàng đợi, kèm số dòng đang tới hạn để panel hiện được ngay.",
+        "properties": {
+          "due_now": {
+            "title": "Due Now",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OutboxRowOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "due_now"
+        ],
+        "title": "OutboxListOut",
+        "type": "object"
+      },
+      "OutboxOperation": {
+        "description": "Việc mà dòng hàng đợi mang đi.\n\nLát 7E-1 chỉ ghi `ISSUE`. Các thành viên còn lại của vòng đời (gửi cho người\nmua, hủy, thay thế, điều chỉnh) **không** khai trước ở đây: khác với\n`EInvoiceAction` — nơi bảng chuyển là đặc tả vòng đời nên cạnh chưa cài vẫn\nphải có mặt — bảng này là một hàng đợi công việc, và một giá trị không đường\nghi nào sinh ra cũng không đường đọc nào xử lý chỉ là một nhánh chết mà\n`CHECK` của migration phải nới ra để đón.",
+        "enum": [
+          "issue"
+        ],
+        "title": "OutboxOperation",
+        "type": "string"
+      },
+      "OutboxRowOut": {
+        "description": "Một dòng hàng đợi truyền tải, cho panel vận hành (7E-1).\n\n**Không có `client_ref`.** Nó là khóa chống trùng dùng với nhà cung cấp;\nlộ ra API là mời một client tự dựng lượt gửi mang đúng khóa ấy, tức đúng\nđường mà `UNIQUE (client_ref)` sinh ra để đóng. Người vận hành cần biết\n*chặng nào* và *hỏng ở đâu*, không cần con số ấy.",
+        "properties": {
+          "attempt_count": {
+            "title": "Attempt Count",
+            "type": "integer"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "einvoice_id": {
+            "format": "uuid",
+            "title": "Einvoice Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/OutboxOperation"
+          },
+          "provider_code": {
+            "title": "Provider Code",
+            "type": "string"
+          },
+          "provider_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Ref"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OutboxStatus"
+          }
+        },
+        "required": [
+          "id",
+          "einvoice_id",
+          "branch_id",
+          "provider_code",
+          "operation",
+          "provider_ref",
+          "status",
+          "attempt_count",
+          "next_attempt_at",
+          "last_error",
+          "created_at"
+        ],
+        "title": "OutboxRowOut",
+        "type": "object"
+      },
+      "OutboxStatus": {
+        "description": "Chặng của một dòng hàng đợi truyền tải (RT-10).\n\nChuỗi ký tự chứ không `IntEnum` như `EInvoiceStatus`: trạng thái hóa đơn đi\nvào ràng buộc bảng, trigger và một cột `SMALLINT` mà pháp luật đọc, còn\ntrạng thái hàng đợi chỉ có người vận hành đọc — trong `psql` lúc một lượt\nphát hành đang treo, đúng lúc `2` không nói được gì.\n\n`NEEDS_RECONCILE` là thành viên mang toàn bộ lý do bảng này tồn tại: nó\n**không** phải \"lỗi\", mà là \"không biết\". Provider có thể đã nhận và đã cấp\nmã cơ quan thuế trong khi câu trả lời rơi mất trên đường về. Gửi lại một\ndòng như thế mà chưa hỏi là cách tạo tờ hóa đơn thứ hai cho cùng chứng từ.\n\n**Không có `pending`.** Phác thảo plan có, và bỏ nó là một quyết định chứ\nkhông phải cắt cho gọn: một dòng \"chờ tới lượt\" không phân biệt được với một\ndòng đã gửi rồi mà lượt ghi kết luận bị rollback, nên nó là đúng cái trạng\nthái mà từ đó một lượt gửi lại mù trở nên hợp lệ. Dòng sinh ra đã `in_flight`\nkèm lease (§Pipeline của plan viết đúng như vậy), và mọi câu hỏi an toàn về\nsau đọc lease — xem `outbox.py`.",
+        "enum": [
+          "in_flight",
+          "done",
+          "failed",
+          "needs_reconcile"
+        ],
+        "title": "OutboxStatus",
+        "type": "string"
+      },
       "PartnerBankAccountCreateRequest": {
         "additionalProperties": false,
         "description": "Thêm một tài khoản.\n\n`is_default = false` **không** bảo đảm tài khoản này không thành mặc định:\ntài khoản đầu tiên của một đối tác luôn là mặc định (xem\n`PartnerBankAccountService.add`). Phản hồi trả về cờ thật, nên màn hình luôn\nthấy đúng trạng thái sau khi ghi.",
@@ -15420,6 +15552,91 @@
           "is_active"
         ],
         "title": "ProjectsUpdateRequest",
+        "type": "object"
+      },
+      "ProviderProfileIn": {
+        "description": "Hồ sơ đăng nhập một nhà cung cấp hóa đơn điện tử (FR-EIV-001).\n\nMật khẩu chỉ đi **vào**: không schema nào trả nó ra, và cột lưu là `bytea`\nđã mã hóa (xem `EInvoiceProviderProfile`).",
+        "properties": {
+          "base_url": {
+            "maxLength": 200,
+            "title": "Địa chỉ máy chủ",
+            "type": "string"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Đang dùng",
+            "type": "boolean"
+          },
+          "password": {
+            "minLength": 1,
+            "title": "Mật khẩu",
+            "type": "string"
+          },
+          "provider_code": {
+            "maxLength": 50,
+            "title": "Mã nhà cung cấp",
+            "type": "string"
+          },
+          "tax_code": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Mã số thuế",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Tên đăng nhập",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_code",
+          "base_url",
+          "username",
+          "password",
+          "tax_code"
+        ],
+        "title": "ProviderProfileIn",
+        "type": "object"
+      },
+      "ProviderProfileOut": {
+        "description": "Hồ sơ đọc ra — **không có mật khẩu**, kể cả dạng đã mã hóa.\n\nTrả ciphertext ra API là biến một bí mật thành thứ ai đọc được response cũng\ncầm được; khóa mã hóa thì nằm ở máy chủ, nhưng bản mã vẫn là thứ mang đi thử\nngoại tuyến được.",
+        "properties": {
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "provider_code": {
+            "title": "Provider Code",
+            "type": "string"
+          },
+          "tax_code": {
+            "title": "Tax Code",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider_code",
+          "base_url",
+          "username",
+          "tax_code",
+          "is_active"
+        ],
+        "title": "ProviderProfileOut",
         "type": "object"
       },
       "PurchaseInvoiceIn": {
@@ -20638,7 +20855,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.32.0"
+    "version": "0.33.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -23454,6 +23671,191 @@
         ]
       }
     },
+    "/api/v1/einvoices/outbox": {
+      "get": {
+        "description": "Trạng thái hàng đợi truyền tải — panel vận hành (7E-1).\n\nKhai **trước** `/{einvoice_id}`: FastAPI khớp theo thứ tự khai, nên đặt sau\nthì `outbox` bị đọc như một UUID và endpoint này không bao giờ tới lượt.\n\nQuyền `view` chứ không `edit`: đây là cửa đọc. Người trực máy cần nhìn thấy\nhàng đợi đang tắc mà không cần quyền phát hành hóa đơn — vốn là quyền có 2FA.",
+        "operationId": "list_outbox_api_v1_einvoices_outbox_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OutboxStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Outbox",
+        "tags": [
+          "einvoice"
+        ]
+      }
+    },
+    "/api/v1/einvoices/outbox/actions/pump": {
+      "post": {
+        "description": "Dọn hàng đợi theo yêu cầu — xếp một lượt bơm không kèm dòng nào cụ thể.\n\nĐường **duy nhất** đưa một dòng `needs_reconcile` về đích khi chi nhánh\nchưa phát hành thêm hóa đơn nào: `TRANSMIT_JOB` khai `direct_enqueue=False`\nnên `POST /api/v1/jobs` không xếp nó được (cố ý — phát hành hóa đơn là\nquyền có 2FA và không được đi vòng qua endpoint phát hành), và bản cài chưa\ncó bộ lập lịch định kỳ nào.\n\nQuyền `edit` như đường phát hành: lượt bơm gọi tới nhà cung cấp thật.",
+        "operationId": "pump_outbox_api_v1_einvoices_outbox_actions_pump_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Pump Outbox Api V1 Einvoices Outbox Actions Pump Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Pump Outbox",
+        "tags": [
+          "einvoice"
+        ]
+      }
+    },
+    "/api/v1/einvoices/provider-profiles": {
+      "get": {
+        "description": "Hồ sơ đã khai — **không** kèm mật khẩu, kể cả dạng đã mã hóa.",
+        "operationId": "list_provider_profiles_api_v1_einvoices_provider_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderProfileOut"
+                  },
+                  "title": "Response List Provider Profiles Api V1 Einvoices Provider Profiles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Provider Profiles",
+        "tags": [
+          "einvoice"
+        ]
+      },
+      "put": {
+        "description": "Khai thông tin đăng nhập với nhà cung cấp hóa đơn điện tử (FR-EIV-001).\n\n`PUT` chứ không `POST`: **một dòng cho mỗi nhà cung cấp**, nên khai lại cùng\nmã là sửa hồ sơ đang có. Thao tác tự nó lũy đẳng, đúng lý do nó nằm trong\ndanh sách miễn khóa idempotency.\n\nQuyền của **hồ sơ đăng ký** (2FA) chứ không quyền hóa đơn: khai sai địa chỉ\nmáy chủ hay tài khoản là đổi nơi mọi tờ hóa đơn của doanh nghiệp được gửi\ntới — cùng mức hệ quả với việc cấp cho mình một dải số.",
+        "operationId": "put_provider_profile_api_v1_einvoices_provider_profiles_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderProfileIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderProfileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Put Provider Profile",
+        "tags": [
+          "einvoice"
+        ]
+      }
+    },
     "/api/v1/einvoices/registrations": {
       "post": {
         "description": "Lập hồ sơ đăng ký / thông báo phát hành (FR-EIV-002, FR-INV-001).",
@@ -23765,7 +24167,7 @@
     },
     "/api/v1/einvoices/{einvoice_id}/actions/issue": {
       "post": {
-        "description": "Cấp số và đưa hóa đơn vào trạng thái đang phát hành (FR-EIV-013).\n\nLát 7E chèn lượt ký XAdES **trước** bước này và một dòng `einvoice_outbox`\n**trong** cùng transaction (RT-10); phần cấp số ở đây không đổi.",
+        "description": "Cấp số, xếp dòng truyền tải, và đánh thức bộ bơm (FR-EIV-013, RT-10).\n\nBa việc, **một** transaction. Lượt cấp số và dòng `einvoice_outbox` phải\ncùng commit hoặc cùng không: xem §\"giao dịch tới hạn\" trong\n`modules/einvoice/outbox.py`. Job bơm xếp cùng chỗ ấy — nó chỉ là lời đánh\nthức, còn công việc thì đã nằm an toàn trên bảng outbox rồi, nên một worker\nchưa chạy chỉ làm hóa đơn đi chậm chứ không làm mất nó.\n\nEndpoint **không** chờ nhà cung cấp trả lời. Lượt gọi mạng nằm ở worker, và\nđó là điều kiện để một sự cố mạng không kéo theo một request treo — chứng từ\nđã lưu, số đã cấp, tờ hóa đơn nằm trong hàng đợi (FR-NFR-042).",
         "operationId": "issue_einvoice_api_v1_einvoices__einvoice_id__actions_issue_post",
         "parameters": [
           {

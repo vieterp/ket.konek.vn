@@ -15,14 +15,20 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from ket.modules.einvoice.models import (
+    BASE_URL_MAX_LENGTH,
     INVOICE_NO_MAX_LENGTH,
     LOOKUP_CODE_MAX_LENGTH,
     NOTICE_NO_MAX_LENGTH,
+    PROVIDER_CODE_MAX_LENGTH,
     REASON_CODE_MAX_LENGTH,
     TAX_AUTHORITY_CODE_MAX_LENGTH,
+    TAX_CODE_MAX_LENGTH,
+    USERNAME_MAX_LENGTH,
     EInvoiceStatus,
     ErrorNoticeKind,
     NoticeStatus,
+    OutboxOperation,
+    OutboxStatus,
     RegistrationStatus,
 )
 
@@ -157,3 +163,68 @@ class InvoiceRegistrationOut(BaseModel):
     range_from: int | None
     range_to: int | None
     status: RegistrationStatus
+
+
+class OutboxRowOut(BaseModel):
+    """Một dòng hàng đợi truyền tải, cho panel vận hành (7E-1).
+
+    **Không có `client_ref`.** Nó là khóa chống trùng dùng với nhà cung cấp;
+    lộ ra API là mời một client tự dựng lượt gửi mang đúng khóa ấy, tức đúng
+    đường mà `UNIQUE (client_ref)` sinh ra để đóng. Người vận hành cần biết
+    *chặng nào* và *hỏng ở đâu*, không cần con số ấy.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    einvoice_id: UUID
+    branch_id: int
+    provider_code: str
+    operation: OutboxOperation
+    provider_ref: str | None
+    status: OutboxStatus
+    attempt_count: int
+    next_attempt_at: datetime | None
+    last_error: str | None
+    created_at: datetime
+
+
+class OutboxListOut(BaseModel):
+    """Một trang hàng đợi, kèm số dòng đang tới hạn để panel hiện được ngay."""
+
+    items: list[OutboxRowOut]
+    total: int
+    due_now: int
+
+
+class ProviderProfileIn(BaseModel):
+    """Hồ sơ đăng nhập một nhà cung cấp hóa đơn điện tử (FR-EIV-001).
+
+    Mật khẩu chỉ đi **vào**: không schema nào trả nó ra, và cột lưu là `bytea`
+    đã mã hóa (xem `EInvoiceProviderProfile`).
+    """
+
+    provider_code: str = Field(max_length=PROVIDER_CODE_MAX_LENGTH, title="Mã nhà cung cấp")
+    base_url: str = Field(max_length=BASE_URL_MAX_LENGTH, title="Địa chỉ máy chủ")
+    username: str = Field(min_length=1, max_length=USERNAME_MAX_LENGTH, title="Tên đăng nhập")
+    password: str = Field(min_length=1, title="Mật khẩu")
+    tax_code: str = Field(min_length=1, max_length=TAX_CODE_MAX_LENGTH, title="Mã số thuế")
+    is_active: bool = Field(default=True, title="Đang dùng")
+
+
+class ProviderProfileOut(BaseModel):
+    """Hồ sơ đọc ra — **không có mật khẩu**, kể cả dạng đã mã hóa.
+
+    Trả ciphertext ra API là biến một bí mật thành thứ ai đọc được response cũng
+    cầm được; khóa mã hóa thì nằm ở máy chủ, nhưng bản mã vẫn là thứ mang đi thử
+    ngoại tuyến được.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    provider_code: str
+    base_url: str
+    username: str
+    tax_code: str
+    is_active: bool
