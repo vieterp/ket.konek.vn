@@ -47,9 +47,7 @@ class InternalProvider:
         trung thực nhất — và nó giữ cho mọi bất biến đọc `provider_ref` vẫn đúng
         với adapter này.
         """
-        return PrepareOutcome(
-            acceptance=ProviderAcceptance.ACCEPTED, provider_ref=str(client_ref)
-        )
+        return PrepareOutcome(acceptance=ProviderAcceptance.ACCEPTED, provider_ref=str(client_ref))
 
     def issue(self, *, provider_ref: str, invoice_id: UUID) -> IssueOutcome:
         """Không cấp số: hóa đơn phát hành nội bộ mang số của dãy `gap_free` cục
@@ -57,14 +55,21 @@ class InternalProvider:
         return IssueOutcome(acceptance=ProviderAcceptance.ACCEPTED)
 
     def query_status(self, *, provider_ref: str) -> ProviderStatus:
-        """Luôn "không biết".
+        """Luôn `PREPARED` — "bản nháp còn đây, cứ phát hành đi".
 
-        Đường tra cứu không tới được adapter này — hai chặng của nó không có
-        bước mạng nào để mất tín hiệu — nên câu trả lời trung thực là không biết
-        gì, chứ không phải một `ISSUED` bịa ra. Bịa sẽ biến một dòng lẽ ra không
-        tồn tại thành `done` mà không ai gửi gì.
+        **Không** `ISSUED`: bịa ra nó sẽ đánh `done` một dòng mà chẳng ai gửi gì.
+        **Không** `UNKNOWN`: đó là câu trả lời cho "tôi không biết khóa này", và
+        `reconcile` đọc nó thành mâu thuẫn rồi để dòng nằm lại chờ người xử lý —
+        vĩnh viễn, vì lượt sau cũng hỏi ra đúng thế. Mà `prepare` của chính
+        adapter này thì **có** ghi khóa, nên mọi lượt thử lại đều đi qua đây.
+
+        `PREPARED` là câu trả lời đúng theo nghĩa đen: không có gì rời phần mềm,
+        nên tờ hóa đơn vẫn đang chờ được phát hành, và phát hành nó lần nữa
+        không đụng tới ai. Đây là ngõ cụt mà review bắt được sau khi tách ba
+        trạng thái — ở bản một chặng, câu trả lời cũ rơi xuống nhánh phát hành
+        và `internal` nhận ngay.
         """
-        return ProviderStatus(state=ProviderRecordState.UNKNOWN)
+        return ProviderStatus(state=ProviderRecordState.PREPARED)
 
 
 def _build(binding: ProviderBinding) -> InternalProvider:

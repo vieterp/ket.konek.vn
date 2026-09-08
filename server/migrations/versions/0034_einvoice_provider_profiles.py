@@ -39,7 +39,10 @@ nhà cung cấp. Không có cột chi nhánh: tài khoản là của doanh nghi�
 liệu kế toán là một doanh nghiệp — nên bảng này **không** vào danh sách RLS, và
 cổng `test_rls_policy_coverage` chỉ đòi policy cho bảng *có* cột chi nhánh.
 `password_enc` là `bytea` vì nó đi qua `SecretBox` (Fernet), cùng cơ chế và cùng
-lập luận kiểu cột với bí mật TOTP.
+lập luận kiểu cột với bí mật TOTP. `base_url` bị ràng buộc phải là `https://`:
+header xác thực của nhà cung cấp mang mật khẩu **dạng rõ** theo đặc tả của họ,
+nên một địa chỉ `http://` để lộ nó trên đường truyền — và hồ sơ này còn khai
+được bằng lệnh SQL lúc dựng bản cài, nên phép kiểm phải nằm ở tầng bảng.
 
 Không đổi metadata builtin nào nên chuỗi không cần bước làm mới (doctrine 0025).
 """
@@ -122,7 +125,7 @@ def _create_provider_profiles() -> None:
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("provider_code", name="uq_einvoice_provider_profiles_code"),
-        sa.CheckConstraint("base_url <> ''", name="base_url_not_blank"),
+        sa.CheckConstraint("base_url LIKE 'https://%'", name="base_url_is_https"),
         sa.CheckConstraint("username <> ''", name="username_not_blank"),
         sa.CheckConstraint("tax_code <> ''", name="tax_code_not_blank"),
     )

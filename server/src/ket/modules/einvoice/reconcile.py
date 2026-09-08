@@ -106,7 +106,7 @@ def transmit(session: Session, claimed: ClaimedRow, provider: EInvoiceProvider) 
             return settled
 
     if provider_ref is None:
-        return _prepare(row, provider, asked_first=asked_first)
+        return _prepare(session, row, provider, asked_first=asked_first)
     return _issue(session, row, provider, provider_ref=provider_ref, asked_first=asked_first)
 
 
@@ -137,12 +137,20 @@ def _reconcile(
 
 
 def _prepare(
-    row: EInvoiceOutbox, provider: EInvoiceProvider, *, asked_first: bool
+    session: Session, row: EInvoiceOutbox, provider: EInvoiceProvider, *, asked_first: bool
 ) -> TransmitReport:
     """Chặng một: nạp bản nháp và **cất khóa của nhà cung cấp**."""
     outcome = _run_prepare(provider, client_ref=row.client_ref, invoice_id=row.einvoice_id)
     if outcome.acceptance == ProviderAcceptance.REJECTED:
-        mark_failed(row, message=outcome.message or "Nhà cung cấp từ chối hóa đơn")
+        # Lật tờ hóa đơn sang `PHAT_HANH_LOI` **cùng lúc** đóng dòng, y như nhánh
+        # từ chối ở `_apply`. Thiếu vế này thì dòng đóng còn hóa đơn kẹt lại ở
+        # `DANG_PHAT_HANH` — và bảng chuyển không có cạnh `(DANG_PHAT_HANH,
+        # ISSUE)`, nên người dùng không phát hành lại được bằng đường nào cả.
+        # Đây lại đúng là ca từ chối thường gặp nhất: nhà cung cấp kiểm khuôn
+        # ngay ở lượt nạp.
+        message = outcome.message or "Nhà cung cấp từ chối hóa đơn"
+        mark_failed(row, message=message)
+        EInvoiceService(session).reject(row.einvoice_id, message=message)
         return _report(row, asked_first=asked_first, prepared=False, issued=False)
     if outcome.acceptance != ProviderAcceptance.ACCEPTED or not outcome.provider_ref:
         # `ACCEPTED` mà không có khóa là mâu thuẫn, và đi tiếp nghĩa là phát hành
@@ -212,9 +220,7 @@ def _run_prepare(
         )
 
 
-def _run_issue(
-    provider: EInvoiceProvider, *, provider_ref: str, invoice_id: UUID
-) -> IssueOutcome:
+def _run_issue(provider: EInvoiceProvider, *, provider_ref: str, invoice_id: UUID) -> IssueOutcome:
     """`issue`, và một lượt ném là `UNKNOWN` chứ không phải `REJECTED`.
 
     Ngoại lệ của thư viện HTTP không nói được nhà cung cấp đã phát hành hay
@@ -244,9 +250,7 @@ def _apply(session: Session, row: EInvoiceOutbox, outcome: IssueOutcome) -> None
             # Không đánh `done`: ràng buộc `issued_invoice_has_a_number` sẽ chặn
             # lượt xác nhận, và một ngoại lệ ở đây kéo cả lô rollback. Để dòng
             # lại chờ một lượt tra cứu — đúng nghĩa "chưa biết đủ".
-            mark_needs_reconcile(
-                row, message="Nhà cung cấp đã nhận nhưng chưa trả về số hóa đơn"
-            )
+            mark_needs_reconcile(row, message="Nhà cung cấp đã nhận nhưng chưa trả về số hóa đơn")
             return
         mark_done(row, provider_ref=outcome.provider_ref)
         # `transmit` đã bảo đảm hóa đơn còn ở `DANG_PHAT_HANH`, nên cạnh này

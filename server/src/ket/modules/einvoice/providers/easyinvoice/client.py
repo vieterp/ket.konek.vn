@@ -34,9 +34,7 @@ CONNECT_TIMEOUT_SECONDS: Final[int] = 10
 """Chờ bắt tay. Ngắn hơn nhiều: không nối được thì chắc chắn chưa ai nhận gì,
 nên đây là lượt hỏng **an toàn** — khác hẳn một lượt hết giờ khi đọc."""
 
-TIMEOUT: Final[httpx.Timeout] = httpx.Timeout(
-    READ_TIMEOUT_SECONDS, connect=CONNECT_TIMEOUT_SECONDS
-)
+TIMEOUT: Final[httpx.Timeout] = httpx.Timeout(READ_TIMEOUT_SECONDS, connect=CONNECT_TIMEOUT_SECONDS)
 
 ACCEPTED_STATUS: Final[int] = 2
 """Giá trị `Status` duy nhất nghĩa là nhà cung cấp đã nhận."""

@@ -580,7 +580,12 @@ class EInvoiceProviderProfile(DatasetBase, Audited):
     __tablename__ = PROVIDER_PROFILE_TABLE_NAME
     __table_args__ = (
         UniqueConstraint("provider_code", name="uq_einvoice_provider_profiles_code"),
-        CheckConstraint("base_url <> ''", name="base_url_not_blank"),
+        # **Bắt buộc `https`.** Header xác thực của nhà cung cấp mang mật khẩu
+        # dạng rõ theo đúng đặc tả của họ (xem `providers/easyinvoice/auth.py`),
+        # nên một địa chỉ `http://` để lộ nó trên đường truyền. Ràng buộc ở tầng
+        # bảng chứ không chỉ ở validator: hồ sơ này còn khai được bằng lệnh SQL
+        # lúc dựng bản cài.
+        CheckConstraint("base_url LIKE 'https://%'", name="base_url_is_https"),
         CheckConstraint("username <> ''", name="username_not_blank"),
         CheckConstraint("tax_code <> ''", name="tax_code_not_blank"),
     )

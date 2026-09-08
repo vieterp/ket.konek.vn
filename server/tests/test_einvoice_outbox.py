@@ -43,6 +43,7 @@ from ket.kernel.security.models import Branch
 from ket.modules.einvoice.models import (
     EInvoice,
     EInvoiceOutbox,
+    EInvoiceProviderProfile,
     EInvoiceStatus,
     OutboxOperation,
     OutboxStatus,
@@ -60,10 +61,12 @@ from ket.modules.einvoice.providers.contracts import (
     IssueOutcome,
     PrepareOutcome,
     ProviderAcceptance,
+    ProviderBinding,
     ProviderRecordState,
     ProviderStatus,
 )
 from ket.modules.einvoice.providers.internal import INTERNAL_PROVIDER_CODE
+from ket.modules.einvoice.providers.registry import PROVIDERS
 from ket.modules.einvoice.reconcile import transmit
 from ket.modules.einvoice.service import EInvoiceService
 from ket.modules.sales.models import SalesInvoiceKind
@@ -1093,3 +1096,110 @@ def test_a_provider_that_accepts_without_a_number_does_not_break_the_batch(
         invoice = session.get(EInvoice, row.einvoice_id)
         assert invoice is not None
         assert EInvoiceStatus(invoice.status) == EInvoiceStatus.DANG_PHAT_HANH
+
+
+# --- hai hồi quy của lượt sửa hai chặng -------------------------------------
+
+
+class _RefusesToPrepare:
+    """Nhà cung cấp từ chối ngay ở chặng nạp — ca thường gặp nhất ngoài đời.
+
+    EasyInvoice kiểm khuôn bản XML ở `importInvoice`, nên sai ký hiệu hay sai mã
+    số thuế người mua đều dừng ở đó chứ không tới lượt phát hành.
+    """
+
+    def prepare(self, *, client_ref: UUID, invoice_id: UUID) -> PrepareOutcome:
+        return PrepareOutcome(acceptance=ProviderAcceptance.REJECTED, message="Sai ký hiệu hóa đơn")
+
+    def issue(self, *, provider_ref: str, invoice_id: UUID) -> IssueOutcome:
+        raise AssertionError("không được tới lượt phát hành")
+
+    def query_status(self, *, provider_ref: str) -> ProviderStatus:
+        raise AssertionError("không được tra cứu")
+
+
+def test_a_refusal_at_prepare_moves_the_invoice_too_not_just_the_row(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Từ chối ở chặng **nạp** phải lật cả tờ hóa đơn, không chỉ đóng dòng.
+
+    Thiếu vế ấy thì dòng đóng còn hóa đơn kẹt ở `DANG_PHAT_HANH` — và bảng
+    chuyển không có cạnh `(DANG_PHAT_HANH, ISSUE)`, nên **không đường nào** phát
+    hành lại được. Hóa đơn nằm chết trong hệ thống.
+    """
+
+    def work(session: Session) -> None:
+        row = _queued_via_provider(session, context, accounts)
+        claimed = load_for_send(session, row.id, force_reconcile=False)
+        assert claimed is not None
+
+        transmit(session, claimed, _RefusesToPrepare())
+
+        assert row.status == OutboxStatus.FAILED
+        invoice = session.get(EInvoice, row.einvoice_id)
+        assert invoice is not None
+        assert EInvoiceStatus(invoice.status) == EInvoiceStatus.PHAT_HANH_LOI, (
+            "hóa đơn phải sang trạng thái phát hành lỗi để còn phát hành lại được"
+        )
+        assert invoice.tax_authority_message == "Sai ký hiệu hóa đơn"
+
+    run(work)
+
+
+def test_the_internal_provider_never_dead_ends_on_a_retry(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Bản cài không có nhà cung cấp vẫn phát hành được sau một lượt thử lại.
+
+    `internal.prepare` **có** ghi khóa, nên mọi lượt thử lại đi qua nhánh tra
+    cứu. Trả "không biết" ở đó biến nó thành ngõ cụt vĩnh viễn: `reconcile` đọc
+    thành mâu thuẫn và để dòng nằm chờ người xử lý, mà lượt sau cũng hỏi ra đúng
+    thế. `internal` là mặc định cho **mọi** ký hiệu không khai nhà cung cấp, nên
+    ngõ cụt ấy sẽ là mặc định của cả hệ thống.
+    """
+
+    def work(session: Session) -> None:
+        row = _queued(session, context, accounts)
+        provider = PROVIDERS.resolve(INTERNAL_PROVIDER_CODE, ProviderBinding(session=session))
+        _prepared(session, row, provider)
+        assert row.provider_ref is not None
+
+        # Lượt thử lại: lease hết hạn, hoặc job chạy lại — cả hai đều
+        # `force_reconcile=True`.
+        retry = load_for_send(session, row.id, force_reconcile=True)
+        assert retry is not None
+        report = transmit(session, retry, provider)
+
+        assert report.issued is True, "tra cứu không được biến thành ngõ cụt"
+        assert row.status == OutboxStatus.DONE
+        invoice = session.get(EInvoice, row.einvoice_id)
+        assert invoice is not None
+        assert EInvoiceStatus(invoice.status) == EInvoiceStatus.DA_PHAT_HANH
+
+    run(work)
+
+
+def test_a_provider_profile_must_use_https(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Địa chỉ `http://` không lưu được.
+
+    Header xác thực mang mật khẩu **dạng rõ** theo đặc tả nhà cung cấp, nên một
+    địa chỉ không mã hóa để lộ nó trên đường truyền. Ràng buộc ở tầng bảng vì hồ
+    sơ còn khai được bằng lệnh SQL lúc dựng bản cài.
+    """
+
+    def work(session: Session) -> None:
+        session.add(
+            EInvoiceProviderProfile(
+                provider_code="ncc-thu-nghiem",
+                base_url="http://khong-ma-hoa.example.vn",
+                username="u",
+                password_enc=b"x",
+                tax_code="0101234567",
+            )
+        )
+        session.flush()
+
+    with pytest.raises(IntegrityError, match="base_url_is_https"):
+        run(work)
