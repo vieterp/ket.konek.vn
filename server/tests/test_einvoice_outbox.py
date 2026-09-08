@@ -30,15 +30,17 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from einvoice_support import ensure_active_registration, ensure_invoice_form
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.errors import EInvoiceProviderNotConfiguredError
 from ket.kernel.organization.service import BranchService
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.pricing import PriceSource
+from ket.kernel.security.keystore import SecretBox
 from ket.kernel.security.models import Branch
 from ket.modules.einvoice.models import (
     EInvoice,
@@ -56,6 +58,7 @@ from ket.modules.einvoice.outbox import (
     load_for_send,
     open_rows_for,
 )
+from ket.modules.einvoice.provider_profile_service import ProviderProfileService
 from ket.modules.einvoice.providers.contracts import (
     EInvoiceProvider,
     IssueOutcome,
@@ -64,6 +67,10 @@ from ket.modules.einvoice.providers.contracts import (
     ProviderBinding,
     ProviderRecordState,
     ProviderStatus,
+)
+from ket.modules.einvoice.providers.easyinvoice.provider import (
+    EASYINVOICE_PROVIDER_CODE,
+    EasyInvoiceProvider,
 )
 from ket.modules.einvoice.providers.internal import INTERNAL_PROVIDER_CODE
 from ket.modules.einvoice.providers.registry import PROVIDERS
@@ -1203,3 +1210,90 @@ def test_a_provider_profile_must_use_https(
 
     with pytest.raises(IntegrityError, match="base_url_is_https"):
         run(work)
+
+
+# --- dựng adapter từ hồ sơ đăng nhập (7E-2) ---------------------------------
+
+
+def _profile(session: Session, secret_box: SecretBox, *, password: str = "mk") -> None:  # noqa: S107
+    """Đặt hồ sơ `easyinvoice` — `put` ghi đè nên gọi lại không sinh dòng thứ hai."""
+    ProviderProfileService(session, secret_box).put(
+        provider_code=EASYINVOICE_PROVIDER_CODE,
+        base_url="https://sandbox.example.vn",
+        username="nguoi-dung",
+        password=password,
+        tax_code="0101234567",
+    )
+
+
+def test_resolving_a_provider_without_a_profile_says_what_to_configure(
+    run: Runner, secret_box: SecretBox
+) -> None:
+    """Chưa khai hồ sơ → lỗi **nghiệp vụ**, không phải lỗi lập trình.
+
+    Người vận hành sửa được, nên nó phải dừng ở `last_error` của một dòng hàng
+    đợi (xem `outbox_job`) thay vì kéo đổ cả lượt bơm.
+
+    Bài **tự dựng tiền đề** bằng cách xóa hồ sơ nếu có: `dataset_alpha` dùng
+    chung cả phiên, và `test_einvoice_api.py` khai một hồ sơ `easyinvoice` thật.
+    Trông vào một cái bảng rỗng ở đây là phụ thuộc thứ tự tệp — cùng họ bẫy tệp
+    này đã dính hai lần.
+    """
+
+    def work(session: Session) -> None:
+        session.execute(
+            delete(EInvoiceProviderProfile).where(
+                EInvoiceProviderProfile.provider_code == EASYINVOICE_PROVIDER_CODE
+            )
+        )
+        session.flush()
+        PROVIDERS.resolve(
+            EASYINVOICE_PROVIDER_CODE,
+            ProviderBinding(session=session, secret_box=secret_box),
+        )
+
+    with pytest.raises(EInvoiceProviderNotConfiguredError, match="EasyInvoice"):
+        run(work)
+
+
+def test_resolving_a_provider_without_an_app_key_names_the_command_to_run(
+    run: Runner, secret_box: SecretBox
+) -> None:
+    """Có hồ sơ mà bản cài chưa có khóa mã hóa → nói đúng lệnh phải chạy.
+
+    Ca thật: khôi phục dữ liệu sang máy khác mà quên mang khóa (ADR-019).
+    """
+
+    def work(session: Session) -> None:
+        _profile(session, secret_box)
+        PROVIDERS.resolve(
+            EASYINVOICE_PROVIDER_CODE, ProviderBinding(session=session, secret_box=None)
+        )
+
+    with pytest.raises(EInvoiceProviderNotConfiguredError, match="generate-app-key"):
+        run(work)
+
+
+def test_a_configured_provider_builds_with_the_decrypted_password(
+    run: Runner, secret_box: SecretBox
+) -> None:
+    """Đường dựng đầy đủ: đọc hồ sơ, giải mã mật khẩu, dựng adapter.
+
+    Bài này ghim rằng mật khẩu **giải mã đúng** — cột lưu là bản mã, nên một lượt
+    ghi hay đọc sai khóa sẽ cho ra một chuỗi khác và mọi yêu cầu tới nhà cung cấp
+    bị từ chối, ở nơi rất khó truy.
+    """
+
+    def work(session: Session) -> None:
+        _profile(session, secret_box, password="mat-khau-that")
+        provider = PROVIDERS.resolve(
+            EASYINVOICE_PROVIDER_CODE,
+            ProviderBinding(session=session, secret_box=secret_box),
+        )
+        assert isinstance(provider, EasyInvoiceProvider)
+        credentials = provider._client._credentials
+        assert credentials.password == "mat-khau-that"
+        assert credentials.base_url == "https://sandbox.example.vn"
+        assert credentials.tax_code == "0101234567"
+
+    run(work)
