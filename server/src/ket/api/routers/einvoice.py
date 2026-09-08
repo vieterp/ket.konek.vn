@@ -31,6 +31,7 @@ from ket.api.dependencies import (
 from ket.api.idempotency import idempotency_key_dependency
 from ket.kernel.errors import BranchNotInScopeError
 from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
+from ket.kernel.jobs import queue
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
 from ket.modules.einvoice import (
@@ -38,7 +39,9 @@ from ket.modules.einvoice import (
     INVOICE_PERMISSION_CODE,
     REGISTRATION_PERMISSION_CODE,
 )
-from ket.modules.einvoice.models import EInvoice, EInvoiceStatus
+from ket.modules.einvoice.models import EInvoice, EInvoiceStatus, OutboxStatus
+from ket.modules.einvoice.outbox import due_now, enqueue_issue, list_rows
+from ket.modules.einvoice.outbox_job import TRANSMIT_JOB
 from ket.modules.einvoice.registration_service import InvoiceRegistrationService
 from ket.modules.einvoice.schemas import (
     EInvoiceConfirmIn,
@@ -51,6 +54,8 @@ from ket.modules.einvoice.schemas import (
     ErrorNoticeOut,
     InvoiceRegistrationIn,
     InvoiceRegistrationOut,
+    OutboxListOut,
+    OutboxRowOut,
 )
 from ket.modules.einvoice.service import EInvoiceService
 
@@ -144,14 +149,34 @@ def issue_einvoice(
     settings: AppSettings,
     idempotency_key: IssueKey,
 ) -> EInvoiceOut:
-    """Cấp số và đưa hóa đơn vào trạng thái đang phát hành (FR-EIV-013).
+    """Cấp số, xếp dòng truyền tải, và đánh thức bộ bơm (FR-EIV-013, RT-10).
 
-    Lát 7E chèn lượt ký XAdES **trước** bước này và một dòng `einvoice_outbox`
-    **trong** cùng transaction (RT-10); phần cấp số ở đây không đổi.
+    Ba việc, **một** transaction. Lượt cấp số và dòng `einvoice_outbox` phải
+    cùng commit hoặc cùng không: xem §"giao dịch tới hạn" trong
+    `modules/einvoice/outbox.py`. Job bơm xếp cùng chỗ ấy — nó chỉ là lời đánh
+    thức, còn công việc thì đã nằm an toàn trên bảng outbox rồi, nên một worker
+    chưa chạy chỉ làm hóa đơn đi chậm chứ không làm mất nó.
+
+    Endpoint **không** chờ nhà cung cấp trả lời. Lượt gọi mạng nằm ở worker, và
+    đó là điều kiện để một sự cố mạng không kéo theo một request treo — chứng từ
+    đã lưu, số đã cấp, tờ hóa đơn nằm trong hàng đợi (FR-NFR-042).
     """
 
     def work(session: Session) -> tuple[EInvoiceOut, IdempotentRef]:
-        invoice = EInvoiceService(session).issue(einvoice_id, invoice_date=payload.invoice_date)
+        provider_code = EInvoiceService(session).provider_code_for(einvoice_id)
+        invoice, row = enqueue_issue(
+            session,
+            einvoice_id,
+            invoice_date=payload.invoice_date,
+            provider_code=provider_code,
+        )
+        queue.enqueue(
+            session,
+            job_type=TRANSMIT_JOB,
+            params={"outbox_id": row.id},
+            requested_by=authorized.scope.user_id,
+            branch_id=invoice.branch_id,
+        )
         return EInvoiceOut.model_validate(invoice), IdempotentRef(
             result_type=EInvoice.__tablename__, result_id=str(invoice.id)
         )
@@ -295,6 +320,61 @@ def list_einvoices(
             page=page,
             page_size=page_size,
             counts_by_status=service.count_by_status(),
+        )
+
+
+@router.post("/outbox/actions/pump", status_code=status.HTTP_202_ACCEPTED)
+def pump_outbox(
+    authorized: InvoiceEditor,
+    factory: SessionFactory,
+) -> dict[str, str]:
+    """Dọn hàng đợi theo yêu cầu — xếp một lượt bơm không kèm dòng nào cụ thể.
+
+    Đường **duy nhất** đưa một dòng `needs_reconcile` về đích khi chi nhánh
+    chưa phát hành thêm hóa đơn nào: `TRANSMIT_JOB` khai `direct_enqueue=False`
+    nên `POST /api/v1/jobs` không xếp nó được (cố ý — phát hành hóa đơn là
+    quyền có 2FA và không được đi vòng qua endpoint phát hành), và bản cài chưa
+    có bộ lập lịch định kỳ nào.
+
+    Quyền `edit` như đường phát hành: lượt bơm gọi tới nhà cung cấp thật.
+    """
+    with unit_of_work(factory, authorized.scope) as session:
+        job = queue.enqueue(
+            session,
+            job_type=TRANSMIT_JOB,
+            requested_by=authorized.scope.user_id,
+            branch_id=authorized.scope.acting_branch_id,
+        )
+        return {"job_id": str(job.id)}
+
+
+@router.get("/outbox", response_model=OutboxListOut)
+def list_outbox(
+    authorized: InvoiceReader,
+    factory: SessionFactory,
+    status_filter: Annotated[OutboxStatus | None, Query(alias="status")] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = 50,
+) -> OutboxListOut:
+    """Trạng thái hàng đợi truyền tải — panel vận hành (7E-1).
+
+    Khai **trước** `/{einvoice_id}`: FastAPI khớp theo thứ tự khai, nên đặt sau
+    thì `outbox` bị đọc như một UUID và endpoint này không bao giờ tới lượt.
+
+    Quyền `view` chứ không `edit`: đây là cửa đọc. Người trực máy cần nhìn thấy
+    hàng đợi đang tắc mà không cần quyền phát hành hóa đơn — vốn là quyền có 2FA.
+    """
+    with unit_of_work(factory, authorized.scope) as session:
+        items, total = list_rows(
+            session,
+            status=status_filter,
+            limit=page_size,
+            offset=(page - 1) * page_size,
+        )
+        return OutboxListOut(
+            items=[OutboxRowOut.model_validate(row) for row in items],
+            total=total,
+            due_now=due_now(session),
         )
 
 

@@ -1079,6 +1079,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/einvoices/outbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Outbox
+         * @description Trạng thái hàng đợi truyền tải — panel vận hành (7E-1).
+         *
+         *     Khai **trước** `/{einvoice_id}`: FastAPI khớp theo thứ tự khai, nên đặt sau
+         *     thì `outbox` bị đọc như một UUID và endpoint này không bao giờ tới lượt.
+         *
+         *     Quyền `view` chứ không `edit`: đây là cửa đọc. Người trực máy cần nhìn thấy
+         *     hàng đợi đang tắc mà không cần quyền phát hành hóa đơn — vốn là quyền có 2FA.
+         */
+        get: operations["list_outbox_api_v1_einvoices_outbox_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/outbox/actions/pump": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pump Outbox
+         * @description Dọn hàng đợi theo yêu cầu — xếp một lượt bơm không kèm dòng nào cụ thể.
+         *
+         *     Đường **duy nhất** đưa một dòng `needs_reconcile` về đích khi chi nhánh
+         *     chưa phát hành thêm hóa đơn nào: `TRANSMIT_JOB` khai `direct_enqueue=False`
+         *     nên `POST /api/v1/jobs` không xếp nó được (cố ý — phát hành hóa đơn là
+         *     quyền có 2FA và không được đi vòng qua endpoint phát hành), và bản cài chưa
+         *     có bộ lập lịch định kỳ nào.
+         *
+         *     Quyền `edit` như đường phát hành: lượt bơm gọi tới nhà cung cấp thật.
+         */
+        post: operations["pump_outbox_api_v1_einvoices_outbox_actions_pump_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/einvoices/registrations": {
         parameters: {
             query?: never;
@@ -1211,10 +1265,17 @@ export interface paths {
         put?: never;
         /**
          * Issue Einvoice
-         * @description Cấp số và đưa hóa đơn vào trạng thái đang phát hành (FR-EIV-013).
+         * @description Cấp số, xếp dòng truyền tải, và đánh thức bộ bơm (FR-EIV-013, RT-10).
          *
-         *     Lát 7E chèn lượt ký XAdES **trước** bước này và một dòng `einvoice_outbox`
-         *     **trong** cùng transaction (RT-10); phần cấp số ở đây không đổi.
+         *     Ba việc, **một** transaction. Lượt cấp số và dòng `einvoice_outbox` phải
+         *     cùng commit hoặc cùng không: xem §"giao dịch tới hạn" trong
+         *     `modules/einvoice/outbox.py`. Job bơm xếp cùng chỗ ấy — nó chỉ là lời đánh
+         *     thức, còn công việc thì đã nằm an toàn trên bảng outbox rồi, nên một worker
+         *     chưa chạy chỉ làm hóa đơn đi chậm chứ không làm mất nó.
+         *
+         *     Endpoint **không** chờ nhà cung cấp trả lời. Lượt gọi mạng nằm ở worker, và
+         *     đó là điều kiện để một sự cố mạng không kéo theo một request treo — chứng từ
+         *     đã lưu, số đã cấp, tờ hóa đơn nằm trong hàng đợi (FR-NFR-042).
          */
         post: operations["issue_einvoice_api_v1_einvoices__einvoice_id__actions_issue_post"];
         delete?: never;
@@ -12584,6 +12645,91 @@ export interface components {
             ledger: number;
         };
         /**
+         * OutboxListOut
+         * @description Một trang hàng đợi, kèm số dòng đang tới hạn để panel hiện được ngay.
+         */
+        OutboxListOut: {
+            /** Due Now */
+            due_now: number;
+            /** Items */
+            items: components["schemas"]["OutboxRowOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * OutboxOperation
+         * @description Việc mà dòng hàng đợi mang đi.
+         *
+         *     Lát 7E-1 chỉ ghi `ISSUE`. Các thành viên còn lại của vòng đời (gửi cho người
+         *     mua, hủy, thay thế, điều chỉnh) **không** khai trước ở đây: khác với
+         *     `EInvoiceAction` — nơi bảng chuyển là đặc tả vòng đời nên cạnh chưa cài vẫn
+         *     phải có mặt — bảng này là một hàng đợi công việc, và một giá trị không đường
+         *     ghi nào sinh ra cũng không đường đọc nào xử lý chỉ là một nhánh chết mà
+         *     `CHECK` của migration phải nới ra để đón.
+         * @enum {string}
+         */
+        OutboxOperation: "issue";
+        /**
+         * OutboxRowOut
+         * @description Một dòng hàng đợi truyền tải, cho panel vận hành (7E-1).
+         *
+         *     **Không có `client_ref`.** Nó là khóa chống trùng dùng với nhà cung cấp;
+         *     lộ ra API là mời một client tự dựng lượt gửi mang đúng khóa ấy, tức đúng
+         *     đường mà `UNIQUE (client_ref)` sinh ra để đóng. Người vận hành cần biết
+         *     *chặng nào* và *hỏng ở đâu*, không cần con số ấy.
+         */
+        OutboxRowOut: {
+            /** Attempt Count */
+            attempt_count: number;
+            /** Branch Id */
+            branch_id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Einvoice Id
+             * Format: uuid
+             */
+            einvoice_id: string;
+            /** Id */
+            id: number;
+            /** Last Error */
+            last_error: string | null;
+            /** Next Attempt At */
+            next_attempt_at: string | null;
+            operation: components["schemas"]["OutboxOperation"];
+            /** Provider Code */
+            provider_code: string;
+            /** Provider Ref */
+            provider_ref: string | null;
+            status: components["schemas"]["OutboxStatus"];
+        };
+        /**
+         * OutboxStatus
+         * @description Chặng của một dòng hàng đợi truyền tải (RT-10).
+         *
+         *     Chuỗi ký tự chứ không `IntEnum` như `EInvoiceStatus`: trạng thái hóa đơn đi
+         *     vào ràng buộc bảng, trigger và một cột `SMALLINT` mà pháp luật đọc, còn
+         *     trạng thái hàng đợi chỉ có người vận hành đọc — trong `psql` lúc một lượt
+         *     phát hành đang treo, đúng lúc `2` không nói được gì.
+         *
+         *     `NEEDS_RECONCILE` là thành viên mang toàn bộ lý do bảng này tồn tại: nó
+         *     **không** phải "lỗi", mà là "không biết". Provider có thể đã nhận và đã cấp
+         *     mã cơ quan thuế trong khi câu trả lời rơi mất trên đường về. Gửi lại một
+         *     dòng như thế mà chưa hỏi là cách tạo tờ hóa đơn thứ hai cho cùng chứng từ.
+         *
+         *     **Không có `pending`.** Phác thảo plan có, và bỏ nó là một quyết định chứ
+         *     không phải cắt cho gọn: một dòng "chờ tới lượt" không phân biệt được với một
+         *     dòng đã gửi rồi mà lượt ghi kết luận bị rollback, nên nó là đúng cái trạng
+         *     thái mà từ đó một lượt gửi lại mù trở nên hợp lệ. Dòng sinh ra đã `in_flight`
+         *     kèm lease (§Pipeline của plan viết đúng như vậy), và mọi câu hỏi an toàn về
+         *     sau đọc lease — xem `outbox.py`.
+         * @enum {string}
+         */
+        OutboxStatus: "in_flight" | "done" | "failed" | "needs_reconcile";
+        /**
          * PartnerBankAccountCreateRequest
          * @description Thêm một tài khoản.
          *
@@ -17441,6 +17587,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorNoticeOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_outbox_api_v1_einvoices_outbox_get: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["OutboxStatus"] | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxListOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    pump_outbox_api_v1_einvoices_outbox_actions_pump_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Lỗi (RFC 7807) */

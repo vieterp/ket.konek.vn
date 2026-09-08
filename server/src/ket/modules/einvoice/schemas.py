@@ -23,6 +23,8 @@ from ket.modules.einvoice.models import (
     EInvoiceStatus,
     ErrorNoticeKind,
     NoticeStatus,
+    OutboxOperation,
+    OutboxStatus,
     RegistrationStatus,
 )
 
@@ -157,3 +159,35 @@ class InvoiceRegistrationOut(BaseModel):
     range_from: int | None
     range_to: int | None
     status: RegistrationStatus
+
+
+class OutboxRowOut(BaseModel):
+    """Một dòng hàng đợi truyền tải, cho panel vận hành (7E-1).
+
+    **Không có `client_ref`.** Nó là khóa chống trùng dùng với nhà cung cấp;
+    lộ ra API là mời một client tự dựng lượt gửi mang đúng khóa ấy, tức đúng
+    đường mà `UNIQUE (client_ref)` sinh ra để đóng. Người vận hành cần biết
+    *chặng nào* và *hỏng ở đâu*, không cần con số ấy.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    einvoice_id: UUID
+    branch_id: int
+    provider_code: str
+    operation: OutboxOperation
+    provider_ref: str | None
+    status: OutboxStatus
+    attempt_count: int
+    next_attempt_at: datetime | None
+    last_error: str | None
+    created_at: datetime
+
+
+class OutboxListOut(BaseModel):
+    """Một trang hàng đợi, kèm số dòng đang tới hạn để panel hiện được ngay."""
+
+    items: list[OutboxRowOut]
+    total: int
+    due_now: int

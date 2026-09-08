@@ -32,7 +32,7 @@ không thuộc về hóa đơn nào.
 from __future__ import annotations
 
 from datetime import date, datetime
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 from uuid import UUID
 
 from sqlalchemy import (
@@ -59,12 +59,15 @@ from ket.kernel.persistence.base import DatasetBase
 EINVOICE_TABLE_NAME = "einvoices"
 ERROR_NOTICE_TABLE_NAME = "einvoice_error_notices"
 REGISTRATION_TABLE_NAME = "invoice_registrations"
+OUTBOX_TABLE_NAME = "einvoice_outbox"
 
 INVOICE_NO_MAX_LENGTH = 50
 TAX_AUTHORITY_CODE_MAX_LENGTH = 100
 LOOKUP_CODE_MAX_LENGTH = 100
 NOTICE_NO_MAX_LENGTH = 50
 REASON_CODE_MAX_LENGTH = 50
+PROVIDER_CODE_MAX_LENGTH = 50
+PROVIDER_REF_MAX_LENGTH = 100
 
 
 class EInvoiceStatus(IntEnum):
@@ -217,6 +220,11 @@ class EInvoice(DatasetBase, Audited):
             name="fk_einvoices_source_voucher",
             ondelete="RESTRICT",
         ),
+        # Đích cho khóa ngoại ghép của `einvoice_outbox` (7E-1), cùng khuôn với
+        # `uq_vouchers_id_branch` mà chính bảng này trỏ vào. Không thêm bảo đảm
+        # nào — `id` đã là khóa chính nên cặp ấy vốn duy nhất — chỉ nói ra để
+        # PostgreSQL chấp nhận một `REFERENCES einvoices (id, branch_id)`.
+        UniqueConstraint("id", "branch_id", name="uq_einvoices_id_branch"),
         Index("ix_einvoices_branch_status", "branch_id", "status"),
         Index("ix_einvoices_source_voucher", "source_voucher_id"),
     )
@@ -384,3 +392,148 @@ class InvoiceRegistration(DatasetBase, Audited):
     status: Mapped[RegistrationStatus] = mapped_column(
         SmallInteger, nullable=False, default=RegistrationStatus.NHAP
     )
+
+
+class OutboxStatus(StrEnum):
+    """Chặng của một dòng hàng đợi truyền tải (RT-10).
+
+    Chuỗi ký tự chứ không `IntEnum` như `EInvoiceStatus`: trạng thái hóa đơn đi
+    vào ràng buộc bảng, trigger và một cột `SMALLINT` mà pháp luật đọc, còn
+    trạng thái hàng đợi chỉ có người vận hành đọc — trong `psql` lúc một lượt
+    phát hành đang treo, đúng lúc `2` không nói được gì.
+
+    `NEEDS_RECONCILE` là thành viên mang toàn bộ lý do bảng này tồn tại: nó
+    **không** phải "lỗi", mà là "không biết". Provider có thể đã nhận và đã cấp
+    mã cơ quan thuế trong khi câu trả lời rơi mất trên đường về. Gửi lại một
+    dòng như thế mà chưa hỏi là cách tạo tờ hóa đơn thứ hai cho cùng chứng từ.
+
+    **Không có `pending`.** Phác thảo plan có, và bỏ nó là một quyết định chứ
+    không phải cắt cho gọn: một dòng "chờ tới lượt" không phân biệt được với một
+    dòng đã gửi rồi mà lượt ghi kết luận bị rollback, nên nó là đúng cái trạng
+    thái mà từ đó một lượt gửi lại mù trở nên hợp lệ. Dòng sinh ra đã `in_flight`
+    kèm lease (§Pipeline của plan viết đúng như vậy), và mọi câu hỏi an toàn về
+    sau đọc lease — xem `outbox.py`.
+    """
+
+    IN_FLIGHT = "in_flight"
+    """Đang có người cầm: hoặc vừa xếp hàng, hoặc một worker vừa giành.
+    `in_flight_since` là lease — hết hạn nghĩa là người cầm nó đã chết."""
+    DONE = "done"
+    """Provider đã nhận. Chặng cuối vui vẻ."""
+    FAILED = "failed"
+    """Provider **từ chối** — một câu trả lời rõ ràng, không phải mất tín hiệu.
+    Số hóa đơn vẫn giữ (ADR-013); đường ra là phát hành lại hoặc lập biên bản
+    hủy số."""
+    NEEDS_RECONCILE = "needs_reconcile"
+    """Không rõ kết quả. Chỉ giải bằng `query_status(client_ref)`, xem
+    `reconcile.py`."""
+
+
+class OutboxOperation(StrEnum):
+    """Việc mà dòng hàng đợi mang đi.
+
+    Lát 7E-1 chỉ ghi `ISSUE`. Các thành viên còn lại của vòng đời (gửi cho người
+    mua, hủy, thay thế, điều chỉnh) **không** khai trước ở đây: khác với
+    `EInvoiceAction` — nơi bảng chuyển là đặc tả vòng đời nên cạnh chưa cài vẫn
+    phải có mặt — bảng này là một hàng đợi công việc, và một giá trị không đường
+    ghi nào sinh ra cũng không đường đọc nào xử lý chỉ là một nhánh chết mà
+    `CHECK` của migration phải nới ra để đón.
+    """
+
+    ISSUE = "issue"
+
+
+class EInvoiceOutbox(DatasetBase):
+    """Hàng đợi truyền tải hóa đơn tới nhà cung cấp (RT-10, LD-10).
+
+    **Không `Audited`.** Ba bảng của 7D đều ghi vết vì chúng mang lời khai với
+    cơ quan thuế; bảng này mang *tiến trình kỹ thuật* của một lượt gửi, và mỗi
+    lượt thử sẽ đẻ một dòng nhật ký kiểm toán về việc `attempt_count` tăng từ 1
+    lên 2. Thứ đáng ghi vết là kết quả — nó nằm trên `einvoices` và đã được ghi.
+
+    **`client_ref` là khóa chống trùng phía nhà cung cấp**, sinh đúng một lần
+    lúc xếp hàng và không bao giờ đổi. Mọi lượt gửi lại của cùng một dòng dùng
+    lại đúng giá trị ấy: đó là thứ duy nhất cho phép provider trả lời "tôi nhận
+    rồi" thay vì lập tờ thứ hai. `UNIQUE` ở tầng bảng, vì một khóa chống trùng
+    trùng nhau thì không chống được gì.
+
+    **Một dòng còn mở cho mỗi (hóa đơn, việc)** — chỉ mục bán phần ở
+    `__table_args__`. Không có nó, hai lượt bấm "Phát hành" trên cùng tờ hóa đơn
+    xếp hai dòng với hai `client_ref` khác nhau, và hai `client_ref` khác nhau
+    là **hai hóa đơn** dưới mắt provider — đúng cái mà toàn bộ đường
+    `needs_reconcile` bên dưới dựng ra để tránh.
+
+    **`branch_id` + khóa ngoại ghép** `(einvoice_id, branch_id)` → `einvoices
+    (id, branch_id)`. Cùng lập luận với `einvoices` ở 7D: bảng có cửa đọc thẳng
+    (panel hàng đợi) nên phải có cột để RLS canh và để `test_rls_policy_coverage`
+    nhìn thấy; cái giá là khóa ngoại ghép, đổi lại dòng lệch chi nhánh không
+    biểu diễn được.
+    """
+
+    __tablename__ = OUTBOX_TABLE_NAME
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('in_flight', 'done', 'failed', 'needs_reconcile')",
+            name="status_known",
+        ),
+        CheckConstraint("operation IN ('issue')", name="operation_known"),
+        CheckConstraint("attempt_count >= 0", name="attempt_count_not_negative"),
+        # Lease chỉ có nghĩa khi đang bay, và đang bay mà không có lease là dòng
+        # không reaper nào đòi lại được — treo vĩnh viễn đúng như dòng `jobs`
+        # kẹt "đang chạy" mà `kernel.jobs.reaper` sinh ra để chặn.
+        CheckConstraint(
+            "(status = 'in_flight') = (in_flight_since IS NOT NULL)",
+            name="lease_only_while_in_flight",
+        ),
+        UniqueConstraint("client_ref", name="uq_einvoice_outbox_client_ref"),
+        Index(
+            "uq_einvoice_outbox_open_operation",
+            "einvoice_id",
+            "operation",
+            unique=True,
+            postgresql_where=text("status <> 'done' AND status <> 'failed'"),
+        ),
+        # Cửa của bộ bơm: lấy dòng tới hạn theo thứ tự tới hạn. Bán phần vì
+        # `done` sẽ là đại đa số bảng sau vài tháng, và không dòng `done` nào
+        # được bơm nhìn tới nữa.
+        Index(
+            "ix_einvoice_outbox_due",
+            "next_attempt_at",
+            postgresql_where=text("status IN ('in_flight', 'needs_reconcile')"),
+        ),
+        ForeignKeyConstraint(
+            ["einvoice_id", "branch_id"],
+            [f"{EINVOICE_TABLE_NAME}.id", f"{EINVOICE_TABLE_NAME}.branch_id"],
+            name="fk_einvoice_outbox_einvoice",
+            ondelete="CASCADE",
+        ),
+        Index("ix_einvoice_outbox_einvoice", "einvoice_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    einvoice_id: Mapped[UUID] = mapped_column(nullable=False)
+    branch_id: Mapped[int] = mapped_column(
+        ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False
+    )
+    provider_code: Mapped[str] = mapped_column(String(PROVIDER_CODE_MAX_LENGTH), nullable=False)
+    """Nhà cung cấp **đã chốt lúc xếp hàng**, không tra lại lúc gửi.
+
+    Đổi cấu hình nhà cung cấp giữa lúc một dòng còn treo là chuyện bình thường;
+    gửi dòng ấy đi cho nhà mới thì `client_ref` của nhà cũ mất ý nghĩa và lượt
+    hỏi lại `query_status` hỏi nhầm người."""
+
+    operation: Mapped[OutboxOperation] = mapped_column(String(20), nullable=False)
+    client_ref: Mapped[UUID] = mapped_column(nullable=False, default=uuid7)
+    provider_ref: Mapped[str | None] = mapped_column(String(PROVIDER_REF_MAX_LENGTH), nullable=True)
+    """Mã tờ hóa đơn phía provider, khi họ trả về một mã riêng khác `client_ref`."""
+
+    status: Mapped[OutboxStatus] = mapped_column(
+        String(20), nullable=False, default=OutboxStatus.IN_FLIGHT
+    )
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    in_flight_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

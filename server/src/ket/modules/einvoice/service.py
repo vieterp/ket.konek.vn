@@ -59,6 +59,7 @@ from ket.modules.einvoice.models import (
     NoticeStatus,
 )
 from ket.modules.einvoice.numbering import scope_key_for
+from ket.modules.einvoice.providers.internal import INTERNAL_PROVIDER_CODE
 from ket.modules.einvoice.registration_service import InvoiceRegistrationService
 from ket.modules.einvoice.state_machine import EInvoiceAction, transition, transition_to
 from ket.posting.documents.models import Voucher
@@ -427,3 +428,22 @@ class EInvoiceService:
             select(EInvoice.status, func.count()).group_by(EInvoice.status)
         ).all()
         return {int(status): count for status, count in rows}
+
+    def provider_code_for(self, einvoice_id: UUID) -> str:
+        """Nhà cung cấp mà ký hiệu của tờ hóa đơn này khai (FR-EIV-001).
+
+        `invoice_forms.provider_code` là chỗ duy nhất giữ lời khai ấy — `0032`
+        đã đặt nó ở đó cùng ràng buộc `provider_only_for_electronic`, nên một ký
+        hiệu hóa đơn đặt in không mang nhà cung cấp nào là đúng theo cấu trúc.
+
+        Trống thì trả `internal`: bản cài chưa ký hợp đồng với nhà cung cấp nào
+        vẫn phải phát hành được trong phần mềm — xem `providers/internal.py`. Đó
+        là một mặc định có chủ đích, không phải một lượt né lỗi: đường thay thế
+        duy nhất là từ chối phát hành, và nó biến việc chưa cấu hình một tích
+        hợp thành việc không dùng được phần mềm.
+        """
+        invoice = self.require(einvoice_id)
+        form = self._session.get(InvoiceForm, invoice.invoice_form_id)
+        if form is None or form.provider_code is None:
+            return INTERNAL_PROVIDER_CODE
+        return form.provider_code

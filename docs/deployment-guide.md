@@ -274,6 +274,32 @@ nhất còn lại về những số đã in ra đời thật. Hệ quả có ch�
 lại: dãy tiếp tục từ đúng chỗ nó dừng, **không** cấp lại số cũ. Hạ cấp một dữ
 liệu đang chạy vì thế phải đi kèm khôi phục sao lưu (§3.2).
 
+#### Bản 0033 — hàng đợi truyền tải hóa đơn
+
+Một bảng mới, `einvoice_outbox`, và **không mã quyền mới nào**: cả hai cửa của
+nó dùng lại `einvoice.invoice.view` (đọc hàng đợi) và `einvoice.invoice.edit`
+(dọn hàng đợi), tức vẫn nằm dưới lớp xác thực thứ hai đã mô tả ở trên.
+
+**Hàng đợi cần tiến trình chạy tác vụ nền.** Lượt phát hành hóa đơn nay cấp số
+rồi *xếp hàng*; việc gọi nhà cung cấp do worker làm. Bản cài không chạy
+`python -m ket.worker` sẽ vẫn cấp số và vẫn giữ tờ hóa đơn an toàn trong hàng
+đợi, nhưng **không tờ nào rời khỏi phần mềm** — theo dõi bằng
+`GET /api/v1/einvoices/outbox` (trường `due_now`).
+
+**Dòng `needs_reconcile` cần một lượt dọn.** Đó là những tờ hóa đơn mà kết quả
+từ nhà cung cấp không rõ (mạng rớt giữa chừng). Hệ thống **không bao giờ** gửi
+lại chúng mà chưa tra cứu, nên chúng không sinh ra hóa đơn trùng; nhưng chúng
+cũng không tự về đích. Bản cài chưa có bộ lập lịch định kỳ, nên đường dọn là
+lượt phát hành kế tiếp **của cùng chi nhánh ấy**, hoặc bấm dọn theo yêu cầu:
+`POST /api/v1/einvoices/outbox/actions/pump`. Lượt dọn chạy dưới chi nhánh đang
+thao tác, nên doanh nghiệp nhiều chi nhánh phải dọn ở từng chi nhánh.
+
+`downgrade` của bản này xóa bảng `einvoice_outbox` cùng nội dung. Mất mát ở đây
+hẹp hơn 0032 — trạng thái *hóa đơn* nằm ở `einvoices` và ở lại — nhưng
+`client_ref` của những lượt gửi chưa kết luận thì mất, và đó là khóa duy nhất
+tra cứu được lượt gửi cũ ở phía nhà cung cấp. Hạ cấp khi còn dòng chưa `done`
+đồng nghĩa mất khả năng phân biệt "đã gửi rồi" với "chưa gửi".
+
 ### 2.2b Khóa mã hóa ứng dụng (ADR-019)
 
 ```bash
