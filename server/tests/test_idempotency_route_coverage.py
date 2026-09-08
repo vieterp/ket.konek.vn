@@ -140,6 +140,7 @@ def test_the_exemption_list_is_exactly_what_was_reviewed() -> None:
             # Lát 7D: đánh dấu văn bản đã nộp — gọi lại trả nguyên trạng.
             "/api/v1/einvoices/notices/{notice_id}/actions/submit",
             "/api/v1/einvoices/outbox/actions/pump",
+            "/api/v1/einvoices/provider-profiles",
         }
     )
     # Cơ chế thứ ba, thêm ở lát 3C-1. Ghim nó ở đây vì chính docstring bên trên

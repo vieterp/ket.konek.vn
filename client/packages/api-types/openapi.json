@@ -15554,6 +15554,91 @@
         "title": "ProjectsUpdateRequest",
         "type": "object"
       },
+      "ProviderProfileIn": {
+        "description": "Hồ sơ đăng nhập một nhà cung cấp hóa đơn điện tử (FR-EIV-001).\n\nMật khẩu chỉ đi **vào**: không schema nào trả nó ra, và cột lưu là `bytea`\nđã mã hóa (xem `EInvoiceProviderProfile`).",
+        "properties": {
+          "base_url": {
+            "maxLength": 200,
+            "title": "Địa chỉ máy chủ",
+            "type": "string"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Đang dùng",
+            "type": "boolean"
+          },
+          "password": {
+            "minLength": 1,
+            "title": "Mật khẩu",
+            "type": "string"
+          },
+          "provider_code": {
+            "maxLength": 50,
+            "title": "Mã nhà cung cấp",
+            "type": "string"
+          },
+          "tax_code": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Mã số thuế",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Tên đăng nhập",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_code",
+          "base_url",
+          "username",
+          "password",
+          "tax_code"
+        ],
+        "title": "ProviderProfileIn",
+        "type": "object"
+      },
+      "ProviderProfileOut": {
+        "description": "Hồ sơ đọc ra — **không có mật khẩu**, kể cả dạng đã mã hóa.\n\nTrả ciphertext ra API là biến một bí mật thành thứ ai đọc được response cũng\ncầm được; khóa mã hóa thì nằm ở máy chủ, nhưng bản mã vẫn là thứ mang đi thử\nngoại tuyến được.",
+        "properties": {
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "provider_code": {
+            "title": "Provider Code",
+            "type": "string"
+          },
+          "tax_code": {
+            "title": "Tax Code",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider_code",
+          "base_url",
+          "username",
+          "tax_code",
+          "is_active"
+        ],
+        "title": "ProviderProfileOut",
+        "type": "object"
+      },
       "PurchaseInvoiceIn": {
         "additionalProperties": false,
         "description": "Thân hóa đơn cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).",
@@ -23690,6 +23775,82 @@
           }
         },
         "summary": "Pump Outbox",
+        "tags": [
+          "einvoice"
+        ]
+      }
+    },
+    "/api/v1/einvoices/provider-profiles": {
+      "get": {
+        "description": "Hồ sơ đã khai — **không** kèm mật khẩu, kể cả dạng đã mã hóa.",
+        "operationId": "list_provider_profiles_api_v1_einvoices_provider_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderProfileOut"
+                  },
+                  "title": "Response List Provider Profiles Api V1 Einvoices Provider Profiles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Provider Profiles",
+        "tags": [
+          "einvoice"
+        ]
+      },
+      "put": {
+        "description": "Khai thông tin đăng nhập với nhà cung cấp hóa đơn điện tử (FR-EIV-001).\n\n`PUT` chứ không `POST`: **một dòng cho mỗi nhà cung cấp**, nên khai lại cùng\nmã là sửa hồ sơ đang có. Thao tác tự nó lũy đẳng, đúng lý do nó nằm trong\ndanh sách miễn khóa idempotency.\n\nQuyền của **hồ sơ đăng ký** (2FA) chứ không quyền hóa đơn: khai sai địa chỉ\nmáy chủ hay tài khoản là đổi nơi mọi tờ hóa đơn của doanh nghiệp được gửi\ntới — cùng mức hệ quả với việc cấp cho mình một dải số.",
+        "operationId": "put_provider_profile_api_v1_einvoices_provider_profiles_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderProfileIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderProfileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Put Provider Profile",
         "tags": [
           "einvoice"
         ]

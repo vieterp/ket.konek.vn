@@ -37,6 +37,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -44,6 +45,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     SmallInteger,
     String,
     Text,
@@ -60,6 +62,7 @@ EINVOICE_TABLE_NAME = "einvoices"
 ERROR_NOTICE_TABLE_NAME = "einvoice_error_notices"
 REGISTRATION_TABLE_NAME = "invoice_registrations"
 OUTBOX_TABLE_NAME = "einvoice_outbox"
+PROVIDER_PROFILE_TABLE_NAME = "einvoice_provider_profiles"
 
 INVOICE_NO_MAX_LENGTH = 50
 TAX_AUTHORITY_CODE_MAX_LENGTH = 100
@@ -68,6 +71,9 @@ NOTICE_NO_MAX_LENGTH = 50
 REASON_CODE_MAX_LENGTH = 50
 PROVIDER_CODE_MAX_LENGTH = 50
 PROVIDER_REF_MAX_LENGTH = 100
+BASE_URL_MAX_LENGTH = 200
+USERNAME_MAX_LENGTH = 100
+TAX_CODE_MAX_LENGTH = 20
 
 
 class EInvoiceStatus(IntEnum):
@@ -171,21 +177,33 @@ class EInvoice(DatasetBase, Audited):
             "tax_authority_status IS NULL OR tax_authority_status BETWEEN 0 AND 3",
             name="tax_authority_status_known",
         ),
-        # Số và ngày đi thành cặp: một hóa đơn mang số mà không mang ngày không
-        # tra cứu được ở đâu cả, và một ngày không kèm số là ngày của cái gì.
+        # **Có số thì phải có ngày** — một chiều, không còn song điều kiện.
+        #
+        # Chiều "có số ⇒ có ngày" giữ nguyên lý do cũ: một hóa đơn mang số mà
+        # không mang ngày thì không tra cứu được ở đâu cả. Chiều ngược lại phải
+        # bỏ ở 7E-2 (quyết định user 2026-09-08): với ký hiệu khai nhà cung cấp,
+        # **nhà cung cấp cấp số**, mà ngày hóa đơn thì ta chọn và gửi đi trong
+        # chính bản XML (`ArisingDate`). Ngày vì thế có trước số, và khoảng giữa
+        # ấy là một trạng thái thật chứ không phải dữ liệu hỏng.
         CheckConstraint(
-            "(invoice_no IS NULL) = (invoice_date IS NULL)", name="number_and_date_together"
+            "invoice_no IS NULL OR invoice_date IS NOT NULL", name="number_needs_a_date"
         ),
-        # Trạng thái duy nhất được phép chưa có số là `CHUA_PHAT_HANH`:
-        # `DANG_PHAT_HANH` và `PHAT_HANH_LOI` đều đã tiêu số rồi (RT-10 cấp số
-        # trong chính txn lật hàng đợi truyền tải). Một ràng buộc chứ không hai
-        # — "đã phát hành thì có số" là hệ quả của câu này, và hai tên cho một
-        # luật là hai chỗ để sửa lệch nhau. Trigger
-        # `einvoices_immutable_after_issue` canh chiều còn lại: đã có số rồi
-        # thì số ấy không đổi nữa.
+        # **Từ `DA_PHAT_HANH` trở lên thì phải có số.** Nới ở 7E-2 (quyết định
+        # user 2026-09-08) từ luật cũ "chỉ bản nháp mới được thiếu số".
+        #
+        # Luật cũ đúng khi hệ thống là nơi duy nhất cấp số. Với ký hiệu khai nhà
+        # cung cấp thì **nhà cung cấp cấp số** — nó nằm trong câu trả lời của
+        # `issueInvoices`, tức chỉ tới nơi sau khi tờ hóa đơn đã rời phần mềm.
+        # `DANG_PHAT_HANH` và `PHAT_HANH_LOI` vì thế là hai trạng thái hợp lệ mà
+        # chưa có số: "đang gửi, chưa nghe trả lời" và "gửi rồi, bị từ chối".
+        #
+        # Ngưỡng dời tới `DA_PHAT_HANH` chứ không bỏ hẳn: một tờ hóa đơn cơ quan
+        # thuế đã nhận mà phần mềm không biết số của nó là dữ liệu vô dụng ở
+        # đúng chỗ nó quan trọng nhất. Trigger `einvoices_immutable_after_issue`
+        # canh chiều còn lại — số điền từ `NULL` được, đổi thì không.
         CheckConstraint(
-            f"status = {EInvoiceStatus.CHUA_PHAT_HANH} OR invoice_no IS NOT NULL",
-            name="only_draft_has_no_number",
+            f"status < {EInvoiceStatus.DA_PHAT_HANH} OR invoice_no IS NOT NULL",
+            name="issued_invoice_has_a_number",
         ),
         CheckConstraint("replaces_invoice_id <> id", name="does_not_replace_itself"),
         CheckConstraint("adjusts_invoice_id <> id", name="does_not_adjust_itself"),
@@ -537,3 +555,42 @@ class EInvoiceOutbox(DatasetBase):
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class EInvoiceProviderProfile(DatasetBase, Audited):
+    """Thông tin đăng nhập một nhà cung cấp hóa đơn điện tử (FR-EIV-001).
+
+    **Một dòng cho mỗi `provider_code`.** Tài khoản là của *doanh nghiệp* với
+    nhà cung cấp ấy, mà một dữ liệu kế toán là một doanh nghiệp — nên không có
+    trục chi nhánh ở đây. Ký hiệu nào dùng nhà cung cấp nào thì
+    `invoice_forms.provider_code` nói (đặt ở `0032`), và đó cũng là chỗ duy nhất
+    quyết định.
+
+    **Mật khẩu là `bytea`, không phải `text`.** Nó đi qua `SecretBox` (Fernet),
+    đúng cơ chế đang giữ bí mật TOTP; kiểu cột là lớp phòng thủ thứ hai — một
+    lệnh `UPDATE ... SET password_enc = 'matkhau'` viết nhầm giá trị dạng rõ bị
+    PostgreSQL từ chối thay vì lặng lẽ nhận (xem `kernel/security/keystore.py`).
+
+    **Không có cột nào giữ mã số thuế người bán ngoài `tax_code`**: nhà cung cấp
+    xác thực theo mã số thuế, nên nó vừa là danh tính đăng nhập vừa là lời khai
+    người bán trên tờ hóa đơn. Hai cột cho một sự thật là hai chỗ để lệch, và
+    lệch ở đây nghĩa là hóa đơn phát hành dưới tên một pháp nhân khác.
+    """
+
+    __tablename__ = PROVIDER_PROFILE_TABLE_NAME
+    __table_args__ = (
+        UniqueConstraint("provider_code", name="uq_einvoice_provider_profiles_code"),
+        CheckConstraint("base_url <> ''", name="base_url_not_blank"),
+        CheckConstraint("username <> ''", name="username_not_blank"),
+        CheckConstraint("tax_code <> ''", name="tax_code_not_blank"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    provider_code: Mapped[str] = mapped_column(String(PROVIDER_CODE_MAX_LENGTH), nullable=False)
+    base_url: Mapped[str] = mapped_column(String(BASE_URL_MAX_LENGTH), nullable=False)
+    username: Mapped[str] = mapped_column(String(USERNAME_MAX_LENGTH), nullable=False)
+    password_enc: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    tax_code: Mapped[str] = mapped_column(String(TAX_CODE_MAX_LENGTH), nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )

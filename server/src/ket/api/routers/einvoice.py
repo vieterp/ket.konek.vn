@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from ket.api.dependencies import (
     AppSettings,
     AuthorizedRequest,
+    SecretBoxes,
     SessionFactory,
     require_permission,
 )
@@ -42,6 +43,7 @@ from ket.modules.einvoice import (
 from ket.modules.einvoice.models import EInvoice, EInvoiceStatus, OutboxStatus
 from ket.modules.einvoice.outbox import due_now, enqueue_issue, list_rows
 from ket.modules.einvoice.outbox_job import TRANSMIT_JOB
+from ket.modules.einvoice.provider_profile_service import ProviderProfileService
 from ket.modules.einvoice.registration_service import InvoiceRegistrationService
 from ket.modules.einvoice.schemas import (
     EInvoiceConfirmIn,
@@ -56,6 +58,8 @@ from ket.modules.einvoice.schemas import (
     InvoiceRegistrationOut,
     OutboxListOut,
     OutboxRowOut,
+    ProviderProfileIn,
+    ProviderProfileOut,
 )
 from ket.modules.einvoice.service import EInvoiceService
 
@@ -321,6 +325,47 @@ def list_einvoices(
             page_size=page_size,
             counts_by_status=service.count_by_status(),
         )
+
+
+@router.put("/provider-profiles", response_model=ProviderProfileOut)
+def put_provider_profile(
+    payload: ProviderProfileIn,
+    authorized: RegistrationEditor,
+    factory: SessionFactory,
+    secret_boxes: SecretBoxes,
+) -> ProviderProfileOut:
+    """Khai thông tin đăng nhập với nhà cung cấp hóa đơn điện tử (FR-EIV-001).
+
+    `PUT` chứ không `POST`: **một dòng cho mỗi nhà cung cấp**, nên khai lại cùng
+    mã là sửa hồ sơ đang có. Thao tác tự nó lũy đẳng, đúng lý do nó nằm trong
+    danh sách miễn khóa idempotency.
+
+    Quyền của **hồ sơ đăng ký** (2FA) chứ không quyền hóa đơn: khai sai địa chỉ
+    máy chủ hay tài khoản là đổi nơi mọi tờ hóa đơn của doanh nghiệp được gửi
+    tới — cùng mức hệ quả với việc cấp cho mình một dải số.
+    """
+    with unit_of_work(factory, authorized.scope) as session:
+        profile = ProviderProfileService(session, secret_boxes()).put(
+            provider_code=payload.provider_code,
+            base_url=payload.base_url,
+            username=payload.username,
+            password=payload.password,
+            tax_code=payload.tax_code,
+            is_active=payload.is_active,
+        )
+        return ProviderProfileOut.model_validate(profile)
+
+
+@router.get("/provider-profiles", response_model=list[ProviderProfileOut])
+def list_provider_profiles(
+    authorized: RegistrationReader,
+    factory: SessionFactory,
+    secret_boxes: SecretBoxes,
+) -> list[ProviderProfileOut]:
+    """Hồ sơ đã khai — **không** kèm mật khẩu, kể cả dạng đã mã hóa."""
+    with unit_of_work(factory, authorized.scope) as session:
+        profiles = ProviderProfileService(session, secret_boxes()).list_all()
+        return [ProviderProfileOut.model_validate(row) for row in profiles]
 
 
 @router.post("/outbox/actions/pump", status_code=status.HTTP_202_ACCEPTED)

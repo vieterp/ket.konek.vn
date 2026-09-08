@@ -300,6 +300,40 @@ hẹp hơn 0032 — trạng thái *hóa đơn* nằm ở `einvoices` và ở l�
 tra cứu được lượt gửi cũ ở phía nhà cung cấp. Hạ cấp khi còn dòng chưa `done`
 đồng nghĩa mất khả năng phân biệt "đã gửi rồi" với "chưa gửi".
 
+#### Bản 0034 — hồ sơ nhà cung cấp, và ai cấp số hóa đơn
+
+Một bảng mới, `einvoice_provider_profiles`, và **không mã quyền mới nào**: khai
+hồ sơ dùng `einvoice.registration.edit` — cùng quyền (có 2FA) với dải số, vì
+khai sai địa chỉ máy chủ hay tài khoản là đổi nơi mọi tờ hóa đơn của doanh
+nghiệp được gửi tới.
+
+**Mật khẩu nhà cung cấp cần khóa mã hóa ứng dụng.** Nó lưu đã mã hóa bằng khóa ở
+§2.2b; bản cài chưa sinh khóa vẫn khai được hồ sơ nhưng lượt phát hành sẽ dừng
+với thông điệp chỉ đúng lệnh phải chạy. Khôi phục dữ liệu sang máy khác mà quên
+mang khóa cũng cho đúng thông điệp ấy.
+
+**Địa chỉ máy chủ phải là `https://`.** Header xác thực của EasyInvoice mang mật
+khẩu dạng rõ theo đúng đặc tả của họ, nên `http://` để lộ nó trên đường truyền.
+
+**Ai cấp số hóa đơn — đọc kỹ nếu doanh nghiệp dùng cả hai loại.** Ký hiệu khai
+nhà cung cấp (danh mục Mẫu số hóa đơn, cột Nhà cung cấp) thì **nhà cung cấp cấp
+số**, và số chỉ về sau khi tờ hóa đơn đã phát hành thành công — trong khoảng ấy
+hóa đơn ở trạng thái *Đang phát hành* và chưa có số. Ký hiệu **không** khai nhà
+cung cấp (hóa đơn đặt in, tự in) giữ nguyên cách cũ: phần mềm cấp số liên tục từ
+dải đã thông báo, ngay lúc bấm Phát hành. Đây là hệ quả của việc một tờ hóa đơn
+chỉ được có **một** số, và số có ý nghĩa là số cơ quan thuế nhìn thấy.
+
+**Phát hành qua nhà cung cấp đi hai chặng**, nên một tờ hóa đơn cần **hai** lượt
+chạy của tiến trình nền: lượt đầu nạp hồ sơ lên nhà cung cấp, lượt sau ký và gửi
+cơ quan thuế. Lượt sau tự xếp hàng ngay khi lượt đầu xong, nên bình thường người
+dùng không thấy khoảng ngắt; nhưng nếu tiến trình nền không chạy, tờ hóa đơn sẽ
+dừng ở chặng một và hiện trong `GET /api/v1/einvoices/outbox`.
+
+`downgrade` của bản này xóa bảng hồ sơ (mất thông tin đăng nhập, khai lại được)
+và **đưa hai ràng buộc số hóa đơn về dạng cũ**. Ràng buộc cũ đòi mọi hóa đơn đã
+rời trạng thái nháp phải có số, nên hạ cấp khi còn tờ nào đang phát hành qua nhà
+cung cấp mà chưa nhận số sẽ **thất bại** — chờ hàng đợi rỗng trước khi hạ cấp.
+
 ### 2.2b Khóa mã hóa ứng dụng (ADR-019)
 
 ```bash

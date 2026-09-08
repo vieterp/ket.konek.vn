@@ -51,6 +51,7 @@ from ket.modules.einvoice import providers as einvoice_provider_registration
 from ket.modules.general_ledger.journal import models as gl_journal_models
 from ket.modules.purchase import models as purchase_models
 from ket.modules.receivables import models as receivables_models
+from ket.modules.sales import einvoice_source as sales_einvoice_source_registration
 from ket.modules.sales import models as sales_models
 from ket.modules.warehousing.treasurer import models as treasurer_models
 
@@ -116,6 +117,7 @@ __all__ = [
     "report_models",
     "report_permission_registration",
     "report_render_job_registration",
+    "sales_einvoice_source_registration",
     "sales_models",
     "security_models",
     "statement_models",

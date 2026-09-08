@@ -24,7 +24,11 @@ from typing import Final
 
 from pydantic import BaseModel, Field
 
-from ket.kernel.errors import EInvoiceProviderUnknownError
+from ket.kernel.errors import (
+    EInvoiceProviderNotConfiguredError,
+    EInvoiceProviderUnknownError,
+)
+from ket.kernel.jobs import queue
 from ket.kernel.jobs.models import ResumeSemantics
 from ket.kernel.jobs.registry import REGISTRY, JobContext, JobResult, JobType
 from ket.kernel.security.permissions import Action, permission_code
@@ -35,6 +39,7 @@ from ket.modules.einvoice.outbox import (
     load_for_send,
     mark_needs_reconcile,
 )
+from ket.modules.einvoice.providers.contracts import ProviderBinding
 from ket.modules.einvoice.providers.registry import PROVIDERS
 from ket.modules.einvoice.reconcile import transmit
 
@@ -65,7 +70,13 @@ class OutboxTransmitParams(BaseModel):
 
 
 def _run_transmit(context: JobContext, params: OutboxTransmitParams) -> JobResult:
-    """Gửi dòng được chỉ định (nếu có), rồi quét nốt những dòng phải hỏi lại.
+    """Đưa dòng được chỉ định tiến một chặng, rồi quét nốt những dòng phải hỏi lại.
+
+    **Một lượt job = một chặng.** Phát hành qua nhà cung cấp thật là hai lời gọi
+    HTTP, và khóa chống trùng do lời gọi thứ nhất sinh ra phải commit trước lời
+    gọi thứ hai (xem `reconcile`). Thân job không tự commit được, nên chặng thứ
+    hai đi bằng một lượt job mới — xếp ngay tại đây, trong cùng transaction với
+    lượt ghi khóa.
 
     Lượt quét đi kèm là thứ đẩy một dòng `needs_reconcile` về đích: bản cài
     chưa có bộ lập lịch định kỳ nào, nên mỗi lượt phát hành mới cũng là một lượt
@@ -93,24 +104,41 @@ def _run_transmit(context: JobContext, params: OutboxTransmitParams) -> JobResul
             work.append(first)
     work.extend(claim_due(context.session, limit=params.batch_size))
 
+    binding = ProviderBinding(session=context.session, secret_box=context.secret_box)
     transmitted = 0
     reconciled = 0
+    prepared = 0
     unresolved = 0
     for index, item in enumerate(work, start=1):
         try:
-            provider = PROVIDERS.resolve(item.row.provider_code)
-        except EInvoiceProviderUnknownError as error:
+            provider = PROVIDERS.resolve(item.row.provider_code, binding)
+        except (EInvoiceProviderUnknownError, EInvoiceProviderNotConfiguredError) as error:
             # KHÔNG để bay lên: một dòng mang mã nhà cung cấp mà bản cài không
-            # còn cài đặt sẽ kéo cả lô rollback, gồm cả những dòng vừa gửi
-            # thành công — và lượt sau giành đúng tập ấy rồi hỏng đúng chỗ ấy,
-            # tức hàng đợi kẹt vĩnh viễn vì một dòng.
+            # còn cài đặt — hoặc chưa khai thông tin đăng nhập — sẽ kéo cả lô
+            # rollback, gồm cả những dòng vừa gửi thành công, và lượt sau giành
+            # đúng tập ấy rồi hỏng đúng chỗ ấy: hàng đợi kẹt vĩnh viễn vì một
+            # dòng. Hai lỗi này người vận hành sửa được, nên chúng thuộc về
+            # `last_error` của dòng chứ không phải lượt chạy.
             mark_needs_reconcile(item.row, message=str(error))
             unresolved += 1
             continue
         report = transmit(context.session, item, provider)
         transmitted += 1
-        if report.asked_first and not report.sent:
+        if report.asked_first and not report.issued:
             reconciled += 1
+        if report.prepared:
+            # Chặng nạp xong. Khóa của nhà cung cấp vừa ghi vào dòng, và lượt
+            # job xếp ở đây đi vào **cùng transaction** — nên khóa và lượt sẽ
+            # dùng nó cùng commit hoặc cùng không. Không có cửa sổ nào tồn tại
+            # một bản nháp đã nạp mà không ai đi phát hành nó.
+            queue.enqueue(
+                context.session,
+                job_type=TRANSMIT_JOB,
+                params={"outbox_id": item.row.id},
+                requested_by=context.requested_by,
+                branch_id=item.row.branch_id,
+            )
+            prepared += 1
         context.progress.report(
             int(index * 100 / len(work)), f"Đã xử lý {index}/{len(work)} hóa đơn"
         )
@@ -118,6 +146,7 @@ def _run_transmit(context: JobContext, params: OutboxTransmitParams) -> JobResul
         "claimed": len(work),
         "transmitted": transmitted,
         "reconciled": reconciled,
+        "prepared": prepared,
         "unresolved": unresolved,
     }
 

@@ -138,6 +138,11 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         # thứ duy nhất ở phân hệ này mà một lần gửi lại làm hỏng thật, nằm ở
         # `actions/issue` và **có** khóa.
         "/api/v1/einvoices/outbox/actions/pump",
+        # Khai hồ sơ đăng nhập nhà cung cấp (lát 7E-2): `PUT` **đặt** một dòng
+        # cho mỗi nhà cung cấp, nên gọi lại cùng thân yêu cầu cho ra đúng cùng
+        # một trạng thái — thao tác tự nó đã lũy đẳng, cùng lối gán vai trò ở
+        # đầu danh sách này.
+        "/api/v1/einvoices/provider-profiles",
     }
 )
 """Miễn trừ theo **đúng một đường dẫn**, cho thao tác tự nó đã idempotent.

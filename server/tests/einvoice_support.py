@@ -38,20 +38,25 @@ def ensure_invoice_form(
     serial: str,
     form_no: str | None = "1",
     kind: InvoiceFormKind | None = InvoiceFormKind.DIEN_TU,
+    provider_code: str | None = None,
     is_group: bool = False,
     is_active: bool = True,
 ) -> InvoiceForm:
     """Một ký hiệu hóa đơn với `id` cố định — idempotent để fixture module dùng lại.
 
+        `provider_code` là thứ quyết định **ai cấp số** (7E-2): trống thì dãy gap-free
+    cục bộ cấp, có thì nhà cung cấp cấp và `invoice_no` còn `NULL` tới lúc xác nhận.
+
     `id` truyền vào chứ không để tự tăng, cùng lối `ensure_customer` /
-    `ensure_payment_term`: `path` của một dòng danh mục phải là chuỗi id có dấu
-    chấm (`ck_..._path_is_dotted_ids`), và một id chưa biết thì không dựng được
-    `path` hợp lệ trong cùng một câu `INSERT`.
+        `ensure_payment_term`: `path` của một dòng danh mục phải là chuỗi id có dấu
+        chấm (`ck_..._path_is_dotted_ids`), và một id chưa biết thì không dựng được
+        `path` hợp lệ trong cùng một câu `INSERT`.
     """
     existing = session.get(InvoiceForm, form_id)
     if existing is not None:
         existing.form_no = form_no
         existing.kind = kind
+        existing.provider_code = provider_code
         existing.is_group = is_group
         existing.is_active = is_active
         session.flush()
@@ -63,6 +68,7 @@ def ensure_invoice_form(
         path=f"{form_id}.",
         form_no=form_no,
         kind=kind,
+        provider_code=provider_code,
         is_group=is_group,
         is_active=is_active,
     )

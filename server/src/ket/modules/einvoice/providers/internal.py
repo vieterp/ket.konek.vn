@@ -21,7 +21,10 @@ from uuid import UUID
 
 from ket.modules.einvoice.providers.contracts import (
     IssueOutcome,
+    PrepareOutcome,
     ProviderAcceptance,
+    ProviderBinding,
+    ProviderRecordState,
     ProviderStatus,
 )
 from ket.modules.einvoice.providers.registry import PROVIDERS
@@ -30,20 +33,44 @@ INTERNAL_PROVIDER_CODE = "internal"
 
 
 class InternalProvider:
-    """Nhận mọi tờ hóa đơn, ngay lập tức, không đi ra khỏi tiến trình."""
+    """Nhận mọi tờ hóa đơn, ngay lập tức, không đi ra khỏi tiến trình.
 
-    def issue(self, *, client_ref: UUID, invoice_id: UUID) -> IssueOutcome:
+    Vẫn đi qua **hai chặng** như nhà cung cấp thật dù không cần: một hợp đồng
+    cho mọi adapter thì đường ghi của `reconcile` chỉ có một hình dạng, và chặng
+    `prepare` ở đây rẻ đúng bằng một phép gán.
+    """
+
+    def prepare(self, *, client_ref: UUID, invoice_id: UUID) -> PrepareOutcome:
+        """Khóa "của nhà cung cấp" ở đây chính là khóa của ta.
+
+        Không có bên thứ ba nào sinh khóa, nên dùng lại `client_ref` là lời khai
+        trung thực nhất — và nó giữ cho mọi bất biến đọc `provider_ref` vẫn đúng
+        với adapter này.
+        """
+        return PrepareOutcome(
+            acceptance=ProviderAcceptance.ACCEPTED, provider_ref=str(client_ref)
+        )
+
+    def issue(self, *, provider_ref: str, invoice_id: UUID) -> IssueOutcome:
+        """Không cấp số: hóa đơn phát hành nội bộ mang số của dãy `gap_free` cục
+        bộ, đã cấp từ lúc xếp hàng (xem `service.issue`)."""
         return IssueOutcome(acceptance=ProviderAcceptance.ACCEPTED)
 
-    def query_status(self, *, client_ref: UUID) -> ProviderStatus:
-        """Luôn "chưa biết".
+    def query_status(self, *, provider_ref: str) -> ProviderStatus:
+        """Luôn "không biết".
 
-        Đường `needs_reconcile` không tới được adapter này — `issue` của nó
-        không có bước mạng nào để mất tín hiệu — nên câu trả lời trung thực là
-        không biết gì về `client_ref`, chứ không phải một `ACCEPTED` bịa ra.
-        Bịa sẽ biến một dòng lẽ ra không tồn tại thành `done` mà không ai gửi gì.
+        Đường tra cứu không tới được adapter này — hai chặng của nó không có
+        bước mạng nào để mất tín hiệu — nên câu trả lời trung thực là không biết
+        gì, chứ không phải một `ISSUED` bịa ra. Bịa sẽ biến một dòng lẽ ra không
+        tồn tại thành `done` mà không ai gửi gì.
         """
-        return ProviderStatus(known=False)
+        return ProviderStatus(state=ProviderRecordState.UNKNOWN)
 
 
-PROVIDERS.register(INTERNAL_PROVIDER_CODE, InternalProvider())
+def _build(binding: ProviderBinding) -> InternalProvider:
+    """Không dùng gì trong `binding` — nó không gọi ra ngoài và không có bí mật
+    nào để giải mã. Vẫn đi qua nhà máy để registry chỉ có một hợp đồng."""
+    return InternalProvider()
+
+
+PROVIDERS.register(INTERNAL_PROVIDER_CODE, _build)

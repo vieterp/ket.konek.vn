@@ -22,14 +22,16 @@ và `query_status`, vì "không gửi lần hai" là thứ chỉ chứng minh đ
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from einvoice_support import ensure_active_registration, ensure_invoice_form
@@ -54,8 +56,11 @@ from ket.modules.einvoice.outbox import (
     open_rows_for,
 )
 from ket.modules.einvoice.providers.contracts import (
+    EInvoiceProvider,
     IssueOutcome,
+    PrepareOutcome,
     ProviderAcceptance,
+    ProviderRecordState,
     ProviderStatus,
 )
 from ket.modules.einvoice.providers.internal import INTERNAL_PROVIDER_CODE
@@ -81,11 +86,21 @@ SERIAL = "C26TOB"
 `einvoice_support`."""
 
 
+SCRIPTED_REF = "NCC-IKEY-1"
+"""Khóa mà nhà cung cấp kịch bản trả về ở chặng nạp — cố ý **khác**
+`client_ref`, đúng như nhà cung cấp thật."""
+
+
 class _ScriptedProvider:
     """Nhà cung cấp đọc kịch bản, và **đếm** mọi lượt gọi.
 
-    Bộ đếm là công cụ đo chính của tệp: luật RT-10 nói "không gửi lại khi chưa
-    hỏi", và câu ấy chỉ kiểm được bằng `issue_calls`, không bằng trạng thái cuối.
+    Bộ đếm là công cụ đo chính của tệp: luật RT-10 nói "không phát hành lại khi
+    chưa hỏi", và câu ấy chỉ kiểm được bằng `issue_calls`, không bằng trạng thái
+    cuối — một lượt phát hành thừa đã nằm ở cơ quan thuế rồi.
+
+    Chặng `prepare` luôn thành công và luôn trả `SCRIPTED_REF`: các bài của tệp
+    này đo đường **sau** khi đã nạp, còn hai chặng của nhà cung cấp thật thì
+    `test_einvoice_easyinvoice.py` và bốn bài cuối tệp này đo.
     """
 
     def __init__(
@@ -96,20 +111,32 @@ class _ScriptedProvider:
     ) -> None:
         self._issue_outcomes = issue_outcomes
         self._query_results = query_results or []
-        self.issue_calls: list[UUID] = []
-        self.query_calls: list[UUID] = []
+        self.prepare_calls: list[UUID] = []
+        self.issue_calls: list[str] = []
+        self.query_calls: list[str] = []
 
-    def issue(self, *, client_ref: UUID, invoice_id: UUID) -> IssueOutcome:
-        self.issue_calls.append(client_ref)
+    def prepare(self, *, client_ref: UUID, invoice_id: UUID) -> PrepareOutcome:
+        self.prepare_calls.append(client_ref)
+        return PrepareOutcome(acceptance=ProviderAcceptance.ACCEPTED, provider_ref=SCRIPTED_REF)
+
+    def issue(self, *, provider_ref: str, invoice_id: UUID) -> IssueOutcome:
+        self.issue_calls.append(provider_ref)
         index = min(len(self.issue_calls) - 1, len(self._issue_outcomes) - 1)
         return self._issue_outcomes[index]
 
-    def query_status(self, *, client_ref: UUID) -> ProviderStatus:
-        self.query_calls.append(client_ref)
+    def query_status(self, *, provider_ref: str) -> ProviderStatus:
+        self.query_calls.append(provider_ref)
         if not self._query_results:
-            return ProviderStatus(known=False)
+            return ProviderStatus(state=ProviderRecordState.UNKNOWN)
         index = min(len(self.query_calls) - 1, len(self._query_results) - 1)
         return self._query_results[index]
+
+
+def _prepared(session: Session, row: EInvoiceOutbox, provider: EInvoiceProvider) -> None:
+    """Đưa dòng qua chặng nạp, để bài đo đường phát hành ngay sau đó."""
+    claimed = load_for_send(session, row.id, force_reconcile=False)
+    assert claimed is not None
+    transmit(session, claimed, provider)
 
 
 ACCEPTED = IssueOutcome(
@@ -332,14 +359,15 @@ def test_a_lost_signal_parks_the_row_and_leaves_the_invoice_alone(
         row = _queued(session, context, accounts)
         number_before = session.get(EInvoice, row.einvoice_id).invoice_no  # type: ignore[union-attr]
         provider = _ScriptedProvider(issue_outcomes=[LOST_SIGNAL])
+        _prepared(session, row, provider)
         mine = load_for_send(session, row.id, force_reconcile=False)
         assert mine is not None
-        assert mine.must_reconcile is False, "lượt đầu chưa gửi bao giờ, không phải hỏi"
+        assert mine.must_reconcile is False, "lượt đầu chưa phát hành bao giờ, không phải hỏi"
 
         report = transmit(session, mine, provider)
 
         assert report.status == OutboxStatus.NEEDS_RECONCILE
-        assert report.sent is True
+        assert report.issued is True
         invoice = session.get(EInvoice, row.einvoice_id)
         assert invoice is not None
         assert invoice.invoice_no == number_before
@@ -364,9 +392,10 @@ def test_a_provider_that_already_has_it_never_receives_a_second_send(
         row = _queued(session, context, accounts)
         provider = _ScriptedProvider(
             issue_outcomes=[LOST_SIGNAL],
-            query_results=[ProviderStatus(known=True, outcome=ACCEPTED)],
+            query_results=[ProviderStatus(state=ProviderRecordState.ISSUED, outcome=ACCEPTED)],
         )
 
+        _prepared(session, row, provider)
         first = load_for_send(session, row.id, force_reconcile=False)
         assert first is not None
         transmit(session, first, provider)
@@ -381,7 +410,7 @@ def test_a_provider_that_already_has_it_never_receives_a_second_send(
         report = transmit(session, second, provider)
 
         assert report.asked_first is True
-        assert report.sent is False, "hỏi ra là đã nhận rồi thì không được gửi nữa"
+        assert report.issued is False, "hỏi ra là đã nhận rồi thì không được gửi nữa"
         assert len(provider.issue_calls) == 1, "một tờ hóa đơn, một lượt gửi"
         assert len(provider.query_calls) == 1
         assert row.status == OutboxStatus.DONE
@@ -394,14 +423,14 @@ def test_a_provider_that_already_has_it_never_receives_a_second_send(
     run(work)
 
 
-def test_a_provider_that_never_got_it_receives_the_same_client_ref(
+def test_a_provider_that_never_got_it_is_asked_again_not_reissued_blindly(
     run: Runner, context: PostingContext, accounts: dict[str, int]
 ) -> None:
-    """Chiều còn lại: chưa nhận thì gửi lại — **đúng** `client_ref` cũ.
+    """Chiều còn lại: nhà cung cấp không nhận ra khóa đã cấp.
 
-    Một `client_ref` mới ở lượt hai sẽ vô hiệu hóa toàn bộ cơ chế chống trùng
-    phía nhà cung cấp, nên bài này ghim chính giá trị ấy chứ không chỉ ghim
-    trạng thái cuối.
+    Đây là một **mâu thuẫn**, không phải "chưa gửi": ta đang giữ khóa của họ mà
+    họ nói không biết nó. Nạp lại một bản nháp mới ở đây là đoán, nên dòng nằm
+    lại `needs_reconcile` cho người xử lý — và tuyệt đối không phát hành lại.
     """
 
     def work(session: Session) -> None:
@@ -409,9 +438,11 @@ def test_a_provider_that_never_got_it_receives_the_same_client_ref(
         client_ref = row.client_ref
         provider = _ScriptedProvider(
             issue_outcomes=[LOST_SIGNAL, ACCEPTED],
-            query_results=[ProviderStatus(known=False)],
+            query_results=[ProviderStatus(state=ProviderRecordState.UNKNOWN)],
         )
 
+        _prepared(session, row, provider)
+        _prepared(session, row, provider)
         first = load_for_send(session, row.id, force_reconcile=False)
         assert first is not None
         transmit(session, first, provider)
@@ -422,10 +453,10 @@ def test_a_provider_that_never_got_it_receives_the_same_client_ref(
         report = transmit(session, second, provider)
 
         assert report.asked_first is True
-        assert report.sent is True
-        assert provider.issue_calls == [client_ref, client_ref]
-        assert row.client_ref == client_ref, "khóa chống trùng không được đổi giữa chừng"
-        assert row.status == OutboxStatus.DONE
+        assert report.issued is False, "mâu thuẫn thì dừng, không phát hành lại"
+        assert provider.issue_calls == [SCRIPTED_REF], "đúng một lượt phát hành"
+        assert row.client_ref == client_ref, "khóa của ta không đổi giữa chừng"
+        assert row.status == OutboxStatus.NEEDS_RECONCILE
 
     run(work)
 
@@ -444,6 +475,7 @@ def test_a_refusal_keeps_the_number_and_stops_retrying(
         number_before = session.get(EInvoice, row.einvoice_id).invoice_no  # type: ignore[union-attr]
         provider = _ScriptedProvider(issue_outcomes=[REFUSED])
 
+        _prepared(session, row, provider)
         claimed = load_for_send(session, row.id, force_reconcile=False)
         assert claimed is not None
         transmit(session, claimed, provider)
@@ -574,9 +606,10 @@ def test_a_rolled_back_attempt_still_forces_the_ask_first_branch(
         row = _queued(session, context, accounts)
         provider = _ScriptedProvider(
             issue_outcomes=[ACCEPTED],
-            query_results=[ProviderStatus(known=True, outcome=ACCEPTED)],
+            query_results=[ProviderStatus(state=ProviderRecordState.ISSUED, outcome=ACCEPTED)],
         )
 
+        _prepared(session, row, provider)
         retry = load_for_send(session, row.id, force_reconcile=True)
         assert retry is not None
         assert retry.must_reconcile is True, (
@@ -584,9 +617,9 @@ def test_a_rolled_back_attempt_still_forces_the_ask_first_branch(
         )
         report = transmit(session, retry, provider)
 
-        assert report.sent is False
+        assert report.issued is False
         assert provider.issue_calls == [], "lượt chạy lại không được gửi mù"
-        assert provider.query_calls == [row.client_ref]
+        assert provider.query_calls == [SCRIPTED_REF]
         assert row.status == OutboxStatus.DONE
 
     run(work)
@@ -595,10 +628,13 @@ def test_a_rolled_back_attempt_still_forces_the_ask_first_branch(
 class _Exploding:
     """Adapter ném ở cả hai cửa — thư viện HTTP báo hết giờ bằng cách ném."""
 
-    def issue(self, *, client_ref: UUID, invoice_id: UUID) -> IssueOutcome:
+    def prepare(self, *, client_ref: UUID, invoice_id: UUID) -> PrepareOutcome:
+        return PrepareOutcome(acceptance=ProviderAcceptance.ACCEPTED, provider_ref=SCRIPTED_REF)
+
+    def issue(self, *, provider_ref: str, invoice_id: UUID) -> IssueOutcome:
         raise TimeoutError("mạng rớt giữa chừng")
 
-    def query_status(self, *, client_ref: UUID) -> ProviderStatus:
+    def query_status(self, *, provider_ref: str) -> ProviderStatus:
         raise TimeoutError("mạng rớt giữa chừng")
 
 
@@ -608,11 +644,14 @@ class _LookupBroken:
     def __init__(self) -> None:
         self.issue_calls = 0
 
-    def issue(self, *, client_ref: UUID, invoice_id: UUID) -> IssueOutcome:
+    def prepare(self, *, client_ref: UUID, invoice_id: UUID) -> PrepareOutcome:
+        return PrepareOutcome(acceptance=ProviderAcceptance.ACCEPTED, provider_ref=SCRIPTED_REF)
+
+    def issue(self, *, provider_ref: str, invoice_id: UUID) -> IssueOutcome:
         self.issue_calls += 1
         return ACCEPTED
 
-    def query_status(self, *, client_ref: UUID) -> ProviderStatus:
+    def query_status(self, *, provider_ref: str) -> ProviderStatus:
         raise ConnectionError("không gọi được cổng tra cứu")
 
 
@@ -628,10 +667,12 @@ def test_an_adapter_that_raises_is_not_a_refusal(
 
     def work(session: Session) -> None:
         row = _queued(session, context, accounts)
+        provider = _Exploding()
+        _prepared(session, row, provider)
         claimed = load_for_send(session, row.id, force_reconcile=False)
         assert claimed is not None
 
-        report = transmit(session, claimed, _Exploding())
+        report = transmit(session, claimed, provider)
 
         assert report.status == OutboxStatus.NEEDS_RECONCILE
         invoice = session.get(EInvoice, row.einvoice_id)
@@ -653,13 +694,14 @@ def test_a_lookup_that_raises_never_reads_as_never_received(
     def work(session: Session) -> None:
         row = _queued(session, context, accounts)
         provider = _LookupBroken()
+        _prepared(session, row, provider)
         claimed = load_for_send(session, row.id, force_reconcile=True)
         assert claimed is not None
 
         report = transmit(session, claimed, provider)
 
         assert provider.issue_calls == 0, "tra cứu hỏng không được dẫn tới lượt gửi lại"
-        assert report.sent is False
+        assert report.issued is False
         assert row.status == OutboxStatus.NEEDS_RECONCILE
 
     run(work)
@@ -672,7 +714,7 @@ def test_an_invoice_confirmed_by_hand_takes_its_row_out_of_the_queue(
 
     Người dùng tra cứu trên cổng cơ quan thuế rồi bấm "Xác nhận" là đường có
     thật, và nó để lại một dòng vẫn trỏ tới tờ hóa đơn. Với nhà cung cấp thật,
-    một `query_status` trả `known=False` ở lượt bơm kế tiếp sẽ dẫn thẳng tới tờ
+    một `query_status` trả "không biết" ở lượt bơm kế tiếp sẽ dẫn thẳng tới tờ
     hóa đơn thứ hai.
     """
 
@@ -680,7 +722,8 @@ def test_an_invoice_confirmed_by_hand_takes_its_row_out_of_the_queue(
         row = _queued(session, context, accounts)
         EInvoiceService(session).confirm(row.einvoice_id, tax_authority_code="TAY-01")
         provider = _ScriptedProvider(
-            issue_outcomes=[ACCEPTED], query_results=[ProviderStatus(known=False)]
+            issue_outcomes=[ACCEPTED],
+            query_results=[ProviderStatus(state=ProviderRecordState.UNKNOWN)],
         )
 
         claimed = load_for_send(session, row.id, force_reconcile=True)
@@ -688,8 +731,365 @@ def test_an_invoice_confirmed_by_hand_takes_its_row_out_of_the_queue(
         report = transmit(session, claimed, provider)
 
         assert provider.issue_calls == [], "hóa đơn đã xác nhận thì hàng đợi không gửi nữa"
-        assert report.sent is False
+        assert report.issued is False
         assert row.status == OutboxStatus.DONE
         assert row.last_error is not None, "lý do đóng phải đọc được ở panel vận hành"
 
     run(work)
+
+
+# --- nhà cung cấp cấp số (7E-2) ---------------------------------------------
+
+
+PROVIDER_FORM_ID = 8842
+PROVIDER_SERIAL = "C26TPV"
+"""Ký hiệu **khai nhà cung cấp** — id riêng, xem `einvoice_support` về vì sao
+tách id chứ không chỉ tách ký hiệu."""
+
+
+def _queued_via_provider(
+    session: Session, context: PostingContext, accounts: dict[str, int]
+) -> EInvoiceOutbox:
+    """Hóa đơn trên một ký hiệu khai nhà cung cấp — **không** cấp số cục bộ."""
+    form = ensure_invoice_form(
+        session, form_id=PROVIDER_FORM_ID, serial=PROVIDER_SERIAL, provider_code="easyinvoice"
+    )
+    ensure_active_registration(session, branch_id=context.branch_id, invoice_form_id=form.id)
+    voucher_id = _sales_voucher(session, context, accounts)
+    draft = EInvoiceService(session).create_draft(
+        source_voucher_id=voucher_id, invoice_form_id=form.id
+    )
+    _invoice, row = enqueue_issue(
+        session, draft.id, invoice_date=FEB_10, provider_code="easyinvoice"
+    )
+    return row
+
+
+def test_a_provider_backed_invoice_leaves_the_number_to_the_provider(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Ký hiệu khai nhà cung cấp thì **không** đốt một số của dãy cục bộ.
+
+    Cấp số cả hai nơi là hai con số cho một tờ hóa đơn thuế, và con số cục bộ sẽ
+    không bao giờ khớp thứ cơ quan thuế nhìn thấy (quyết định user 2026-09-08).
+    Ngày hóa đơn thì **có** ngay từ lượt phát hành: nó đi trong bản XML
+    (`ArisingDate`), nên nó có trước số — đúng lý do `number_and_date_together`
+    phải nới thành một chiều ở `0034`.
+    """
+
+    def work(session: Session) -> None:
+        row = _queued_via_provider(session, context, accounts)
+        invoice = session.get(EInvoice, row.einvoice_id)
+        assert invoice is not None
+
+        assert invoice.invoice_no is None, "số là việc của nhà cung cấp"
+        assert invoice.invoice_date == FEB_10
+        assert invoice.issued_at is not None
+        assert EInvoiceStatus(invoice.status) == EInvoiceStatus.DANG_PHAT_HANH
+
+    run(work)
+
+
+def test_the_provider_number_lands_on_the_invoice_and_then_freezes(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Số về cùng câu trả lời phát hành, điền **một lần**, rồi đóng băng.
+
+    Trigger `einvoices_immutable_after_issue` cho `NULL → giá trị` và chặn mọi
+    lượt đổi sau đó — bài này đi qua cả hai chiều trên dữ liệu thật.
+    """
+
+    def work(session: Session) -> None:
+        row = _queued_via_provider(session, context, accounts)
+        numbered = IssueOutcome(
+            acceptance=ProviderAcceptance.ACCEPTED,
+            provider_ref=str(row.client_ref),
+            invoice_no="00009001",
+            tax_authority_code="M1-22-ABC",
+        )
+        provider = _ScriptedProvider(issue_outcomes=[numbered])
+        _prepared(session, row, provider)
+        claimed = load_for_send(session, row.id, force_reconcile=False)
+        assert claimed is not None
+
+        transmit(session, claimed, provider)
+
+        invoice = session.get(EInvoice, row.einvoice_id)
+        assert invoice is not None
+        assert invoice.invoice_no == "00009001"
+        assert EInvoiceStatus(invoice.status) == EInvoiceStatus.DA_PHAT_HANH
+
+        # Chiều thứ hai: số đã cấp thì đóng băng. Để lỗi bay thẳng ra khỏi
+        # `run` chứ không bắt tại chỗ — bắt xong mà `unit_of_work` vẫn commit
+        # một session đã hỏng thì bài đỏ vì `PendingRollbackError`, tức nó đo
+        # nhầm thứ.
+        invoice.invoice_no = "00000999"
+        session.flush()
+
+    with pytest.raises(DBAPIError, match="BR-EIV-02"):
+        run(work)
+
+
+def test_an_issued_invoice_without_a_number_is_not_representable(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """`issued_invoice_has_a_number` — ngưỡng nới tới `DA_PHAT_HANH`, không bỏ hẳn.
+
+    Một tờ hóa đơn cơ quan thuế đã nhận mà phần mềm không biết số của nó là dữ
+    liệu vô dụng ở đúng chỗ nó quan trọng nhất, nên `0034` giữ lại chiều ấy khi
+    nới luật cũ.
+    """
+
+    def work(session: Session) -> None:
+        row = _queued_via_provider(session, context, accounts)
+        invoice = session.get(EInvoice, row.einvoice_id)
+        assert invoice is not None
+        invoice.status = EInvoiceStatus.DA_PHAT_HANH
+        session.flush()
+
+    with pytest.raises(IntegrityError, match="issued_invoice_has_a_number"):
+        run(work)
+
+
+# --- hai chặng qua nhà cung cấp thật (7E-2) ---------------------------------
+
+
+SERVER_IKEY = "0101234567_INV-001_1757300000000"
+"""Khóa của **nhà cung cấp**. Hình dạng chép từ `_gen_ikey` của bản tích hợp
+thật — có mốc thời gian, nên nó không tái lập được, và đó đúng là lý do phải cất
+nó trước khi phát hành."""
+
+# Mỗi bài một số hóa đơn riêng (khối `00009xxx`). `uq_einvoices_form_number` là
+# duy nhất theo (ký hiệu, số) trên **toàn dữ liệu**, nên một chuỗi dùng chung
+# giữa hai bài làm bài chạy sau đỏ — cùng họ với bẫy `FORM_ID` mà tệp này đã
+# dính một lần.
+
+
+def _easyinvoice(handler: Callable[[httpx.Request], httpx.Response], session: Session):  # noqa: ANN202
+    from ket.modules.einvoice.providers.easyinvoice.client import (
+        EasyInvoiceClient,
+        EasyInvoiceCredentials,
+    )
+    from ket.modules.einvoice.providers.easyinvoice.provider import EasyInvoiceProvider
+
+    credentials = EasyInvoiceCredentials(
+        base_url="https://sandbox.example.vn",
+        username="u",
+        password="p",
+        tax_code="0101234567",
+    )
+    return EasyInvoiceProvider(
+        session, EasyInvoiceClient(credentials, transport=httpx.MockTransport(handler))
+    )
+
+
+def test_the_first_pass_only_prepares_and_stores_the_server_key(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Chặng một **không** phát hành: nó nạp bản nháp và cất khóa của họ.
+
+    Đây là hình dạng mà cả bất biến treo lên: khóa phải commit trước lời gọi
+    phát hành, nên một lượt job chỉ đi được một chặng. `prepared` là thứ
+    `outbox_job` đọc để xếp lượt tiếp.
+    """
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(200, json={"Status": 2, "Data": {"Ikeys": [SERVER_IKEY]}})
+
+    def work(session: Session) -> None:
+        row = _queued_via_provider(session, context, accounts)
+        claimed = load_for_send(session, row.id, force_reconcile=False)
+        assert claimed is not None
+
+        report = transmit(session, claimed, _easyinvoice(handler, session))
+
+        assert report.prepared is True
+        assert report.issued is False
+        assert calls == ["/api/publish/importInvoice"], "chặng một không được phát hành"
+        assert row.provider_ref == SERVER_IKEY
+        invoice = session.get(EInvoice, row.einvoice_id)
+        assert invoice is not None
+        assert EInvoiceStatus(invoice.status) == EInvoiceStatus.DANG_PHAT_HANH
+
+    run(work)
+
+
+def test_the_second_pass_issues_with_the_stored_server_key(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Chặng hai phát hành bằng khóa **đã ghi bền**, và nhận số từ họ."""
+    sent: list[list[str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("importInvoice"):
+            return httpx.Response(200, json={"Status": 2, "Data": {"Ikeys": [SERVER_IKEY]}})
+        sent.append(json.loads(request.content)["Ikeys"])
+        return httpx.Response(
+            200,
+            json={
+                "Status": 2,
+                "Data": {
+                    "KeyInvoiceNo": {SERVER_IKEY: "00009002"},
+                    "Invoices": [{"TaxAuthorityCode": "M1-22-ABC"}],
+                },
+            },
+        )
+
+    def work(session: Session) -> None:
+        row = _queued_via_provider(session, context, accounts)
+        first = load_for_send(session, row.id, force_reconcile=False)
+        assert first is not None
+        transmit(session, first, _easyinvoice(handler, session))
+
+        second = load_for_send(session, row.id, force_reconcile=False)
+        assert second is not None
+        report = transmit(session, second, _easyinvoice(handler, session))
+
+        assert report.issued is True
+        assert sent == [[SERVER_IKEY]], "phát hành phải dùng khóa của nhà cung cấp"
+        assert row.status == OutboxStatus.DONE
+        invoice = session.get(EInvoice, row.einvoice_id)
+        assert invoice is not None
+        assert invoice.invoice_no == "00009002"
+        assert EInvoiceStatus(invoice.status) == EInvoiceStatus.DA_PHAT_HANH
+
+    run(work)
+
+
+def test_an_issue_that_lost_its_answer_is_never_issued_twice(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Bài trung tâm của 7E-2 — kịch bản C-1 của review, chạy đầu-cuối.
+
+    Nạp xong, phát hành thành công phía họ, câu trả lời rơi mất. Lượt sau
+    **phải** tra cứu bằng khóa đã cất, thấy đã phát hành, và **không** gọi
+    `issueInvoices` lần thứ hai. Đếm lượt gọi là cách duy nhất chứng minh điều
+    đó: nhìn trạng thái cuối thì một tờ hóa đơn thừa đã nằm ở cơ quan thuế rồi.
+    """
+    issue_calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal issue_calls
+        path = request.url.path
+        if path.endswith("importInvoice"):
+            return httpx.Response(200, json={"Status": 2, "Data": {"Ikeys": [SERVER_IKEY]}})
+        if path.endswith("issueInvoices"):
+            issue_calls += 1
+            raise httpx.ReadTimeout("mất tín hiệu sau khi họ đã phát hành")
+        return httpx.Response(
+            200,
+            json={
+                "Status": 2,
+                "Data": [
+                    {"Ikey": SERVER_IKEY, "InvoiceStatus": 2, "InvoiceNo": "00009003"},
+                ],
+            },
+        )
+
+    def work(session: Session) -> None:
+        row = _queued_via_provider(session, context, accounts)
+        provider = _easyinvoice(handler, session)
+
+        first = load_for_send(session, row.id, force_reconcile=False)
+        assert first is not None
+        transmit(session, first, provider)
+        assert row.provider_ref == SERVER_IKEY
+
+        second = load_for_send(session, row.id, force_reconcile=False)
+        assert second is not None
+        transmit(session, second, provider)
+        assert row.status == OutboxStatus.NEEDS_RECONCILE, "mất tín hiệu = chưa biết"
+
+        row.next_attempt_at = datetime.now(UTC) - timedelta(seconds=1)
+        session.flush()
+        third = load_for_send(session, row.id, force_reconcile=True)
+        assert third is not None
+        report = transmit(session, third, provider)
+
+        assert report.asked_first is True
+        assert report.issued is False, "tra ra đã phát hành thì không phát hành lại"
+        assert issue_calls == 1, "một tờ hóa đơn, một lượt phát hành"
+        assert row.status == OutboxStatus.DONE
+        invoice = session.get(EInvoice, row.einvoice_id)
+        assert invoice is not None
+        assert invoice.invoice_no == "00009003"
+
+    run(work)
+
+
+def test_a_draft_found_on_lookup_is_issued_not_abandoned(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Tra ra **bản nháp** thì đi tiếp sang phát hành, không nạp lại, không bỏ.
+
+    Lỗi C-3 của review nằm đúng ở đây: đọc bản nháp thành "đã phát hành" bỏ rơi
+    tờ hóa đơn vĩnh viễn, còn nạp lại thì sinh bản nháp mồ côi thứ hai.
+    """
+    imports = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal imports
+        path = request.url.path
+        if path.endswith("importInvoice"):
+            imports += 1
+            return httpx.Response(200, json={"Status": 2, "Data": {"Ikeys": [SERVER_IKEY]}})
+        if path.endswith("issueInvoices"):
+            return httpx.Response(
+                200, json={"Status": 2, "Data": {"KeyInvoiceNo": {SERVER_IKEY: "00009004"}}}
+            )
+        return httpx.Response(
+            200,
+            json={"Status": 2, "Data": [{"Ikey": SERVER_IKEY, "InvoiceStatus": 0}]},
+        )
+
+    def work(session: Session) -> None:
+        row = _queued_via_provider(session, context, accounts)
+        provider = _easyinvoice(handler, session)
+        first = load_for_send(session, row.id, force_reconcile=False)
+        assert first is not None
+        transmit(session, first, provider)
+
+        # Lượt sau buộc phải hỏi trước; nhà cung cấp nói "mới là bản nháp".
+        second = load_for_send(session, row.id, force_reconcile=True)
+        assert second is not None
+        report = transmit(session, second, provider)
+
+        assert report.asked_first is True
+        assert report.issued is True, "bản nháp phải được phát hành, không bị bỏ"
+        assert imports == 1, "không nạp lại khi đã có bản nháp"
+        assert row.status == OutboxStatus.DONE
+
+    run(work)
+
+
+def test_a_provider_that_accepts_without_a_number_does_not_break_the_batch(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """ "Đã nhận" mà không đọc ra số = **chưa biết đủ**, không phải thành công.
+
+    Đánh `done` ở đây sẽ đâm vào `issued_invoice_has_a_number` và kéo cả lô
+    rollback — gồm cả những dòng vừa phát hành thật.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("importInvoice"):
+            return httpx.Response(200, json={"Status": 2, "Data": {"Ikeys": [SERVER_IKEY]}})
+        return httpx.Response(200, json={"Status": 2, "Data": {"KeyInvoiceNo": {}}})
+
+    def work(session: Session) -> None:
+        row = _queued_via_provider(session, context, accounts)
+        provider = _easyinvoice(handler, session)
+        first = load_for_send(session, row.id, force_reconcile=False)
+        assert first is not None
+        transmit(session, first, provider)
+        second = load_for_send(session, row.id, force_reconcile=False)
+        assert second is not None
+
+        transmit(session, second, provider)
+
+        assert row.status == OutboxStatus.NEEDS_RECONCILE
+        invoice = session.get(EInvoice, row.einvoice_id)
+        assert invoice is not None
+        assert EInvoiceStatus(invoice.status) == EInvoiceStatus.DANG_PHAT_HANH

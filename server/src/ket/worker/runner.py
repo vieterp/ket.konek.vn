@@ -36,7 +36,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.datasets.service import list_datasets
-from ket.kernel.errors import DomainError, JobPrivilegeUnavailableError
+from ket.kernel.errors import AppKeyUnavailableError, DomainError, JobPrivilegeUnavailableError
 from ket.kernel.jobs import queue
 from ket.kernel.jobs.models import Job
 from ket.kernel.jobs.reaper import reap_expired_leases
@@ -56,6 +56,7 @@ from ket.kernel.persistence.session import control_session, worker_session
 from ket.kernel.persistence.types import JsonPrimitive
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
 from ket.kernel.security.authorization import resolve_access
+from ket.kernel.security.keystore import SecretBox, load_app_key
 from ket.settings import Settings
 from ket.worker.progress import LeaseLostError, WorkerProgress
 
@@ -161,6 +162,7 @@ class Worker:
         self._lease = timedelta(seconds=settings.job_lease_seconds)
         self._heartbeat = timedelta(seconds=settings.job_heartbeat_seconds)
         self._reaped_at: dict[str, datetime] = {}
+        self._secret_box_cache: SecretBox | None = None
 
     # --- vòng đời ---------------------------------------------------------
 
@@ -381,6 +383,25 @@ class Worker:
             self._fence_before_commit(session, claimed)
             return result
 
+    def _secret_box(self) -> SecretBox | None:
+        """Hộp giải mã của bản cài, nạp **trễ** và nhớ lại — cùng lối `api`.
+
+        `None` khi bản cài chưa cấu hình khóa mã hóa ứng dụng (ADR-019). Không
+        đổ ở đây: worker phải chạy được mọi loại job khác trên một bản cài chưa
+        có khóa, và loại job nào thật sự cần bí mật thì tự từ chối với thông
+        điệp chỉ đúng cách sửa. Đổ tại chỗ dựng context sẽ biến một thiếu sót
+        cấu hình thành "không tác vụ nền nào chạy được".
+        """
+        if self._secret_box_cache is not None:
+            return self._secret_box_cache
+        override = self._settings.app_key.get_secret_value() if self._settings.app_key else None
+        try:
+            key = load_app_key(service=self._settings.keyring_service, override=override)
+        except AppKeyUnavailableError:
+            return None
+        self._secret_box_cache = SecretBox(key)
+        return self._secret_box_cache
+
     def _fence_before_commit(self, session: Session, claimed: ClaimedJob) -> None:
         """Gia hạn lease **trong chính transaction nghiệp vụ**, ngay trước commit.
 
@@ -439,6 +460,7 @@ class Worker:
             branch_id=claimed.branch_id,
             requested_by=claimed.requested_by,
             storage_root=self._settings.attachments_dir,
+            secret_box=self._secret_box(),
         )
         return job_type.run(context, claimed.params)
 

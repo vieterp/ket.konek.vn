@@ -1133,6 +1133,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/einvoices/provider-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Provider Profiles
+         * @description Hồ sơ đã khai — **không** kèm mật khẩu, kể cả dạng đã mã hóa.
+         */
+        get: operations["list_provider_profiles_api_v1_einvoices_provider_profiles_get"];
+        /**
+         * Put Provider Profile
+         * @description Khai thông tin đăng nhập với nhà cung cấp hóa đơn điện tử (FR-EIV-001).
+         *
+         *     `PUT` chứ không `POST`: **một dòng cho mỗi nhà cung cấp**, nên khai lại cùng
+         *     mã là sửa hồ sơ đang có. Thao tác tự nó lũy đẳng, đúng lý do nó nằm trong
+         *     danh sách miễn khóa idempotency.
+         *
+         *     Quyền của **hồ sơ đăng ký** (2FA) chứ không quyền hóa đơn: khai sai địa chỉ
+         *     máy chủ hay tài khoản là đổi nơi mọi tờ hóa đơn của doanh nghiệp được gửi
+         *     tới — cùng mức hệ quả với việc cấp cho mình một dải số.
+         */
+        put: operations["put_provider_profile_api_v1_einvoices_provider_profiles_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/einvoices/registrations": {
         parameters: {
             query?: never;
@@ -13888,6 +13920,52 @@ export interface components {
             row_version: number;
         };
         /**
+         * ProviderProfileIn
+         * @description Hồ sơ đăng nhập một nhà cung cấp hóa đơn điện tử (FR-EIV-001).
+         *
+         *     Mật khẩu chỉ đi **vào**: không schema nào trả nó ra, và cột lưu là `bytea`
+         *     đã mã hóa (xem `EInvoiceProviderProfile`).
+         */
+        ProviderProfileIn: {
+            /** Địa chỉ máy chủ */
+            base_url: string;
+            /**
+             * Đang dùng
+             * @default true
+             */
+            is_active: boolean;
+            /** Mật khẩu */
+            password: string;
+            /** Mã nhà cung cấp */
+            provider_code: string;
+            /** Mã số thuế */
+            tax_code: string;
+            /** Tên đăng nhập */
+            username: string;
+        };
+        /**
+         * ProviderProfileOut
+         * @description Hồ sơ đọc ra — **không có mật khẩu**, kể cả dạng đã mã hóa.
+         *
+         *     Trả ciphertext ra API là biến một bí mật thành thứ ai đọc được response cũng
+         *     cầm được; khóa mã hóa thì nằm ở máy chủ, nhưng bản mã vẫn là thứ mang đi thử
+         *     ngoại tuyến được.
+         */
+        ProviderProfileOut: {
+            /** Base Url */
+            base_url: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Provider Code */
+            provider_code: string;
+            /** Tax Code */
+            tax_code: string;
+            /** Username */
+            username: string;
+        };
+        /**
          * PurchaseInvoiceIn
          * @description Thân hóa đơn cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).
          */
@@ -17651,6 +17729,68 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_provider_profiles_api_v1_einvoices_provider_profiles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderProfileOut"][];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    put_provider_profile_api_v1_einvoices_provider_profiles_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderProfileIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderProfileOut"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

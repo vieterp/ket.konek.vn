@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 from ket.kernel.errors import JobParamsInvalidError, JobTypeUnknownError
 from ket.kernel.jobs.models import ResumeSemantics
 from ket.kernel.persistence.types import AuditValues
+from ket.kernel.security.keystore import SecretBox
 from ket.kernel.security.rls import validate_identifier
 
 
@@ -149,6 +150,16 @@ class JobContext:
     dataset_schema: str
     branch_id: int | None
     requested_by: int
+
+    secret_box: SecretBox | None = None
+    """Hộp giải mã bí mật của bản cài, khi thân job cần một thông tin đăng nhập
+    đã mã hóa.
+
+    `None` khi bản cài chưa cấu hình khóa mã hóa ứng dụng (ADR-019). Cùng hợp
+    đồng với `storage_root` ngay dưới, và cùng lý do: thân job nào cần nó thì tự
+    nói ra bằng một lỗi nghiệp vụ chỉ đúng thứ phải cấu hình, thay vì đổ ở một
+    `AttributeError` giữa chừng — và `kernel` không được biết tới lớp cấu hình
+    của ứng dụng, nên worker là nơi dựng rồi truyền vào."""
 
     storage_root: Path | None = None
     """Thư mục kho tệp của bản cài, khi job cần đọc một tệp đã tải lên.

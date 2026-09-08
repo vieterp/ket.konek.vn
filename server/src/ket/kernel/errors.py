@@ -1830,3 +1830,16 @@ class EInvoiceOutboxStateError(DomainError):
 
     error_code: ClassVar[str] = "einvoice.outbox_state_invalid"
     http_status: ClassVar[int] = 409
+
+
+class EInvoiceProviderNotConfiguredError(DomainError):
+    """Ký hiệu hóa đơn khai một nhà cung cấp mà bản cài chưa khai hồ sơ đăng nhập.
+
+    Riêng khỏi `EInvoiceProviderUnknownError`: ở đó adapter không tồn tại trong
+    bản đang chạy (việc của người cài đặt phần mềm), còn ở đây adapter có sẵn mà
+    doanh nghiệp chưa điền tài khoản với nhà cung cấp (việc của người dùng). Hai
+    câu trả lời khác nhau cho câu hỏi "giờ tôi phải làm gì".
+    """
+
+    error_code: ClassVar[str] = "einvoice.provider_not_configured"
+    http_status: ClassVar[int] = 409

@@ -13,33 +13,38 @@ hiện hành: cấu hình đổi giữa lúc một dòng còn treo là chuyện 
 from __future__ import annotations
 
 from ket.kernel.errors import EInvoiceProviderUnknownError
-from ket.modules.einvoice.providers.contracts import EInvoiceProvider
+from ket.modules.einvoice.providers.contracts import (
+    EInvoiceProvider,
+    ProviderBinding,
+    ProviderFactory,
+)
 
 
 class ProviderRegistry:
     """Registry của tiến trình, nạp lúc import module."""
 
     def __init__(self) -> None:
-        self._providers: dict[str, EInvoiceProvider] = {}
+        self._providers: dict[str, ProviderFactory] = {}
 
-    def register(self, code: str, provider: EInvoiceProvider) -> None:
+    def register(self, code: str, factory: ProviderFactory) -> None:
+        """Đăng ký **nhà máy**, không phải thể hiện — xem `ProviderBinding`."""
         if code in self._providers:
             raise ValueError(f"Nhà cung cấp hóa đơn `{code}` đã đăng ký")
-        self._providers[code] = provider
+        self._providers[code] = factory
 
-    def resolve(self, code: str) -> EInvoiceProvider:
+    def resolve(self, code: str, binding: ProviderBinding) -> EInvoiceProvider:
         """Adapter của `code`, hoặc lỗi nghiệp vụ nêu đúng mã còn thiếu.
 
         Không trả `None`: một dòng outbox mang mã không ai cài là một lượt phát
         hành **không bao giờ chạy**, và người vận hành cần biết tên nhà cung cấp
         phải cấu hình, chứ không phải một `AttributeError` ở giữa worker.
         """
-        provider = self._providers.get(code)
-        if provider is None:
+        factory = self._providers.get(code)
+        if factory is None:
             raise EInvoiceProviderUnknownError(
                 f"Chưa cài đặt nhà cung cấp hóa đơn điện tử `{code}`", provider_code=code
             )
-        return provider
+        return factory(binding)
 
     def codes(self) -> tuple[str, ...]:
         return tuple(sorted(self._providers))
