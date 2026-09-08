@@ -538,6 +538,9 @@ PINNED_HEADERS: Final[dict[str, tuple[str, ...]]] = {
         "Mã nhóm cha",
         "Là nhóm",
         "Còn theo dõi",
+        "Mẫu số",
+        "Hình thức hóa đơn",
+        "Nhà cung cấp dịch vụ HĐĐT",
     ),
     "items": (
         "Mã *",

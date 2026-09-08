@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 from ket.kernel.bank_import.profile_merge import BankStatementProfileMergeHook
 from ket.kernel.master_data.bank_account_service import PartnerBankAccountMergeHook
 from ket.kernel.master_data.base import MasterDataRow
+from ket.kernel.master_data.invoice_form_service import InvoiceFormMergeHook
 from ket.kernel.master_data.item_discount_tier_service import ItemDiscountTierMergeHook
 from ket.kernel.master_data.item_price_level_service import (
     ItemPriceLevelOfItemMergeHook,
@@ -64,7 +65,11 @@ from ket.kernel.master_data.models.employee import (
 )
 from ket.kernel.master_data.models.excise_tax_table import ExciseTaxTable
 from ket.kernel.master_data.models.expense_item import ExpenseItem
-from ket.kernel.master_data.models.invoice_form import InvoiceForm
+from ket.kernel.master_data.models.invoice_form import (
+    InvoiceForm,
+    InvoiceFormFields,
+    invoice_form_row_rules,
+)
 from ket.kernel.master_data.models.item import (
     Item,
     ItemEditableFields,
@@ -557,7 +562,16 @@ def _register_all() -> None:
         ),
         # Chứng từ – hóa đơn
         CatalogSpec(slug="document_types", model=DocumentTypeCatalog, title="Loại chứng từ"),
-        CatalogSpec(slug="invoice_forms", model=InvoiceForm, title="Mẫu số hóa đơn"),
+        CatalogSpec(
+            slug="invoice_forms",
+            model=InvoiceForm,
+            title="Mẫu số hóa đơn",
+            extra_fields=InvoiceFormFields,
+            # Hook duy nhất luôn TỪ CHỐI — hai ký hiệu hóa đơn không bao giờ là
+            # một bản ghi bị khai hai lần; lý do đầy đủ ở `invoice_form_service`.
+            merge_hooks=(InvoiceFormMergeHook(),),
+            row_rules=invoice_form_row_rules(),
+        ),
         # Lương – thuế (chỉ bảng đầu; bậc thuế thuộc phase 9 — H50)
         CatalogSpec(slug="timekeeping_symbols", model=TimekeepingSymbol, title="Ký hiệu chấm công"),
         CatalogSpec(slug="pit_tables", model=PitTable, title="Biểu tính thuế thu nhập cá nhân"),

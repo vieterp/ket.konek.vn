@@ -74,6 +74,10 @@ MINIMUM_VALID_CELLS: dict[str, dict[str, object]] = {
     "price_lists": {"direction": "1"},
     # Tham chiếu nhập theo MÃ của danh mục đích (`bank_code`, không `bank_id`).
     "company_bank_accounts": {"bank_code": "NH_MIN_IMPORT"},  # ngân hàng bắt buộc (6A)
+    # CHECK (is_group OR (form_no IS NOT NULL AND kind IS NOT NULL)) — `code` của
+    # danh mục mang KÝ HIỆU hóa đơn, còn mẫu số và hình thức là hai cột riêng, và
+    # một ký hiệu thiếu chúng thì không cấp số được (7D).
+    "invoice_forms": {"form_no": "1", "kind": "0"},
 }
 
 MINIMUM_VALID_TARGETS: dict[str, tuple[tuple[str, str], ...]] = {

@@ -60,6 +60,7 @@ from ket.api.routers.cashflow import router as cashflow_router
 from ket.api.routers.config_packages import CONFIG_PACKAGES_PREFIX
 from ket.api.routers.config_packages import router as config_packages_router
 from ket.api.routers.dimensions import router as dimensions_router
+from ket.api.routers.einvoice import router as einvoice_router
 from ket.api.routers.exports import router as exports_router
 from ket.api.routers.fiscal_years import router as fiscal_years_router
 from ket.api.routers.gl_journal import router as gl_journal_router
@@ -314,6 +315,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # endpoint chứng từ dùng chung, sổ phụ công nợ qua `ArApSubledger`.
     app.include_router(purchase_router)
     app.include_router(sales_router)
+    # Lát 7D — nền hóa đơn điện tử (SRS 07) + quản lý hóa đơn (SRS 08). Sau
+    # `sales_router` vì hóa đơn trỏ về chứng từ bán và giữ nó đứng yên
+    # (FR-EIV-035), không phải ngược lại.
+    app.include_router(einvoice_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

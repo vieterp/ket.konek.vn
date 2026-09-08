@@ -87,6 +87,35 @@ const PRICE_LIST_FIELDS: readonly ExtraField[] = [
   { key: 'effective_to', labelKey: 'catalog.field.effectiveTo', type: 'date' },
 ]
 
+const INVOICE_FORM_KIND_OPTIONS: readonly {
+  readonly value: string
+  readonly labelKey: TranslationKey
+}[] = [
+  { value: '0', labelKey: 'catalog.field.invoiceFormKindElectronic' },
+  { value: '1', labelKey: 'catalog.field.invoiceFormKindPrinted' },
+  { value: '2', labelKey: 'catalog.field.invoiceFormKindSelfPrinted' },
+]
+
+const INVOICE_FORM_FIELDS: readonly ExtraField[] = [
+  // `code` của danh mục mang KÝ HIỆU hóa đơn (`C26TAA`) — thứ in trên tờ hóa
+  // đơn và duy nhất trong doanh nghiệp; mẫu số là cột riêng vì nó lặp lại trên
+  // hàng chục ký hiệu. Cặp (mẫu số, ký hiệu) mới là phạm vi của dãy số.
+  { key: 'form_no', labelKey: 'catalog.field.invoiceFormNo', type: 'text', essential: true },
+  // KHÔNG có `defaultValue`, cùng lối `direction` của bảng giá: nút **nhóm** bị
+  // server cấm mang hình thức (`group_has_no_invoice_fields`), nên một giá trị
+  // mặc định ở đây làm mọi lần tạo nhóm ăn 422.
+  {
+    key: 'kind',
+    labelKey: 'catalog.field.invoiceFormKind',
+    type: 'select',
+    options: INVOICE_FORM_KIND_OPTIONS,
+    essential: true,
+  },
+  // Chỉ có nghĩa với hóa đơn điện tử — server chặn bằng
+  // `provider_only_for_electronic`. Bỏ trống = dùng nhà cung cấp mặc định.
+  { key: 'provider_code', labelKey: 'catalog.field.invoiceProviderCode', type: 'text' },
+]
+
 const EMPLOYEE_FIELDS: readonly ExtraField[] = [
   { key: 'department', labelKey: 'catalog.field.department', type: 'text', essential: true },
   { key: 'position', labelKey: 'catalog.field.position', type: 'text' },
@@ -271,7 +300,14 @@ export const CATALOGS: readonly CatalogDef[] = [
     listColumns: ['currency_code', 'account_holder'],
   },
   simple('document_types', 'loai-chung-tu', 'catalog.title.documentTypes'),
-  simple('invoice_forms', 'mau-so-hoa-don', 'catalog.title.invoiceForms'),
+  {
+    slug: 'invoice_forms',
+    urlSegment: 'mau-so-hoa-don',
+    titleKey: 'catalog.title.invoiceForms',
+    flags: [],
+    extraFields: INVOICE_FORM_FIELDS,
+    listColumns: ['form_no', 'kind'],
+  },
   simple('timekeeping_symbols', 'ky-hieu-cham-cong', 'catalog.title.timekeepingSymbols'),
   simple('pit_tables', 'bieu-thue-tncn', 'catalog.title.pitTables'),
   simple('excise_tax_tables', 'bieu-thue-ttdb', 'catalog.title.exciseTaxTables'),

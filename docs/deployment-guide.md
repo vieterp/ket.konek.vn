@@ -234,6 +234,46 @@ dòng đối trừ trỏ vào chúng. Lượt nâng cấp lại dựng lại đ�
 cha, nhưng không dựng lại được phần đã tất toán — hạ cấp một dữ liệu đang chạy
 vì thế phải đi kèm khôi phục sao lưu (§3.2), không chạy `downgrade` một mình.
 
+#### Phân hệ hóa đơn điện tử (bản 0032)
+
+**Hai mã quyền mới đòi lớp xác thực thứ hai.** `einvoice.invoice.*` (lập, phát
+hành, hủy hóa đơn) và `einvoice.registration.*` (hồ sơ đăng ký, dải số) đều khai
+`requires_second_factor`. Vai trò nào được gán một trong hai sẽ **bật
+`totp_required`** cho mọi người giữ vai trò ấy (FR-NFR-016) — người dùng chưa
+đăng ký TOTP sẽ bị chặn ở lần đăng nhập kế tiếp cho tới khi họ đăng ký. Lên kế
+hoạch cho bước này trước khi gán quyền, đừng gán vào giữa giờ làm việc.
+
+Cả hai mã chỉ **cấp phát được** sau khi chạy `ensure-cluster` (xem hai bước ở
+đầu mục này).
+
+**Migration dừng nếu danh mục mẫu số có dòng chưa đủ thông tin.** Bản 0032 bồi
+ba cột vào `invoice_forms` (`form_no` = mẫu số, `kind` = hình thức, và mã nhà
+cung cấp dịch vụ), rồi bắt mọi ký hiệu không phải nút nhóm phải có đủ mẫu số và
+hình thức. Dataset nào đã có ký hiệu tạo trước bản này — mã và tên, không có gì
+khác — sẽ làm migration **dừng lại** với thông điệp nêu đích danh các mã ấy;
+transaction quay lui sạch, không mất gì. Cách xử lý: mở danh mục Mẫu số hóa
+đơn, điền mẫu số và hình thức cho từng ký hiệu được nêu, rồi chạy lại nâng cấp.
+Migration cố ý **không đoán** hai giá trị đó: chúng là thứ doanh nghiệp đã đăng
+ký với cơ quan thuế, và một giá trị đoán sai đi thẳng vào phép kiểm ngày bắt
+đầu sử dụng (BR-EIV-03).
+
+**Một ký hiệu hóa đơn thuộc đúng một chi nhánh.** Dãy số hóa đơn liên tục theo
+(mẫu số, ký hiệu) — đúng chữ BR-EIV-02 — còn dải số đã thông báo phát hành thì
+đăng ký theo từng chi nhánh. Hai trục ấy chỉ trùng nhau khi mỗi ký hiệu có đúng
+một chủ, nên hồ sơ đăng ký của chi nhánh thứ hai trên một ký hiệu đã có chủ bị
+từ chối (`invoice_form.branch_conflict`, 409). Khi khai báo danh mục Mẫu số hóa
+đơn cho doanh nghiệp nhiều chi nhánh: **mỗi chi nhánh một ký hiệu riêng**, đúng
+cách TT78 vốn vận hành (ký hiệu mã hóa đơn vị phát hành).
+
+`downgrade` của bản này **có mất mát**: nó xóa ba bảng `einvoices`,
+`einvoice_error_notices`, `invoice_registrations` cùng toàn bộ nội dung. Số hóa
+đơn đã cấp không dựng lại được từ đâu cả — mối nối giữa từng số và tờ hóa đơn
+của nó thì mất. Dòng bộ đếm trong `number_sequences` (khóa `EIV|…`) thì **ở
+lại**: chúng thuộc bảng của một bản trước, và xóa chúng là xóa bằng chứng duy
+nhất còn lại về những số đã in ra đời thật. Hệ quả có chủ đích khi nâng cấp
+lại: dãy tiếp tục từ đúng chỗ nó dừng, **không** cấp lại số cũ. Hạ cấp một dữ
+liệu đang chạy vì thế phải đi kèm khôi phục sao lưu (§3.2).
+
 ### 2.2b Khóa mã hóa ứng dụng (ADR-019)
 
 ```bash

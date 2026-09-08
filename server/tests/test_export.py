@@ -556,6 +556,14 @@ def test_a_text_heavy_catalog_at_the_row_ceiling_is_refused_by_the_byte_guard(
 
     Ngoại suy từ mẫu nhỏ rồi hạ trần byte để kiểm chính đường từ chối ấy — dựng
     đủ 10.000 dòng `partners` mất hàng chục giây và làm bẩn dataset dùng chung.
+
+    Số byte mỗi dòng đo bằng **hiệu** của hai lượt xuất, trước và sau khi nhập
+    hai mươi dòng nặng, chứ không bằng `tổng byte / tổng dòng` (lát 7D). Bản đầu
+    chia cho tổng dòng của cả danh mục, nên mọi bản ghi đối tác mà **tệp test
+    khác** để lại — tên ngắn, phần lớn ô trống — kéo trung bình xuống, và bài
+    này đỏ khi có đủ chúng. Đó là bài test phụ thuộc thứ tự tệp: nó đo một đại
+    lượng của dataset dùng chung trong khi thứ nó nói về là hai mươi dòng của
+    chính nó.
     """
     widest = max(
         REGISTRY.specs(),
@@ -571,12 +579,15 @@ def test_a_text_heavy_catalog_at_the_row_ceiling_is_refused_by_the_byte_guard(
             if column.kind is CellKind.TEXT and column.max_length and row[position] is None:
                 row[position] = "ữ" * min(column.max_length, 255)
         rows.append(row)
+    before = uncompressed_size(BytesIO(_export(session_factory, scope, widest.slug)))
+    assert before is not None
+
     _import(session_factory, dataset_alpha, scope, tmp_path, widest.slug, rows)
 
     content = _export(session_factory, scope, widest.slug)
     measured = uncompressed_size(BytesIO(content))
     assert measured is not None
-    per_row = measured / max(len(_data_rows(content, widest.slug)), 1)
+    per_row = (measured - before) / len(rows)
     projected = per_row * exporter.MAX_EXPORT_ROWS
 
     if projected <= MAX_UNCOMPRESSED_BYTES:
