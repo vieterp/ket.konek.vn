@@ -1,4 +1,4 @@
-"""Adapter EasyInvoice — lát 7E-2.
+"""Adapter EasyInvoice — lát 7E-2, cộng đường tải bản thể hiện của 7E-3.
 
 Không có sandbox EasyInvoice nào cấu hình ở repo này, nên tệp này chứng minh
 adapter **dựng đúng** chứ không chứng minh nhà cung cấp **chấp nhận**. Ranh giới
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import xml.etree.ElementTree as ET
 from datetime import date
 from decimal import Decimal
@@ -26,7 +27,12 @@ import pytest
 from ket.kernel.contracts import PartnerKind
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.protocols import EInvoiceSourceDocument, EInvoiceSourceLine
-from ket.modules.einvoice.providers.contracts import ProviderAcceptance, ProviderRecordState
+from ket.modules.einvoice.providers.contracts import (
+    ProviderAcceptance,
+    ProviderRecordState,
+    RepresentationAvailability,
+    RepresentationKind,
+)
 from ket.modules.einvoice.providers.easyinvoice.auth import build_header
 from ket.modules.einvoice.providers.easyinvoice.client import (
     EasyInvoiceClient,
@@ -43,6 +49,7 @@ from ket.modules.einvoice.providers.easyinvoice.xml_builder import (
     VAT_NOT_DECLARED,
     build_invoice_xml,
 )
+from ket.modules.einvoice.providers.internal import InternalProvider
 
 CLIENT_REF = UUID("01a07f14-30eb-7000-b7dd-000000007e02")
 """Khóa của **ta**, đi vào thân XML."""
@@ -392,3 +399,138 @@ def test_a_refused_lookup_never_reads_as_not_received() -> None:
 
     with pytest.raises(EasyInvoiceRefusedError):
         _provider(handler).query_status(provider_ref=SERVER_IKEY)
+
+
+# --- bản thể hiện (lát 7E-3) ------------------------------------------------
+
+
+def _provider_for(handler: object) -> EasyInvoiceProvider:
+    """Adapter nói chuyện với một máy chủ giả.
+
+    `session` là `None`: đường tải tệp không chạm cơ sở dữ liệu — nó chỉ gọi HTTP
+    rồi giải base64. Truyền một session thật vào đây sẽ che mất chính điều đó.
+    """
+    client = EasyInvoiceClient(CREDENTIALS, transport=_transport(handler))  # type: ignore[arg-type]
+    return EasyInvoiceProvider(None, client)  # type: ignore[arg-type]
+
+
+def test_the_representation_is_fetched_from_the_documented_path() -> None:
+    """`getInvoicePdf` với `Option 1` cho PDF và `Option 2` cho XML."""
+    seen: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "Status": 2,
+                "Data": {
+                    "FileContent": base64.b64encode(b"%PDF-1.7 noi dung").decode(),
+                    "FileName": "hoa-don.pdf",
+                },
+            },
+        )
+
+    provider = _provider_for(handler)
+    pdf = provider.fetch_representation(provider_ref=SERVER_IKEY, kind=RepresentationKind.PDF)
+    xml = provider.fetch_representation(provider_ref=SERVER_IKEY, kind=RepresentationKind.XML)
+
+    assert [payload["Option"] for payload in seen] == [1, 2]
+    assert all(payload["Ikey"] == SERVER_IKEY for payload in seen)
+    assert pdf.availability is RepresentationAvailability.AVAILABLE
+    assert pdf.content == b"%PDF-1.7 noi dung"
+    assert pdf.media_type == "application/pdf"
+    assert pdf.file_name == "hoa-don.pdf"
+    assert xml.media_type == "application/xml"
+
+
+def test_a_refused_download_is_unknown_not_unavailable() -> None:
+    """Một lượt từ chối của họ là "chưa hỏi được", KHÔNG phải "vĩnh viễn không có".
+
+    Cùng một `Status != 2` chở cả "không có tệp" lẫn "hết phiên đăng nhập",
+    "quá tải", "đang xử lý", và EasyInvoice không công bố bộ mã nào tách được
+    hai nhóm ấy. Với một tài liệu phải lưu mười năm, đoán nhầm về phía 404
+    "đừng chờ nữa" là hỏng theo hướng không ai đi kiểm lại; đoán nhầm về phía
+    503 thì người dùng bấm lại một lần và thấy đúng.
+
+    Nhóm "chắc chắn không có" thật sự không đi qua đây: nó đã bị chặn từ trước
+    bằng chính trạng thái hóa đơn bên ta (`representation.ensure`), hoặc do
+    adapter `internal` nói ra (hóa đơn giấy không có XML).
+    """
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"Status": 4, "Message": "Phien dang nhap het han"})
+
+    outcome = _provider_for(handler).fetch_representation(
+        provider_ref=SERVER_IKEY, kind=RepresentationKind.PDF
+    )
+    assert outcome.availability is RepresentationAvailability.UNKNOWN
+    assert "het han" in (outcome.message or "")
+
+
+def test_a_body_we_cannot_decode_is_unknown_not_unavailable() -> None:
+    """ "Họ nói có mà ta giải không ra" là một sự cố, không phải một câu trả lời.
+
+    Đọc nó thành `UNAVAILABLE` sẽ báo với người dùng rằng tờ hóa đơn của họ vĩnh
+    viễn không có bản thể hiện — sai, và sai theo hướng không ai đi kiểm lại. Ba
+    hình dạng hỏng đều phải về cùng một chỗ.
+    """
+    bodies: list[dict[str, object]] = [
+        {"Status": 2, "Data": {}},
+        {"Status": 2, "Data": {"FileContent": "kh0ng-ph@i-base64!!"}},
+        {"Status": 2, "Data": {"FileContent": ""}},
+    ]
+    for body in bodies:
+
+        def handler(_request: httpx.Request, payload: dict[str, object] = body) -> httpx.Response:
+            return httpx.Response(200, json=payload)
+
+        outcome = _provider_for(handler).fetch_representation(
+            provider_ref=SERVER_IKEY, kind=RepresentationKind.PDF
+        )
+        assert outcome.availability is RepresentationAvailability.UNKNOWN, body
+        assert outcome.content is None
+
+
+def test_base64_padding_is_validated_instead_of_silently_dropped() -> None:
+    """`b64decode` mặc định **bỏ qua** ký tự lạ.
+
+    Không có `validate=True`, một thân hỏng sẽ giải ra vài byte rác rồi được cất
+    thành một "bản thể hiện" mở không lên — và nó nằm lại trong kho đính kèm với
+    tư cách bản lưu trữ mười năm. Bài này giết đúng phép đột biến bỏ cờ ấy đi.
+    """
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"Status": 2, "Data": {"FileContent": "UE**RG**Rg=="}})
+
+    outcome = _provider_for(handler).fetch_representation(
+        provider_ref=SERVER_IKEY, kind=RepresentationKind.PDF
+    )
+    assert outcome.availability is RepresentationAvailability.UNKNOWN
+
+
+def test_a_network_failure_while_downloading_is_not_a_refusal() -> None:
+    """Cùng luật với ba lời gọi kia: lỗi mạng nổi lên nguyên vẹn."""
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("mạng rớt")
+
+    with pytest.raises(httpx.ReadTimeout):
+        _provider_for(handler).fetch_representation(
+            provider_ref=SERVER_IKEY, kind=RepresentationKind.PDF
+        )
+
+
+def test_the_internal_provider_separates_no_xml_from_render_it_yourself() -> None:
+    """Hai câu trả lời khác hẳn nhau, và gộp chúng là một lỗi đọc được.
+
+    Hóa đơn đặt in / tự in **không có** tệp XML — sự thật pháp lý, `UNAVAILABLE`.
+    Bản thể hiện thì dựng được, chỉ là không phải ở adapter — `NOT_HOSTED`. Nếu
+    cả hai cùng trả `UNAVAILABLE` thì nơi gọi phải suy ý định từ `provider_code`,
+    và tờ hóa đơn nội bộ sẽ không bao giờ được dựng.
+    """
+    provider = InternalProvider()
+    xml = provider.fetch_representation(provider_ref="bat-ky", kind=RepresentationKind.XML)
+    pdf = provider.fetch_representation(provider_ref="bat-ky", kind=RepresentationKind.PDF)
+    assert xml.availability is RepresentationAvailability.UNAVAILABLE
+    assert pdf.availability is RepresentationAvailability.NOT_HOSTED

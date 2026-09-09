@@ -131,6 +131,8 @@ def test_the_exemption_list_is_exactly_what_was_reviewed() -> None:
             "/api/v1/einvoices/{einvoice_id}/actions/confirm",
             "/api/v1/einvoices/{einvoice_id}/actions/reject",
             "/api/v1/einvoices/{einvoice_id}/actions/cancel",
+            # Lát 7E-3: đánh dấu đã gửi — cùng họ, xem `api/idempotency.py`.
+            "/api/v1/einvoices/{einvoice_id}/actions/mark-sent",
             # Lát 7D: lập thông báo hủy / biên bản hủy — unique
             # `(einvoice_id, kind)` chặn nhân đôi, cùng lối hồ sơ định dạng sao kê.
             "/api/v1/einvoices/{einvoice_id}/notices",

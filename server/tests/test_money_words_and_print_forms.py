@@ -321,6 +321,10 @@ class TestBuiltinManifest:
             ("SEC", "SEC-CHUYEN-KHOAN"),
             ("CTNB", "CHUYEN-TIEN-NOI-BO"),
             ("KKQ", "BIEN-BAN-KIEM-KE-QUY-08aTT"),
+            # Bản thể hiện hóa đơn (7E-3) — bản in thứ hai không phải chứng từ.
+            # Chỉ dùng cho hóa đơn phát hành nội bộ (đặt in / tự in); hóa đơn
+            # qua nhà cung cấp lấy bản thể hiện của chính họ.
+            ("HDDT", "HOA-DON-BAN-THE-HIEN"),
         }
         assert set(by_key) == expected
         assert all(entry.is_default for entry in by_key.values())
