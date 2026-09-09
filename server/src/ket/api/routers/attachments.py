@@ -17,7 +17,6 @@ from __future__ import annotations
 from datetime import timedelta
 from pathlib import Path
 from typing import Annotated, Final
-from urllib.parse import quote
 
 import structlog
 from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
@@ -25,6 +24,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ket.api.dependencies import AppSettings, AuthorizedRequest, SessionFactory, require_permission
+from ket.api.downloads import content_disposition as _content_disposition
 from ket.api.idempotency import idempotency_key_dependency
 from ket.api.routers.attachments_schemas import AttachmentListResponse, AttachmentResponse
 from ket.kernel.attachments import service, storage
@@ -120,24 +120,6 @@ def _safe_file_name(raw: str | None) -> str:
     candidate = (raw or "").replace("\\", "/").split("/")[-1].strip()
     cleaned = "".join(character for character in candidate if character.isprintable())
     return cleaned[:255] or "tep-dinh-kem"
-
-
-def _content_disposition(file_name: str) -> str:
-    """Header buộc tải về, mang được tên tiếng Việt.
-
-    Hai dạng tên trong cùng một header là cố ý: `filename=` ASCII cho client cũ,
-    `filename*=UTF-8''…` cho tên có dấu. Bỏ dạng thứ hai thì "Hợp đồng số 12.pdf"
-    tải về thành một chuỗi ký tự hỏng.
-    """
-    # Bỏ `"` và `\` khỏi dạng ASCII: cả hai đều là ký tự **cấu trúc** của giá
-    # trị trong ngoặc kép, nên một tên tệp chứa chúng sẽ cắt header thành hai
-    # tham số mà trình duyệt mỗi bên đọc một kiểu. Dạng `filename*` bên dưới
-    # mang tên đầy đủ nên không mất thông tin gì.
-    ascii_fallback = (
-        file_name.encode("ascii", "ignore").decode("ascii").replace('"', "").replace("\\", "")
-        or "attachment"
-    )
-    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{quote(file_name)}"
 
 
 @router.post(
