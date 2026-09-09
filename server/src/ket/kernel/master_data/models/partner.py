@@ -118,6 +118,21 @@ class Partner(MasterDataRow):
     province: Mapped[str | None] = mapped_column(String(REGION_MAX_LENGTH), nullable=True)
     district: Mapped[str | None] = mapped_column(String(REGION_MAX_LENGTH), nullable=True)
 
+    @property
+    def full_address(self) -> str:
+        """Địa chỉ ghép để in lên chứng từ và gửi kèm hóa đơn điện tử.
+
+        Thuộc tính của chính bản ghi chứ không phải hàm của một bộ dựng: bản XML
+        gửi cơ quan thuế và bản thể hiện in ra phải mang **cùng một** địa chỉ,
+        và hai bản chép của phép ghép này sẽ lệch nhau ở đúng lần ai đó thêm một
+        ô địa giới mới.
+
+        Bỏ ô trống thay vì để lại dấu phẩy treo — một dòng địa chỉ kết thúc bằng
+        ", ," là thứ người mua nhìn thấy trên tờ hóa đơn của họ.
+        """
+        parts = (self.address, self.district, self.province)
+        return ", ".join(part for part in parts if part)
+
     contact_name: Mapped[str | None] = mapped_column(String(NAME_MAX_LENGTH), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(PHONE_MAX_LENGTH), nullable=True)
     email: Mapped[str | None] = mapped_column(String(EMAIL_MAX_LENGTH), nullable=True)

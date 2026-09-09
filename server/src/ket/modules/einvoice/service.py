@@ -34,13 +34,14 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ket.kernel.errors import (
     EInvoiceCancellationIncompleteError,
     EInvoiceNotFoundError,
     EInvoiceNoticeSubmittedError,
+    EInvoiceNotSentError,
     EInvoiceNumberRangeExhaustedError,
     EInvoiceRegistrationMissingError,
     InvoiceFormNotUsableError,
@@ -53,6 +54,7 @@ from ket.modules.einvoice.models import (
     CANCELLATION_KINDS,
     EInvoice,
     EInvoiceErrorNotice,
+    EInvoiceRepresentation,
     EInvoiceStatus,
     ErrorNoticeKind,
     InvoiceRegistration,
@@ -216,14 +218,99 @@ class EInvoiceService:
         self._session.flush()
         return invoice
 
+    def mark_sent(
+        self,
+        einvoice_id: UUID,
+        *,
+        sent_to: str,
+        sent_at: datetime | None = None,
+        user_id: int,
+    ) -> EInvoice:
+        """Đánh dấu đã gửi bản thể hiện cho người mua (FR-EIV-020, cạnh `SEND`).
+
+        **Lượt gửi xảy ra ngoài phần mềm** — quyết định user 2026-09-08, phương
+        án A3. Hai đường thật đều nằm ngoài: kế toán gửi từ hộp thư của mình,
+        hoặc chính nhà cung cấp gửi theo cấu hình bên họ (bản tích hợp
+        EasyInvoice đang chạy thật bỏ hẳn `CusEmails` khỏi XML vì trường ấy làm
+        họ trả `Code=127`, và tự lo phần thư từ). Bản ghi ở đây vì thế là **lời
+        khai về một việc đã xảy ra**, không phải kết quả một thao tác của máy.
+
+        Hệ quả với thiết kế, và là chỗ dễ làm sai nhất: **không** đòi phải có
+        đính kèm bản thể hiện trước. Đòi nó sẽ chặn đúng ca thường gặp nhất —
+        nhà cung cấp đã gửi, kế toán chưa từng bấm tải tệp về — tức chặn một lời
+        khai trung thực. Thứ đòi được mà vẫn đúng là **người nhận**: một dấu
+        "đã gửi" không nói được gửi cho ai thì không ai đối chiếu lại được.
+
+        Ba đầu chặn của `sent_at`, mỗi cái đóng một hình dạng vô nghĩa khác nhau:
+        không rỗng (mặc định là bây giờ), không sau hôm nay (ngày ghi trong sổ
+        không đi trước đồng hồ — cùng trần `book_date` của 6F-2), và không trước
+        `issued_at` (không gửi được thứ chưa tồn tại).
+        """
+        # `FOR UPDATE`, không phải `require` thường — và đây là bản sửa của một
+        # lỗ đo được. Miễn trừ khóa idempotency của cửa này dựa trên lập luận
+        # "lượt thứ hai đâm vào máy trạng thái trước khi chạm ba cột dấu gửi",
+        # nhưng lập luận ấy chỉ đúng khi hai lượt **tuần tự**: hai luồng song
+        # song cùng đọc `DA_PHAT_HANH`, cùng qua `transition_to`, và cả hai
+        # cùng ghi — người nhận của lần bấm thứ nhất biến mất khỏi sổ. Khóa dòng
+        # buộc lượt sau đọc lại trạng thái đã lật rồi mới quyết định.
+        invoice = self.require(einvoice_id, for_update=True)
+        recipient = sent_to.strip()
+        if not recipient:
+            raise EInvoiceNotSentError(
+                "Khai người nhận bản thể hiện trước khi đánh dấu đã gửi",
+                einvoice=str(einvoice_id),
+            )
+        stamp = sent_at if sent_at is not None else datetime.now(UTC)
+        now = datetime.now(UTC)
+        if stamp > now:
+            raise EInvoiceNotSentError(
+                "Thời điểm gửi không được ở tương lai", einvoice=str(einvoice_id)
+            )
+        if invoice.issued_at is not None and stamp < invoice.issued_at:
+            raise EInvoiceNotSentError(
+                "Thời điểm gửi không được trước lúc phát hành hóa đơn",
+                einvoice=str(einvoice_id),
+            )
+        invoice.status = transition_to(EInvoiceStatus(invoice.status), EInvoiceAction.SEND)
+        invoice.sent_at = stamp
+        invoice.sent_to = recipient
+        invoice.sent_by = user_id
+        self._session.flush()
+        return invoice
+
     def cancel(self, einvoice_id: UUID) -> EInvoice:
         """Hủy hóa đơn — đòi đủ thông báo hủy **và** biên bản hủy (BR-EIV-04)."""
         invoice = self.require(einvoice_id)
         target = transition_to(EInvoiceStatus(invoice.status), EInvoiceAction.CANCEL)
         self._require_cancellation_documents(invoice)
         invoice.status = target
+        self.discard_representations(einvoice_id)
         self._session.flush()
         return invoice
+
+    def discard_representations(self, einvoice_id: UUID) -> None:
+        """Bỏ bản thể hiện đã lưu khi tờ hóa đơn thôi còn hiệu lực.
+
+        **Không xóa tệp, chỉ bỏ dòng trỏ tới nó** — kho định địa chỉ theo nội
+        dung giữ nguyên byte, nên hồ sơ lưu trữ không mất gì và lượt tải kế tiếp
+        dựng lại đúng nội dung ấy, lần này **có dấu trạng thái**.
+
+        Vì sao phải có bước này: `representation.ensure` trả bản đã cất trước
+        mọi phép kiểm — đó là điều làm nó rẻ — nên dấu "ĐÃ HỦY" mà lát này thêm
+        vào chỉ đóng được lúc **dựng**. Thứ tự thật của kế toán lại là *tải →
+        gửi cho người mua → sau đó mới hủy*, tức đúng thứ tự khiến dấu ấy không
+        bao giờ xuất hiện: người dùng bấm tải sau khi hủy và nhận lại y nguyên
+        tờ giấy sạch của hôm trước. Đo được, và vòng review pre-landing bắt được.
+
+        Bản của nhà cung cấp cũng bỏ theo: tờ họ dựng sau lượt hủy thường mang
+        trạng thái của họ, nên lấy lại là **đúng hơn** giữ bản cũ.
+
+        **7F gọi thêm ở hai cạnh còn lại** (`REPLACE`, `ADJUST`) — chúng đưa hóa
+        đơn ra khỏi hiệu lực bằng cùng một nghĩa, và cùng cần dấu ấy.
+        """
+        self._session.execute(
+            delete(EInvoiceRepresentation).where(EInvoiceRepresentation.einvoice_id == einvoice_id)
+        )
 
     def delete(self, einvoice_id: UUID) -> None:
         """Xóa hóa đơn chưa phát hành. Số hóa đơn không tái sử dụng — nhưng ở
@@ -302,8 +389,15 @@ class EInvoiceService:
             )
         return notice
 
-    def require(self, einvoice_id: UUID) -> EInvoice:
-        invoice = self._session.get(EInvoice, einvoice_id)
+    def require(self, einvoice_id: UUID, *, for_update: bool = False) -> EInvoice:
+        """Hóa đơn theo id, hoặc 404.
+
+        `for_update` khóa dòng cho tới cuối transaction. Chỉ đường ghi nào có
+        **hai lượt cùng hợp lệ trên cùng trạng thái nguồn** mới cần nó: ở đó máy
+        trạng thái không phân xử được, vì cả hai lượt đều đọc ra cùng một trạng
+        thái trước khi lượt nào kịp ghi. Xem `mark_sent`.
+        """
+        invoice = self._session.get(EInvoice, einvoice_id, with_for_update=for_update)
         if invoice is None:
             raise EInvoiceNotFoundError(
                 "Không tìm thấy hóa đơn điện tử", einvoice_id=str(einvoice_id)

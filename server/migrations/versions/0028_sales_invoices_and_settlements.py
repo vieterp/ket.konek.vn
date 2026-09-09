@@ -17,13 +17,18 @@ của header và RLS canh ở đó, nên ở đây chỉ cấp quyền, không b
   tích, và hai cột truy nguyên nguồn giá.
 * `sales_settlements` — đối trừ của chứng từ trả lại / giảm giá vào hóa đơn gốc.
 
-Cộng **một bước làm mới metadata builtin**: báo cáo `tuoi-no-phai-thu` đổi
+Cộng **một lượt đổi metadata builtin**: báo cáo `tuoi-no-phai-thu` đổi
 `required_permission_module` từ `receivables` sang `sales`. Từ 7A hai chiều tuổi
 nợ dùng chung mã quyền `receivables` vì chưa phân hệ nào của chúng tồn tại;
 chiều phải trả đã chuyển sang `purchase` ở 0026, và lát này đóng nốt chiều phải
-thu. Bước làm mới phải đứng ở **cuối** chuỗi migration mỗi khi chuỗi thêm thứ
-mà dữ liệu builtin đọc (doctrine ghi ở 0025); 0027 không đổi metadata nào nên
-nó không có bước này, và đây là chỗ đúng cho lượt đổi lần này.
+thu.
+
+Bước dữ liệu `_refresh_builtin_data` **từng ở đây, chuyển sang 0035 ở lát
+7E-3**. Nó phải luôn đứng ở **head** của chuỗi (doctrine ghi ở 0025): lượt đổi
+metadata của chính lát này vẫn tới nơi, vì mọi dataset chạy hết chuỗi tới head
+đều đi qua bước ấy ở vị trí mới. Vị trí hiện tại tra bằng
+`grep -rn "_refresh_builtin_data" migrations/versions/` chứ đừng tin con số
+chép trong bất kỳ docstring nào.
 
 **Không có nghiệp vụ định khoản `SAL` ở đây.** Bộ nghiệp vụ và các purpose mới
 (`revenue_goods`, `revenue_services`, `sales_deduction`, `cogs`) nằm trong tệp
@@ -42,8 +47,6 @@ import sqlalchemy as sa
 from alembic import context, op
 from sqlalchemy.dialects.postgresql import JSONB
 
-from ket.kernel.config.printing.seed import ensure_builtin_print_templates
-from ket.kernel.config.reports.seed import refresh_builtin_reports
 from ket.kernel.datasets.naming import role_name_for_schema
 from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 from ket.kernel.security.grants import grant_read_write
@@ -113,7 +116,6 @@ def upgrade() -> None:
     _create_sales_invoice_lines()
     _create_sales_settlements()
     _apply_security()
-    _refresh_builtin_data()
 
 
 def _create_sales_invoices() -> None:
@@ -292,18 +294,6 @@ def _apply_security() -> None:
     for table in _TABLES:
         for statement in grant_read_write(table, grantee=grantee, sequence=None):
             op.execute(statement)
-
-
-def _refresh_builtin_data() -> None:
-    """Làm mới metadata báo cáo + mẫu in builtin — lát này đổi quyền xem báo
-    cáo tuổi nợ phải thu sang module `sales`. Chỉ chạy online: bước đọc-rồi-ghi
-    không diễn đạt được thành SQL tĩnh của `upgrade --sql`."""
-    if context.is_offline_mode():
-        return
-    schema = _target_schema()
-    connection = op.get_bind()
-    refresh_builtin_reports(connection, schema)
-    ensure_builtin_print_templates(connection, schema)
 
 
 def downgrade() -> None:

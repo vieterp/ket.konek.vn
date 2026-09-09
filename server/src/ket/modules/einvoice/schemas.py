@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from ket.modules.einvoice.models import (
     BASE_URL_MAX_LENGTH,
@@ -21,6 +21,7 @@ from ket.modules.einvoice.models import (
     NOTICE_NO_MAX_LENGTH,
     PROVIDER_CODE_MAX_LENGTH,
     REASON_CODE_MAX_LENGTH,
+    SENT_TO_MAX_LENGTH,
     TAX_AUTHORITY_CODE_MAX_LENGTH,
     TAX_CODE_MAX_LENGTH,
     USERNAME_MAX_LENGTH,
@@ -115,6 +116,43 @@ class EInvoiceOut(BaseModel):
     replaces_invoice_id: UUID | None
     adjusts_invoice_id: UUID | None
     issued_at: datetime | None
+    sent_at: datetime | None
+    sent_to: str | None
+
+
+class MarkSentIn(BaseModel):
+    """Lời khai "đã gửi bản thể hiện cho người mua" (FR-EIV-020, cạnh `SEND`).
+
+    Lượt gửi xảy ra **ngoài phần mềm** (quyết định user 2026-09-08), nên đây là
+    một bản ghi nhận chứ không phải lệnh gửi — xem `service.mark_sent`.
+    """
+
+    sent_to: str = Field(
+        title="Đã gửi cho",
+        min_length=1,
+        max_length=SENT_TO_MAX_LENGTH,
+        description=(
+            "Địa chỉ thư người nhận, hoặc mô tả cách giao. Nhiều địa chỉ ngăn "
+            "bằng dấu chấm phẩy (FR-EIV-022)."
+        ),
+    )
+    sent_at: AwareDatetime | None = Field(
+        default=None,
+        title="Thời điểm gửi",
+        description=(
+            "Bỏ trống = bây giờ. Nhận ngày lùi vì lượt gửi có thể đã xảy ra "
+            "trước đó; không nhận thời điểm ở tương lai hay trước lúc phát hành. "
+            "Phải kèm múi giờ (ISO 8601 có hậu tố `Z` hoặc `+07:00`)."
+        ),
+    )
+    """`AwareDatetime`, không `datetime` trần — và đây là bản sửa của một lỗi 500.
+
+    Đây là trường **datetime do client gửi lên đầu tiên của cả dự án** (mọi
+    `datetime` khác trong `schemas` là dữ liệu ĐI RA: `created_at`, `issued_at`),
+    nên không quy ước sẵn nào đỡ hộ. Một giá trị không múi giờ đi tới
+    `service.mark_sent` rồi đem so với `datetime.now(UTC)` là `TypeError` — tức
+    `500 "lỗi không mong muốn"` cho một đầu vào người dùng gõ sai. Bắt ở schema
+    thì nó thành `422` kèm câu nói rõ thiếu gì."""
 
 
 class EInvoiceListOut(BaseModel):

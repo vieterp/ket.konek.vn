@@ -30,7 +30,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import inspect, text, update
-from sqlalchemy.exc import IntegrityError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
 from einvoice_support import ensure_active_registration, ensure_invoice_form
@@ -38,6 +38,7 @@ from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.errors import (
     EInvoiceCancellationIncompleteError,
     EInvoiceNoticeSubmittedError,
+    EInvoiceNotSentError,
     EInvoiceNumberRangeExhaustedError,
     EInvoiceRegistrationMissingError,
     EInvoiceTransitionError,
@@ -88,9 +89,31 @@ RANGE_SERIAL = "C26TRG"
 của các bài khác."""
 
 _MUTABLE_AFTER_ISSUE = frozenset(
-    {"status", "tax_authority_status", "tax_authority_code", "tax_authority_message", "lookup_code"}
+    {
+        "status",
+        "tax_authority_status",
+        "tax_authority_code",
+        "tax_authority_message",
+        "lookup_code",
+        "sent_at",
+        "sent_to",
+        "sent_by",
+    }
 )
-"""Năm cột chở tin từ cơ quan thuế về — trigger cố ý để mở, xem `0032`."""
+"""Cột chở tin về **sau khi** phát hành — trigger cố ý để mở, xem `0032`/`0035`.
+
+Năm cột đầu chở tin từ cơ quan thuế về. Ba cột cuối (7E-3) chở lời khai "đã gửi
+bản thể hiện cho người mua", và chúng thuộc cùng họ ấy chứ không phải nội dung
+hóa đơn: BR-EIV-01 đóng băng *tờ hóa đơn* — số, ngày, ký hiệu, chứng từ gốc,
+chuỗi thay thế/điều chỉnh, mốc cấp số — và cả bảy thứ đó vẫn nằm trong nhóm bị
+khóa. Khóa ba cột này lại thì cạnh `DaPhatHanh --> DaGui` mà chính SRS 07 §3 vẽ
+sẽ không có đường nào đi qua: dấu gửi **luôn** được đóng sau khi hóa đơn đã phát
+hành, đó là định nghĩa của nó.
+
+Docstring của `test_an_issued_invoice_refuses_every_content_update_from_raw_sql`
+ở 7D đoán trước tên `sent_at` và xếp nó vào nhóm bị khóa. Lát 7E-3 xếp lại, có
+chủ đích — xem `0035` về việc trigger là **danh sách cấm** nên ba cột mới ghi
+được mà không phải dựng lại nó."""
 
 
 @pytest.fixture(scope="module")
@@ -901,3 +924,230 @@ def test_listing_counts_every_status(
         assert page_total == total
 
     run(work)
+
+
+# --- cạnh "đã gửi bản thể hiện" (lát 7E-3) ----------------------------------
+
+
+def _issued(session: Session, context: PostingContext, accounts: dict[str, int]) -> EInvoice:
+    """Một tờ hóa đơn đã phát hành và đã được xác nhận — điểm xuất phát của
+    cạnh `SEND`, trạng thái duy nhất mà nó đi ra được."""
+    service = EInvoiceService(session)
+    invoice = _draft(session, context, accounts)
+    service.issue(invoice.id, invoice_date=FEB_10)
+    service.confirm(invoice.id)
+    session.flush()
+    return invoice
+
+
+def test_marking_sent_survives_the_immutability_trigger(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Ba cột dấu gửi ghi được ở `DA_PHAT_HANH` — điều kiện sống của cạnh `SEND`.
+
+    Bài này canh một thứ không hiển nhiên: trigger `einvoices_immutable_after_issue`
+    là **danh sách cấm**, nên `0035` không phải dựng lại nó. Một lượt siết trigger
+    thành danh sách cho phép ở lát sau sẽ làm cạnh `SEND` chết — và chết im lặng,
+    vì mọi bài khác của phân hệ vẫn xanh. Xem docstring `_MUTABLE_AFTER_ISSUE`.
+    """
+
+    def work(session: Session) -> None:
+        invoice = _issued(session, context, accounts)
+        # Bỏ trống mốc = bây giờ. Khoảng hợp lệ của một mốc **khai tay** nằm giữa
+        # `issued_at` và đồng hồ hiện tại, mà tờ hóa đơn này vừa được cấp số nên
+        # khoảng ấy gần như rỗng — đó là hành vi đúng (chưa tồn tại thì chưa gửi
+        # được, mà tương lai thì chưa xảy ra), và cũng là lý do đường mặc định
+        # phải có. Ngày lùi có bài riêng ở cửa HTTP.
+        assert invoice.issued_at is not None
+        sent = EInvoiceService(session).mark_sent(
+            invoice.id, sent_to="ketoan@khachhang.vn", user_id=ACTOR_ID
+        )
+        assert EInvoiceStatus(sent.status) is EInvoiceStatus.DA_GUI
+        assert sent.sent_at is not None and sent.sent_at >= invoice.issued_at
+        assert sent.sent_to == "ketoan@khachhang.vn"
+        assert sent.sent_by == ACTOR_ID
+        # Nội dung tờ hóa đơn không nhúc nhích — đó là nửa còn lại của BR-EIV-01.
+        assert sent.invoice_no is not None
+        assert sent.invoice_date == FEB_10
+
+    run(work)
+
+
+def test_marking_sent_twice_is_refused_before_it_overwrites_the_first_claim(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Lượt thứ hai đâm vào máy trạng thái **trước** khi chạm ba cột dấu gửi.
+
+    Đây là toàn bộ lý do cửa `mark-sent` được miễn trừ khóa idempotency: nếu
+    `transition_to` chạy **sau** phép gán thì một lượt gửi lại sẽ ghi đè lời khai
+    đã có rồi mới báo lỗi, và ai đọc lại sổ sẽ thấy người nhận của lần bấm nhầm.
+    """
+
+    def work(session: Session) -> None:
+        invoice = _issued(session, context, accounts)
+        service = EInvoiceService(session)
+        service.mark_sent(invoice.id, sent_to="lan-mot@khachhang.vn", user_id=ACTOR_ID)
+        first_stamp = invoice.sent_at
+        with pytest.raises(EInvoiceTransitionError):
+            service.mark_sent(invoice.id, sent_to="lan-hai@khachhang.vn", user_id=ACTOR_ID)
+        # **Lời khai thứ nhất còn nguyên** — đây mới là điều bài này đo, và là
+        # điều lý lẽ miễn trừ khóa idempotency dựa vào. Chỉ khẳng định "lượt hai
+        # ném lỗi" thì một bản viết lại gán ba cột TRƯỚC `transition_to` vẫn
+        # xanh, trong khi nó đã kịp ghi đè người nhận của lần bấm đầu.
+        assert invoice.sent_to == "lan-mot@khachhang.vn"
+        assert invoice.sent_at == first_stamp
+        session.rollback()
+
+    run(work)
+
+
+def test_an_unissued_invoice_cannot_be_marked_sent(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Chưa phát hành thì chưa có gì để gửi — máy trạng thái nói trước, ràng buộc
+    `sent_after_issue` của `0035` là lớp chót."""
+
+    def work(session: Session) -> None:
+        invoice = _draft(session, context, accounts)
+        with pytest.raises(EInvoiceTransitionError):
+            EInvoiceService(session).mark_sent(
+                invoice.id, sent_to="ai-do@khachhang.vn", user_id=ACTOR_ID
+            )
+        session.rollback()
+
+    run(work)
+
+
+def test_the_sent_stamp_refuses_the_three_shapes_that_mean_nothing(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Người nhận rỗng, mốc ở tương lai, mốc trước lúc phát hành.
+
+    Ba hình dạng, ba lý do khác nhau, cùng một kết luận: một dấu "đã gửi" phải
+    kiểm chứng lại được. Người nhận rỗng làm lời khai vô nghĩa; mốc tương lai
+    nói một việc chưa xảy ra; mốc trước lúc cấp số nói đã gửi thứ chưa tồn tại.
+    """
+
+    def work(session: Session) -> None:
+        invoice = _issued(session, context, accounts)
+        service = EInvoiceService(session)
+        for recipient, stamp in (
+            ("   ", None),
+            ("ok@khachhang.vn", datetime(2030, 1, 1, tzinfo=UTC)),
+            ("ok@khachhang.vn", datetime(2020, 1, 1, tzinfo=UTC)),
+        ):
+            with pytest.raises(EInvoiceNotSentError):
+                service.mark_sent(invoice.id, sent_to=recipient, sent_at=stamp, user_id=ACTOR_ID)
+        # Không lượt nào trong ba lượt trên được để lại dấu vết.
+        assert invoice.sent_at is None and invoice.sent_to is None
+        assert EInvoiceStatus(invoice.status) is EInvoiceStatus.DA_PHAT_HANH
+        session.rollback()
+
+    run(work)
+
+
+def test_a_replaced_invoice_needs_no_sent_stamp(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """`sent_after_issue` là ràng buộc **một chiều**, và bài này ghim chiều ấy.
+
+    `DA_HUY` tới thẳng từ `DA_PHAT_HANH` mà chưa từng gửi ai — hình dạng hoàn
+    toàn hợp lệ. Một ràng buộc song điều kiện ("trạng thái cao ⇒ có dấu gửi")
+    sẽ đỏ ngay trên dữ liệu đúng, đúng lỗi mà `0034` đã phải sửa cho
+    `number_and_date_together`.
+    """
+
+    def work(session: Session) -> None:
+        invoice = _issued(session, context, accounts)
+        service = EInvoiceService(session)
+        for kind, notice_no in (
+            (ErrorNoticeKind.THONG_BAO_HUY, "TBH-7E3"),
+            (ErrorNoticeKind.BIEN_BAN_HUY, "BBH-7E3"),
+        ):
+            service.add_notice(
+                invoice.id, kind=kind, notice_no=notice_no, notice_date=FEB_10, submitted=True
+            )
+        cancelled = service.cancel(invoice.id)
+        session.flush()
+        assert EInvoiceStatus(cancelled.status) is EInvoiceStatus.DA_HUY
+        assert cancelled.sent_at is None
+
+    run(work)
+
+
+def test_marking_sent_holds_the_invoice_row_against_a_second_writer(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`mark_sent` giữ khóa ghi trên dòng hóa đơn suốt lượt của nó.
+
+    **Vì sao cần một bài riêng cho cơ chế, chứ không chỉ bài "gọi hai lần".**
+    Bài tuần tự không đo được gì ở đây: hai lượt song song cùng đọc
+    `DA_PHAT_HANH` trước khi lượt nào kịp ghi, nên máy trạng thái để cả hai đi
+    qua và người nhận của lần bấm đầu bị ghi đè. Đó chính là ca mà cửa
+    `mark-sent` được **miễn trừ** khóa idempotency với lý do "không lần gửi lại
+    nào ghi đè được lời khai đã có" — lý do ấy đứng được là nhờ `FOR UPDATE`.
+
+    **Đo bằng `NOWAIT`, không bằng nhịp máy.** Hai bản trước của bài này cho hai
+    luồng đua nhau: bản dùng `Barrier` bắt được phép đột biến bỏ khóa **2/3
+    lượt** (đỏ ngẫu nhiên trong CI), bản ép thứ tự bằng hai sự kiện thì đóng mất
+    chính cửa sổ đua nên đột biến sống sót **3/3**. Khuôn đúng là khuôn của
+    `test_lock_vs_post_writeskew`: gate ngay trong lượt ghi, rồi hỏi cơ sở dữ
+    liệu "dòng này có đang bị giữ không" bằng một lượt `FOR UPDATE NOWAIT` —
+    câu trả lời không phụ thuộc vào việc luồng nào chạy nhanh hơn.
+    """
+    import threading
+
+    from ket.modules.einvoice import service as einvoice_service
+
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        invoice = _issued(session, context, accounts)
+        invoice_id = invoice.id
+
+    holding = threading.Event()
+    release = threading.Event()
+    real_transition_to = einvoice_service.transition_to
+
+    def gated_transition_to(*args: object, **kwargs: object) -> object:
+        """Gate đặt SAU lượt đọc khóa dòng, TRƯỚC lượt ghi ba cột dấu gửi —
+        đúng giữa cửa sổ mà một lượt ghi thứ hai cần chen vào."""
+        holding.set()
+        assert release.wait(timeout=30), "test không nhả gate"
+        return real_transition_to(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(einvoice_service, "transition_to", gated_transition_to)
+
+    outcome: dict[str, object] = {}
+
+    def marker() -> None:
+        try:
+            with unit_of_work(session_factory, scope) as session:
+                EInvoiceService(session).mark_sent(
+                    invoice_id, sent_to="lan-mot@khachhang.vn", user_id=ACTOR_ID
+                )
+        except Exception as error:  # pragma: no cover - chỉ chạm khi test đổ
+            outcome["error"] = error
+
+    thread = threading.Thread(target=marker)
+    thread.start()
+    try:
+        assert holding.wait(timeout=30), f"lượt ghi không tới gate: {outcome.get('error')}"
+        with pytest.raises(OperationalError):
+            with unit_of_work(session_factory, scope) as session:
+                session.execute(
+                    text("SELECT id FROM einvoices WHERE id = :invoice FOR UPDATE NOWAIT"),
+                    {"invoice": invoice_id},
+                )
+    finally:
+        release.set()
+        thread.join(timeout=30)
+    assert "error" not in outcome, outcome.get("error")
+
+    with unit_of_work(session_factory, scope) as session:
+        stored = EInvoiceService(session).require(invoice_id)
+        assert EInvoiceStatus(stored.status) is EInvoiceStatus.DA_GUI
+        assert stored.sent_to == "lan-mot@khachhang.vn"

@@ -50,6 +50,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -63,6 +64,7 @@ ERROR_NOTICE_TABLE_NAME = "einvoice_error_notices"
 REGISTRATION_TABLE_NAME = "invoice_registrations"
 OUTBOX_TABLE_NAME = "einvoice_outbox"
 PROVIDER_PROFILE_TABLE_NAME = "einvoice_provider_profiles"
+REPRESENTATION_TABLE_NAME = "einvoice_representations"
 
 INVOICE_NO_MAX_LENGTH = 50
 TAX_AUTHORITY_CODE_MAX_LENGTH = 100
@@ -74,6 +76,23 @@ PROVIDER_REF_MAX_LENGTH = 100
 BASE_URL_MAX_LENGTH = 200
 USERNAME_MAX_LENGTH = 100
 TAX_CODE_MAX_LENGTH = 20
+SENT_TO_MAX_LENGTH = 500
+"""Trần cho ô "đã gửi cho ai" — đủ khoảng mười địa chỉ thư ngăn bằng `;`
+(FR-EIV-022). Có trần chứ không `Text`: đây là danh sách người nhận, không phải
+chỗ ghi chép tự do, và một cột không trần là một cột client ghi được megabyte."""
+
+
+PDF_KIND = "pdf"
+XML_KIND = "xml"
+"""Hai giá trị của `einvoice_representations.kind`.
+
+Chuỗi trần chứ không import `RepresentationKind`: `models` là tầng dưới của
+`providers`, và `CheckConstraint` cần một hằng số nội suy được lúc dựng bảng.
+`test_representation_kinds_match_the_protocol` ghim hai bộ giá trị bằng nhau."""
+
+MEDIA_TYPE_MAX_LENGTH = 150
+FILE_NAME_MAX_LENGTH = 255
+SHA256_HEX_LENGTH = 64
 
 
 class EInvoiceStatus(IntEnum):
@@ -205,6 +224,22 @@ class EInvoice(DatasetBase, Audited):
             f"status < {EInvoiceStatus.DA_PHAT_HANH} OR invoice_no IS NOT NULL",
             name="issued_invoice_has_a_number",
         ),
+        # **Chưa phát hành thì chưa gửi được cho ai.** Một chiều, không phải
+        # song điều kiện: `DA_THAY_THE`/`DA_DIEU_CHINH`/`DA_HUY` tới được thẳng
+        # từ `DA_PHAT_HANH` mà chưa từng gửi ai, nên "trạng thái cao ⇒ có dấu
+        # gửi" là sai trên dữ liệu đúng.
+        CheckConstraint(
+            f"sent_at IS NULL OR status >= {EInvoiceStatus.DA_PHAT_HANH}",
+            name="sent_after_issue",
+        ),
+        # Ba cột của một lời khai đi cùng nhau — cùng lập luận
+        # `submitted_stamp_complete` của thông báo hủy: "đã gửi nhưng không biết
+        # gửi cho ai" là nửa dữ liệu chỉ lộ ra đúng lúc cần giải trình.
+        CheckConstraint(
+            "(sent_at IS NULL) = (sent_to IS NULL) AND (sent_at IS NULL) = (sent_by IS NULL)",
+            name="sent_stamp_complete",
+        ),
+        CheckConstraint("sent_to <> ''", name="sent_to_not_blank"),
         CheckConstraint("replaces_invoice_id <> id", name="does_not_replace_itself"),
         CheckConstraint("adjusts_invoice_id <> id", name="does_not_adjust_itself"),
         # BR-EIV-02 ở tầng bảng. Dãy `number_sequences` gap-free là thứ **sinh**
@@ -313,6 +348,33 @@ class EInvoice(DatasetBase, Audited):
     issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     """Thời điểm cấp số. Khác `invoice_date` (ngày ghi trên hóa đơn) đúng như
     `posting_date` khác `document_date` của chứng từ."""
+
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    """Thời điểm bản thể hiện tới tay người mua (FR-EIV-020), do người dùng khai.
+
+    **Người dùng khai chứ không phải đồng hồ máy chủ**: lượt gửi xảy ra NGOÀI
+    phần mềm (quyết định user 2026-09-08, phương án A3) — qua hộp thư của kế
+    toán, hoặc do chính nhà cung cấp gửi theo cấu hình bên họ. Dấu ở đây là lời
+    khai về một việc đã xảy ra, nên nó nhận được ngày lùi; `service.mark_sent`
+    chặn hai đầu (không sau hôm nay, không trước `issued_at`).
+    """
+
+    sent_to: Mapped[str | None] = mapped_column(String(SENT_TO_MAX_LENGTH), nullable=True)
+    """Đã gửi cho ai — địa chỉ thư, hoặc mô tả nếu giao tay.
+
+    **Bắt buộc không rỗng khi đánh dấu đã gửi.** Không có nó, `DA_GUI` là một
+    lời khai không nói được gì, và người kiểm tra về sau không có cách nào đối
+    chiếu. Đây là thứ thay cho việc theo dõi trạng thái gửi tự động (FR-EIV-023)
+    mà lát này chưa có hạ tầng để làm thật.
+    """
+
+    sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Người đánh dấu — `user_id` trần như mọi tham chiếu `public.users`
+    (`persistence/base.py`; tiền lệ `print_log.printed_by`).
+
+    `Audited` đã ghi vết lượt sửa, nhưng cột này đứng cạnh hai cột kia để một
+    câu truy vấn trả lời trọn "ai khai đã gửi cho ai, lúc nào" mà không phải mở
+    nhật ký."""
 
 
 class EInvoiceErrorNotice(DatasetBase, Audited):
@@ -599,3 +661,93 @@ class EInvoiceProviderProfile(DatasetBase, Audited):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )
+
+
+class EInvoiceRepresentation(DatasetBase, Audited):
+    """Bản thể hiện PDF / tệp XML đã lưu trữ của một tờ hóa đơn (FR-EIV-026).
+
+    **Bảng riêng, không dùng `attachments` chung — và đó là bản sửa của một lỗ
+    CRITICAL.** Bản đầu của lát 7E-3 cất tệp vào bảng đính kèm dùng chung rồi
+    nhận dạng nó bằng `(entity_type='einvoices', media_type)`. Cửa
+    `POST /api/v1/attachments` cho phép đính **bất cứ tệp nào** vào **bất cứ
+    `entity_id` nào** mà không hỏi bản ghi chủ thuộc loại gì, nên một tệp PDF
+    tùy ý đính vào id hóa đơn sẽ chiếm chỗ vĩnh viễn: đường tải thấy "đã có" nên
+    không bao giờ đi lấy bản thật về nữa. Đo được bằng một lượt gọi HTTP.
+
+    Bảng riêng đóng bốn thứ cùng lúc, và đó là lý do nó đáng tồn tại thay vì một
+    phép lọc chặt hơn:
+
+    * **không ai ghi được vào đây ngoài đường phát hành** — không có cửa HTTP
+      nào nhận tệp cho bảng này;
+    * `UNIQUE (einvoice_id, kind)` **dựng thật** cái bất biến "mỗi tờ hóa đơn
+      nhiều nhất một tệp mỗi loại", thứ mà phép lọc theo `media_type` chỉ *khai*
+      chứ không bảo đảm;
+    * nội dung hóa đơn (người mua, từng dòng hàng, số tiền) không còn đọc được
+      qua `GET /api/v1/attachments/…` bằng một mã quyền của phân hệ khác;
+    * `kind` là cột riêng nên nó không còn phụ thuộc `media_type` — bảng đính
+      kèm chống trùng theo `content_hash` **không kể** kiểu nội dung, và hai
+      luật khác nhau trên cùng một khóa là chỗ một lượt tải hợp lệ kẹt 409.
+
+    **Tệp vẫn nằm ở kho content-hash của phase 2** (`kernel/attachments/storage`
+    — nó không biết gì về DB nên dùng thẳng được), nên quyết định 7D giữ nguyên:
+    `einvoices` không có cột `BYTEA` nào, và `pg_dump` hằng đêm không phải đọc
+    lại vài chục GB tệp. Hai bảng dùng chung kho là **có lợi**: cùng nội dung
+    thì cùng một tệp trên đĩa.
+
+    **Nợ chuyển phase 11:** lượt quét đối chiếu dọn tệp mồ côi mà
+    `kernel/attachments/__init__` hứa hẹn phải đọc **cả hai** bảng. Quét mình
+    `attachments` sẽ xóa đúng những tệp lưu trữ mười năm này.
+    """
+
+    __tablename__ = REPRESENTATION_TABLE_NAME
+    __table_args__ = (
+        # Bất biến trung tâm của bảng: một tờ, một tệp mỗi loại. Toàn phần chứ
+        # không bán phần — không có trạng thái nào của hóa đơn làm bản lưu trữ
+        # cũ hết giá trị, kể cả lượt hủy.
+        UniqueConstraint("einvoice_id", "kind", name="uq_einvoice_representations_kind"),
+        CheckConstraint(f"kind IN ('{PDF_KIND}', '{XML_KIND}')", name="kind_known"),
+        CheckConstraint("byte_size > 0", name="byte_size_positive"),
+        CheckConstraint("file_name <> ''", name="file_name_not_blank"),
+        CheckConstraint(
+            f"char_length(content_hash) = {SHA256_HEX_LENGTH}", name="content_hash_is_sha256"
+        ),
+        # `CASCADE` chứ không `RESTRICT`, ngược `einvoices.source_voucher_id`:
+        # bản thể hiện là *dẫn xuất* của tờ hóa đơn, không phải một lời khai
+        # đứng riêng, nên nó không có lý do sống lâu hơn dòng nó thuộc về. Mà
+        # hóa đơn đã cấp số thì trigger `einvoices_numbered_rows_are_permanent`
+        # đã cấm xóa, nên đường duy nhất chạm tới đây là xóa một bản nháp — thứ
+        # chưa bao giờ có bản thể hiện nào.
+        ForeignKeyConstraint(
+            ["einvoice_id", "branch_id"],
+            [f"{EINVOICE_TABLE_NAME}.id", f"{EINVOICE_TABLE_NAME}.branch_id"],
+            name="fk_einvoice_representations_einvoice",
+            ondelete="CASCADE",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    einvoice_id: Mapped[UUID] = mapped_column(nullable=False)
+
+    branch_id: Mapped[int] = mapped_column(
+        ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False
+    )
+    """Chi nhánh **của hóa đơn**, không phải chi nhánh đang thao tác của người
+    tải: tệp phải nhìn thấy được đúng bởi những người nhìn thấy tờ hóa đơn, và
+    hai phạm vi ấy lệch nhau ngay khi một người dùng đa chi nhánh bấm tải về
+    trong lúc đang đứng ở chi nhánh khác. Khóa ngoại ghép giữ hai vế không lệch."""
+
+    kind: Mapped[str] = mapped_column(String(3), nullable=False)
+    """`pdf` hoặc `xml` — giá trị của `RepresentationKind`."""
+
+    content_hash: Mapped[str] = mapped_column(String(SHA256_HEX_LENGTH), nullable=False)
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    media_type: Mapped[str] = mapped_column(String(MEDIA_TYPE_MAX_LENGTH), nullable=False)
+    file_name: Mapped[str] = mapped_column(String(FILE_NAME_MAX_LENGTH), nullable=False)
+    """Tên hiển thị lúc tải về. Kho định địa chỉ theo nội dung nên nó **không**
+    là tên tệp trên đĩa — đường ghi lọc nó trước khi cất (xem `representation`)."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_by: Mapped[int] = mapped_column(Integer, nullable=False)
+    """`user_id` trần như mọi tham chiếu `public.users`."""

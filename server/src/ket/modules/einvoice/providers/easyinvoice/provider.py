@@ -1,4 +1,4 @@
-"""Adapter EasyInvoice — nối ba lời gọi HTTP vào Protocol `EInvoiceProvider`.
+"""Adapter EasyInvoice — nối bốn lời gọi HTTP vào Protocol `EInvoiceProvider`.
 
 **`Ikey` là của MÁY CHỦ, không phải của ta.** `importInvoice` trả về một mảng
 `Ikeys` do họ sinh, và đó là khóa duy nhất tra cứu được ở `issueInvoices` cùng
@@ -22,6 +22,8 @@ nháp thành "đã phát hành" là bỏ rơi tờ hóa đơn ở đúng lượt
 
 from __future__ import annotations
 
+import base64
+import binascii
 from typing import Any, Final
 from uuid import UUID
 
@@ -41,6 +43,9 @@ from ket.modules.einvoice.providers.contracts import (
     ProviderBinding,
     ProviderRecordState,
     ProviderStatus,
+    RepresentationAvailability,
+    RepresentationKind,
+    RepresentationOutcome,
 )
 from ket.modules.einvoice.providers.easyinvoice.client import (
     EasyInvoiceClient,
@@ -109,6 +114,70 @@ class EasyInvoiceProvider:
             )
         return ProviderStatus(state=ProviderRecordState.PREPARED)
 
+    def fetch_representation(
+        self, *, provider_ref: str | None, kind: RepresentationKind
+    ) -> RepresentationOutcome:
+        """`getInvoicePdf` — `Option 1` là bản thể hiện, `Option 2` là tệp XML.
+
+        Ba nhánh, và ranh giới giữa chúng là thứ đáng viết ra:
+
+        * họ **từ chối** (`Status` khác 2) → `UNKNOWN`, **không** `UNAVAILABLE`.
+          Cùng một mã từ chối chở cả "không có tệp" lẫn "hết phiên đăng nhập",
+          "quá tải", "đang xử lý", và họ không công bố bộ mã nào tách được hai
+          nhóm ấy. Với một tài liệu phải lưu mười năm, đoán nhầm về phía "vĩnh
+          viễn không có" là bảo người dùng bỏ cuộc trước một sự cố tạm thời —
+          hỏng theo hướng không ai đi kiểm lại. Nhóm "chắc chắn không có" thật
+          sự đã được chặn từ trước bằng chính trạng thái hóa đơn bên ta;
+        * thân trả về **thiếu hoặc hỏng base64** → `UNKNOWN`, không phải
+          `UNAVAILABLE`. "Họ nói có mà ta giải không ra" là một sự cố, và bảo
+          người dùng "hóa đơn này không có bản thể hiện" là nói sai;
+        * lỗi mạng / hết giờ **không bắt ở đây** — nổi lên nguyên vẹn để nơi gọi
+          đọc thành `UNKNOWN`, cùng khuôn với ba phương thức kia.
+
+        Thiếu khóa của họ thì `UNKNOWN`, không `UNAVAILABLE`: mọi lượt tra cứu ở
+        đây đều theo khóa **của máy chủ** (xem docstring đầu tệp), nên không có
+        khóa nghĩa là *chưa hỏi được* — có thể tờ hóa đơn đang chờ lượt bơm kế
+        tiếp. Đọc thành "vĩnh viễn không có" là bảo người dùng bỏ cuộc quá sớm.
+        """
+        if provider_ref is None:
+            return RepresentationOutcome(
+                availability=RepresentationAvailability.UNKNOWN,
+                message="Hóa đơn chưa có mã tra cứu của nhà cung cấp — chờ lượt gửi hoàn tất",
+            )
+        try:
+            data = self._client.get_invoice_pdf(provider_ref, option=_OPTIONS[kind])
+        except EasyInvoiceRefusedError as error:
+            return RepresentationOutcome(
+                availability=RepresentationAvailability.UNKNOWN, message=error.message
+            )
+        raw = data.get("FileContent")
+        if not isinstance(raw, str) or not raw:
+            return RepresentationOutcome(
+                availability=RepresentationAvailability.UNKNOWN,
+                message="EasyInvoice trả về lượt tải tệp không kèm nội dung",
+            )
+        try:
+            # `validate=True`: mặc định của thư viện là **bỏ qua** ký tự lạ, nên
+            # một thân trả về hỏng sẽ giải ra vài byte rác rồi được cất thành
+            # một "bản thể hiện" mở không lên.
+            content = base64.b64decode(raw, validate=True)
+        except (binascii.Error, ValueError):
+            return RepresentationOutcome(
+                availability=RepresentationAvailability.UNKNOWN,
+                message="Nội dung tệp EasyInvoice trả về không phải base64 hợp lệ",
+            )
+        if not content:
+            return RepresentationOutcome(
+                availability=RepresentationAvailability.UNKNOWN,
+                message="EasyInvoice trả về tệp rỗng",
+            )
+        return RepresentationOutcome(
+            availability=RepresentationAvailability.AVAILABLE,
+            content=content,
+            media_type=_MEDIA_TYPES[kind],
+            file_name=_text(data, "FileName"),
+        )
+
     def _build_xml(self, invoice: EInvoice, *, client_ref: UUID) -> str:
         document = None
         for source in CROSS_MODULE.einvoice_sources():
@@ -146,6 +215,17 @@ class EasyInvoiceProvider:
             )
         return form
 
+
+_OPTIONS: Final[dict[RepresentationKind, int]] = {
+    RepresentationKind.PDF: 1,
+    RepresentationKind.XML: 2,
+}
+"""`Option` của `getInvoicePdf` — con số của giao thức bên họ, không phải của ta."""
+
+_MEDIA_TYPES: Final[dict[RepresentationKind, str]] = {
+    RepresentationKind.PDF: "application/pdf",
+    RepresentationKind.XML: "application/xml",
+}
 
 ISSUED_STATUSES = frozenset({1, 2, 3, 4, 5})
 """`InvoiceStatus` nghĩa là tờ hóa đơn **đã ký và rời phần mềm**.

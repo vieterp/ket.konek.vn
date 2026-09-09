@@ -1843,3 +1843,40 @@ class EInvoiceProviderNotConfiguredError(DomainError):
 
     error_code: ClassVar[str] = "einvoice.provider_not_configured"
     http_status: ClassVar[int] = 409
+
+
+class EInvoiceRepresentationUnavailableError(DomainError):
+    """Tệp bản thể hiện / XML **không tồn tại** cho tờ hóa đơn này.
+
+    404 chứ không 409: người dùng xin một tài nguyên không có, và không thao tác
+    nào của họ làm nó xuất hiện. Ca thường gặp nhất là hợp lệ hoàn toàn — hóa
+    đơn đặt in hay tự in không có bản XML nào, vì bản gốc của nó là tờ giấy.
+    """
+
+    error_code: ClassVar[str] = "einvoice.representation_unavailable"
+    http_status: ClassVar[int] = 404
+
+
+class EInvoiceRepresentationUnreachableError(DomainError):
+    """Không hỏi được nhà cung cấp về tệp — hết giờ, đứt nối, thân trả về hỏng.
+
+    Tách hẳn khỏi `…UnavailableError`, và đó là toàn bộ lý do nó tồn tại: "chưa
+    lấy được, thử lại sau" với "sẽ không bao giờ có" dẫn tới hai việc khác nhau
+    người dùng phải làm. Gộp chúng là dạy người dùng bỏ cuộc trước một sự cố
+    mạng, hoặc bấm lại mãi trước một tờ hóa đơn giấy.
+
+    503 vì đây là sự cố **phía ngoài** và lượt sau có thể chạy được.
+    """
+
+    error_code: ClassVar[str] = "einvoice.representation_unreachable"
+    http_status: ClassVar[int] = 503
+
+
+class EInvoiceNotSentError(DomainError):
+    """Lời khai "đã gửi" thiếu thứ làm nó kiểm chứng được.
+
+    Hai ca: người nhận để trống, và mốc thời gian nằm ngoài khoảng có nghĩa
+    (sau hôm nay, hoặc trước lúc chính tờ hóa đơn được cấp số).
+    """
+
+    error_code: ClassVar[str] = "einvoice.not_sent"

@@ -334,6 +334,43 @@ và **đưa hai ràng buộc số hóa đơn về dạng cũ**. Ràng buộc cũ
 rời trạng thái nháp phải có số, nên hạ cấp khi còn tờ nào đang phát hành qua nhà
 cung cấp mà chưa nhận số sẽ **thất bại** — chờ hàng đợi rỗng trước khi hạ cấp.
 
+#### Bản 0035 — bản thể hiện hóa đơn, và dấu "đã gửi cho người mua"
+
+Một bảng mới, `einvoice_representations`, ba cột bồi vào `einvoices`, và **không
+mã quyền mới nào**: tải bản thể hiện dùng `einvoice.invoice.print`, đánh dấu đã
+gửi dùng `einvoice.invoice.edit` — cả hai vẫn dưới lớp xác thực thứ hai.
+
+**Cần thư mục tệp đính kèm (`KET_ATTACHMENTS_DIR`).** Bản thể hiện tải về được
+**cất lại** ngay lượt đầu, vào chính kho tệp ở §2.3. Lý do là nghĩa vụ lưu hóa
+đơn mười năm, dài hơn hẳn hợp đồng với nhà cung cấp: sau ngày ngừng dịch vụ, tờ
+hóa đơn vẫn phải mở được. Bản cài chưa cấu hình thư mục ấy vẫn phát hành hóa đơn
+bình thường, nhưng lượt tải bản thể hiện sẽ dừng với thông điệp chỉ đúng biến
+môi trường phải đặt.
+
+Kho tệp vì thế **lớn thêm theo số hóa đơn**, không chỉ theo số tệp người dùng
+đính tay. Ước lượng: một bản thể hiện PDF cỡ vài chục KB. Kho định địa chỉ theo
+nội dung nên hai tệp giống hệt chỉ tốn một chỗ.
+
+**Phần mềm KHÔNG gửi email cho người mua.** Nút "Đánh dấu đã gửi" ghi lại một
+lời khai — gửi cho ai, lúc nào — chứ không gửi gì. Hai đường gửi thật đều nằm
+ngoài: kế toán gửi từ hộp thư của mình, hoặc nhà cung cấp tự gửi theo cấu hình
+**trên cổng của họ** (EasyInvoice làm vậy). Bản cài cần bật thư tự động thì cấu
+hình ở phía nhà cung cấp, không phải ở đây.
+
+**Hóa đơn đặt in / tự in không có tệp XML** — lượt xin nó trả 404, và đó là câu
+trả lời đúng theo luật: bản gốc của hóa đơn giấy là tờ giấy. Bản thể hiện PDF
+của chúng do chính phần mềm dựng, theo mẫu in `HDDT` sửa được như mọi mẫu khác.
+
+**Lượt hủy hóa đơn bỏ bản thể hiện đã cất** để tờ in lại mang dấu "ĐÃ HỦY". Tệp
+cũ vẫn nằm trong kho (không byte nào mất), chỉ mối nối là bỏ. Lưu ý bất đối
+xứng: dấu ấy chỉ có trên bản **phần mềm dựng**; hóa đơn qua nhà cung cấp trả về
+tờ của họ và phần mềm không sửa được nó.
+
+`downgrade` của bản này xóa bảng `einvoice_representations` cùng ba cột dấu gửi.
+Mất mát hẹp: **tệp vẫn nằm nguyên trong kho**, chỉ mối nối tới từng hóa đơn là
+mất, và lượt tải sau khi nâng cấp lại sẽ lấy/dựng lại từ đầu. Thứ mất hẳn là lời
+khai "đã gửi cho ai, lúc nào" — nó không dựng lại được từ đâu cả.
+
 ### 2.2b Khóa mã hóa ứng dụng (ADR-019)
 
 ```bash

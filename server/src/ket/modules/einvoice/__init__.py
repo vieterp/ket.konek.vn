@@ -11,7 +11,10 @@ Import gói này (qua `ket.model_registry`) là đăng ký ba thứ:
   ngoài phần mềm, và `permissions.DocumentType` viết sẵn từ phase 2 rằng
   `einvoice` là ca nó chờ.
 * **một `EDIT_GUARDS`** — FR-EIV-035 chiều sửa/xóa chứng từ nháp.
-* **một `REFERENCE_GUARDS`** — FR-EIV-035 chiều bỏ ghi sổ.
+* **một `REFERENCE_GUARDS`** — FR-EIV-035 chiều bỏ ghi sổ;
+* **một `PrintSubject`** — bản thể hiện hóa đơn (lát 7E-3). Nó đi registry "bản
+  in không phải chứng từ" của 6E-2 chứ không registry loại chứng từ, đúng vì lý
+  do ghi ở đoạn dưới: hóa đơn điện tử không có dòng nào trong `vouchers`.
 
 Module này **không** đăng ký loại chứng từ posting: hóa đơn điện tử không phải
 một chứng từ ghi sổ. Nó không sinh bút toán nào — bút toán doanh thu đã nằm ở
@@ -26,10 +29,13 @@ lý do (luật C3, và danh sách ấy trải qua ba phân hệ).
 
 from __future__ import annotations
 
+from ket.kernel.config.printing.subjects import REGISTRY as PRINT_SUBJECT_REGISTRY
+from ket.kernel.config.printing.subjects import PrintSubject
 from ket.kernel.security.permissions import (
     CATALOG_ACTIONS,
     Action,
     DocumentType,
+    permission_code,
 )
 from ket.kernel.security.permissions import (
     REGISTRY as PERMISSION_REGISTRY,
@@ -72,6 +78,23 @@ PERMISSION_REGISTRY.register(
         # là cấp được cho mình một dải số hóa đơn. Cùng mức rủi ro với quyền
         # phát hành, nên cùng yêu cầu lớp thứ hai.
         requires_second_factor=True,
+    )
+)
+
+REPRESENTATION_PRINT_CODE = "HDDT"
+"""Mã bản in của bản thể hiện hóa đơn trong `print_templates.document_type`."""
+
+PRINT_SUBJECT_REGISTRY.register(
+    PrintSubject(
+        code=REPRESENTATION_PRINT_CODE,
+        title="Hóa đơn giá trị gia tăng (bản thể hiện)",
+        # `.print` chứ không `.view` — khác biên bản kiểm kê quỹ, và có lý do:
+        # `einvoice.invoice` **có** khai `Action.PRINT` từ 7D với đúng nghĩa
+        # "xem trước và tải bản thể hiện" (FR-EIV-016/026), nên dùng `.view` ở
+        # đây sẽ làm mã quyền ấy thành mã không ai canh.
+        view_permission=permission_code(
+            EINVOICE_PERMISSION_MODULE, INVOICE_PERMISSION_CODE, Action.PRINT
+        ),
     )
 )
 
