@@ -22,7 +22,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from ket.kernel.master_data.models.partner import Partner
-from ket.kernel.money_words import amount_in_words
+from ket.kernel.money_words import amount_in_words, currency_unit
 from ket.kernel.protocols import EInvoiceSourceDocument, EInvoiceSourceLine
 
 VAT_EXEMPT = -1
@@ -82,25 +82,6 @@ def _vat_rate(line: EInvoiceSourceLine) -> int:
     return rate
 
 
-VND = "VND"
-"""Đồng Việt Nam — đơn vị duy nhất đọc thành chữ "đồng"."""
-
-
-def _currency_unit(currency_code: str) -> str:
-    """Đơn vị cho phần tiền bằng chữ.
-
-    Hóa đơn ngoại tệ đọc thành chữ theo chính đồng tiền của nó; gắn "đồng" cho
-    một tờ hóa đơn USD là ghi sai đơn vị lên chứng từ thuế — và sai theo hướng
-    khó thấy, vì con số thì vẫn đúng.
-    """
-    return "đồng" if currency_code == VND else currency_code
-
-
-def _address(partner: Partner) -> str:
-    parts = (partner.address, partner.district, partner.province)
-    return ", ".join(part for part in parts if part)
-
-
 def build_invoice_xml(
     document: EInvoiceSourceDocument, partner: Partner, *, client_ref: UUID
 ) -> str:
@@ -118,7 +99,7 @@ def build_invoice_xml(
     ET.SubElement(invoice, "Buyer").text = partner.invoice_recipient or partner.contact_name or ""
     ET.SubElement(invoice, "CusName").text = partner.name
     ET.SubElement(invoice, "CusTaxCode").text = partner.tax_code or ""
-    ET.SubElement(invoice, "CusAddress").text = _address(partner)
+    ET.SubElement(invoice, "CusAddress").text = partner.full_address
     # Nhà cung cấp nhận một chuỗi tự do; "TM/CK" (tiền mặt / chuyển khoản) là
     # cách khai chuẩn khi chứng từ chưa chốt hình thức nào — và chứng từ bán ở
     # phase 7 quả thật chưa mang trường ấy.
@@ -135,7 +116,7 @@ def build_invoice_xml(
     ET.SubElement(invoice, "VATAmount").text = _money(document.total_vat_fc)
     ET.SubElement(invoice, "Amount").text = _money(document.total_fc)
     ET.SubElement(invoice, "AmountInWords").text = amount_in_words(
-        document.total_fc, unit=_currency_unit(document.currency_code)
+        document.total_fc, unit=currency_unit(document.currency_code)
     )
 
     return ET.tostring(root, encoding="unicode")

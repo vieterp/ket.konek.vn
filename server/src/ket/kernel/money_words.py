@@ -112,6 +112,23 @@ def _read_fraction(digits: str) -> str:
     return " ".join(words)
 
 
+VND = "VND"
+"""Đồng Việt Nam — đơn vị duy nhất đọc thành chữ "đồng"."""
+
+
+def currency_unit(currency_code: str) -> str:
+    """Đơn vị đọc kèm cho `amount_in_words`, suy từ mã tiền tệ.
+
+    Chứng từ ngoại tệ đọc thành chữ theo chính đồng tiền của nó; gắn "đồng" cho
+    một tờ hóa đơn USD là ghi sai đơn vị lên chứng từ thuế — và sai theo hướng
+    khó thấy, vì con số thì vẫn đúng.
+
+    Ở đây chứ không ở bộ dựng XML của một nhà cung cấp: luật này thuộc về **cách
+    đọc số tiền**, và cả bản XML lẫn bản thể hiện in ra đều phải đọc giống nhau.
+    """
+    return "đồng" if currency_code == VND else currency_code
+
+
 def amount_in_words(value: Decimal, *, unit: str = "đồng") -> str:
     """`Decimal` → câu chữ hoa đầu câu cho dòng "(Viết bằng chữ)" của chứng từ.
 
