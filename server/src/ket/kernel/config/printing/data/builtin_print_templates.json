@@ -56,6 +56,13 @@
       "name": "Bảng kiểm kê quỹ",
       "html_file": "bien-ban-kiem-ke-quy.html.j2",
       "is_default": true
+    },
+    {
+      "document_type": "HDDT",
+      "code": "HOA-DON-BAN-THE-HIEN",
+      "name": "Hóa đơn giá trị gia tăng (bản thể hiện)",
+      "html_file": "hoa-don-ban-the-hien.html.j2",
+      "is_default": true
     }
   ]
 }

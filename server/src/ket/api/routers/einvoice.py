@@ -15,11 +15,13 @@ lại đọc kết quả cũ mà không chạy `work` lần nào nữa. Đo bằ
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Annotated, Final
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ket.api.dependencies import (
@@ -29,8 +31,16 @@ from ket.api.dependencies import (
     SessionFactory,
     require_permission,
 )
+from ket.api.downloads import content_disposition
 from ket.api.idempotency import idempotency_key_dependency
-from ket.kernel.errors import BranchNotInScopeError
+from ket.api.render_options import build_render_options
+from ket.kernel.attachments import storage
+from ket.kernel.errors import (
+    AttachmentStorageNotConfiguredError,
+    BranchNotInScopeError,
+    EInvoiceRepresentationUnreachableError,
+)
+from ket.kernel.formatting import format_date
 from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
 from ket.kernel.jobs import queue
 from ket.kernel.persistence.unit_of_work import unit_of_work
@@ -39,11 +49,15 @@ from ket.modules.einvoice import (
     EINVOICE_PERMISSION_MODULE,
     INVOICE_PERMISSION_CODE,
     REGISTRATION_PERMISSION_CODE,
+    REPRESENTATION_PRINT_CODE,
+    representation,
 )
 from ket.modules.einvoice.models import EInvoice, EInvoiceStatus, OutboxStatus
 from ket.modules.einvoice.outbox import due_now, enqueue_issue, list_rows
 from ket.modules.einvoice.outbox_job import TRANSMIT_JOB
+from ket.modules.einvoice.print_details import build_representation_details, voided_label
 from ket.modules.einvoice.provider_profile_service import ProviderProfileService
+from ket.modules.einvoice.providers.contracts import RepresentationKind
 from ket.modules.einvoice.registration_service import InvoiceRegistrationService
 from ket.modules.einvoice.schemas import (
     EInvoiceConfirmIn,
@@ -56,19 +70,33 @@ from ket.modules.einvoice.schemas import (
     ErrorNoticeOut,
     InvoiceRegistrationIn,
     InvoiceRegistrationOut,
+    MarkSentIn,
     OutboxListOut,
     OutboxRowOut,
     ProviderProfileIn,
     ProviderProfileOut,
 )
 from ket.modules.einvoice.service import EInvoiceService
+from ket.reporting.printing.template_service import (
+    DocumentPrintContext,
+    render_document_pdf,
+    resolve_template,
+)
+from ket.reporting.rendering.header import load_unit_info, signature_date_line
+from ket.settings import Settings
 
 router = APIRouter(prefix="/api/v1/einvoices", tags=["einvoice"])
+
+PDF_MEDIA_TYPE: Final[str] = "application/pdf"
+XML_MEDIA_TYPE: Final[str] = "application/xml"
+"""Hai kiểu nội dung của lượt tải bản thể hiện. Giá trị thật đi ra header lấy
+từ `representation.MEDIA_TYPES` — hai hằng ở đây chỉ để khai với OpenAPI."""
 
 INVOICE_VIEW = permission_code(EINVOICE_PERMISSION_MODULE, INVOICE_PERMISSION_CODE, Action.VIEW)
 INVOICE_CREATE = permission_code(EINVOICE_PERMISSION_MODULE, INVOICE_PERMISSION_CODE, Action.CREATE)
 INVOICE_EDIT = permission_code(EINVOICE_PERMISSION_MODULE, INVOICE_PERMISSION_CODE, Action.EDIT)
 INVOICE_DELETE = permission_code(EINVOICE_PERMISSION_MODULE, INVOICE_PERMISSION_CODE, Action.DELETE)
+INVOICE_PRINT = permission_code(EINVOICE_PERMISSION_MODULE, INVOICE_PERMISSION_CODE, Action.PRINT)
 REGISTRATION_VIEW = permission_code(
     EINVOICE_PERMISSION_MODULE, REGISTRATION_PERMISSION_CODE, Action.VIEW
 )
@@ -83,6 +111,7 @@ InvoiceReader = Annotated[AuthorizedRequest, Depends(require_permission(INVOICE_
 InvoiceAuthor = Annotated[AuthorizedRequest, Depends(require_permission(INVOICE_CREATE))]
 InvoiceEditor = Annotated[AuthorizedRequest, Depends(require_permission(INVOICE_EDIT))]
 InvoiceDeleter = Annotated[AuthorizedRequest, Depends(require_permission(INVOICE_DELETE))]
+InvoicePrinter = Annotated[AuthorizedRequest, Depends(require_permission(INVOICE_PRINT))]
 RegistrationReader = Annotated[AuthorizedRequest, Depends(require_permission(REGISTRATION_VIEW))]
 RegistrationAuthor = Annotated[AuthorizedRequest, Depends(require_permission(REGISTRATION_CREATE))]
 RegistrationEditor = Annotated[AuthorizedRequest, Depends(require_permission(REGISTRATION_EDIT))]
@@ -241,6 +270,174 @@ def cancel_einvoice(
     with unit_of_work(factory, authorized.scope) as session:
         invoice = EInvoiceService(session).cancel(einvoice_id)
         return EInvoiceOut.model_validate(invoice)
+
+
+@router.post("/{einvoice_id}/actions/mark-sent", response_model=EInvoiceOut)
+def mark_einvoice_sent(
+    einvoice_id: UUID,
+    payload: MarkSentIn,
+    authorized: InvoiceEditor,
+    factory: SessionFactory,
+) -> EInvoiceOut:
+    """Ghi nhận đã gửi bản thể hiện cho người mua (FR-EIV-020, cạnh `DA_GUI`).
+
+    **Không gửi gì cả** — tên endpoint nói đúng việc nó làm. Lượt gửi xảy ra
+    ngoài phần mềm (quyết định user 2026-09-08): kế toán gửi từ hộp thư của
+    mình, hoặc nhà cung cấp tự gửi theo cấu hình bên họ. Xem `service.mark_sent`
+    về lý do không đòi phải có đính kèm bản thể hiện trước.
+    """
+    with unit_of_work(factory, authorized.scope) as session:
+        invoice = EInvoiceService(session).mark_sent(
+            einvoice_id,
+            sent_to=payload.sent_to,
+            sent_at=payload.sent_at,
+            user_id=authorized.scope.user_id,
+        )
+        return EInvoiceOut.model_validate(invoice)
+
+
+@router.get(
+    "/{einvoice_id}/representation",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {PDF_MEDIA_TYPE: {}, XML_MEDIA_TYPE: {}},
+            "description": "Bản thể hiện PDF hoặc tệp XML gốc",
+        },
+        404: {"description": "Không có hóa đơn, hoặc hóa đơn không có tệp loại này"},
+        503: {"description": "Chưa hỏi được nhà cung cấp — thử lại sau"},
+    },
+)
+def get_einvoice_representation(
+    einvoice_id: UUID,
+    authorized: InvoicePrinter,
+    factory: SessionFactory,
+    settings: AppSettings,
+    secret_boxes: SecretBoxes,
+    kind: RepresentationKind = RepresentationKind.PDF,
+) -> StreamingResponse:
+    """Tải bản thể hiện PDF hoặc tệp XML của hóa đơn (FR-EIV-026).
+
+    **Lượt đầu lấy về và cất; lượt sau đọc từ đĩa** — xem `representation.py`
+    về vì sao tệp phải nằm lại trong kho đính kèm chứ không chỉ chảy qua.
+
+    `GET` dù lượt đầu có ghi: thứ ghi ra là một **bản sao lưu trữ** của tài
+    nguyên đang được đọc, không phải một thay đổi nghiệp vụ — hóa đơn không đổi
+    trạng thái, không đổi nội dung, và lượt gọi thứ hai trả đúng thứ lượt đầu
+    trả. Đổi thành `POST` sẽ buộc mọi màn xem hóa đơn phải gửi một lệnh ghi.
+
+    Quyền là `einvoice.invoice.print`: 7D đã khai `Action.PRINT` với đúng nghĩa
+    "xem trước và tải bản thể hiện" (FR-EIV-016/026).
+    """
+    root = _storage_root(settings)
+    with unit_of_work(factory, authorized.scope) as session:
+        invoice = EInvoiceService(session).require(einvoice_id)
+        # Lớp phòng thủ THỨ HAI như mọi cửa đọc của dự án (6E-2 L-1): RLS đã lọc
+        # hóa đơn ngoài phạm vi nên `require` ném 404 trước khi tới đây.
+        _require_branch_in_scope(authorized, invoice.branch_id)
+        result = representation.ensure(
+            session,
+            invoice=invoice,
+            kind=kind,
+            storage_root=root,
+            dataset_schema=authorized.scope.dataset_schema,
+            max_bytes=settings.attachment_max_bytes,
+            user_id=authorized.scope.user_id,
+            secret_box=secret_boxes(),
+            render_locally=lambda target: _render_representation(
+                session,
+                target,
+                settings=settings,
+                dataset_schema=authorized.scope.dataset_schema,
+                user_id=authorized.scope.user_id,
+            ),
+        )
+        content_hash = result.content_hash
+        file_name = result.file_name
+        media_type = result.media_type
+
+    # Phát luồng SAU khi transaction đóng, cùng lối cửa tải tệp đính kèm: thân
+    # tệp không phải dữ liệu của giao dịch, và một bản thể hiện vài MB đọc trọn
+    # vào RAM là giữ cả tệp lẫn một kết nối của pool cho một việc không còn chạm
+    # tới cơ sở dữ liệu.
+    path = storage.blob_path(root, authorized.scope.dataset_schema, content_hash)
+    if not path.is_file():
+        raise EInvoiceRepresentationUnreachableError(
+            "Bản thể hiện có trong sổ nhưng không đọc được trên máy chủ",
+            einvoice=str(einvoice_id),
+            kind=kind.value,
+        )
+    return StreamingResponse(
+        storage.iter_blob(root, authorized.scope.dataset_schema, content_hash),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": content_disposition(file_name),
+            "Content-Length": str(path.stat().st_size),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+def _render_representation(
+    session: Session,
+    invoice: EInvoice,
+    *,
+    settings: Settings,
+    dataset_schema: str,
+    user_id: int,
+) -> bytes:
+    """Dựng bản thể hiện của hóa đơn phát hành nội bộ, tại tầng này.
+
+    Ở `api` chứ không ở `modules/einvoice`: engine in sống tại `ket.reporting`
+    mà `modules` không import được (C5), đúng khuôn biên bản kiểm kê quỹ của
+    6E-2 — module dựng *dữ liệu* in, tầng này dựng *tờ giấy*.
+
+    **Không ghi `print_log`.** Sổ đếm lần in gắn khóa ngoại tới `vouchers`, còn
+    hóa đơn điện tử không có dòng nào ở đó; và cảnh báo in lại của FR-RPT-011
+    nói về chứng từ. Miễn trừ này cùng lý do với biên bản kiểm kê (6E-2).
+    """
+    template = resolve_template(
+        session, document_type=REPRESENTATION_PRINT_CODE, template_code=None
+    )
+    details = build_representation_details(session, invoice, user_id=user_id)
+    # Tờ đã hủy / đã bị thay thế / đã bị điều chỉnh vẫn in được (quyết định user
+    # 2026-09-09 — hồ sơ lưu trữ cần nó), nhưng phải nói ra ngay ở tiêu đề: một
+    # tờ đã hủy không phân biệt được với tờ còn hiệu lực là thứ đi ra ngoài rồi
+    # không thu lại được. Đặt vào `title` chứ không mượn `copy_line` hay `draft`
+    # — hai trường ấy đã mang nghĩa khác ("In lần N", dấu BẢN NHÁP), và một
+    # trường chở hai nghĩa là chỗ lát sau đọc nhầm.
+    label = voided_label(EInvoiceStatus(invoice.status))
+    context = DocumentPrintContext(
+        title=template.name if label is None else f"{template.name} — {label}",
+        voucher_no=invoice.invoice_no or "",
+        document_date=format_date(invoice.invoice_date),
+        posting_date=format_date(invoice.invoice_date),
+        description=None,
+        # Bản thể hiện chỉ dựng cho hóa đơn **đã phát hành** — `ensure` chặn
+        # `status < DA_PHAT_HANH` trước khi hỏi adapter — nên không có dấu BẢN
+        # NHÁP nào để đóng.
+        draft=False,
+        copy_line=None,
+        lines=(),
+        total_debit="",
+        total_credit="",
+        signature_date_line=signature_date_line(datetime.now(UTC).astimezone().date()),
+        unit=load_unit_info(session),
+        details=details,
+    )
+    options = build_render_options(
+        session, settings=settings, dataset_schema=dataset_schema, user_id=user_id
+    )
+    return render_document_pdf(template, context, options=options)
+
+
+def _storage_root(settings: Settings) -> Path:
+    """Thư mục kho tệp, hoặc lỗi nêu đúng cách bật — cùng khuôn `routers/attachments.py`."""
+    if settings.attachments_dir is None:
+        raise AttachmentStorageNotConfiguredError(
+            "Bản cài chưa cấu hình thư mục tệp đính kèm (KET_ATTACHMENTS_DIR)"
+        )
+    return settings.attachments_dir
 
 
 @router.post(

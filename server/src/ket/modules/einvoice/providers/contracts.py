@@ -22,9 +22,17 @@ Bốn phương thức, và bộ ấy là tối thiểu không cắt được n�
   hành*: đọc một bản nháp chưa ký thành "cơ quan thuế đã nhận" là bỏ rơi đúng
   tờ hóa đơn mà `needs_reconcile` sinh ra để dọn.
 
-Gửi cho người mua, hủy, thay thế, điều chỉnh **chưa khai ở đây**: chúng thuộc
-lát sau, và một phương thức Protocol không ai gọi là một phương thức mọi bản cài
-phải viết `raise NotImplementedError` để thỏa mãn.
+Lát 7E-3 thêm phương thức thứ tư, `fetch_representation` — **đọc thuần**, và
+đó là lý do nó không đi qua `outbox`: hàng đợi tồn tại để một lượt GỬI không đi
+hai lần, còn tải bản thể hiện lặp lại bao nhiêu lần cũng không đụng tới ai.
+
+Hủy, thay thế, điều chỉnh **chưa khai ở đây**: chúng thuộc lát sau, và một
+phương thức Protocol không ai gọi là một phương thức mọi bản cài phải viết
+`raise NotImplementedError` để thỏa mãn. Gửi cho người mua thì **sẽ không** khai:
+quyết định user 2026-09-08 (A3) đặt lượt gửi ra ngoài phần mềm, và nhà cung cấp
+đang chạy thật cũng tự gửi mail theo cấu hình bên họ — bản tích hợp
+`~/code/beta.konek.vn` bỏ hẳn `CusEmails` khỏi XML vì trường ấy làm họ trả
+`Code=127`.
 
 **Ba loại kết quả, không phải hai.** `IssueOutcome` phân biệt *nhận* / *từ chối*
 / *không rõ*; đường thứ ba là toàn bộ lý do `OutboxStatus.NEEDS_RECONCILE` tồn
@@ -124,6 +132,57 @@ class ProviderStatus:
     """Kết quả họ đang giữ, khi `ISSUED`."""
 
 
+class RepresentationKind(StrEnum):
+    """Hai tệp mà một tờ hóa đơn điện tử để lại (FR-EIV-026)."""
+
+    PDF = "pdf"
+    """Bản thể hiện — tờ giấy người đọc được."""
+    XML = "xml"
+    """Bản gốc có giá trị pháp lý, mang chữ ký số."""
+
+
+class RepresentationAvailability(StrEnum):
+    """Bốn câu trả lời cho "cho tôi xin tệp này" — bốn hệ quả khác nhau.
+
+    Ba giá trị đầu đủ cho một nhà cung cấp có giữ tệp. `NOT_HOSTED` phải tách ra
+    vì `internal` cần nói **hai điều khác hẳn nhau** về hai loại tệp, và gộp
+    chúng vào một giá trị buộc nơi gọi phải suy ra ý định từ `provider_code` —
+    tức đưa tri thức của một adapter ra ngoài adapter ấy.
+    """
+
+    AVAILABLE = "available"
+    """Có tệp, và nó nằm trong `RepresentationOutcome.content`."""
+    NOT_HOSTED = "not_hosted"
+    """Adapter này **không giữ tệp**, nhưng tệp thì dựng được — người dựng là
+    nơi gọi. Đường duy nhất tới đây ở lát 7E-3: bản thể hiện của hóa đơn phát
+    hành nội bộ, dựng bằng engine in của phase 5 ở tầng `api` (`modules` không
+    import `reporting` được — C5 và tiền lệ biên bản kiểm kê 6E-2)."""
+    UNAVAILABLE = "unavailable"
+    """Tệp này **không tồn tại**, và sẽ không. Hóa đơn đặt in / tự in không có
+    bản XML nào — đó là câu trả lời ĐÚNG THEO LUẬT chứ không phải một chỗ chưa
+    cài. Nhà cung cấp từ chối rõ ràng cũng về đây."""
+    UNKNOWN = "unknown"
+    """Không có câu trả lời nào đáng tin — hết giờ, đứt nối, mã lỗi lạ. Tách
+    khỏi `UNAVAILABLE` vì hai thứ dẫn tới hai lời khuyên khác nhau cho người
+    dùng: một cái là "thử lại sau", cái kia là "đừng chờ nữa"."""
+
+
+@dataclass(frozen=True)
+class RepresentationOutcome:
+    """Kết quả một lượt xin tệp bản thể hiện."""
+
+    availability: RepresentationAvailability
+    content: bytes | None = None
+    """Nội dung tệp. `None` với mọi giá trị khác `AVAILABLE`."""
+
+    media_type: str | None = None
+    file_name: str | None = None
+    """Tên tệp nhà cung cấp đặt, nếu có. Nơi gọi **không** dùng thẳng nó làm tên
+    tệp trên đĩa — kho định địa chỉ theo nội dung — mà làm nhãn hiển thị."""
+
+    message: str | None = None
+
+
 class EInvoiceProvider(Protocol):
     """Adapter một nhà cung cấp. Đăng ký theo `provider_code` — xem `registry`."""
 
@@ -147,6 +206,29 @@ class EInvoiceProvider(Protocol):
 
     def query_status(self, *, provider_ref: str) -> ProviderStatus:
         """Nhà cung cấp đang giữ tờ hóa đơn này ở chặng nào."""
+        ...
+
+    def fetch_representation(
+        self, *, provider_ref: str | None, kind: RepresentationKind
+    ) -> RepresentationOutcome:
+        """Xin bản thể hiện PDF hoặc tệp XML của tờ hóa đơn đã phát hành.
+
+        **Đọc thuần, không đổi gì phía họ** — nên gọi thẳng trong một request
+        HTTP là đúng, và gọi lại nhiều lần cũng vậy. Đây là điểm khác căn bản
+        với ba phương thức trên: chúng đi qua `outbox` vì mỗi lượt đều có thể
+        cấp một số hóa đơn thật.
+
+        **`provider_ref` nhận `None`, và đó là một quyết định.** Ba phương thức
+        kia đòi khóa vì không có nó thì không lượt gọi nào có nghĩa. Ở đây thì
+        khác: adapter `internal` không cần khóa nào để nói "tự dựng lấy", và bắt
+        nơi gọi tự chặn trước khi hỏi sẽ làm hóa đơn phát hành nội bộ **chưa qua
+        lượt bơm** vĩnh viễn không in được — nó chưa có dòng hàng đợi nào mang
+        khóa. Adapter nào *cần* khóa thì tự trả `UNKNOWN` khi thiếu.
+
+        Trả `UNAVAILABLE` chứ đừng ném khi tệp không tồn tại theo đúng nghĩa
+        (loại hóa đơn này không có bản XML), và `NOT_HOSTED` khi adapter không
+        giữ tệp nhưng nơi gọi dựng được.
+        """
         ...
 
 

@@ -1,4 +1,4 @@
-"""Client HTTP tới EasyInvoice — ba lời gọi mà lát này cần.
+"""Client HTTP tới EasyInvoice — bốn lời gọi của luồng hóa đơn.
 
 **`Status` trong thân JSON là câu trả lời thật, không phải mã HTTP.** Máy chủ
 trả `200 OK` kèm `{"Status": 4, "Message": "..."}` cho một lượt từ chối, nên đọc
@@ -62,7 +62,9 @@ class EasyInvoiceCredentials:
 
 
 class EasyInvoiceClient:
-    """Ba cửa của luồng phát hành. Không giữ trạng thái giữa các lượt gọi."""
+    """Bốn cửa: ba của luồng phát hành, một để tải bản thể hiện về.
+
+    Không giữ trạng thái giữa các lượt gọi."""
 
     def __init__(
         self,
@@ -100,6 +102,15 @@ class EasyInvoiceClient:
         if isinstance(records, list):
             return [record for record in records if isinstance(record, dict)]
         return [data] if data else []
+
+    def get_invoice_pdf(self, ikey: str, *, option: int) -> dict[str, Any]:
+        """Tải bản thể hiện (`option=1`) hoặc tệp XML gốc (`option=2`).
+
+        Trả nguyên `Data` vì nội dung về dưới dạng base64 trong `FileContent`
+        kèm `FileName`, và việc giải mã thuộc về adapter — tệp này chỉ nói
+        chuyện HTTP.
+        """
+        return self._post("api/publish/getInvoicePdf", {"Ikey": ikey, "Option": option})
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Một lượt gọi. Ném `EasyInvoiceRefusedError` khi bị từ chối rõ ràng.

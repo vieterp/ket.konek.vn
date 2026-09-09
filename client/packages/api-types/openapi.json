@@ -6959,6 +6959,29 @@
             ],
             "title": "Replaces Invoice Id"
           },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "sent_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent To"
+          },
           "source_voucher_id": {
             "format": "uuid",
             "title": "Source Voucher Id",
@@ -7014,7 +7037,9 @@
           "lookup_code",
           "replaces_invoice_id",
           "adjusts_invoice_id",
-          "issued_at"
+          "issued_at",
+          "sent_at",
+          "sent_to"
         ],
         "title": "EInvoiceOut",
         "type": "object"
@@ -11474,6 +11499,36 @@
           "session_scope"
         ],
         "title": "LoginResponse",
+        "type": "object"
+      },
+      "MarkSentIn": {
+        "description": "Lời khai \"đã gửi bản thể hiện cho người mua\" (FR-EIV-020, cạnh `SEND`).\n\nLượt gửi xảy ra **ngoài phần mềm** (quyết định user 2026-09-08), nên đây là\nmột bản ghi nhận chứ không phải lệnh gửi — xem `service.mark_sent`.",
+        "properties": {
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bỏ trống = bây giờ. Nhận ngày lùi vì lượt gửi có thể đã xảy ra trước đó; không nhận thời điểm ở tương lai hay trước lúc phát hành. Phải kèm múi giờ (ISO 8601 có hậu tố `Z` hoặc `+07:00`).",
+            "title": "Thời điểm gửi"
+          },
+          "sent_to": {
+            "description": "Địa chỉ thư người nhận, hoặc mô tả cách giao. Nhiều địa chỉ ngăn bằng dấu chấm phẩy (FR-EIV-022).",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Đã gửi cho",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sent_to"
+        ],
+        "title": "MarkSentIn",
         "type": "object"
       },
       "MasterDataMergeRequest": {
@@ -17182,6 +17237,15 @@
         "title": "ReportSummaryResponse",
         "type": "object"
       },
+      "RepresentationKind": {
+        "description": "Hai tệp mà một tờ hóa đơn điện tử để lại (FR-EIV-026).",
+        "enum": [
+          "pdf",
+          "xml"
+        ],
+        "title": "RepresentationKind",
+        "type": "string"
+      },
       "ResourceTaxTablesCreateRequest": {
         "additionalProperties": false,
         "description": "Biểu thuế tài nguyên — tạo mới.",
@@ -20855,7 +20919,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.33.0"
+    "version": "0.34.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -24219,6 +24283,60 @@
         ]
       }
     },
+    "/api/v1/einvoices/{einvoice_id}/actions/mark-sent": {
+      "post": {
+        "description": "Ghi nhận đã gửi bản thể hiện cho người mua (FR-EIV-020, cạnh `DA_GUI`).\n\n**Không gửi gì cả** — tên endpoint nói đúng việc nó làm. Lượt gửi xảy ra\nngoài phần mềm (quyết định user 2026-09-08): kế toán gửi từ hộp thư của\nmình, hoặc nhà cung cấp tự gửi theo cấu hình bên họ. Xem `service.mark_sent`\nvề lý do không đòi phải có đính kèm bản thể hiện trước.",
+        "operationId": "mark_einvoice_sent_api_v1_einvoices__einvoice_id__actions_mark_sent_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "einvoice_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Einvoice Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkSentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EInvoiceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Mark Einvoice Sent",
+        "tags": [
+          "einvoice"
+        ]
+      }
+    },
     "/api/v1/einvoices/{einvoice_id}/actions/reject": {
       "post": {
         "description": "Bị từ chối. Số đã cấp **giữ nguyên** (ADR-013).",
@@ -24322,6 +24440,62 @@
           }
         },
         "summary": "Add Error Notice",
+        "tags": [
+          "einvoice"
+        ]
+      }
+    },
+    "/api/v1/einvoices/{einvoice_id}/representation": {
+      "get": {
+        "description": "Tải bản thể hiện PDF hoặc tệp XML của hóa đơn (FR-EIV-026).\n\n**Lượt đầu lấy về và cất; lượt sau đọc từ đĩa** — xem `representation.py`\nvề vì sao tệp phải nằm lại trong kho đính kèm chứ không chỉ chảy qua.\n\n`GET` dù lượt đầu có ghi: thứ ghi ra là một **bản sao lưu trữ** của tài\nnguyên đang được đọc, không phải một thay đổi nghiệp vụ — hóa đơn không đổi\ntrạng thái, không đổi nội dung, và lượt gọi thứ hai trả đúng thứ lượt đầu\ntrả. Đổi thành `POST` sẽ buộc mọi màn xem hóa đơn phải gửi một lệnh ghi.\n\nQuyền là `einvoice.invoice.print`: 7D đã khai `Action.PRINT` với đúng nghĩa\n\"xem trước và tải bản thể hiện\" (FR-EIV-016/026).",
+        "operationId": "get_einvoice_representation_api_v1_einvoices__einvoice_id__representation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "einvoice_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Einvoice Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RepresentationKind",
+              "default": "pdf"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {},
+              "application/xml": {}
+            },
+            "description": "Bản thể hiện PDF hoặc tệp XML gốc"
+          },
+          "404": {
+            "description": "Không có hóa đơn, hoặc hóa đơn không có tệp loại này"
+          },
+          "503": {
+            "description": "Chưa hỏi được nhà cung cấp — thử lại sau"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Einvoice Representation",
         "tags": [
           "einvoice"
         ]

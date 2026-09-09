@@ -1316,6 +1316,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/einvoices/{einvoice_id}/actions/mark-sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Einvoice Sent
+         * @description Ghi nhận đã gửi bản thể hiện cho người mua (FR-EIV-020, cạnh `DA_GUI`).
+         *
+         *     **Không gửi gì cả** — tên endpoint nói đúng việc nó làm. Lượt gửi xảy ra
+         *     ngoài phần mềm (quyết định user 2026-09-08): kế toán gửi từ hộp thư của
+         *     mình, hoặc nhà cung cấp tự gửi theo cấu hình bên họ. Xem `service.mark_sent`
+         *     về lý do không đòi phải có đính kèm bản thể hiện trước.
+         */
+        post: operations["mark_einvoice_sent_api_v1_einvoices__einvoice_id__actions_mark_sent_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/einvoices/{einvoice_id}/actions/reject": {
         parameters: {
             query?: never;
@@ -1350,6 +1375,37 @@ export interface paths {
          * @description Lập thông báo hủy hoặc biên bản hủy (FR-EIV-031/032).
          */
         post: operations["add_error_notice_api_v1_einvoices__einvoice_id__notices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/{einvoice_id}/representation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Einvoice Representation
+         * @description Tải bản thể hiện PDF hoặc tệp XML của hóa đơn (FR-EIV-026).
+         *
+         *     **Lượt đầu lấy về và cất; lượt sau đọc từ đĩa** — xem `representation.py`
+         *     về vì sao tệp phải nằm lại trong kho đính kèm chứ không chỉ chảy qua.
+         *
+         *     `GET` dù lượt đầu có ghi: thứ ghi ra là một **bản sao lưu trữ** của tài
+         *     nguyên đang được đọc, không phải một thay đổi nghiệp vụ — hóa đơn không đổi
+         *     trạng thái, không đổi nội dung, và lượt gọi thứ hai trả đúng thứ lượt đầu
+         *     trả. Đổi thành `POST` sẽ buộc mọi màn xem hóa đơn phải gửi một lệnh ghi.
+         *
+         *     Quyền là `einvoice.invoice.print`: 7D đã khai `Action.PRINT` với đúng nghĩa
+         *     "xem trước và tải bản thể hiện" (FR-EIV-016/026).
+         */
+        get: operations["get_einvoice_representation_api_v1_einvoices__einvoice_id__representation_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10775,6 +10831,10 @@ export interface components {
             lookup_code: string | null;
             /** Replaces Invoice Id */
             replaces_invoice_id: string | null;
+            /** Sent At */
+            sent_at: string | null;
+            /** Sent To */
+            sent_to: string | null;
             /**
              * Source Voucher Id
              * Format: uuid
@@ -12364,6 +12424,25 @@ export interface components {
             session_scope: components["schemas"]["SessionScope"];
             /** Token */
             token: string;
+        };
+        /**
+         * MarkSentIn
+         * @description Lời khai "đã gửi bản thể hiện cho người mua" (FR-EIV-020, cạnh `SEND`).
+         *
+         *     Lượt gửi xảy ra **ngoài phần mềm** (quyết định user 2026-09-08), nên đây là
+         *     một bản ghi nhận chứ không phải lệnh gửi — xem `service.mark_sent`.
+         */
+        MarkSentIn: {
+            /**
+             * Thời điểm gửi
+             * @description Bỏ trống = bây giờ. Nhận ngày lùi vì lượt gửi có thể đã xảy ra trước đó; không nhận thời điểm ở tương lai hay trước lúc phát hành. Phải kèm múi giờ (ISO 8601 có hậu tố `Z` hoặc `+07:00`).
+             */
+            sent_at?: string | null;
+            /**
+             * Đã gửi cho
+             * @description Địa chỉ thư người nhận, hoặc mô tả cách giao. Nhiều địa chỉ ngăn bằng dấu chấm phẩy (FR-EIV-022).
+             */
+            sent_to: string;
         };
         /**
          * MasterDataMergeRequest
@@ -14545,6 +14624,12 @@ export interface components {
             /** Name En */
             name_en: string | null;
         };
+        /**
+         * RepresentationKind
+         * @description Hai tệp mà một tờ hóa đơn điện tử để lại (FR-EIV-026).
+         * @enum {string}
+         */
+        RepresentationKind: "pdf" | "xml";
         /**
          * ResourceTaxTablesCreateRequest
          * @description Biểu thuế tài nguyên — tạo mới.
@@ -18060,6 +18145,41 @@ export interface operations {
             };
         };
     };
+    mark_einvoice_sent_api_v1_einvoices__einvoice_id__actions_mark_sent_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                einvoice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkSentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     reject_einvoice_api_v1_einvoices__einvoice_id__actions_reject_post: {
         parameters: {
             query?: never;
@@ -18118,6 +18238,54 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorNoticeOut"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_einvoice_representation_api_v1_einvoices__einvoice_id__representation_get: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["RepresentationKind"];
+            };
+            header?: never;
+            path: {
+                einvoice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bản thể hiện PDF hoặc tệp XML gốc */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                    "application/xml": unknown;
+                };
+            };
+            /** @description Không có hóa đơn, hoặc hóa đơn không có tệp loại này */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Chưa hỏi được nhà cung cấp — thử lại sau */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {

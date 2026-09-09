@@ -117,6 +117,11 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         "/api/v1/einvoices/{einvoice_id}/actions/confirm",
         "/api/v1/einvoices/{einvoice_id}/actions/reject",
         "/api/v1/einvoices/{einvoice_id}/actions/cancel",
+        # Lát 7E-3: đánh dấu đã gửi bản thể hiện — cùng họ ba cạnh trên. Nó lật
+        # `DA_PHAT_HANH → DA_GUI` và không tạo bản ghi nào; lượt gửi lại đâm vào
+        # máy trạng thái (422) TRƯỚC khi chạm tới ba cột dấu gửi, nên không lần
+        # gửi lại nào ghi đè được lời khai đã có.
+        "/api/v1/einvoices/{einvoice_id}/actions/mark-sent",
         # Lập thông báo hủy / biên bản hủy (lát 7D): lượt gửi lại đâm vào unique
         # `(einvoice_id, kind)` của bảng — mỗi hóa đơn tối đa một văn bản mỗi
         # loại. Cùng lối miễn trừ với hồ sơ định dạng sao kê, và cùng lý do:

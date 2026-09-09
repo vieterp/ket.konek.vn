@@ -26,6 +26,9 @@ from ket.modules.einvoice.providers.contracts import (
     ProviderBinding,
     ProviderRecordState,
     ProviderStatus,
+    RepresentationAvailability,
+    RepresentationKind,
+    RepresentationOutcome,
 )
 from ket.modules.einvoice.providers.registry import PROVIDERS
 
@@ -70,6 +73,34 @@ class InternalProvider:
         và `internal` nhận ngay.
         """
         return ProviderStatus(state=ProviderRecordState.PREPARED)
+
+    def fetch_representation(
+        self, *, provider_ref: str | None, kind: RepresentationKind
+    ) -> RepresentationOutcome:
+        """Hai câu trả lời khác hẳn nhau cho hai loại tệp.
+
+        `XML` → `UNAVAILABLE`, và đó là câu trả lời **đúng theo luật**: hóa đơn
+        phát hành nội bộ là hóa đơn đặt in hoặc tự in, bản gốc của nó là tờ
+        giấy. Không có tệp XML ký số nào tồn tại, không phải "chưa cài".
+
+        `PDF` → `NOT_HOSTED`: bản thể hiện dựng được, chỉ là không phải ở đây.
+        Engine in sống ở tầng `reporting` mà `modules` không import được (C5,
+        tiền lệ biên bản kiểm kê 6E-2), nên nơi dựng là tầng `api` — xem
+        `representation.ensure`.
+
+        `provider_ref` **không đọc tới**, kể cả khi nó `None`: không có bên thứ
+        ba nào giữ gì cho tờ hóa đơn này, nên câu trả lời không phụ thuộc vào
+        việc đã có dòng hàng đợi nào chạy hay chưa.
+        """
+        if kind is RepresentationKind.XML:
+            return RepresentationOutcome(
+                availability=RepresentationAvailability.UNAVAILABLE,
+                message="Hóa đơn đặt in / tự in không có tệp XML",
+            )
+        return RepresentationOutcome(
+            availability=RepresentationAvailability.NOT_HOSTED,
+            message="Bản thể hiện của hóa đơn phát hành nội bộ dựng tại chỗ",
+        )
 
 
 def _build(binding: ProviderBinding) -> InternalProvider:
