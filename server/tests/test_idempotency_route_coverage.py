@@ -136,6 +136,12 @@ def test_the_exemption_list_is_exactly_what_was_reviewed() -> None:
             # Lát 7D: lập thông báo hủy / biên bản hủy — unique
             # `(einvoice_id, kind)` chặn nhân đôi, cùng lối hồ sơ định dạng sao kê.
             "/api/v1/einvoices/{einvoice_id}/notices",
+            # Lát 7F-1: xử lý sai sót. Nó **tạo** bản ghi (thông báo sai sót, và
+            # ở nhánh thay thế thêm một hóa đơn nháp), nhưng cạnh trạng thái đi
+            # trước mọi phép ghi và ba trạng thái cuối không có cạnh ra — nên
+            # lượt gửi lại dừng ở `einvoice.invalid_transition` (422) trước khi
+            # chạm bảng nào. Xem `api/idempotency.py`.
+            "/api/v1/einvoices/{einvoice_id}/actions/resolve-error",
             # Lát 7D: kích hoạt hồ sơ đăng ký — trả về ngay khi đã hiệu lực,
             # nên thao tác tự nó đã idempotent (cùng họ gán vai trò).
             "/api/v1/einvoices/registrations/{registration_id}/actions/activate",

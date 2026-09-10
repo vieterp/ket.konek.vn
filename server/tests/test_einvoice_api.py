@@ -385,6 +385,66 @@ def test_the_full_lifecycle_over_http(
     assert cancelled.json()["status"] == int(EInvoiceStatus.DA_HUY)
 
 
+def test_the_error_flow_table_is_not_shadowed_by_the_id_route(
+    app_client: TestClient,
+    issuer_headers: dict[str, str],
+) -> None:
+    """`GET /error-flows` phải tới được, không bị `GET /{einvoice_id}` nuốt.
+
+    FastAPI khớp route **theo thứ tự khai**, và `{einvoice_id}` là `UUID` — nên
+    một lượt khai sau sẽ biến đường này thành `422 uuid_parsing` vĩnh viễn. Bài
+    ngắn, nhưng nó canh đúng thứ mà không bài service nào nhìn thấy.
+    """
+    response = app_client.get("/api/v1/einvoices/error-flows", headers=issuer_headers)
+    assert response.status_code == 200, response.text
+    flows = response.json()
+    # Năm bộ câu trả lời, bốn cách xử lý phân biệt (`docs/srs/07` §4.4).
+    assert len(flows) == 5
+    assert len({flow["remedy"] for flow in flows}) == 4
+
+
+def test_an_adjustment_answers_with_409_and_the_right_remedy(
+    app_client: TestClient,
+    issuer_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Nhánh chưa thi hành được trả `409`, không `422` và không `500`.
+
+    `422` là "dữ liệu anh gửi sai" — mà bộ câu trả lời ở đây **đúng**, và câu trả
+    lời của hệ thống cũng đúng; thứ chưa sẵn sàng là đường thi hành. Nhầm hai mã
+    ấy thì client dựng câu "kiểm tra lại số liệu" cho một người không nhập gì sai.
+    """
+    voucher_id = _new_voucher_id(session_factory, dataset_alpha, context, accounts)
+    _, created = _create_invoice(app_client, issuer_headers, voucher_id)
+    invoice_id = created["id"]
+    app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/issue",
+        json={"invoice_date": MAY_08},
+        headers={**issuer_headers, IDEMPOTENCY_HEADER: str(uuid4())},
+    )
+    app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/confirm",
+        json={"tax_authority_code": "M1-26-ADJ", "lookup_code": "TRA-CUU-ADJ"},
+        headers=issuer_headers,
+    )
+
+    refused = app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/resolve-error",
+        json={
+            "error_kind": 1,
+            "buyer_declared": True,
+            "notice_no": "04SS-API",
+            "notice_date": MAY_08,
+        },
+        headers=issuer_headers,
+    )
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["error_code"] == "einvoice.remedy_not_available"
+
+
 def test_resending_the_create_request_returns_the_same_invoice(
     app_client: TestClient,
     issuer_headers: dict[str, str],
