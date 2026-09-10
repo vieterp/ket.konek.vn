@@ -127,6 +127,14 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         # loại. Cùng lối miễn trừ với hồ sơ định dạng sao kê, và cùng lý do:
         # ràng buộc DB khử trùng bền hơn một khóa có hạn.
         "/api/v1/einvoices/{einvoice_id}/notices",
+        # Xử lý sai sót (lát 7F-1): tuy nó **tạo** bản ghi — thông báo sai sót,
+        # và ở nhánh thay thế còn một tờ hóa đơn nháp — lượt gửi lại không tạo
+        # thêm được cái nào. Cạnh trạng thái đi **trước** mọi phép ghi, và ba
+        # trạng thái cuối không có cạnh ra, nên lượt thứ hai đâm vào
+        # `einvoice.invalid_transition` (422) trước khi chạm bảng nào. Cùng họ
+        # ba cạnh hóa đơn ở trên, cộng thêm một lớp: `(einvoice_id, kind)` của
+        # bảng văn bản khử trùng thông báo sai sót một lần nữa.
+        "/api/v1/einvoices/{einvoice_id}/actions/resolve-error",
         # Kích hoạt hồ sơ đăng ký (lát 7D): `activate` trả về ngay khi hồ sơ đã
         # ở trạng thái hiệu lực, nên bản thân thao tác đã idempotent — cùng lối
         # gán vai trò / gán chi nhánh ở đầu danh sách này.

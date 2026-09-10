@@ -1035,6 +1035,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/einvoices/error-flows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Error Flows
+         * @description Bảng quyết định xử lý sai sót (`docs/srs/07` §4.4, FR-NFR-055).
+         *
+         *     Wizard dựng câu hỏi từ đây thay vì mang sẵn cây quyết định trong mã client:
+         *     quy định đổi thì sửa bảng, và cả hai tầng thấy cùng một sự thật.
+         */
+        get: operations["list_error_flows_api_v1_einvoices_error_flows_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/einvoices/notices/{notice_id}": {
         parameters: {
             query?: never;
@@ -1355,6 +1378,30 @@ export interface paths {
          * @description Bị từ chối. Số đã cấp **giữ nguyên** (ADR-013).
          */
         post: operations["reject_einvoice_api_v1_einvoices__einvoice_id__actions_reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/{einvoice_id}/actions/resolve-error": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Einvoice Error
+         * @description Tra bảng quyết định rồi thi hành cách xử lý (FR-EIV-030..034).
+         *
+         *     Trả về cách xử lý cho **cả bốn** kịch bản; thi hành được hai (thay thế, hủy).
+         *     Nhánh điều chỉnh trả `409` kèm cách xử lý đúng — nó cần một chứng từ bán mang
+         *     phần chênh, tức việc ở phân hệ bán hàng.
+         */
+        post: operations["resolve_einvoice_error_api_v1_einvoices__einvoice_id__actions_resolve_error_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11001,6 +11048,29 @@ export interface components {
             tax_code?: string | null;
         };
         /**
+         * ErrorFlowOut
+         * @description Một nhánh của bảng quyết định xử lý sai sót (`docs/srs/07` §4.4).
+         */
+        ErrorFlowOut: {
+            /**
+             * Khách đã kê khai
+             * @description `null` = nhánh này không hỏi câu ấy, không phải 'chưa biết' — wizard dừng sau câu hỏi thứ nhất.
+             */
+            buyer_declared?: boolean | null;
+            /** Code */
+            code: string;
+            error_kind: components["schemas"]["ErrorKind"];
+            /** Căn cứ pháp lý */
+            legal_basis: string;
+            remedy: components["schemas"]["Remedy"];
+        };
+        /**
+         * ErrorKind
+         * @description Câu hỏi thứ nhất của wizard: "hóa đơn sai chỗ nào?" (`docs/srs/07` §4.4).
+         * @enum {integer}
+         */
+        ErrorKind: 0 | 1 | 2;
+        /**
          * ErrorNoticeIn
          * @description Thông báo hủy (CQT) hoặc biên bản hủy (người mua) — FR-EIV-031/032.
          */
@@ -11039,7 +11109,7 @@ export interface components {
          *     lại thành "đã có đủ hai loại chưa".
          * @enum {integer}
          */
-        ErrorNoticeKind: 0 | 1;
+        ErrorNoticeKind: 0 | 1 | 2;
         /** ErrorNoticeOut */
         ErrorNoticeOut: {
             /**
@@ -14483,6 +14553,12 @@ export interface components {
          * @enum {integer}
          */
         RegistrationStatus: 0 | 1 | 2 | 3;
+        /**
+         * Remedy
+         * @description Cách xử lý sai sót mà bảng quyết định trả về (FR-EIV-030/031/033/034).
+         * @enum {integer}
+         */
+        Remedy: 0 | 1 | 2 | 3;
         /** ReportListResponse */
         ReportListResponse: {
             /** Reports */
@@ -14630,6 +14706,42 @@ export interface components {
          * @enum {string}
          */
         RepresentationKind: "pdf" | "xml";
+        /**
+         * ResolveErrorIn
+         * @description Câu trả lời của kế toán cho wizard xử lý sai sót (FR-EIV-030..034).
+         */
+        ResolveErrorIn: {
+            /** Khách đã kê khai thuế chưa */
+            buyer_declared?: boolean | null;
+            /** Hóa đơn sai chỗ nào */
+            error_kind: components["schemas"]["ErrorKind"];
+            /**
+             * Ngày thông báo sai sót
+             * Format: date
+             */
+            notice_date: string;
+            /** Số thông báo sai sót */
+            notice_no: string;
+            /** Diễn giải sai sót */
+            reason?: string | null;
+        };
+        /**
+         * ResolveErrorOut
+         * @description Cách xử lý đã chọn và những gì hệ thống vừa dựng.
+         */
+        ResolveErrorOut: {
+            /** Flow Code */
+            flow_code: string;
+            /** Legal Basis */
+            legal_basis: string;
+            notice: components["schemas"]["ErrorNoticeOut"];
+            remedy: components["schemas"]["Remedy"];
+            /**
+             * Hóa đơn thay thế
+             * @description Chỉ có ở cách xử lý THAY THẾ; tờ nháp mới trên chính chứng từ cũ.
+             */
+            replacement?: components["schemas"]["EInvoiceOut"] | null;
+        };
         /**
          * ResourceTaxTablesCreateRequest
          * @description Biểu thuế tài nguyên — tạo mới.
@@ -17703,6 +17815,35 @@ export interface operations {
             };
         };
     };
+    list_error_flows_api_v1_einvoices_error_flows_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorFlowOut"][];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     delete_error_notice_api_v1_einvoices_notices__notice_id__delete: {
         parameters: {
             query?: never;
@@ -18202,6 +18343,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    resolve_einvoice_error_api_v1_einvoices__einvoice_id__actions_resolve_error_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                einvoice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveErrorIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveErrorOut"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

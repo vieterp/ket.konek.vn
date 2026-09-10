@@ -7617,6 +7617,56 @@
         "title": "EmployeesUpdateRequest",
         "type": "object"
       },
+      "ErrorFlowOut": {
+        "description": "Một nhánh của bảng quyết định xử lý sai sót (`docs/srs/07` §4.4).",
+        "properties": {
+          "buyer_declared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`null` = nhánh này không hỏi câu ấy, không phải 'chưa biết' — wizard dừng sau câu hỏi thứ nhất.",
+            "title": "Khách đã kê khai"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "error_kind": {
+            "$ref": "#/components/schemas/ErrorKind"
+          },
+          "legal_basis": {
+            "maxLength": 200,
+            "title": "Căn cứ pháp lý",
+            "type": "string"
+          },
+          "remedy": {
+            "$ref": "#/components/schemas/Remedy"
+          }
+        },
+        "required": [
+          "code",
+          "error_kind",
+          "remedy",
+          "legal_basis"
+        ],
+        "title": "ErrorFlowOut",
+        "type": "object"
+      },
+      "ErrorKind": {
+        "description": "Câu hỏi thứ nhất của wizard: \"hóa đơn sai chỗ nào?\" (`docs/srs/07` §4.4).",
+        "enum": [
+          0,
+          1,
+          2
+        ],
+        "title": "ErrorKind",
+        "type": "integer"
+      },
       "ErrorNoticeIn": {
         "description": "Thông báo hủy (CQT) hoặc biên bản hủy (người mua) — FR-EIV-031/032.",
         "properties": {
@@ -7676,7 +7726,8 @@
         "description": "Loại văn bản kèm hóa đơn.\n\nBR-EIV-04 đòi hủy hóa đơn phải có **cả hai**: thông báo gửi cơ quan thuế và\nbiên bản thỏa thuận với người mua. Phác thảo plan để hai cột `cancel_notice_id`\n/ `cancel_record_id` trên `einvoices`; lát này đảo chiều (quyết định user\n2026-09-07) — văn bản trỏ về hóa đơn, kèm loại, và một chỉ mục duy nhất\n`(einvoice_id, kind)`. Lý do: hai cột cùng trỏ một bảng thì **không có cách\nnào ở tầng SQL** bắt cột thứ nhất phải là thông báo còn cột thứ hai phải là\nbiên bản — luật ấy tụt xuống mã service, tức thành thứ quên được. Đảo chiều\nthì gắn nhầm loại là không biểu diễn được, và câu hỏi của state machine gọn\nlại thành \"đã có đủ hai loại chưa\".",
         "enum": [
           0,
-          1
+          1,
+          2
         ],
         "title": "ErrorNoticeKind",
         "type": "integer"
@@ -16955,6 +17006,17 @@
         "title": "RegistrationStatus",
         "type": "integer"
       },
+      "Remedy": {
+        "description": "Cách xử lý sai sót mà bảng quyết định trả về (FR-EIV-030/031/033/034).",
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "title": "Remedy",
+        "type": "integer"
+      },
       "ReportListResponse": {
         "properties": {
           "reports": {
@@ -17245,6 +17307,94 @@
         ],
         "title": "RepresentationKind",
         "type": "string"
+      },
+      "ResolveErrorIn": {
+        "description": "Câu trả lời của kế toán cho wizard xử lý sai sót (FR-EIV-030..034).",
+        "properties": {
+          "buyer_declared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Khách đã kê khai thuế chưa"
+          },
+          "error_kind": {
+            "$ref": "#/components/schemas/ErrorKind",
+            "title": "Hóa đơn sai chỗ nào"
+          },
+          "notice_date": {
+            "format": "date",
+            "title": "Ngày thông báo sai sót",
+            "type": "string"
+          },
+          "notice_no": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Số thông báo sai sót",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diễn giải sai sót"
+          }
+        },
+        "required": [
+          "error_kind",
+          "notice_no",
+          "notice_date"
+        ],
+        "title": "ResolveErrorIn",
+        "type": "object"
+      },
+      "ResolveErrorOut": {
+        "description": "Cách xử lý đã chọn và những gì hệ thống vừa dựng.",
+        "properties": {
+          "flow_code": {
+            "title": "Flow Code",
+            "type": "string"
+          },
+          "legal_basis": {
+            "title": "Legal Basis",
+            "type": "string"
+          },
+          "notice": {
+            "$ref": "#/components/schemas/ErrorNoticeOut"
+          },
+          "remedy": {
+            "$ref": "#/components/schemas/Remedy"
+          },
+          "replacement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EInvoiceOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Chỉ có ở cách xử lý THAY THẾ; tờ nháp mới trên chính chứng từ cũ.",
+            "title": "Hóa đơn thay thế"
+          }
+        },
+        "required": [
+          "remedy",
+          "flow_code",
+          "legal_basis",
+          "notice"
+        ],
+        "title": "ResolveErrorOut",
+        "type": "object"
       },
       "ResourceTaxTablesCreateRequest": {
         "additionalProperties": false,
@@ -20919,7 +21069,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.34.0"
+    "version": "0.35.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -23654,6 +23804,42 @@
         ]
       }
     },
+    "/api/v1/einvoices/error-flows": {
+      "get": {
+        "description": "Bảng quyết định xử lý sai sót (`docs/srs/07` §4.4, FR-NFR-055).\n\nWizard dựng câu hỏi từ đây thay vì mang sẵn cây quyết định trong mã client:\nquy định đổi thì sửa bảng, và cả hai tầng thấy cùng một sự thật.",
+        "operationId": "list_error_flows_api_v1_einvoices_error_flows_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ErrorFlowOut"
+                  },
+                  "title": "Response List Error Flows Api V1 Einvoices Error Flows Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Error Flows",
+        "tags": [
+          "einvoice"
+        ]
+      }
+    },
     "/api/v1/einvoices/notices/{notice_id}": {
       "delete": {
         "description": "Xóa văn bản **còn nháp** — đường sửa khi lập nhầm loại. Đã nộp thì không.",
@@ -24386,6 +24572,60 @@
           }
         },
         "summary": "Reject Einvoice",
+        "tags": [
+          "einvoice"
+        ]
+      }
+    },
+    "/api/v1/einvoices/{einvoice_id}/actions/resolve-error": {
+      "post": {
+        "description": "Tra bảng quyết định rồi thi hành cách xử lý (FR-EIV-030..034).\n\nTrả về cách xử lý cho **cả bốn** kịch bản; thi hành được hai (thay thế, hủy).\nNhánh điều chỉnh trả `409` kèm cách xử lý đúng — nó cần một chứng từ bán mang\nphần chênh, tức việc ở phân hệ bán hàng.",
+        "operationId": "resolve_einvoice_error_api_v1_einvoices__einvoice_id__actions_resolve_error_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "einvoice_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Einvoice Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveErrorIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveErrorOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Resolve Einvoice Error",
         "tags": [
           "einvoice"
         ]

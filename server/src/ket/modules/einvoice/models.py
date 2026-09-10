@@ -65,12 +65,15 @@ REGISTRATION_TABLE_NAME = "invoice_registrations"
 OUTBOX_TABLE_NAME = "einvoice_outbox"
 PROVIDER_PROFILE_TABLE_NAME = "einvoice_provider_profiles"
 REPRESENTATION_TABLE_NAME = "einvoice_representations"
+ERROR_FLOW_TABLE_NAME = "einvoice_error_flows"
 
 INVOICE_NO_MAX_LENGTH = 50
 TAX_AUTHORITY_CODE_MAX_LENGTH = 100
 LOOKUP_CODE_MAX_LENGTH = 100
 NOTICE_NO_MAX_LENGTH = 50
 REASON_CODE_MAX_LENGTH = 50
+FLOW_CODE_MAX_LENGTH = 50
+LEGAL_BASIS_MAX_LENGTH = 200
 PROVIDER_CODE_MAX_LENGTH = 50
 PROVIDER_REF_MAX_LENGTH = 100
 BASE_URL_MAX_LENGTH = 200
@@ -132,6 +135,19 @@ rời nhau là ba chỗ để nó lệch khi vòng đời mọc thêm trạng th
 """
 
 
+SUPERSEDED_STATUSES: frozenset[EInvoiceStatus] = frozenset(
+    {EInvoiceStatus.DA_THAY_THE, EInvoiceStatus.DA_DIEU_CHINH, EInvoiceStatus.DA_HUY}
+)
+"""Ba trạng thái cuối — tờ hóa đơn đã **xử lý xong sai sót** và thôi còn hiệu lực.
+
+Chúng đi cùng nhau ở ba chỗ và phải đi cùng nhau ở cả ba: bảng chuyển không cho
+chúng có cạnh ra, chỉ mục riêng phần `uq_einvoices_live_source_voucher` loại
+chúng khỏi luật "một chứng từ một hóa đơn", và FR-EIV-035 **nhả** chứng từ gốc ở
+chúng (xem `service.issued_for_voucher`). Một tên chứ không ba con số rời, cùng
+lập luận `ISSUED_FLOOR`.
+"""
+
+
 class ErrorNoticeKind(IntEnum):
     """Loại văn bản kèm hóa đơn.
 
@@ -150,6 +166,14 @@ class ErrorNoticeKind(IntEnum):
     """Thông báo hủy hóa đơn gửi cơ quan thuế (FR-EIV-031)."""
     BIEN_BAN_HUY = 1
     """Biên bản hủy thỏa thuận với người mua (FR-EIV-032)."""
+    THONG_BAO_SAI_SOT = 2
+    """Thông báo hóa đơn có sai sót gửi cơ quan thuế (Mẫu 04/SS-HĐĐT, TT78).
+
+    Kèm **mọi** cách xử lý sai sót, kể cả hủy — nó khai với cơ quan thuế rằng tờ
+    hóa đơn kia có sai sót, còn `THONG_BAO_HUY` khai riêng việc hủy. Vì vậy nó
+    **không** thuộc `CANCELLATION_KINDS`: một tờ có đủ thông báo sai sót và biên
+    bản hủy vẫn chưa đủ điều kiện BR-EIV-04.
+    """
 
 
 CANCELLATION_KINDS: frozenset[ErrorNoticeKind] = frozenset(
@@ -161,6 +185,41 @@ Một hằng số chứ không hai phép so rời trong `service`: 7F thêm thô
 (FR-EIV-030/033/034) vào cùng bảng, và lúc ấy "mọi loại văn bản" khác hẳn "bộ
 văn bản của lượt hủy". Tách sẵn tên cho hai khái niệm để lát sau không phải đoán
 xem một phép so `kind IN (0, 1)` nào đó có ý gì.
+"""
+
+
+class ErrorKind(IntEnum):
+    """Câu hỏi thứ nhất của wizard: "hóa đơn sai chỗ nào?" (`docs/srs/07` §4.4)."""
+
+    SAI_THONG_TIN = 0
+    """Sai thông tin **không** làm đổi số tiền (tên, địa chỉ, mã số thuế)."""
+    SAI_SO_TIEN = 1
+    """Sai số tiền, số lượng hoặc thuế suất."""
+    KHONG_PHAT_SINH = 2
+    """Không phát sinh giao dịch — tờ hóa đơn lẽ ra không tồn tại."""
+
+
+class Remedy(IntEnum):
+    """Cách xử lý sai sót mà bảng quyết định trả về (FR-EIV-030/031/033/034)."""
+
+    THAY_THE = 0
+    """Lập hóa đơn thay thế trên chính chứng từ cũ (FR-EIV-030, BR-EIV-05)."""
+    DIEU_CHINH_THONG_TIN = 1
+    """Điều chỉnh thông tin, không đổi số tiền (FR-EIV-034)."""
+    DIEU_CHINH_TIEN = 2
+    """Điều chỉnh tăng/giảm — hóa đơn mang **phần chênh** (FR-EIV-033)."""
+    HUY = 3
+    """Hủy, kèm thông báo hủy và biên bản hủy (FR-EIV-031/032, BR-EIV-04)."""
+
+
+EXECUTABLE_REMEDIES: frozenset[Remedy] = frozenset({Remedy.THAY_THE, Remedy.HUY})
+"""Hai cách xử lý **thi hành được** ở lát này (quyết định user 2026-09-10).
+
+Hai cách còn lại ra quyết định đúng nhưng chưa có đường thi hành, và lý do là
+một ràng buộc **cấu trúc** chứ không phải việc chưa kịp làm: hóa đơn cố ý không
+mang cột tiền (xem docstring đầu tệp), nên hóa đơn điều chỉnh — thứ chỉ mang
+phần chênh — không trỏ được vào chứng từ gốc mang số tiền đầy đủ mà vẫn giữ
+BR-EIV-07. Nó cần một chứng từ bán mang phần chênh, tức việc ở phân hệ `sales`.
 """
 
 
@@ -382,7 +441,10 @@ class EInvoiceErrorNotice(DatasetBase, Audited):
 
     __tablename__ = ERROR_NOTICE_TABLE_NAME
     __table_args__ = (
-        CheckConstraint("kind BETWEEN 0 AND 1", name="kind_known"),
+        CheckConstraint(
+            f"kind BETWEEN {ErrorNoticeKind.THONG_BAO_HUY} AND {ErrorNoticeKind.THONG_BAO_SAI_SOT}",
+            name="kind_known",
+        ),
         CheckConstraint("status BETWEEN 0 AND 1", name="status_known"),
         CheckConstraint("notice_no <> ''", name="notice_no_not_blank"),
         # Cùng lập luận `posted_stamp_complete` của chứng từ: "đã nộp nhưng
@@ -416,6 +478,77 @@ class EInvoiceErrorNotice(DatasetBase, Audited):
         SmallInteger, nullable=False, default=NoticeStatus.NHAP
     )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class EInvoiceErrorFlow(DatasetBase, Audited):
+    """Bảng quyết định của wizard xử lý sai sót — **dữ liệu, không phải `if/elif`**.
+
+    Quy định về xử lý hóa đơn sai sót (NĐ123 điều 19, TT78 điều 7) đổi thì sửa
+    dòng ở đây, không phát hành lại bản mới (FR-NFR-055). Đó là toàn bộ lý do
+    bảng này là bảng chứ không phải một `dict` trong mã.
+
+    **Không có `branch_id`**: đây là quy định của nhà nước, chung cho cả dataset
+    — cùng hình dạng `item_discount_tiers`/`price_list_lines`, nên cổng
+    `test_rls_policy_coverage` không đòi policy cho nó.
+
+    **Không thuộc gói cấu hình** (khác `auto_posting_rules` của 6A, dù cùng lối
+    "cấu hình là dữ liệu"): gói cấu hình tồn tại để TT99 và TT133 gán **tài
+    khoản khác nhau** cho cùng một nghiệp vụ. Cách xử lý hóa đơn sai sót không
+    phụ thuộc chế độ kế toán — TT78 áp như nhau cho cả hai — nên phần phạm vi
+    theo gói ở đây là máy móc không ai dùng.
+    """
+
+    __tablename__ = ERROR_FLOW_TABLE_NAME
+    __table_args__ = (
+        CheckConstraint("code <> ''", name="code_not_blank"),
+        CheckConstraint(
+            f"error_kind BETWEEN {ErrorKind.SAI_THONG_TIN} AND {ErrorKind.KHONG_PHAT_SINH}",
+            name="error_kind_known",
+        ),
+        CheckConstraint(
+            f"remedy BETWEEN {Remedy.THAY_THE} AND {Remedy.HUY}",
+            name="remedy_known",
+        ),
+        UniqueConstraint("code", name="uq_einvoice_error_flows_code"),
+        # **`NULLS NOT DISTINCT` là phần mang bất biến, không phải trang trí.**
+        # `buyer_declared IS NULL` nghĩa là "câu hỏi thứ hai không áp dụng", và
+        # `UNIQUE` mặc định của PostgreSQL coi hai `NULL` là **khác nhau** — tức
+        # hai dòng `(KHONG_PHAT_SINH, NULL)` mâu thuẫn nhau lọt được vào bảng, và
+        # phép tra sẽ trả về dòng nào tùy tâm trạng của planner. Với `NULLS NOT
+        # DISTINCT` thì "một bộ câu trả lời ra đúng một cách xử lý" là điều
+        # không biểu diễn ngược lại được.
+        UniqueConstraint(
+            "error_kind",
+            "buyer_declared",
+            name="uq_einvoice_error_flows_answers",
+            postgresql_nulls_not_distinct=True,
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    code: Mapped[str] = mapped_column(String(FLOW_CODE_MAX_LENGTH), nullable=False)
+    """Tên hằng của một nhánh, để test và thông điệp lỗi nhắc tới nó mà không
+    phải gõ lại cặp câu trả lời."""
+
+    error_kind: Mapped[ErrorKind] = mapped_column(SmallInteger, nullable=False)
+
+    buyer_declared: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    """Câu hỏi thứ hai: "khách đã kê khai thuế chưa?".
+
+    `NULL` = **không hỏi** ở nhánh này, không phải "chưa biết": tờ hóa đơn không
+    phát sinh giao dịch thì hủy bất kể khách đã kê khai hay chưa. `next_question`
+    đọc đúng cột này để biết còn phải hỏi gì (xem `error_flow.py`)."""
+
+    remedy: Mapped[Remedy] = mapped_column(SmallInteger, nullable=False)
+
+    legal_basis: Mapped[str] = mapped_column(String(LEGAL_BASIS_MAX_LENGTH), nullable=False)
+    """Căn cứ pháp lý của nhánh — hiện lên wizard để kế toán đối chiếu, và là
+    thứ người sửa bảng phải cập nhật cùng lúc khi quy định đổi."""
+
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    """Tắt một nhánh khi quy định bỏ nó, thay vì xóa dòng: hóa đơn đã xử lý theo
+    nhánh ấy vẫn phải giải thích được về sau."""
 
 
 class InvoiceRegistration(DatasetBase, Audited):
