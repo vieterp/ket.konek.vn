@@ -11,6 +11,13 @@ lời người bán viết, dòng theo vật tư thì lấy tên trong danh mụ
 ấy sang `einvoice` là buộc nó tra danh mục vật tư của một phân hệ khác để đoán
 lại điều `sales` đã biết.
 
+**Một trường không mô tả tờ giấy: `adjusts_voucher_id`.** Nó có mặt vì phân hệ
+hóa đơn điện tử phải phân biệt được một chứng từ **điều chỉnh** với một hóa đơn
+bán thường trước khi treo tờ hóa đơn điều chỉnh lên nó — và loại nghiệp vụ
+(`sales_invoices.kind`) là chuyện riêng của phân hệ này, C3 cấm bên kia hỏi
+thẳng. Ràng buộc `adjustment_link_matches_kind` là thứ làm cho `None` ở đây
+nghĩa **đúng** là "không phải chứng từ điều chỉnh", chứ không phải "chưa ai điền".
+
 **Không phân giải phần mình không phải chủ:** người mua trả về dạng
 `(partner_kind, partner_id)` chứ không phải tên và địa chỉ. Đối tác là danh mục
 của `kernel`, nên nơi gọi đọc thẳng được — chép qua đây chỉ tạo một bản sao
@@ -70,6 +77,7 @@ class SalesEInvoiceSource:
             total_vat_fc=invoice.total_vat_fc,
             total_fc=invoice.total_fc,
             lines=tuple(self._line(session, row) for row in rows),
+            adjusts_voucher_id=invoice.adjusts_voucher_id,
         )
 
     def _line(self, session: Session, row: SalesInvoiceLine) -> EInvoiceSourceLine:

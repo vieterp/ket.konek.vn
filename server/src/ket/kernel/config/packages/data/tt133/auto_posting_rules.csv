@@ -63,3 +63,5 @@ SAL,ban-hang-xuat-khau,Bán hàng xuất khẩu,ar_trade,revenue_goods,1,0,3
 SAL,ban-hang-dai-ly,Bán hàng qua đại lý,ar_trade,revenue_goods,1,0,4
 SAL,tra-lai-hang-ban,Hàng bán bị trả lại,sales_deduction,ar_trade,1,0,5
 SAL,giam-gia-hang-ban,Giảm giá hàng bán,sales_deduction,ar_trade,1,0,6
+SAL,dieu-chinh-tang-hoa-don,Điều chỉnh tăng hóa đơn đã phát hành,ar_trade,revenue_goods,1,0,7
+SAL,dieu-chinh-giam-hoa-don,Điều chỉnh giảm hóa đơn đã phát hành,sales_deduction,ar_trade,1,0,8

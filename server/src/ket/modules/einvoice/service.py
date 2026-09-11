@@ -307,6 +307,22 @@ class EInvoiceService:
         self._session.flush()
         return invoice
 
+    def mark_adjusted(self, einvoice_id: UUID) -> EInvoice:
+        """Đánh dấu tờ cũ **đã bị điều chỉnh** (FR-EIV-033/034) — nửa thứ nhất
+        của lượt điều chỉnh, đối xứng từng điểm với `mark_replaced`.
+
+        Thứ tự hai nửa cũng là bất biến ở đây, và vì đúng lý do ấy: điều chỉnh
+        THÔNG TIN dựng tờ mới trên **chính chứng từ cũ**, nên chừng nào tờ này
+        chưa rời `DA_PHAT_HANH` thì `uq_einvoices_live_source_voucher` còn chặn.
+        Điều chỉnh TIỀN dựng trên một chứng từ khác nên chỉ mục ấy không chạm
+        tới — nhưng hai nhánh đi cùng một thứ tự thì không có nhánh nào để quên.
+        """
+        invoice = self.require(einvoice_id)
+        invoice.status = transition_to(EInvoiceStatus(invoice.status), EInvoiceAction.ADJUST)
+        self.discard_representations(einvoice_id)
+        self._session.flush()
+        return invoice
+
     def discard_representations(self, einvoice_id: UUID) -> None:
         """Bỏ bản thể hiện đã lưu khi tờ hóa đơn thôi còn hiệu lực.
 

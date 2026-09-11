@@ -15,7 +15,7 @@ import pytest
 from pydantic import ValidationError
 
 from ket.kernel.protocols import SettlementTargetKind
-from ket.modules.sales.models import REVERSING_KINDS, SalesInvoiceKind
+from ket.modules.sales.models import ADJUSTMENT_KINDS, REVERSING_KINDS, SalesInvoiceKind
 from ket.modules.sales.schemas import (
     SalesInvoiceIn,
     SalesInvoiceLineIn,
@@ -88,17 +88,53 @@ def test_discount_percent_stays_within_a_hundred() -> None:
 @pytest.mark.parametrize("kind", REVERSING_KINDS)
 def test_reversing_kinds_require_a_settlement_target(kind: int) -> None:
     """Sổ phụ không có dòng âm, nên chứng từ giảm trừ không đối trừ vào đâu là
-    một chứng từ không có chỗ để ghi (quyết định user 2026-09-04)."""
+    một chứng từ không có chỗ để ghi (quyết định user 2026-09-04).
+
+    `ADJUSTMENT_DECREASE` mang thêm `adjusts_voucher_id` — luật riêng của nó,
+    kiểm ở bài khác. Điền sẵn ở đây để bài này đo đúng thứ nó nói, chứ không đỏ
+    vì một thông điệp khác.
+    """
+    extra = {"adjusts_voucher_id": uuid4()} if kind in ADJUSTMENT_KINDS else {}
     with pytest.raises(ValidationError, match="đối trừ vào hóa đơn gốc"):
-        _invoice(kind=kind, operation_code="tra-lai-hang-ban")
+        _invoice(kind=kind, operation_code="tra-lai-hang-ban", **extra)
     assert (
         len(
             _invoice(
-                kind=kind, operation_code="tra-lai-hang-ban", settlements=(_settlement(),)
+                kind=kind,
+                operation_code="tra-lai-hang-ban",
+                settlements=(_settlement(),),
+                **extra,
             ).settlements
         )
         == 1
     )
+
+
+@pytest.mark.parametrize("kind", ADJUSTMENT_KINDS)
+def test_adjustment_kinds_must_name_the_voucher_they_adjust(kind: int) -> None:
+    """Đường trỏ về chứng từ được điều chỉnh bắt buộc ở đây, cấm ở mọi `kind` khác.
+
+    Luật hai chiều, và chiều "cấm" mới là chiều đáng đo: phân hệ hóa đơn điện tử
+    đọc `adjusts_voucher_id IS NULL` thành "không phải chứng từ điều chỉnh", nên
+    một hóa đơn bán thường mang đường trỏ ấy sẽ làm phép phân biệt nói dối.
+    """
+    settlements = (_settlement(),) if kind in REVERSING_KINDS else ()
+    with pytest.raises(ValidationError, match="phải nêu chứng từ bán được điều chỉnh"):
+        _invoice(kind=kind, operation_code="dieu-chinh", settlements=settlements)
+    assert (
+        _invoice(
+            kind=kind,
+            operation_code="dieu-chinh",
+            settlements=settlements,
+            adjusts_voucher_id=uuid4(),
+        ).adjusts_voucher_id
+        is not None
+    )
+
+
+def test_normal_kinds_cannot_name_a_voucher_they_adjust() -> None:
+    with pytest.raises(ValidationError, match="mới nêu chứng từ bán được điều chỉnh"):
+        _invoice(kind=SalesInvoiceKind.GOODS, adjusts_voucher_id=uuid4())
 
 
 @pytest.mark.parametrize(

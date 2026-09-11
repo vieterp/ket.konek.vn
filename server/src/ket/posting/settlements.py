@@ -75,6 +75,13 @@ SETTLEMENT_CURRENCY_MISMATCH_CODE = "settlement.currency_mismatch"
 SETTLEMENT_OVER_REMAINING_CODE = "settlement.exceeds_remaining"
 SETTLEMENT_PARTNER_REQUIRED_CODE = "settlement.partner_required"
 SETTLEMENT_TOTAL_MISMATCH_CODE = "settlement.total_mismatch"
+SETTLEMENT_DOCUMENT_MISMATCH_CODE = "settlement.document_mismatch"
+"""Khoản nợ được đối trừ không thuộc chứng từ mà người gọi bắt buộc (7F-2a).
+
+Chỉ chứng từ điều chỉnh giảm dùng tới: nó mang **hai** đường trỏ về hóa đơn
+gốc — `sales_invoices.adjusts_voucher_id` và chính dòng đối trừ này — nên nếu
+hai đường lệch nhau thì tờ hóa đơn điều chỉnh khai với cơ quan thuế rằng hóa
+đơn A giảm, còn sổ công nợ giảm hóa đơn B (ADR-023)."""
 
 FX_GAIN_PURPOSE = "fx_gain"
 FX_LOSS_PURPOSE = "fx_loss"
@@ -139,12 +146,18 @@ def price_settlements(
     scale: int,
     account_id: int | None = None,
     settles_advance: bool = False,
+    document_id: UUID | None = None,
 ) -> list[PricedSettlement]:
     """Kiểm + định giá toàn bộ dòng đối trừ của một chứng từ. Trả toàn bộ vi
     phạm một lượt (triết lý bộ kiểm phase-04), không nhỏ giọt.
 
     `account_id`: TK công nợ mà chứng từ ghi bút toán giảm nợ lên — đưa vào
     thì mọi khoản đích phải nằm đúng TK ấy (`SETTLEMENT_ACCOUNT_MISMATCH_CODE`).
+
+    `document_id`: mọi khoản đích phải đến từ **đúng** chứng từ này
+    (`SETTLEMENT_DOCUMENT_MISMATCH_CODE`). Chỉ chứng từ điều chỉnh giảm đưa vào —
+    xem docstring của mã lỗi ấy. Bỏ trống thì không kiểm, đúng như mọi lượt gọi
+    có trước: phiếu thu tất toán nhiều hóa đơn một lúc là hình dạng bình thường.
 
     `settles_advance`: chứng từ đang tất toán một khoản **ứng trước** chứ không
     một khoản nợ — tức bên ghi TĂNG nợ (lát 7C-4). Mặc định `False` vì đó là
@@ -181,6 +194,7 @@ def price_settlements(
             currency_code=currency_code,
             account_id=account_id,
             settles_advance=settles_advance,
+            document_id=document_id,
             violations=violations,
         )
         amount = convert_currency(row.amount_fc, exchange_rate, scale)
@@ -297,6 +311,7 @@ def _check_target(
     currency_code: str,
     account_id: int | None,
     settles_advance: bool,
+    document_id: UUID | None,
     violations: list[PostingViolation],
 ) -> None:
     if (
@@ -340,6 +355,21 @@ def _check_target(
                 target_id=str(invoice.target_id),
                 invoice_account_id=invoice.account_id,
                 voucher_account_id=account_id,
+            )
+        )
+    if document_id is not None and invoice.document_id != document_id:
+        # `document_id IS NULL` (số dư đầu kỳ khai tay) rơi vào đây và **bị từ
+        # chối**, đúng như nó phải: một khoản nợ không đến từ chứng từ nào thì
+        # chắc chắn không đến từ chứng từ mà lượt gọi bắt buộc.
+        violations.append(
+            PostingViolation(
+                SETTLEMENT_DOCUMENT_MISMATCH_CODE,
+                "Khoản nợ được đối trừ không thuộc chứng từ mà chứng từ này điều chỉnh",
+                target_id=str(invoice.target_id),
+                invoice_document_id=(
+                    None if invoice.document_id is None else str(invoice.document_id)
+                ),
+                required_document_id=str(document_id),
             )
         )
     if invoice.currency_code != currency_code:

@@ -339,6 +339,7 @@ class SalesInvoiceService:
         body.payment_term_id = payload.payment_term_id
         body.due_date = self._due_date_of(payload)
         body.receivable_account_id = payload.receivable_account_id
+        body.adjusts_voucher_id = payload.adjusts_voucher_id
         body.price_list_id = payload.price_list_id
         body.is_stock_issue = payload.is_stock_issue
         body.total_before_tax_fc = sum((line.amount_fc for line in payload.lines), _ZERO)

@@ -13,6 +13,13 @@ liệt kê nó và `price_settlements` từ chối dòng trỏ vào nó
 phiếu chi — cùng lựa chọn với chiều mua, và nó giữ cho `ar_ap_ledger` chỉ có
 đúng một chiều cho mỗi `target_kind`.
 
+**Điều chỉnh giảm (7F-2a) là loại đầu tiên có HAI đường trỏ về hóa đơn gốc** —
+`adjusts_voucher_id` ở thân chứng từ và dòng đối trừ ở đây — nên nó là loại đầu
+tiên mà hai đường ấy lệch nhau được. `document_id` truyền xuống bộ kiểm chung là
+thứ buộc chúng khớp (ADR-023 mở `OpenInvoice.document_id` cho đúng câu hỏi này).
+Trả lại hàng và giảm giá chỉ có một đường nên không truyền gì, và vẫn đối trừ
+nhiều hóa đơn một lượt như trước.
+
 Phần không-phụ-thuộc-module sống ở `ket.posting.settlements` (7B đã tách); ở
 đây chỉ còn phần buộc vào bảng `sales_settlements` và hình dạng payload.
 """
@@ -111,6 +118,14 @@ def price_settlements(
         # phải đang treo nợ trên đúng TK ấy — khác TK là sổ cái giảm một TK,
         # sổ phụ giảm TK kia.
         account_id=payload.receivable_account_id,
+        # Chứng từ điều chỉnh giảm mang **hai** đường trỏ về hóa đơn gốc —
+        # `adjusts_voucher_id` ở thân, và dòng đối trừ ở đây — nên chúng phải
+        # trỏ cùng một chỗ. Lệch nhau thì tờ hóa đơn điều chỉnh khai với cơ quan
+        # thuế rằng hóa đơn A giảm, còn sổ công nợ giảm hóa đơn B: sổ sách và
+        # lời khai thuế nói hai điều khác nhau, và không phép kiểm toàn vẹn nào
+        # thấy (cả hai vế đều cân). Trả lại hàng và giảm giá không có đường thứ
+        # hai nên không truyền gì — chúng vẫn đối trừ nhiều hóa đơn một lượt.
+        document_id=payload.adjusts_voucher_id,
     )
     if not priced:
         return priced

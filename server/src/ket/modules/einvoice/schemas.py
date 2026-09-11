@@ -131,6 +131,16 @@ class ResolveErrorIn(BaseModel):
     )
     notice_date: date = Field(title="Ngày thông báo sai sót")
     reason: str | None = Field(default=None, title="Diễn giải sai sót")
+    adjustment_voucher_id: UUID | None = Field(
+        default=None,
+        title="Chứng từ mang phần chênh",
+        description=(
+            "**Chỉ** nhánh điều chỉnh tăng/giảm, và **bắt buộc** ở đó: hóa đơn "
+            "đọc tổng từ chứng từ gốc, nên tờ khai phần chênh cần chứng từ bán "
+            "của riêng nó (`sales`, kind điều chỉnh tăng/giảm). Đưa kèm ở nhánh "
+            "khác là lỗi, không phải tham số thừa bị bỏ qua."
+        ),
+    )
 
 
 class EInvoiceOut(BaseModel):
@@ -165,6 +175,15 @@ class ResolveErrorOut(BaseModel):
         default=None,
         title="Hóa đơn thay thế",
         description="Chỉ có ở cách xử lý THAY THẾ; tờ nháp mới trên chính chứng từ cũ.",
+    )
+    adjustment: EInvoiceOut | None = Field(
+        default=None,
+        title="Hóa đơn điều chỉnh",
+        description=(
+            "Chỉ có ở hai cách xử lý ĐIỀU CHỈNH. Nhánh THÔNG TIN dựng tờ nháp "
+            "trên chính chứng từ cũ (không đồng nào đổi); nhánh TIỀN dựng nó "
+            "trên chứng từ mang phần chênh."
+        ),
     )
 
 

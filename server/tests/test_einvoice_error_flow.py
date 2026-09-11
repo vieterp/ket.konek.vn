@@ -31,15 +31,19 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from einvoice_support import ensure_active_registration, ensure_invoice_form
+from ket.api.dependencies import RequestScope
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.errors import (
+    EInvoiceAdjustmentVoucherInvalidError,
+    EInvoiceAdjustmentVoucherRequiredError,
     EInvoiceCancellationIncompleteError,
     EInvoiceErrorFlowUnknownError,
-    EInvoiceRemedyNotAvailableError,
+    EInvoiceTransitionError,
     VoucherHasIssuedInvoiceError,
 )
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.pricing import PriceSource
+from ket.kernel.security.models import Branch
 from ket.modules.einvoice.error_flow import ErrorFlowService
 from ket.modules.einvoice.models import (
     SUPERSEDED_STATUSES,
@@ -57,7 +61,12 @@ from ket.modules.sales.schemas import SalesInvoiceIn, SalesInvoiceLineIn
 from ket.modules.sales.service import SalesInvoiceService
 from ket.posting.contracts import VoucherService
 from ket.posting.documents.models import Voucher
-from posting_support import PostingContext, posting_scope, seed_posting_context
+from posting_support import (
+    PostingContext,
+    ensure_second_branch,
+    posting_scope,
+    seed_posting_context,
+)
 from sales_support import ensure_customer, ensure_salesperson, seed_sales_package_data
 
 pytestmark = pytest.mark.db
@@ -66,6 +75,7 @@ ACTOR_ID = 1
 MAY_08 = date(2026, 5, 8)
 CUSTOMER_ID = 9751
 SALESPERSON_ID = 9752
+OTHER_CUSTOMER_ID = 9753
 FORM_ID = 8861
 SERIAL = "C26TERR"
 
@@ -133,6 +143,76 @@ def _payload(context: PostingContext, accounts: dict[str, int]) -> SalesInvoiceI
             ),
         ),
     )
+
+
+def _delta_payload(
+    context: PostingContext,
+    accounts: dict[str, int],
+    *,
+    adjusts_voucher_id: UUID,
+    customer_id: int = CUSTOMER_ID,
+    branch_id: int | None = None,
+    currency_code: str = "VND",
+    exchange_rate: Decimal = Decimal(1),
+) -> SalesInvoiceIn:
+    """Chứng từ điều chỉnh TĂNG mang **phần chênh** — 30.000 đ, không phải cả hóa đơn."""
+    return SalesInvoiceIn(
+        kind=SalesInvoiceKind.ADJUSTMENT_INCREASE,
+        operation_code="dieu-chinh-tang-hoa-don",
+        adjusts_voucher_id=adjusts_voucher_id,
+        customer_id=customer_id,
+        receivable_account_id=accounts["131"],
+        branch_id=branch_id if branch_id is not None else context.branch_id,
+        document_date=MAY_08,
+        posting_date=MAY_08,
+        currency_code=currency_code,
+        exchange_rate=exchange_rate,
+        salesperson_id=SALESPERSON_ID,
+        description="điều chỉnh tăng hóa đơn",
+        lines=(
+            SalesInvoiceLineIn(
+                description="Chênh lệch đơn giá Hàng A",
+                quantity=Decimal(1),
+                unit_price_fc=Decimal(30_000),
+                amount_fc=Decimal(30_000),
+                vat_rate=Decimal(10),
+                vat_amount_fc=Decimal(3_000),
+                account_id=accounts["5111"],
+                vat_account_id=accounts["33311"],
+                price_source=PriceSource.ITEM_DEFAULT,
+            ),
+        ),
+    )
+
+
+def _posted_delta_voucher(
+    session: Session,
+    context: PostingContext,
+    accounts: dict[str, int],
+    *,
+    adjusts_voucher_id: UUID,
+    customer_id: int = CUSTOMER_ID,
+    branch_id: int | None = None,
+    currency_code: str = "VND",
+    exchange_rate: Decimal = Decimal(1),
+) -> Voucher:
+    """Chứng từ chênh lệch **đã ghi sổ** — điều kiện của `_verify_delta_voucher`."""
+    service = SalesInvoiceService(session)
+    voucher = service.create(
+        _delta_payload(
+            context,
+            accounts,
+            adjusts_voucher_id=adjusts_voucher_id,
+            customer_id=customer_id,
+            branch_id=branch_id,
+            currency_code=currency_code,
+            exchange_rate=exchange_rate,
+        ),
+        user_id=ACTOR_ID,
+    )
+    service.post(voucher.id, user_id=ACTOR_ID)
+    session.flush()
+    return voucher
 
 
 def _issued_invoice(
@@ -413,39 +493,317 @@ def test_the_error_notice_does_not_satisfy_the_cancellation_pair(
     run(work)
 
 
-# --- Nhánh chưa thi hành được ---------------------------------------------
+# --- Hai nhánh điều chỉnh (lát 7F-2a) -------------------------------------
 
 
-def test_an_adjustment_reports_the_right_remedy_but_refuses_to_run(
+def test_an_information_only_adjustment_needs_no_delta_voucher(
     run: Runner, context: PostingContext, accounts: dict[str, int]
 ) -> None:
-    """Điều chỉnh: `resolve` đúng, `apply` từ chối bằng mã lỗi riêng.
+    """Điều chỉnh THÔNG TIN dựng tờ mới trên **chính chứng từ cũ**.
 
-    Không phải `500` và không phải một hóa đơn nửa vời: hóa đơn điều chỉnh mang
-    **phần chênh**, nên nó cần một chứng từ bán mang phần chênh (phân hệ bán
-    hàng, lát sau). Thông điệp phải nói ra cách xử lý đúng, vì kế toán vẫn phải
-    làm việc ấy — bằng tay, ở bản này.
+    Không đồng nào đổi, nên tổng của tờ điều chỉnh đúng bằng tổng tờ cũ và
+    BR-EIV-07 giữ nguyên trên chứng từ gốc — đó là lý do nhánh này không cần
+    chứng từ chênh lệch nào, chứ không phải vì nó được miễn kiểm.
     """
 
     def work(session: Session) -> None:
-        _, invoice = _issued_invoice(session, context, accounts)
-        flows = ErrorFlowService(session)
-        flow = flows.resolve(error_kind=ErrorKind.SAI_SO_TIEN, buyer_declared=True)
-        assert Remedy(flow.remedy) is Remedy.DIEU_CHINH_TIEN
+        voucher, invoice = _issued_invoice(session, context, accounts)
+        outcome = ErrorFlowService(session).apply(
+            invoice.id,
+            error_kind=ErrorKind.SAI_THONG_TIN,
+            buyer_declared=True,
+            notice_no=NOTICE_NO,
+            notice_date=MAY_08,
+        )
+        assert Remedy(outcome.flow.remedy) is Remedy.DIEU_CHINH_THONG_TIN
+        assert outcome.replacement is None
+        assert outcome.adjustment is not None
+        assert outcome.adjustment.source_voucher_id == voucher.id
+        assert outcome.adjustment.adjusts_invoice_id == invoice.id
+        assert outcome.adjustment.replaces_invoice_id is None
 
-        with pytest.raises(EInvoiceRemedyNotAvailableError) as raised:
-            flows.apply(
-                invoice.id,
+        session.refresh(invoice)
+        assert EInvoiceStatus(invoice.status) is EInvoiceStatus.DA_DIEU_CHINH
+
+    run(work)
+
+
+def test_an_amount_adjustment_hangs_the_new_invoice_on_the_delta_voucher(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Điều chỉnh TIỀN: tờ mới đứng trên chứng từ **chênh lệch**, không trên gốc.
+
+    Đây là cả lý do tồn tại của hai `kind` điều chỉnh. Hóa đơn đọc tổng từ chứng
+    từ nó trỏ vào, nên một tờ điều chỉnh trỏ về chứng từ gốc sẽ khai **cả** hóa
+    đơn lần thứ hai thay vì khai phần chênh — tức doanh thu gấp đôi với cơ quan
+    thuế. Bài ghim đúng cái `source_voucher_id` ấy.
+    """
+
+    def work(session: Session) -> None:
+        voucher, invoice = _issued_invoice(session, context, accounts)
+        delta = _posted_delta_voucher(session, context, accounts, adjusts_voucher_id=voucher.id)
+        outcome = ErrorFlowService(session).apply(
+            invoice.id,
+            error_kind=ErrorKind.SAI_SO_TIEN,
+            buyer_declared=True,
+            notice_no=NOTICE_NO,
+            notice_date=MAY_08,
+            adjustment_voucher_id=delta.id,
+        )
+        assert Remedy(outcome.flow.remedy) is Remedy.DIEU_CHINH_TIEN
+        assert outcome.adjustment is not None
+        assert outcome.adjustment.source_voucher_id == delta.id
+        assert outcome.adjustment.source_voucher_id != voucher.id
+        assert outcome.adjustment.adjusts_invoice_id == invoice.id
+        # Thông báo 04/SS lập ở nhánh này như ở mọi nhánh khác.
+        assert outcome.notice.kind == ErrorNoticeKind.THONG_BAO_SAI_SOT
+
+    run(work)
+
+
+def test_the_delta_voucher_is_required_and_refused_both_ways(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Luật đi hai chiều: thiếu ở nhánh cần, **và** thừa ở nhánh không cần.
+
+    Chiều thừa đáng ghim ngang chiều thiếu. Một chứng từ bán đưa kèm ở nhánh hủy
+    mà bị bỏ qua im lặng sẽ để lại một khoản doanh thu đã ghi sổ không tờ hóa đơn
+    nào khai — thứ chỉ lộ ra ở lượt đối chiếu hóa đơn ↔ doanh thu sổ cái.
+    """
+
+    def work(session: Session) -> None:
+        _, missing = _issued_invoice(session, context, accounts)
+        with pytest.raises(EInvoiceAdjustmentVoucherRequiredError) as absent:
+            ErrorFlowService(session).apply(
+                missing.id,
                 error_kind=ErrorKind.SAI_SO_TIEN,
                 buyer_declared=True,
                 notice_no=NOTICE_NO,
                 notice_date=MAY_08,
             )
-        assert raised.value.details["remedy"] == int(Remedy.DIEU_CHINH_TIEN)
+        assert absent.value.details["remedy"] == int(Remedy.DIEU_CHINH_TIEN)
+        session.refresh(missing)
+        assert EInvoiceStatus(missing.status) is EInvoiceStatus.DA_PHAT_HANH
 
-        # Và nó **không** để lại gì: không đổi trạng thái, không lập văn bản.
+        spare_voucher, spare = _issued_invoice(session, context, accounts)
+        delta = _posted_delta_voucher(
+            session, context, accounts, adjusts_voucher_id=spare_voucher.id
+        )
+        with pytest.raises(EInvoiceAdjustmentVoucherRequiredError) as surplus:
+            ErrorFlowService(session).apply(
+                spare.id,
+                error_kind=ErrorKind.KHONG_PHAT_SINH,
+                buyer_declared=None,
+                notice_no=NOTICE_NO,
+                notice_date=MAY_08,
+                adjustment_voucher_id=delta.id,
+            )
+        assert surplus.value.details["remedy"] == int(Remedy.HUY)
+        session.refresh(spare)
+        assert EInvoiceStatus(spare.status) is EInvoiceStatus.DA_PHAT_HANH
+
+    run(work)
+
+
+def test_the_delta_voucher_must_be_posted_and_belong_to_the_same_customer(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Ba điều kiện của chứng từ chênh lệch, mỗi điều kiện một cách hỏng riêng.
+
+    Duyệt cả ba trong một bài chứ không ba bài rời, cùng lập luận với bài bảng
+    quyết định: một phép kiểm viết nhầm thành `or` sẽ để lọt đúng hai trong ba,
+    và điều đó chỉ lộ ra khi cả ba chạy qua cùng một đường.
+    """
+
+    def work(session: Session) -> None:
+        voucher, invoice = _issued_invoice(session, context, accounts)
+        flows = ErrorFlowService(session)
+        answers = {
+            "error_kind": ErrorKind.SAI_SO_TIEN,
+            "buyer_declared": True,
+            "notice_no": NOTICE_NO,
+            "notice_date": MAY_08,
+        }
+
+        # (1) Chính chứng từ gốc: tờ điều chỉnh sẽ mang cả hóa đơn, không phải phần chênh.
+        with pytest.raises(EInvoiceAdjustmentVoucherInvalidError):
+            flows.apply(invoice.id, adjustment_voucher_id=voucher.id, **answers)
+
+        # (2) Chưa ghi sổ: số tiền còn sửa được, nên BR-EIV-07 đúng lúc lập rồi sai sau.
+        draft = SalesInvoiceService(session).create(
+            _delta_payload(context, accounts, adjusts_voucher_id=voucher.id), user_id=ACTOR_ID
+        )
+        with pytest.raises(EInvoiceAdjustmentVoucherInvalidError):
+            flows.apply(invoice.id, adjustment_voucher_id=draft.id, **answers)
+
+        # (3) Khách khác: rút doanh thu khỏi kỳ thuế của một người mua không liên quan.
+        ensure_customer(session, partner_id=OTHER_CUSTOMER_ID, code="KH-7F-ERR-2")
+        stranger = _posted_delta_voucher(
+            session, context, accounts, adjusts_voucher_id=voucher.id, customer_id=OTHER_CUSTOMER_ID
+        )
+        with pytest.raises(EInvoiceAdjustmentVoucherInvalidError):
+            flows.apply(invoice.id, adjustment_voucher_id=stranger.id, **answers)
+
+        # Không lượt nào để lại dấu vết trên tờ hóa đơn.
         session.refresh(invoice)
         assert EInvoiceStatus(invoice.status) is EInvoiceStatus.DA_PHAT_HANH
+
+    run(work)
+
+
+def test_an_ordinary_sale_cannot_pass_as_a_delta_voucher(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Điều kiện nặng nhất: chứng từ chênh lệch phải là chứng từ ĐIỀU CHỈNH của
+    **đúng** chứng từ gốc này.
+
+    Hai ca, cả hai qua sạch năm điều kiện kia. (1) Một hóa đơn bán **thường**
+    cùng khách, cùng đồng tiền, cùng chi nhánh, đã ghi sổ, chưa mang hóa đơn
+    điện tử nào — nhận nó là khai một khoản doanh thu **thật** với cơ quan thuế
+    thành phần chênh của tờ khác, còn chính nó thì vĩnh viễn không xuất được hóa
+    đơn (`uq_einvoices_live_source_voucher`). (2) Một chứng từ điều chỉnh thật,
+    nhưng lập cho **hóa đơn khác** — cùng loại lỗi, nhỏ hơn một bậc.
+
+    Một phép so bắt cả hai, và đó là cả điểm của `adjusts_voucher_id`:
+    `NULL` nghĩa "không phải chứng từ điều chỉnh" (ràng buộc
+    `adjustment_link_matches_kind` của `sales` dựng nghĩa ấy), nên phép so bằng
+    loại luôn cả hai ca mà không cần hỏi `kind`.
+    """
+
+    def work(session: Session) -> None:
+        _, invoice = _issued_invoice(session, context, accounts)
+        other_voucher, _ = _issued_invoice(session, context, accounts)
+        flows = ErrorFlowService(session)
+        answers = {
+            "error_kind": ErrorKind.SAI_SO_TIEN,
+            "buyer_declared": True,
+            "notice_no": NOTICE_NO,
+            "notice_date": MAY_08,
+        }
+
+        # (1) Hóa đơn bán thường — không có đường trỏ về chứng từ nào.
+        ordinary = SalesInvoiceService(session).create(
+            _payload(context, accounts), user_id=ACTOR_ID
+        )
+        SalesInvoiceService(session).post(ordinary.id, user_id=ACTOR_ID)
+        session.flush()
+        with pytest.raises(EInvoiceAdjustmentVoucherInvalidError) as plain:
+            flows.apply(invoice.id, adjustment_voucher_id=ordinary.id, **answers)
+        assert plain.value.details["adjusts_voucher_id"] is None
+
+        # (2) Chứng từ điều chỉnh thật, nhưng của hóa đơn khác.
+        misdirected = _posted_delta_voucher(
+            session, context, accounts, adjusts_voucher_id=other_voucher.id
+        )
+        with pytest.raises(EInvoiceAdjustmentVoucherInvalidError) as wrong:
+            flows.apply(invoice.id, adjustment_voucher_id=misdirected.id, **answers)
+        assert wrong.value.details["adjusts_voucher_id"] == str(other_voucher.id)
+
+        session.refresh(invoice)
+        assert EInvoiceStatus(invoice.status) is EInvoiceStatus.DA_PHAT_HANH
+
+    run(work)
+
+
+def test_the_delta_voucher_must_match_branch_and_currency(
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Hai điều kiện còn lại, và cả hai chặn một **ngõ cụt vĩnh viễn**.
+
+    Chi nhánh: `create_draft` lấy chi nhánh từ chứng từ chênh lệch còn ký hiệu
+    chép từ tờ cũ, mà một ký hiệu thuộc đúng một chi nhánh (7D) — nên tờ điều
+    chỉnh dựng xong sẽ đổ ở lượt kiểm hồ sơ đăng ký lúc phát hành, trong khi tờ
+    gốc đã sang `DA_DIEU_CHINH` (không có cạnh ra) và 04/SS đã lập. Khóa ngoại
+    `adjusts_invoice_id` là **một cột** nên nó không chặn hộ, khác
+    `(source_voucher_id, branch_id)` của chính bảng này.
+
+    Đồng tiền: một phần chênh USD cho một hóa đơn VND là hai con số không cộng
+    trừ được với nhau.
+
+    Bài này tự dựng scope hai chi nhánh thay vì dùng `run`: `posting_scope` chỉ
+    mở đúng một chi nhánh, mà ca hỏng đòi một người dùng **nhìn thấy cả hai** —
+    đúng cấu hình thường gặp ở bản cài nhiều chi nhánh.
+    """
+    ensure_second_branch(session_factory, dataset_alpha)
+    narrow = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, narrow) as session:
+        other_branch_id = session.execute(
+            select(Branch.id).where(Branch.id != context.branch_id).order_by(Branch.id).limit(1)
+        ).scalar_one()
+
+    wide = RequestScope(
+        dataset_schema=dataset_alpha.schema_name,
+        user_id=ACTOR_ID,
+        branch_ids=(context.branch_id, other_branch_id),
+        acting_branch_id=context.branch_id,
+    )
+    answers = {
+        "error_kind": ErrorKind.SAI_SO_TIEN,
+        "buyer_declared": True,
+        "notice_no": NOTICE_NO,
+        "notice_date": MAY_08,
+    }
+
+    with unit_of_work(session_factory, wide) as session:
+        voucher, invoice = _issued_invoice(session, context, accounts)
+        flows = ErrorFlowService(session)
+
+        other_branch = _posted_delta_voucher(
+            session, context, accounts, adjusts_voucher_id=voucher.id, branch_id=other_branch_id
+        )
+        with pytest.raises(EInvoiceAdjustmentVoucherInvalidError, match="chi nhánh"):
+            flows.apply(invoice.id, adjustment_voucher_id=other_branch.id, **answers)
+
+        foreign = _posted_delta_voucher(
+            session, context, accounts, adjusts_voucher_id=voucher.id, currency_code="USD"
+        )
+        with pytest.raises(EInvoiceAdjustmentVoucherInvalidError, match="đồng tiền"):
+            flows.apply(invoice.id, adjustment_voucher_id=foreign.id, **answers)
+
+        # Không lượt nào để lại dấu vết trên tờ hóa đơn.
+        session.refresh(invoice)
+        assert EInvoiceStatus(invoice.status) is EInvoiceStatus.DA_PHAT_HANH
+
+
+def test_the_supersede_chain_cannot_close_on_itself(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Nợ 7D "chuỗi không vòng" đóng bằng **cấu trúc**, không bằng phép kiểm.
+
+    Tờ mới luôn vừa dựng xong nên chưa ai trỏ vào nó, còn tờ cũ vừa rơi vào
+    `SUPERSEDED_STATUSES` — ba trạng thái không có cạnh ra — nên nó không bao
+    giờ là đầu của một lượt sau. Bài ghim đúng hai mệnh đề ấy: một lượt xử lý
+    thứ hai trên tờ đã bị điều chỉnh bị máy trạng thái chặn, nên vòng
+    `A → B → A` không dựng được.
+    """
+
+    def work(session: Session) -> None:
+        _, invoice = _issued_invoice(session, context, accounts)
+        outcome = ErrorFlowService(session).apply(
+            invoice.id,
+            error_kind=ErrorKind.SAI_THONG_TIN,
+            buyer_declared=True,
+            notice_no=NOTICE_NO,
+            notice_date=MAY_08,
+        )
+        assert outcome.adjustment is not None
+        session.refresh(invoice)
+        assert EInvoiceStatus(invoice.status) in SUPERSEDED_STATUSES
+        # Ba trạng thái cuối không có cạnh ra — không nhánh nào trỏ ngược lại được.
+        assert not [
+            action for (status, action) in TRANSITIONS if status is EInvoiceStatus(invoice.status)
+        ]
+        with pytest.raises(EInvoiceTransitionError):
+            ErrorFlowService(session).apply(
+                invoice.id,
+                error_kind=ErrorKind.SAI_THONG_TIN,
+                buyer_declared=False,
+                notice_no="04SS-002",
+                notice_date=MAY_08,
+            )
 
     run(work)
 

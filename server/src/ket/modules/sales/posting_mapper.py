@@ -2,7 +2,9 @@
 
 Mỗi dòng hóa đơn trải thành các **cặp** Nợ/Có cùng số tiền, TK bên này làm đối
 ứng của bên kia — cùng khuôn mapper hóa đơn mua, đảo hai vế. Hai sổ ghi giống
-nhau nên `management_lines=None`. Với hóa đơn bán thường (kind 0, 1, 4):
+nhau nên `management_lines=None`. Với hóa đơn ghi TĂNG phải thu — bán thường
+(kind 0, 1, 4) và **điều chỉnh tăng** (kind 5), thứ chỉ khác ở chỗ số tiền là
+phần chênh chứ không phải cả hóa đơn:
 
 * Hàng/dịch vụ: Nợ `receivable_account_id` / Có `line.account_id`, số
   `amount_fc` — **đã trừ chiết khấu thương mại**. Chiết khấu ghi giảm doanh thu
@@ -10,11 +12,15 @@ nhau nên `management_lines=None`. Với hóa đơn bán thường (kind 0, 1, 4
   521 riêng và `discount_amount_fc` không đi vào bút toán nào.
 * Thuế GTGT đầu ra: Nợ `receivable_account_id` / Có `line.vat_account_id`.
 
-**Trả lại hàng bán (kind 2) và giảm giá hàng bán (kind 3)** đảo chiều mọi cặp
+**Ba loại ghi GIẢM phải thu** (`REVERSING_KINDS` — trả lại hàng bán kind 2,
+giảm giá hàng bán kind 3, **điều chỉnh giảm** kind 6) đảo chiều mọi cặp
 (Nợ 521/511 / Có 131, Nợ 33311 / Có 131), và thêm cặp chênh lệch tỷ giá của
 lượt đối trừ vào hóa đơn gốc — `money_in=True` vì đây là một lượt **giảm phải
 thu**, cùng hướng lãi/lỗ với phiếu thu (xem `posting.settlements._is_gain`).
 Đối xứng với chứng từ trả lại hàng mua của 7B, nơi cùng lập luận cho ra `False`.
+
+Hai `kind` điều chỉnh **không** mọc thêm nhánh nào ở tệp này: chiều nằm ở
+`kind`, và `REVERSING_KINDS` là câu hỏi duy nhất mapper đặt ra về chiều.
 
 **Không có cặp giá vốn.** Nợ 632 / Có 156 đòi giá xuất kho, mà giá xuất kho là
 việc của phase 8 — `sales_invoices.cogs_posted` ở lại `false` cho tới lúc ấy.

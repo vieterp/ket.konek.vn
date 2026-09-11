@@ -40,6 +40,7 @@ class ket.kernel.protocols.OpenInvoice
   field branch_id: int
   field currency_code: str
   field description: str | None
+  field document_id: UUID | None
   field due_date: date | None
   field exchange_rate: Decimal
   field invoice_date: date

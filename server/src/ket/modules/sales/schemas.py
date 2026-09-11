@@ -42,6 +42,7 @@ from ket.kernel.pricing import PriceSource
 from ket.kernel.protocols import SettlementTargetKind
 from ket.kernel.quantity import QUANTITY_PRECISION, QUANTITY_SCALE
 from ket.modules.sales.models import (
+    ADJUSTMENT_KINDS,
     DESCRIPTION_MAX_LENGTH,
     DISCOUNT_PERCENT_PRECISION,
     DISCOUNT_PERCENT_SCALE,
@@ -163,7 +164,17 @@ class SalesInvoiceIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: int = Field(ge=SalesInvoiceKind.GOODS, le=SalesInvoiceKind.AGENCY)
+    kind: int = Field(ge=SalesInvoiceKind.GOODS, le=SalesInvoiceKind.ADJUSTMENT_DECREASE)
+    adjusts_voucher_id: UUID | None = Field(
+        default=None,
+        title="Chứng từ được điều chỉnh",
+        description=(
+            "**Bắt buộc** trên hai loại điều chỉnh tăng/giảm và **cấm** trên năm "
+            "loại còn lại: chứng từ điều chỉnh mang phần chênh của một chứng từ "
+            "bán cụ thể, và hóa đơn điện tử đọc đường này để biết nó điều chỉnh "
+            "đúng hóa đơn nào (FR-EIV-033/036)."
+        ),
+    )
     operation_code: str = Field(min_length=1, max_length=OPERATION_CODE_INPUT_MAX)
     customer_id: int
     receivable_account_id: int
@@ -198,6 +209,11 @@ class SalesInvoiceIn(BaseModel):
     def _invoice_sane(self) -> SalesInvoiceIn:
         if self.exchange_rate <= _ZERO:
             raise ValueError("Tỷ giá phải dương")
+        adjusting = self.kind in ADJUSTMENT_KINDS
+        if adjusting and self.adjusts_voucher_id is None:
+            raise ValueError("Chứng từ điều chỉnh phải nêu chứng từ bán được điều chỉnh")
+        if not adjusting and self.adjusts_voucher_id is not None:
+            raise ValueError("Chỉ chứng từ điều chỉnh mới nêu chứng từ bán được điều chỉnh")
         if self.kind in REVERSING_KINDS:
             if not self.settlements:
                 # Sổ phụ công nợ không có dòng âm: khoản trả lại / giảm giá chỉ
@@ -207,10 +223,12 @@ class SalesInvoiceIn(BaseModel):
                 # đường đúng lúc ấy là trả tiền lại khách bằng phiếu chi
                 # (quyết định user 2026-09-04, cùng hình dạng với 7B).
                 raise ValueError(
-                    "Chứng từ trả lại / giảm giá hàng bán phải đối trừ vào hóa đơn gốc"
+                    "Chứng từ trả lại / giảm giá / điều chỉnh giảm phải đối trừ vào hóa đơn gốc"
                 )
         elif self.settlements:
-            raise ValueError("Chỉ chứng từ trả lại / giảm giá hàng bán mới đối trừ hóa đơn gốc")
+            raise ValueError(
+                "Chỉ chứng từ trả lại / giảm giá / điều chỉnh giảm mới đối trừ hóa đơn gốc"
+            )
         targets = [(row.target_kind, row.target_id) for row in self.settlements]
         if len(targets) != len(set(targets)):
             raise ValueError("Một chứng từ công nợ chỉ đối trừ một dòng trên mỗi hóa đơn")

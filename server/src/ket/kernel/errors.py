@@ -1808,20 +1808,49 @@ class EInvoiceErrorFlowUnknownError(DomainError):
     error_code: ClassVar[str] = "einvoice.error_flow_unknown"
 
 
-class EInvoiceRemedyNotAvailableError(DomainError):
-    """Cách xử lý đúng là điều chỉnh, mà đường lập hóa đơn điều chỉnh chưa có.
+class EInvoiceAdjustmentVoucherRequiredError(DomainError):
+    """Nhánh điều chỉnh TIỀN cần một chứng từ bán mang phần chênh, mà lượt gọi
+    không đưa kèm — hoặc đưa kèm ở một nhánh không nhận nó.
 
-    Hóa đơn cố ý không mang cột tiền — nó đọc tổng từ chứng từ gốc và BR-EIV-07
-    kiểm hai vế khớp nhau — nên hóa đơn điều chỉnh, thứ chỉ mang **phần chênh**,
-    cần một chứng từ bán mang phần chênh ấy. Đó là việc ở phân hệ bán hàng.
+    Hóa đơn cố ý không mang cột tiền: nó đọc tổng từ chứng từ gốc, và đó chính
+    là cách BR-EIV-07 thành đúng theo cấu trúc. Một tờ hóa đơn điều chỉnh tăng
+    hoặc giảm chỉ khai **phần chênh**, nên nó cần chứng từ của riêng nó.
 
-    `409` chứ không `422`: bộ câu trả lời **hợp lệ** và câu trả lời của hệ thống
-    **đúng** — thứ chưa sẵn sàng là đường thi hành, tức một xung đột về trạng
-    thái của hệ thống chứ không phải một lỗi ở dữ liệu người dùng gửi lên.
+    Luật đi **hai chiều**, và lỗi này mang cả hai: thiếu ở nhánh cần là một tờ
+    hóa đơn không lập được, còn thừa ở nhánh không cần là một chứng từ bán sắp
+    bị buộc vào một tờ hóa đơn không khai nó — một khoản doanh thu đứng ngoài
+    mọi tờ hóa đơn. Bỏ qua tham số thừa sẽ giấu đúng ca thứ hai.
+
+    `422` chứ không `409`: chỗ sai nằm ở **dữ liệu lượt gọi gửi lên**, không ở
+    trạng thái của hệ thống — khác hẳn `einvoice.remedy_not_available` mà lát
+    7F-1 dùng lúc đường thi hành còn chưa tồn tại.
     """
 
-    error_code: ClassVar[str] = "einvoice.remedy_not_available"
-    http_status: ClassVar[int] = 409
+    error_code: ClassVar[str] = "einvoice.adjustment_voucher_required"
+    http_status: ClassVar[int] = 422
+
+
+class EInvoiceAdjustmentVoucherInvalidError(DomainError):
+    """Chứng từ mang phần chênh không dùng được cho tờ hóa đơn đang điều chỉnh.
+
+    Ba điều kiện, mỗi điều kiện đóng một cách hỏng khác nhau:
+
+    * **Đã ghi sổ** — chứng từ còn ở trạng thái Đã cất thì số tiền trên nó còn
+      sửa được, và một tờ hóa đơn điện tử đọc tổng từ một con số còn sửa được
+      là BR-EIV-07 đúng lúc lập rồi sai lúc nào không ai biết.
+    * **Cùng khách hàng với hóa đơn bị điều chỉnh** — khác khách là điều chỉnh
+      tờ hóa đơn của người này bằng phần chênh của người kia, tức rút doanh thu
+      khỏi kỳ thuế của một người mua không liên quan.
+    * **Không phải chính chứng từ gốc** — trỏ lại chứng từ cũ thì tờ điều chỉnh
+      mang **cả** hóa đơn chứ không phải phần chênh, đúng thứ hai `kind` điều
+      chỉnh của `sales` sinh ra để tránh.
+
+    Điều kiện thứ tư — chứng từ ấy chưa mang tờ hóa đơn còn hiệu lực nào — không
+    ở đây: `uq_einvoices_live_source_voucher` đã đóng nó ở tầng bảng.
+    """
+
+    error_code: ClassVar[str] = "einvoice.adjustment_voucher_invalid"
+    http_status: ClassVar[int] = 422
 
 
 class EInvoiceNoticeSubmittedError(DomainError):
