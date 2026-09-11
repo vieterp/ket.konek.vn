@@ -9,7 +9,9 @@ hơn và mỗi test chỉ đổi đúng một điều kiện đang kiểm.
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -18,6 +20,7 @@ from ket.kernel.config.packages.loader import (
     CLOSING_PAIRS_FILE,
     DEFAULT_ACCOUNTS_FILE,
     PACKAGE_MANIFEST_FILE,
+    load_builtin_package,
     load_package_directory,
     load_package_from_texts,
 )
@@ -316,3 +319,58 @@ def test_a_non_deposit_account_may_not_declare_the_bank_dimension() -> None:
     with pytest.raises(ConfigPackageDataInvalidError) as refused:
         load_package_from_texts(_valid_texts(**{ACCOUNTS_FILE: accounts}))
     assert "131" in str(refused.value)
+
+
+def _load_migration(name: str) -> ModuleType:
+    """Nạp một tệp migration làm module rời.
+
+    `importlib` trực tiếp chứ không `import`: thư mục `migrations/versions` không
+    phải một gói, và tên tệp mở đầu bằng chữ số nên nó không phải một định danh
+    Python hợp lệ.
+    """
+    path = Path(__file__).resolve().parents[1] / "migrations" / "versions" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_adjustment_operations_agree_between_the_packages_and_the_migration() -> None:
+    """Hai nghiệp vụ điều chỉnh khai ở hai chỗ, và hai chỗ phải nói một điều.
+
+    Lát 7F-2a cố ý chép: tệp CSV của gói phục vụ dataset **cấp mới**, còn lượt
+    chèn của migration `0037` phục vụ dataset **đã có** — vì
+    `seed._ensure_auto_posting_backfilled` tính chỗ trống theo từng
+    `document_type`, và `SAL` đã có dòng từ `0028` nên nó bỏ qua đúng ca này.
+
+    Chép thì phải có thứ canh cho hai bản khỏi trôi. Bài này là thứ ấy: sửa CSV
+    mà quên migration (hoặc ngược lại) sẽ để bản cài cũ và bản cài mới lặng lẽ
+    khác nhau — loại lệch không cổng nào khác nhìn thấy, vì mỗi đường gieo chạy
+    ở một loại dataset.
+    """
+    migration = _load_migration("0037_sales_adjustment_kinds")
+    expected = {
+        (code, debit, credit, order)
+        for code, _name, debit, credit, order in migration._NEW_OPERATIONS
+    }
+
+    for slug in ("tt99", "tt133"):
+        rules = load_builtin_package(slug).auto_posting_rules
+        actual = {
+            (row.operation_code, row.debit_purpose, row.credit_purpose, row.display_order)
+            for row in rules
+            if row.operation_code.startswith("dieu-chinh-")
+        }
+        assert actual == expected, slug
+        # Và chúng thuộc đúng loại chứng từ mà migration chèn vào.
+        assert {
+            row.document_type for row in rules if row.operation_code.startswith("dieu-chinh-")
+        } == {migration._SALES_DOCUMENT_TYPE}
+
+    # Đường hạ cấp gỡ **đúng** hai mã đường nâng cấp chèn. Hai mã ở đó viết
+    # literal (bindparam danh sách không dựng được literal cho `--sql`), tức một
+    # bản chép thứ ba — nên nó phải nằm trong cùng phép đối chiếu này.
+    for code, _name, _debit, _credit, _order in migration._NEW_OPERATIONS:
+        assert f"'{code}'" in migration._DELETE_OPERATIONS
+    assert migration._DELETE_OPERATIONS.count("'dieu-chinh-") == len(migration._NEW_OPERATIONS)

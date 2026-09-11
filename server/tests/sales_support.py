@@ -54,6 +54,8 @@ _RULES: tuple[tuple[str, str, str, bool, int | None, int], ...] = (
     ("SAL", "ban-hang-dai-ly", "Bán hàng qua đại lý", True, 0, 3),
     ("SAL", "tra-lai-hang-ban", "Hàng bán bị trả lại", True, 0, 4),
     ("SAL", "giam-gia-hang-ban", "Giảm giá hàng bán", True, 0, 5),
+    ("SAL", "dieu-chinh-tang-hoa-don", "Điều chỉnh tăng hóa đơn đã phát hành", True, 0, 6),
+    ("SAL", "dieu-chinh-giam-hoa-don", "Điều chỉnh giảm hóa đơn đã phát hành", True, 0, 7),
     # Nghiệp vụ gói khai sai loại đối tác — để kiểm module từ chối.
     ("SAL", "ban-cho-ncc", "Nghiệp vụ khai nhầm cho nhà cung cấp", True, 1, 9),
 )

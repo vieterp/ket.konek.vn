@@ -31,9 +31,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
+from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.contracts import PartnerKind
@@ -49,7 +51,7 @@ from ket.kernel.protocols import SettlementTargetKind
 from ket.modules.receivables.ledger_service import SUBLEDGER_SETTLED_CODE
 from ket.modules.receivables.models import ArApLedgerEntry
 from ket.modules.receivables.settlement_source import SETTLEMENT_OVERPAID_CODE
-from ket.modules.sales.models import SalesInvoiceKind
+from ket.modules.sales.models import ADJUSTMENT_KINDS, SalesInvoice, SalesInvoiceKind
 from ket.modules.sales.schemas import SalesInvoiceIn, SalesInvoiceLineIn, SalesSettlementIn
 from ket.modules.sales.service import (
     KIND_IMMUTABLE_CODE,
@@ -62,7 +64,10 @@ from ket.posting.contracts import Voucher, VoucherStatus
 from ket.posting.engine.models import GlPosting, Ledger
 from ket.posting.integrity.checks.registry import check_of
 from ket.posting.integrity.runner import run_check
-from ket.posting.settlements import SETTLEMENT_ACCOUNT_MISMATCH_CODE
+from ket.posting.settlements import (
+    SETTLEMENT_ACCOUNT_MISMATCH_CODE,
+    SETTLEMENT_DOCUMENT_MISMATCH_CODE,
+)
 from posting_support import PostingContext, posting_scope, seed_posting_context
 from purchase_support import ensure_payment_term
 from sales_support import ensure_customer, ensure_salesperson, seed_sales_package_data
@@ -124,10 +129,12 @@ def _sales_invoice(
     posting_date: date = JAN_15,
     customer_id: int = CUSTOMER_ID,
     lines: tuple[SalesInvoiceLineIn, ...] | None = None,
+    adjusts_voucher_id: UUID | None = None,
 ) -> SalesInvoiceIn:
     return SalesInvoiceIn(
         kind=kind,
         operation_code=operation,
+        adjusts_voucher_id=adjusts_voucher_id,
         customer_id=customer_id,
         receivable_account_id=accounts["131"],
         branch_id=context.branch_id,
@@ -420,13 +427,19 @@ def test_due_date_falls_back_to_the_customer_payment_term(
     [
         (SalesInvoiceKind.RETURN, "tra-lai-hang-ban"),
         (SalesInvoiceKind.ALLOWANCE, "giam-gia-hang-ban"),
+        (SalesInvoiceKind.ADJUSTMENT_DECREASE, "dieu-chinh-giam-hoa-don"),
     ],
 )
 def test_reversing_documents_settle_the_original_and_reverse_entries(
     run: Runner, context: PostingContext, accounts: dict[str, int], kind: int, operation: str
 ) -> None:
-    """Trả lại hàng và giảm giá hàng bán đi cùng một đường: đảo chiều bút toán,
-    giảm nợ hóa đơn gốc, không sinh khoản nợ mới."""
+    """Ba loại ghi giảm đi cùng một đường: đảo chiều bút toán, giảm nợ hóa đơn
+    gốc, không sinh khoản nợ mới.
+
+    `ADJUSTMENT_DECREASE` vào chính bài này ở lát 7F-2a, và đó là bằng chứng của
+    quyết định "chiều nằm ở `kind`": nó xanh **không một dòng mã mới nào** ở
+    mapper, sổ phụ hay đối trừ — vào `REVERSING_KINDS` là đủ. Một `kind` kèm cột
+    chiều sẽ đòi mỗi nơi ấy đọc lại cột và tự suy ra nhánh."""
 
     def work(session: Session) -> object:
         service, original, debt = _post_original(session, context, accounts)
@@ -452,6 +465,7 @@ def test_reversing_documents_settle_the_original_and_reverse_entries(
                 operation=operation,
                 posting_date=JAN_20,
                 lines=reversing_lines,
+                adjusts_voucher_id=(original.id if kind in ADJUSTMENT_KINDS else None),
                 settlements=(
                     SalesSettlementIn(
                         target_kind=SettlementTargetKind.SALES_INVOICE,
@@ -496,6 +510,241 @@ def test_reversing_documents_settle_the_original_and_reverse_entries(
         return None
 
     run(work)
+
+
+def test_the_table_refuses_a_kind_the_module_does_not_know(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Ranh giới `kind` canh ở **bảng**, không chỉ ở schema Pydantic.
+
+    Hai lớp cho một luật vì chúng đóng hai đường khác nhau: lớp Pydantic đóng
+    cửa HTTP, còn `CHECK` đóng mọi `UPDATE` trực tiếp bằng SQL và mọi đường ghi
+    nội bộ về sau. Bài này đo lớp dưới — lớp mà `0037` vừa nới từ `0..4` lên
+    `0..6`, và là lớp duy nhất còn đứng nếu một lát sau quên đồng bộ hai bên.
+    """
+
+    def work(session: Session) -> object:
+        service = SalesInvoiceService(session)
+        voucher = service.create(_sales_invoice(context, accounts), user_id=ACTOR_ID)
+        session.flush()
+        unknown = SalesInvoiceKind.ADJUSTMENT_DECREASE + 1
+        with pytest.raises(IntegrityError, match="kind_known"), session.begin_nested():
+            session.execute(
+                update(SalesInvoice).where(SalesInvoice.id == voucher.id).values(kind=unknown)
+            )
+            session.flush()
+        return None
+
+    run(work)
+
+
+def test_an_increasing_adjustment_carries_its_own_debt(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Điều chỉnh TĂNG là chiều ngược của điều chỉnh giảm, và đó là cả điểm của
+    hai `kind`: nó sinh một khoản nợ **đứng riêng**, không đối trừ gì.
+
+    Đối xứng đáng ghim vì nó dễ viết sai theo hướng "điều chỉnh thì đối trừ hóa
+    đơn gốc" — đúng cho chiều giảm, sai cho chiều tăng. Tăng nợ mà lại ghi vào
+    `settled` của hóa đơn gốc sẽ **giảm** nợ đúng lúc phải tăng, và tuổi nợ im
+    lặng thiếu đi phần chênh.
+    """
+
+    def work(session: Session) -> object:
+        service = SalesInvoiceService(session)
+        lines = (
+            SalesInvoiceLineIn(
+                description="Chênh lệch đơn giá Hàng A",
+                quantity=Decimal(1),
+                unit_price_fc=Decimal(200_000),
+                amount_fc=Decimal(200_000),
+                vat_rate=Decimal(10),
+                vat_amount_fc=Decimal(20_000),
+                account_id=accounts["5111"],
+                vat_account_id=accounts["33311"],
+            ),
+        )
+        original = service.create(_sales_invoice(context, accounts), user_id=ACTOR_ID)
+        voucher = service.create(
+            _sales_invoice(
+                context,
+                accounts,
+                kind=SalesInvoiceKind.ADJUSTMENT_INCREASE,
+                operation="dieu-chinh-tang-hoa-don",
+                lines=lines,
+                adjusts_voucher_id=original.id,
+            ),
+            user_id=ACTOR_ID,
+        )
+        service.post(voucher.id, user_id=ACTOR_ID)
+
+        # Chiều thuận, đúng như hóa đơn bán thường: Nợ 131 / Có 5111, Nợ 131 / Có 33311.
+        assert {
+            (row.account_id, row.debit, row.credit) for row in _postings(session, voucher.id)
+        } == {
+            (accounts["131"], Decimal(200_000), Decimal(0)),
+            (accounts["5111"], Decimal(0), Decimal(200_000)),
+            (accounts["131"], Decimal(20_000), Decimal(0)),
+            (accounts["33311"], Decimal(0), Decimal(20_000)),
+        }
+        # Và một khoản nợ MỚI trên sổ phụ, chỉ mang phần chênh.
+        (debt,) = _subledger_rows(session, voucher.id)
+        assert (debt.partner_id, debt.account_id) == (CUSTOMER_ID, accounts["131"])
+        assert debt.amount_fc == Decimal(220_000)
+        assert debt.settled_fc == Decimal(0)
+
+        service.unpost(voucher.id, user_id=ACTOR_ID)
+        assert _subledger_rows(session, voucher.id) == []
+        return None
+
+    run(work)
+
+
+def test_a_decreasing_adjustment_must_settle_the_invoice_it_adjusts(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Hai đường trỏ về "hóa đơn gốc" phải trỏ cùng một chỗ (ADR-023).
+
+    `ADJUSTMENT_DECREASE` là loại chứng từ bán đầu tiên mang **hai** đường:
+    `adjusts_voucher_id` ở thân — thứ tờ hóa đơn điện tử đọc — và dòng đối trừ,
+    thứ ghi giảm nợ trên sổ phụ. Lệch nhau thì hóa đơn điều chỉnh khai với **cơ
+    quan thuế** rằng hóa đơn của V1 giảm, trong khi **sổ công nợ** giảm dư nợ
+    của V9. Không phép kiểm toàn vẹn nào thấy: cả hai vế đều cân.
+
+    Đó là lý do `OpenInvoice` mở thêm `document_id` — và bài này là thứ chứng
+    minh đường mới thật sự được nối, không phải chỉ được khai.
+    """
+
+    def work(session: Session) -> object:
+        service = SalesInvoiceService(session)
+        adjusted, wanted = _post_original(session, context, accounts)[1:]
+        other = service.create(_sales_invoice(context, accounts), user_id=ACTOR_ID)
+        service.post(other.id, user_id=ACTOR_ID)
+        other_debt = _subledger_rows(session, other.id)[0]
+
+        def decrease(target_id: UUID) -> SalesInvoiceIn:
+            return _sales_invoice(
+                context,
+                accounts,
+                kind=SalesInvoiceKind.ADJUSTMENT_DECREASE,
+                operation="dieu-chinh-giam-hoa-don",
+                posting_date=JAN_20,
+                adjusts_voucher_id=adjusted.id,
+                lines=(
+                    SalesInvoiceLineIn(
+                        description="Chênh lệch giảm",
+                        quantity=Decimal(1),
+                        unit_price_fc=Decimal(300_000),
+                        amount_fc=Decimal(300_000),
+                        vat_rate=Decimal(10),
+                        vat_amount_fc=Decimal(30_000),
+                        account_id=accounts["521"],
+                        vat_account_id=accounts["33311"],
+                    ),
+                ),
+                settlements=(
+                    SalesSettlementIn(
+                        target_kind=SettlementTargetKind.SALES_INVOICE,
+                        target_id=target_id,
+                        amount_fc=Decimal(330_000),
+                    ),
+                ),
+            )
+
+        # Đối trừ vào khoản nợ của một hóa đơn KHÁC hóa đơn đang điều chỉnh.
+        with pytest.raises(PostingValidationError) as caught:
+            service.create(decrease(other_debt.id), user_id=ACTOR_ID)
+        assert caught.value.violations[0].code == SETTLEMENT_DOCUMENT_MISMATCH_CODE
+
+        # Đối trừ đúng khoản nợ của hóa đơn đang điều chỉnh thì qua.
+        accepted = service.create(decrease(wanted.id), user_id=ACTOR_ID)
+        assert accepted.id is not None
+        return None
+
+    run(work)
+
+
+def test_the_table_ties_the_adjustment_link_to_the_kind(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """`adjusts_voucher_id` có mặt **đúng** trên hai loại điều chỉnh — canh ở BẢNG.
+
+    Luật này không phải một phép kiểm tiện tay: phân hệ hóa đơn điện tử đọc
+    `adjusts_voucher_id IS NULL` và hiểu là "không phải chứng từ điều chỉnh" —
+    C3 cấm nó hỏi `kind` của phân hệ khác. Một dòng lọt qua bằng đường ghi nào
+    khác sẽ làm phép phân biệt ấy **nói dối**, và lúc ấy một hóa đơn bán thường
+    lại treo được một tờ hóa đơn điều chỉnh. Schema Pydantic đóng cửa HTTP; bài
+    này đo lớp dưới, lớp duy nhất còn đứng nếu hai bên lệch nhau.
+
+    Duyệt cả hai chiều: thiếu ở loại điều chỉnh, thừa ở loại thường.
+    """
+
+    def work(session: Session) -> object:
+        service = SalesInvoiceService(session)
+        original = service.create(_sales_invoice(context, accounts), user_id=ACTOR_ID)
+        adjusting = service.create(
+            _sales_invoice(
+                context,
+                accounts,
+                kind=SalesInvoiceKind.ADJUSTMENT_INCREASE,
+                operation="dieu-chinh-tang-hoa-don",
+                adjusts_voucher_id=original.id,
+            ),
+            user_id=ACTOR_ID,
+        )
+        session.flush()
+
+        # Gỡ đường trỏ khỏi một chứng từ điều chỉnh.
+        with (
+            pytest.raises(IntegrityError, match="adjustment_link_matches_kind"),
+            session.begin_nested(),
+        ):
+            session.execute(
+                update(SalesInvoice)
+                .where(SalesInvoice.id == adjusting.id)
+                .values(adjusts_voucher_id=None)
+            )
+            session.flush()
+
+        # Gắn đường trỏ vào một hóa đơn bán thường.
+        with (
+            pytest.raises(IntegrityError, match="adjustment_link_matches_kind"),
+            session.begin_nested(),
+        ):
+            session.execute(
+                update(SalesInvoice)
+                .where(SalesInvoice.id == original.id)
+                .values(adjusts_voucher_id=adjusting.id)
+            )
+            session.flush()
+        return None
+
+    run(work)
+
+
+def test_an_increasing_adjustment_refuses_to_settle_the_original(
+    context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """Chiều tăng **không** nhận dòng đối trừ — chặn ở schema, trước mọi phép ghi.
+
+    Cùng câu từ chối mà chứng từ bán thường nhận, và đúng như thế: một khoản
+    làm tăng nợ không có nghĩa nào khi ghi vào số đã trả của hóa đơn gốc.
+    """
+    with pytest.raises(ValueError, match="mới đối trừ hóa đơn gốc"):
+        _sales_invoice(
+            context,
+            accounts,
+            kind=SalesInvoiceKind.ADJUSTMENT_INCREASE,
+            operation="dieu-chinh-tang-hoa-don",
+            adjusts_voucher_id=uuid4(),
+            settlements=(
+                SalesSettlementIn(
+                    target_kind=SettlementTargetKind.SALES_INVOICE,
+                    target_id=uuid4(),
+                    amount_fc=Decimal(1_000),
+                ),
+            ),
+        )
 
 
 def test_reversing_document_needs_a_settlement_target(

@@ -403,7 +403,7 @@ def test_the_error_flow_table_is_not_shadowed_by_the_id_route(
     assert len({flow["remedy"] for flow in flows}) == 4
 
 
-def test_an_adjustment_answers_with_409_and_the_right_remedy(
+def test_an_amount_adjustment_without_a_delta_voucher_answers_with_422(
     app_client: TestClient,
     issuer_headers: dict[str, str],
     session_factory: sessionmaker[Session],
@@ -411,11 +411,12 @@ def test_an_adjustment_answers_with_409_and_the_right_remedy(
     context: PostingContext,
     accounts: dict[str, int],
 ) -> None:
-    """Nhánh chưa thi hành được trả `409`, không `422` và không `500`.
+    """Thiếu chứng từ chênh lệch là `422`, không `409` và không `500`.
 
-    `422` là "dữ liệu anh gửi sai" — mà bộ câu trả lời ở đây **đúng**, và câu trả
-    lời của hệ thống cũng đúng; thứ chưa sẵn sàng là đường thi hành. Nhầm hai mã
-    ấy thì client dựng câu "kiểm tra lại số liệu" cho một người không nhập gì sai.
+    Mã đổi ở lát 7F-2a, và đổi vì sự thật đổi: khi đường thi hành chưa tồn tại,
+    `409` đúng — bộ câu trả lời hợp lệ, thứ chưa sẵn sàng là hệ thống. Nay đường
+    đã có và thứ còn thiếu nằm trong **chính lượt gọi**, nên đây là lỗi dữ liệu
+    gửi lên. Bài canh cửa HTTP: client dựng hai câu khác hẳn nhau từ hai mã này.
     """
     voucher_id = _new_voucher_id(session_factory, dataset_alpha, context, accounts)
     _, created = _create_invoice(app_client, issuer_headers, voucher_id)
@@ -441,8 +442,8 @@ def test_an_adjustment_answers_with_409_and_the_right_remedy(
         },
         headers=issuer_headers,
     )
-    assert refused.status_code == 409, refused.text
-    assert refused.json()["error_code"] == "einvoice.remedy_not_available"
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["error_code"] == "einvoice.adjustment_voucher_required"
 
 
 def test_resending_the_create_request_returns_the_same_invoice(
