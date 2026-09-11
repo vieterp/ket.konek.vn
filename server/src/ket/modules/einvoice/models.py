@@ -212,14 +212,20 @@ class Remedy(IntEnum):
     """Hủy, kèm thông báo hủy và biên bản hủy (FR-EIV-031/032, BR-EIV-04)."""
 
 
-EXECUTABLE_REMEDIES: frozenset[Remedy] = frozenset({Remedy.THAY_THE, Remedy.HUY})
-"""Hai cách xử lý **thi hành được** ở lát này (quyết định user 2026-09-10).
+DELTA_VOUCHER_REMEDIES: frozenset[Remedy] = frozenset({Remedy.DIEU_CHINH_TIEN})
+"""Cách xử lý đòi người gọi đưa kèm một chứng từ bán mang **phần chênh**.
 
-Hai cách còn lại ra quyết định đúng nhưng chưa có đường thi hành, và lý do là
-một ràng buộc **cấu trúc** chứ không phải việc chưa kịp làm: hóa đơn cố ý không
-mang cột tiền (xem docstring đầu tệp), nên hóa đơn điều chỉnh — thứ chỉ mang
-phần chênh — không trỏ được vào chứng từ gốc mang số tiền đầy đủ mà vẫn giữ
-BR-EIV-07. Nó cần một chứng từ bán mang phần chênh, tức việc ở phân hệ `sales`.
+Hóa đơn cố ý không mang cột tiền — nó đọc tổng từ chứng từ gốc, và đó chính là
+cách BR-EIV-07 thành đúng theo cấu trúc (7D). Một tờ hóa đơn điều chỉnh tăng
+hoặc giảm chỉ khai phần chênh, nên nó **không** trỏ được vào chứng từ gốc mang
+số tiền đầy đủ: nó cần chứng từ của riêng nó, và `sales` mang hai `kind` cho
+đúng việc ấy (`SalesInvoiceKind.ADJUSTMENT_INCREASE`/`ADJUSTMENT_DECREASE`).
+
+Ba cách xử lý còn lại **không** nhận chứng từ nào, và đó là một luật hai chiều
+— đưa kèm chứng từ ở nhánh không cần là một lỗi, không phải một tham số thừa bị
+bỏ qua. Điều chỉnh THÔNG TIN nằm ở vế không cần: không có đồng nào đổi, nên
+tổng của tờ điều chỉnh **đúng bằng** tổng tờ cũ và BR-EIV-07 giữ nguyên trên
+chính chứng từ gốc.
 """
 
 

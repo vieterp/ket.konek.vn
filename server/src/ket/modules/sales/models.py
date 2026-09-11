@@ -7,10 +7,10 @@ nhánh là của header, và RLS canh ở đó.
 
 Năm quyết định đáng ghi:
 
-* **`kind` gom năm nghiệp vụ bán vào một loại chứng từ `SAL`** (bán hàng, bán
-  dịch vụ, trả lại hàng bán, giảm giá hàng bán, bán đại lý) — cùng lập luận
-  với `PURCHASE_DOCUMENT_TYPE`: chúng khác nhau ở TK bên Có và ở chiều bút
-  toán, không khác nhau ở hình dạng dữ liệu.
+* **`kind` gom bảy nghiệp vụ bán vào một loại chứng từ `SAL`** (bán hàng, bán
+  dịch vụ, trả lại hàng bán, giảm giá hàng bán, bán đại lý, điều chỉnh tăng,
+  điều chỉnh giảm) — cùng lập luận với `PURCHASE_DOCUMENT_TYPE`: chúng khác
+  nhau ở TK bên Có và ở chiều bút toán, không khác nhau ở hình dạng dữ liệu.
 * **Chiết khấu thương mại ghi giảm doanh thu NGAY TRÊN DÒNG**, không tách một
   bút toán 521 riêng: SRS 06 §3.2 cho cả hai đường ("qua TK 5211 **hoặc** trừ
   trực tiếp trên hóa đơn") và đường trừ trực tiếp là đường hóa đơn GTGT thật
@@ -22,10 +22,14 @@ Năm quyết định đáng ghi:
   lúc ghi sổ — cùng lý do `payable_account_id` của hóa đơn mua và
   `ar_ap_ledger.account_id`: gói đổi mặc định thì chứng từ cũ vẫn phải ghi
   đúng TK nó đã cất.
-* **Trả lại hàng bán và giảm giá hàng bán đối trừ hóa đơn gốc** qua
-  `sales_settlements`, cùng khuôn `purchase_settlements` (quyết định user
-  2026-09-04): khoản giảm nợ ghi thẳng vào số đã trả của hóa đơn gốc thay vì
-  treo một dòng công nợ âm — `ar_ap_ledger` không có dòng âm.
+* **Trả lại hàng bán, giảm giá hàng bán và điều chỉnh GIẢM đối trừ hóa đơn
+  gốc** qua `sales_settlements`, cùng khuôn `purchase_settlements` (quyết định
+  user 2026-09-04): khoản giảm nợ ghi thẳng vào số đã trả của hóa đơn gốc thay
+  vì treo một dòng công nợ âm — `ar_ap_ledger` không có dòng âm.
+* **Chứng từ điều chỉnh mang PHẦN CHÊNH, không mang số tiền đúng.** Hóa đơn
+  điện tử đọc tổng từ chứng từ gốc (BR-EIV-07 đúng theo cấu trúc, 7D), nên một
+  tờ hóa đơn điều chỉnh — thứ chỉ khai phần chênh — cần một chứng từ của riêng
+  nó. Đó là lý do hai `kind` này tồn tại; xem `SalesInvoiceKind`.
 * **Ba cột giá vốn để trống ở lát này** (`cogs_account_id`,
   `inventory_account_id`, `unit_cost_fc`) cùng cờ `cogs_posted`: giá xuất kho
   là việc của phase 8, và nó ghi bổ sung vào chính ba cột ấy. Khai sẵn vì
@@ -99,14 +103,50 @@ class SalesInvoiceKind:
     """Giảm giá hàng bán — đảo chiều bút toán, đối trừ hóa đơn gốc."""
     AGENCY = 4
     """Bán qua đại lý đúng giá hưởng hoa hồng."""
+    ADJUSTMENT_INCREASE = 5
+    """Điều chỉnh TĂNG một hóa đơn đã phát hành (FR-EIV-033) — chứng từ mang
+    **phần chênh**, không mang số tiền đúng.
+
+    **Chiều nằm ở `kind`, không ở dấu của số tiền.** `totals_not_negative` cấm
+    số âm trên thân, và cấm đúng: một cột tiền nhận cả hai dấu là một cột mà mọi
+    phép cộng — tổng doanh thu, tuổi nợ, bảng kê bán ra — phải nhớ kiểm dấu
+    trước khi cộng, tức một chỗ để quên.
+
+    Vì sao hai `kind` mà không một `kind` kèm cột chiều: một cột chiều buộc
+    mapper, sổ phụ và đối trừ mỗi nơi đọc lại nó rồi tự suy ra nhánh. Với hai
+    `kind`, chiều giảm rơi thẳng vào `REVERSING_KINDS` còn chiều tăng rơi vào
+    nhánh hóa đơn thường — không nhánh nào phải mọc thêm một câu `if`."""
+    ADJUSTMENT_DECREASE = 6
+    """Điều chỉnh GIẢM một hóa đơn đã phát hành (FR-EIV-033) — chứng từ mang
+    **phần chênh**. Thuộc `REVERSING_KINDS`; xem `ADJUSTMENT_INCREASE` về vì sao
+    chiều là hai loại chứng từ chứ không một cột dấu."""
 
 
-REVERSING_KINDS = (SalesInvoiceKind.RETURN, SalesInvoiceKind.ALLOWANCE)
-"""Hai loại ghi GIẢM doanh thu và giảm nợ hóa đơn gốc.
+ADJUSTMENT_KINDS = (SalesInvoiceKind.ADJUSTMENT_INCREASE, SalesInvoiceKind.ADJUSTMENT_DECREASE)
+"""Hai chứng từ mang phần chênh của một lượt điều chỉnh hóa đơn (FR-EIV-033).
+
+Chúng đi cùng nhau ở đúng một luật — `adjusts_voucher_id` bắt buộc ở đây và cấm
+ở mọi `kind` khác — và luật ấy viết cả ở ràng buộc bảng lẫn ở schema, nên tên
+gọi chung này tồn tại để hai chỗ không lệch nhau. Ở mọi nơi khác chúng **tách
+đôi**: chiều giảm thuộc `REVERSING_KINDS`, chiều tăng không."""
+
+
+REVERSING_KINDS = (
+    SalesInvoiceKind.RETURN,
+    SalesInvoiceKind.ALLOWANCE,
+    SalesInvoiceKind.ADJUSTMENT_DECREASE,
+)
+"""Ba loại ghi GIẢM doanh thu và giảm nợ hóa đơn gốc.
 
 Chúng đi cùng nhau ở mọi nhánh (đảo chiều bút toán, bắt buộc có dòng đối trừ,
 không ghi dòng sổ phụ mới) nên tên gọi chung này tồn tại để không nhánh nào
-kiểm một loại mà quên loại kia."""
+kiểm một loại mà quên loại kia.
+
+`ADJUSTMENT_DECREASE` vào đây ở lát điều chỉnh: cả ba tính chất trên đúng với
+nó y như với trả lại và giảm giá — nó ghi giảm doanh thu, phần giảm ấy phải trừ
+vào nợ của chính hóa đơn gốc, và treo thêm một dòng sổ phụ âm là thứ
+`ar_ap_ledger` không biểu diễn được. Chiều TĂNG thì ngược lại, không thuộc tập
+này: nó sinh một khoản nợ mới đứng riêng, đúng như một hóa đơn bán thường."""
 
 
 class SalesInvoice(DatasetBase, Audited):
@@ -119,10 +159,23 @@ class SalesInvoice(DatasetBase, Audited):
     __tablename__ = "sales_invoices"
     __table_args__ = (
         CheckConstraint(
-            f"kind BETWEEN {SalesInvoiceKind.GOODS} AND {SalesInvoiceKind.AGENCY}",
+            f"kind BETWEEN {SalesInvoiceKind.GOODS} AND {SalesInvoiceKind.ADJUSTMENT_DECREASE}",
             name="kind_known",
         ),
         CheckConstraint("operation_code <> ''", name="operation_code_not_blank"),
+        # Đường trỏ về chứng từ được điều chỉnh sống chết theo `kind`: hai loại
+        # điều chỉnh **phải** có, năm loại còn lại **không được** có. Viết thành
+        # ràng buộc chứ không thành một phép kiểm trong service vì đây là thứ
+        # `einvoice` tin vào để phân biệt chứng từ chênh lệch với một hóa đơn bán
+        # thường — một dòng lọt qua bằng đường ghi khác sẽ làm phép phân biệt ấy
+        # nói dối.
+        CheckConstraint(
+            "(adjusts_voucher_id IS NOT NULL) = "
+            f"(kind IN ({SalesInvoiceKind.ADJUSTMENT_INCREASE}, "
+            f"{SalesInvoiceKind.ADJUSTMENT_DECREASE}))",
+            name="adjustment_link_matches_kind",
+        ),
+        CheckConstraint("adjusts_voucher_id <> id", name="does_not_adjust_itself"),
         CheckConstraint(
             "total_before_tax_fc >= 0 AND total_discount_fc >= 0 "
             "AND total_vat_fc >= 0 AND total_fc >= 0",
@@ -171,6 +224,25 @@ class SalesInvoice(DatasetBase, Audited):
         ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False
     )
     """TK công nợ phải thu của hóa đơn (131/1388…) — bên Nợ của mọi dòng hàng."""
+
+    adjusts_voucher_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("sales_invoices.id", ondelete="RESTRICT"), nullable=True
+    )
+    """Chứng từ bán mà chứng từ này mang **phần chênh** của (FR-EIV-033/036).
+
+    Bắt buộc trên hai `kind` điều chỉnh, và **cấm** trên năm loại còn lại —
+    `adjustment_link_matches_kind` dựng luật ấy ở tầng bảng, nên nó không tụt
+    xuống thành một phép kiểm ai đó quên gọi.
+
+    `RESTRICT`: chứng từ gốc phải sống chừng nào còn một chứng từ điều chỉnh nói
+    về nó, cùng lập luận `fk_einvoices_source_voucher` của 7D. Trỏ sang chính
+    `sales_invoices` chứ không `vouchers`: chỉ chứng từ **bán** mới điều chỉnh
+    được bằng một chứng từ bán.
+
+    Đây cũng là thứ `einvoice` đọc qua `EInvoiceSourceDocument.adjusts_voucher_id`
+    để biết một chứng từ chênh lệch có đúng là chứng từ điều chỉnh của đúng hóa
+    đơn đang xử lý hay không — C3 cấm nó hỏi thẳng bảng này.
+    """
 
     price_list_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     """Bảng giá người lập chứng từ CHỌN TAY (FR-SAL-020). Ép chứ không "ưu

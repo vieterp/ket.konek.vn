@@ -81,6 +81,7 @@ def _to_open_invoice(row: ArApLedgerEntry) -> OpenInvoice:
     return OpenInvoice(
         target_kind=SettlementTargetKind(row.target_kind),
         target_id=row.id,
+        document_id=row.document_id,
         partner_kind=PartnerKind(row.partner_kind),
         partner_id=row.partner_id,
         branch_id=row.branch_id,

@@ -190,6 +190,22 @@ class OpenInvoice(BaseModel):
 
     target_kind: SettlementTargetKind
     target_id: UUID
+    document_id: UUID | None = None
+    """Chứng từ đã sinh ra khoản nợ này, hoặc `None` khi khoản nợ không đến từ
+    một chứng từ (số dư đầu kỳ khai tay — nguồn duy nhất như thế hôm nay).
+
+    Khác `target_id`, thứ định danh **dòng sổ phụ**. Hai thứ ấy không thay nhau
+    được, và lát 7F-2a là chỗ sự khác biệt trở thành một bất biến: chứng từ điều
+    chỉnh giảm mang **hai** đường trỏ về "hóa đơn gốc" — `adjusts_voucher_id` ở
+    thân chứng từ và dòng đối trừ ở đây — nên phải có cách hỏi chúng có trỏ cùng
+    một chỗ không. Không có trường này thì hai đường lệch nhau **không phát hiện
+    được**, và hệ quả là tờ hóa đơn điều chỉnh khai với cơ quan thuế rằng hóa
+    đơn A giảm, trong khi sổ công nợ giảm hóa đơn B (ADR-023).
+
+    `None` là câu trả lời **đúng** cho số dư đầu kỳ, không phải một chỗ trống:
+    khoản ấy có thật nhưng chứng từ sinh ra nó nằm ngoài sổ. Nơi gọi nào đòi
+    trỏ đúng một chứng từ phải **từ chối** `None` thay vì bỏ qua.
+    """
     partner_kind: PartnerKind
     partner_id: int
     branch_id: int
@@ -424,6 +440,27 @@ class EInvoiceSourceDocument(BaseModel):
     total_vat_fc: Decimal
     total_fc: Decimal
     lines: tuple[EInvoiceSourceLine, ...]
+
+    adjusts_voucher_id: UUID | None = None
+    """Chứng từ mà chứng từ này mang **phần chênh** của (FR-EIV-033), hoặc
+    `None` nếu nó không phải chứng từ điều chỉnh.
+
+    Trường duy nhất ở đây **không** mô tả tờ giấy in ra, và nó có mặt vì không
+    có nó thì một phép kiểm bắt buộc không đặt được câu hỏi. Hóa đơn điều chỉnh
+    đọc tổng từ chứng từ nó trỏ vào, nên chứng từ ấy phải đúng là chứng từ điều
+    chỉnh **của đúng hóa đơn đang xử lý sai sót**. Thiếu trường này thì một hóa
+    đơn bán **thường** cùng khách, cùng đồng tiền, cùng chi nhánh và đã ghi sổ
+    cũng lọt qua — và hệ quả là một khoản doanh thu thật được khai với cơ quan
+    thuế thành phần chênh của tờ khác, còn chính nó thì vĩnh viễn không xuất
+    được hóa đơn (`uq_einvoices_live_source_voucher`).
+
+    `einvoice` không tự hỏi được: `C3` cấm nó import `sales`, và loại nghiệp vụ
+    (`sales_invoices.kind`) là chuyện riêng của phân hệ bán hàng. Đây là cửa —
+    cùng lập luận đã dựng ra chính Protocol này ở ADR-022.
+
+    `None` ở bản cài chưa có khái niệm điều chỉnh là câu trả lời **đúng**, không
+    phải một chỗ trống: nơi gọi từ chối rõ ràng thay vì đoán.
+    """
 
 
 class EInvoiceSource(Protocol):

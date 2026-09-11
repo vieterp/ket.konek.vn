@@ -1397,9 +1397,9 @@ export interface paths {
          * Resolve Einvoice Error
          * @description Tra bảng quyết định rồi thi hành cách xử lý (FR-EIV-030..034).
          *
-         *     Trả về cách xử lý cho **cả bốn** kịch bản; thi hành được hai (thay thế, hủy).
-         *     Nhánh điều chỉnh trả `409` kèm cách xử lý đúng — nó cần một chứng từ bán mang
-         *     phần chênh, tức việc ở phân hệ bán hàng.
+         *     **Cả bốn** kịch bản đều thi hành được. Nhánh điều chỉnh TIỀN đòi kèm
+         *     `adjustment_voucher_id` — chứng từ bán mang phần chênh — và ba nhánh còn lại
+         *     **từ chối** nó: xem `ResolveErrorIn.adjustment_voucher_id`.
          */
         post: operations["resolve_einvoice_error_api_v1_einvoices__einvoice_id__actions_resolve_error_post"];
         delete?: never;
@@ -14711,6 +14711,11 @@ export interface components {
          * @description Câu trả lời của kế toán cho wizard xử lý sai sót (FR-EIV-030..034).
          */
         ResolveErrorIn: {
+            /**
+             * Chứng từ mang phần chênh
+             * @description **Chỉ** nhánh điều chỉnh tăng/giảm, và **bắt buộc** ở đó: hóa đơn đọc tổng từ chứng từ gốc, nên tờ khai phần chênh cần chứng từ bán của riêng nó (`sales`, kind điều chỉnh tăng/giảm). Đưa kèm ở nhánh khác là lỗi, không phải tham số thừa bị bỏ qua.
+             */
+            adjustment_voucher_id?: string | null;
             /** Khách đã kê khai thuế chưa */
             buyer_declared?: boolean | null;
             /** Hóa đơn sai chỗ nào */
@@ -14730,6 +14735,11 @@ export interface components {
          * @description Cách xử lý đã chọn và những gì hệ thống vừa dựng.
          */
         ResolveErrorOut: {
+            /**
+             * Hóa đơn điều chỉnh
+             * @description Chỉ có ở hai cách xử lý ĐIỀU CHỈNH. Nhánh THÔNG TIN dựng tờ nháp trên chính chứng từ cũ (không đồng nào đổi); nhánh TIỀN dựng nó trên chứng từ mang phần chênh.
+             */
+            adjustment?: components["schemas"]["EInvoiceOut"] | null;
             /** Flow Code */
             flow_code: string;
             /** Legal Basis */
@@ -14829,6 +14839,11 @@ export interface components {
          * @description Thân hóa đơn cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).
          */
         SalesInvoiceIn: {
+            /**
+             * Chứng từ được điều chỉnh
+             * @description **Bắt buộc** trên hai loại điều chỉnh tăng/giảm và **cấm** trên năm loại còn lại: chứng từ điều chỉnh mang phần chênh của một chứng từ bán cụ thể, và hóa đơn điện tử đọc đường này để biết nó điều chỉnh đúng hóa đơn nào (FR-EIV-033/036).
+             */
+            adjusts_voucher_id?: string | null;
             /** Branch Id */
             branch_id: number;
             /** Currency Code */
@@ -15159,6 +15174,11 @@ export interface components {
          * @description PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).
          */
         SalesInvoiceUpdate: {
+            /**
+             * Chứng từ được điều chỉnh
+             * @description **Bắt buộc** trên hai loại điều chỉnh tăng/giảm và **cấm** trên năm loại còn lại: chứng từ điều chỉnh mang phần chênh của một chứng từ bán cụ thể, và hóa đơn điện tử đọc đường này để biết nó điều chỉnh đúng hóa đơn nào (FR-EIV-033/036).
+             */
+            adjusts_voucher_id?: string | null;
             /** Branch Id */
             branch_id: number;
             /** Currency Code */

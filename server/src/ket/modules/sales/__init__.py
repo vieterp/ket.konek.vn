@@ -3,10 +3,10 @@
 Import gói này (qua `ket.model_registry`) là đăng ký vào hai registry, cùng
 khuôn `modules/purchase`:
 
-* **phân quyền** — `sales.invoice.*` đủ bộ hành vi chứng từ. Năm loại hóa đơn
-  (hàng hóa, dịch vụ, trả lại hàng bán, giảm giá hàng bán, bán đại lý) dùng
-  chung một mã quyền và một dãy số `SAL`: chúng là cùng một nghiệp vụ nhìn ở
-  năm góc, không phải năm phân hệ.
+* **phân quyền** — `sales.invoice.*` đủ bộ hành vi chứng từ. Bảy loại hóa đơn
+  (hàng hóa, dịch vụ, trả lại hàng bán, giảm giá hàng bán, bán đại lý, điều
+  chỉnh tăng, điều chỉnh giảm) dùng chung một mã quyền và một dãy số `SAL`:
+  chúng là cùng một nghiệp vụ nhìn ở bảy góc, không phải bảy phân hệ.
 * **loại chứng từ của posting** — `SAL` với `build_request` (posting_mapper) và
   ba hook vòng đời: ghi sổ xong ghi khoản phải thu vào sổ phụ công nợ (hoặc
   giảm nợ hóa đơn gốc nếu là trả lại / giảm giá), bỏ ghi sổ gỡ ra, xóa thì trả

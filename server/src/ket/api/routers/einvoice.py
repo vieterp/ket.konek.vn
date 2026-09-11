@@ -517,9 +517,9 @@ def resolve_einvoice_error(
 ) -> ResolveErrorOut:
     """Tra bảng quyết định rồi thi hành cách xử lý (FR-EIV-030..034).
 
-    Trả về cách xử lý cho **cả bốn** kịch bản; thi hành được hai (thay thế, hủy).
-    Nhánh điều chỉnh trả `409` kèm cách xử lý đúng — nó cần một chứng từ bán mang
-    phần chênh, tức việc ở phân hệ bán hàng.
+    **Cả bốn** kịch bản đều thi hành được. Nhánh điều chỉnh TIỀN đòi kèm
+    `adjustment_voucher_id` — chứng từ bán mang phần chênh — và ba nhánh còn lại
+    **từ chối** nó: xem `ResolveErrorIn.adjustment_voucher_id`.
     """
     with unit_of_work(factory, authorized.scope) as session:
         outcome = ErrorFlowService(session).apply(
@@ -529,6 +529,7 @@ def resolve_einvoice_error(
             notice_no=payload.notice_no,
             notice_date=payload.notice_date,
             reason=payload.reason,
+            adjustment_voucher_id=payload.adjustment_voucher_id,
         )
         return ResolveErrorOut(
             remedy=Remedy(outcome.flow.remedy),
@@ -539,6 +540,11 @@ def resolve_einvoice_error(
                 None
                 if outcome.replacement is None
                 else EInvoiceOut.model_validate(outcome.replacement)
+            ),
+            adjustment=(
+                None
+                if outcome.adjustment is None
+                else EInvoiceOut.model_validate(outcome.adjustment)
             ),
         )
 
