@@ -17,6 +17,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from ket.modules.einvoice.models import (
     BASE_URL_MAX_LENGTH,
     INVOICE_NO_MAX_LENGTH,
+    LEGAL_BASIS_MAX_LENGTH,
     LOOKUP_CODE_MAX_LENGTH,
     NOTICE_NO_MAX_LENGTH,
     PROVIDER_CODE_MAX_LENGTH,
@@ -26,11 +27,13 @@ from ket.modules.einvoice.models import (
     TAX_CODE_MAX_LENGTH,
     USERNAME_MAX_LENGTH,
     EInvoiceStatus,
+    ErrorKind,
     ErrorNoticeKind,
     NoticeStatus,
     OutboxOperation,
     OutboxStatus,
     RegistrationStatus,
+    Remedy,
 )
 
 
@@ -99,6 +102,37 @@ class ErrorNoticeOut(BaseModel):
     submitted_at: datetime | None
 
 
+class ErrorFlowOut(BaseModel):
+    """Một nhánh của bảng quyết định xử lý sai sót (`docs/srs/07` §4.4)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    error_kind: ErrorKind
+    buyer_declared: bool | None = Field(
+        default=None,
+        title="Khách đã kê khai",
+        description=(
+            "`null` = nhánh này không hỏi câu ấy, không phải 'chưa biết' — wizard "
+            "dừng sau câu hỏi thứ nhất."
+        ),
+    )
+    remedy: Remedy
+    legal_basis: str = Field(max_length=LEGAL_BASIS_MAX_LENGTH, title="Căn cứ pháp lý")
+
+
+class ResolveErrorIn(BaseModel):
+    """Câu trả lời của kế toán cho wizard xử lý sai sót (FR-EIV-030..034)."""
+
+    error_kind: ErrorKind = Field(title="Hóa đơn sai chỗ nào")
+    buyer_declared: bool | None = Field(default=None, title="Khách đã kê khai thuế chưa")
+    notice_no: str = Field(
+        min_length=1, max_length=NOTICE_NO_MAX_LENGTH, title="Số thông báo sai sót"
+    )
+    notice_date: date = Field(title="Ngày thông báo sai sót")
+    reason: str | None = Field(default=None, title="Diễn giải sai sót")
+
+
 class EInvoiceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -118,6 +152,20 @@ class EInvoiceOut(BaseModel):
     issued_at: datetime | None
     sent_at: datetime | None
     sent_to: str | None
+
+
+class ResolveErrorOut(BaseModel):
+    """Cách xử lý đã chọn và những gì hệ thống vừa dựng."""
+
+    remedy: Remedy
+    flow_code: str
+    legal_basis: str
+    notice: ErrorNoticeOut
+    replacement: EInvoiceOut | None = Field(
+        default=None,
+        title="Hóa đơn thay thế",
+        description="Chỉ có ở cách xử lý THAY THẾ; tờ nháp mới trên chính chứng từ cũ.",
+    )
 
 
 class MarkSentIn(BaseModel):

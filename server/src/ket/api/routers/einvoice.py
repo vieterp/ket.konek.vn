@@ -52,7 +52,8 @@ from ket.modules.einvoice import (
     REPRESENTATION_PRINT_CODE,
     representation,
 )
-from ket.modules.einvoice.models import EInvoice, EInvoiceStatus, OutboxStatus
+from ket.modules.einvoice.error_flow import ErrorFlowService
+from ket.modules.einvoice.models import EInvoice, EInvoiceStatus, OutboxStatus, Remedy
 from ket.modules.einvoice.outbox import due_now, enqueue_issue, list_rows
 from ket.modules.einvoice.outbox_job import TRANSMIT_JOB
 from ket.modules.einvoice.print_details import build_representation_details, voided_label
@@ -66,6 +67,7 @@ from ket.modules.einvoice.schemas import (
     EInvoiceListOut,
     EInvoiceOut,
     EInvoiceRejectIn,
+    ErrorFlowOut,
     ErrorNoticeIn,
     ErrorNoticeOut,
     InvoiceRegistrationIn,
@@ -75,6 +77,8 @@ from ket.modules.einvoice.schemas import (
     OutboxRowOut,
     ProviderProfileIn,
     ProviderProfileOut,
+    ResolveErrorIn,
+    ResolveErrorOut,
 )
 from ket.modules.einvoice.service import EInvoiceService
 from ket.reporting.printing.template_service import (
@@ -488,6 +492,55 @@ def delete_error_notice(
     """Xóa văn bản **còn nháp** — đường sửa khi lập nhầm loại. Đã nộp thì không."""
     with unit_of_work(factory, authorized.scope) as session:
         EInvoiceService(session).delete_notice(notice_id)
+
+
+@router.get("/error-flows", response_model=list[ErrorFlowOut])
+def list_error_flows(
+    authorized: InvoiceReader,
+    factory: SessionFactory,
+) -> list[ErrorFlowOut]:
+    """Bảng quyết định xử lý sai sót (`docs/srs/07` §4.4, FR-NFR-055).
+
+    Wizard dựng câu hỏi từ đây thay vì mang sẵn cây quyết định trong mã client:
+    quy định đổi thì sửa bảng, và cả hai tầng thấy cùng một sự thật.
+    """
+    with unit_of_work(factory, authorized.scope) as session:
+        return [ErrorFlowOut.model_validate(flow) for flow in ErrorFlowService(session).table()]
+
+
+@router.post("/{einvoice_id}/actions/resolve-error", response_model=ResolveErrorOut)
+def resolve_einvoice_error(
+    einvoice_id: UUID,
+    payload: ResolveErrorIn,
+    authorized: InvoiceEditor,
+    factory: SessionFactory,
+) -> ResolveErrorOut:
+    """Tra bảng quyết định rồi thi hành cách xử lý (FR-EIV-030..034).
+
+    Trả về cách xử lý cho **cả bốn** kịch bản; thi hành được hai (thay thế, hủy).
+    Nhánh điều chỉnh trả `409` kèm cách xử lý đúng — nó cần một chứng từ bán mang
+    phần chênh, tức việc ở phân hệ bán hàng.
+    """
+    with unit_of_work(factory, authorized.scope) as session:
+        outcome = ErrorFlowService(session).apply(
+            einvoice_id,
+            error_kind=payload.error_kind,
+            buyer_declared=payload.buyer_declared,
+            notice_no=payload.notice_no,
+            notice_date=payload.notice_date,
+            reason=payload.reason,
+        )
+        return ResolveErrorOut(
+            remedy=Remedy(outcome.flow.remedy),
+            flow_code=outcome.flow.code,
+            legal_basis=outcome.flow.legal_basis,
+            notice=ErrorNoticeOut.model_validate(outcome.notice),
+            replacement=(
+                None
+                if outcome.replacement is None
+                else EInvoiceOut.model_validate(outcome.replacement)
+            ),
+        )
 
 
 @router.delete("/{einvoice_id}", status_code=status.HTTP_204_NO_CONTENT)

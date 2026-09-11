@@ -1796,6 +1796,34 @@ class InvoiceFormBranchConflictError(DomainError):
     http_status: ClassVar[int] = 409
 
 
+class EInvoiceErrorFlowUnknownError(DomainError):
+    """Bộ câu trả lời của wizard xử lý sai sót không khớp nhánh nào trong bảng.
+
+    Lỗi chứ không nhánh mặc định: một wizard hỏi thiếu câu "khách đã kê khai
+    chưa" mà rơi vào nhánh "chưa kê khai" sẽ lặng lẽ chọn THAY THẾ cho một tờ
+    hóa đơn khách đã kê khai — tức một tờ hóa đơn bị xóa khỏi kỳ thuế của người
+    mua. `details` mang cả hai vế để client biết còn thiếu câu nào.
+    """
+
+    error_code: ClassVar[str] = "einvoice.error_flow_unknown"
+
+
+class EInvoiceRemedyNotAvailableError(DomainError):
+    """Cách xử lý đúng là điều chỉnh, mà đường lập hóa đơn điều chỉnh chưa có.
+
+    Hóa đơn cố ý không mang cột tiền — nó đọc tổng từ chứng từ gốc và BR-EIV-07
+    kiểm hai vế khớp nhau — nên hóa đơn điều chỉnh, thứ chỉ mang **phần chênh**,
+    cần một chứng từ bán mang phần chênh ấy. Đó là việc ở phân hệ bán hàng.
+
+    `409` chứ không `422`: bộ câu trả lời **hợp lệ** và câu trả lời của hệ thống
+    **đúng** — thứ chưa sẵn sàng là đường thi hành, tức một xung đột về trạng
+    thái của hệ thống chứ không phải một lỗi ở dữ liệu người dùng gửi lên.
+    """
+
+    error_code: ClassVar[str] = "einvoice.remedy_not_available"
+    http_status: ClassVar[int] = 409
+
+
 class EInvoiceNoticeSubmittedError(DomainError):
     """Văn bản kèm hóa đơn đã nộp cơ quan thuế nên không xóa được.
 

@@ -52,6 +52,7 @@ from ket.kernel.master_data.models.invoice_form import InvoiceForm
 from ket.kernel.numbering.service import NumberingService
 from ket.modules.einvoice.models import (
     CANCELLATION_KINDS,
+    SUPERSEDED_STATUSES,
     EInvoice,
     EInvoiceErrorNotice,
     EInvoiceRepresentation,
@@ -288,6 +289,24 @@ class EInvoiceService:
         self._session.flush()
         return invoice
 
+    def mark_replaced(self, einvoice_id: UUID) -> EInvoice:
+        """Đánh dấu tờ cũ **đã bị thay thế** (FR-EIV-030) — nửa thứ nhất của lượt thay thế.
+
+        Cùng khuôn `cancel`: đi một cạnh của máy trạng thái rồi bỏ bản thể hiện
+        đã lưu, để lượt tải kế tiếp dựng lại tờ có dấu trạng thái. Nửa thứ hai —
+        dựng hóa đơn nháp mới trỏ ngược về tờ này — nằm ở `error_flow`, vì nó là
+        phần *quy trình* chứ không phải phần *vòng đời một tờ hóa đơn*.
+
+        Tách đôi chứ không gộp: chừng nào tờ cũ chưa rời `DA_PHAT_HANH` thì chỉ
+        mục `uq_einvoices_live_source_voucher` còn chặn tờ thứ hai trên cùng
+        chứng từ, nên thứ tự hai nửa là một **bất biến**, không phải sở thích.
+        """
+        invoice = self.require(einvoice_id)
+        invoice.status = transition_to(EInvoiceStatus(invoice.status), EInvoiceAction.REPLACE)
+        self.discard_representations(einvoice_id)
+        self._session.flush()
+        return invoice
+
     def discard_representations(self, einvoice_id: UUID) -> None:
         """Bỏ bản thể hiện đã lưu khi tờ hóa đơn thôi còn hiệu lực.
 
@@ -429,18 +448,40 @@ class EInvoiceService:
         return rows, total
 
     def issued_for_voucher(self, voucher_id: UUID) -> EInvoice | None:
-        """Hóa đơn **đã phát hành** của một chứng từ, nếu có — nguồn của FR-EIV-035.
+        """Hóa đơn **còn hiệu lực** của một chứng từ, nếu có — nguồn của FR-EIV-035.
 
         `DANG_PHAT_HANH` tính là đã phát hành ở đây dù chưa có xác nhận của cơ
         quan thuế: số đã cấp và bản XML đã ra khỏi phần mềm, nên sửa chứng từ
         gốc lúc ấy là làm lệch một tờ hóa đơn có thể đang trên đường tới CQT.
-        Trạng thái duy nhất còn cho phép động vào chứng từ gốc là `CHUA_PHAT_HANH`.
+
+        **Ba trạng thái cuối thì nhả chứng từ ra** (`SUPERSEDED_STATUSES`, quyết
+        định user 2026-09-10). Lát 7D chỉ chừa `CHUA_PHAT_HANH`, và điều đó khóa
+        chứng từ **vĩnh viễn** sau khi xử lý sai sót — trong khi chính thông điệp
+        của guard bảo người dùng "xử lý ở phía hóa đơn trước", tức hứa rằng xử lý
+        xong thì chứng từ mở ra. Không nhả thì hai kịch bản bắt buộc của
+        `docs/srs/07` §4.4 chết theo: "sai số tiền + khách chưa kê khai ⇒ THAY
+        THẾ" cần sửa số tiền trên chứng từ, còn "không phát sinh giao dịch ⇒ HỦY"
+        cần bỏ ghi sổ chứng từ khống để đảo tác động kế toán của nó.
+
+        **Nới tới đây thôi: sửa và bỏ ghi sổ, KHÔNG phải xóa.**
+        `fk_einvoices_source_voucher` khai `RESTRICT`, nên chừng nào tờ hóa đơn
+        còn thì chứng từ gốc còn — và tờ hóa đơn *phải* còn: số đã tiêu
+        (ADR-013) và nó nằm trong nghĩa vụ lưu trữ mười năm, nên một tờ hóa đơn
+        không có chứng từ gốc là chỗ trống không giải trình được. Khóa ngoại là
+        lớp canh cuối cho đúng ranh giới ấy; guard này không nói gì về nó.
+
+        Dấu vết không mất theo: bản XML/PDF lưu trữ của 7E-3 mới là bằng chứng
+        "đã gửi đi những con số nào", và nó nằm ở kho định địa chỉ theo nội dung
+        chứ không đọc lại từ chứng từ. Chứng từ đổi sau khi thay thế vì thế không
+        viết lại được lịch sử — đó đúng là hình dạng mà chỉ mục riêng phần
+        `uq_einvoices_live_source_voucher` đã chừa sẵn từ 7D.
         """
         return self._session.scalars(
             select(EInvoice)
             .where(
                 EInvoice.source_voucher_id == voucher_id,
                 EInvoice.status != EInvoiceStatus.CHUA_PHAT_HANH,
+                EInvoice.status.not_in(SUPERSEDED_STATUSES),
             )
             .limit(1)
         ).first()

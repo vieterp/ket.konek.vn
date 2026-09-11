@@ -35,7 +35,11 @@ from ket.modules.einvoice.service import EInvoiceService
 
 
 def refuse_when_invoice_issued(session: Session, voucher_id: UUID) -> None:
-    """Từ chối nếu chứng từ này đã có hóa đơn ra khỏi trạng thái nháp.
+    """Từ chối nếu chứng từ này đã có hóa đơn **còn hiệu lực**.
+
+    "Còn hiệu lực" chứ không "ra khỏi trạng thái nháp": từ 7F-1, hóa đơn đã xử lý
+    xong sai sót (thay thế / điều chỉnh / hủy) **nhả** chứng từ ra, đúng như câu
+    dưới đây hứa với người dùng. Ranh giới sống ở `issued_for_voucher`.
 
     Một truy vấn `LIMIT 1` trên `ix_einvoices_source_voucher`: guard chạy ở mọi
     lượt sửa, xóa và bỏ ghi sổ chứng từ của **mọi** phân hệ, nên nó phải rẻ kể
