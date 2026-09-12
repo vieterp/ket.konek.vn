@@ -111,3 +111,136 @@ def ensure_active_registration(
             range_to=range_to,
         )
     return service.activate(existing.id)
+
+
+_DEFAULT_INBOUND_LINES = """        <HHDVu>
+          <TChat>1</TChat>
+          <STT>1</STT>
+          <THHDVu>Thép hộp 20x40</THHDVu>
+          <DVTinh>cây</DVTinh>
+          <SLuong>10</SLuong>
+          <DGia>120000</DGia>
+          <ThTien>1200000</ThTien>
+          <TSuat>10%</TSuat>
+        </HHDVu>
+        <HHDVu>
+          <TChat>1</TChat>
+          <STT>2</STT>
+          <THHDVu>Công vận chuyển</THHDVu>
+          <DVTinh>chuyến</DVTinh>
+          <SLuong>1</SLuong>
+          <DGia>800000</DGia>
+          <ThTien>800000</ThTien>
+          <TSuat>10%</TSuat>
+        </HHDVu>"""
+
+_DEFAULT_INBOUND_VAT_GROUPS = """          <LTSuat>
+            <TSuat>10%</TSuat>
+            <ThTien>2000000</ThTien>
+            <TThue>200000</TThue>
+          </LTSuat>"""
+
+
+def inbound_xml(
+    *,
+    seller_tax_code: str = "0101243150",
+    seller_name: str = "Công ty TNHH Vật tư Bình Minh",
+    buyer_tax_code: str = "0312345678",
+    buyer_name: str = "Công ty CP Thử Nghiệm",
+    form: str = "1",
+    serial: str = "C26TAA",
+    number: str = "00004994",
+    invoice_date: str = "2026-03-05",
+    currency: str | None = None,
+    lines: str = _DEFAULT_INBOUND_LINES,
+    vat_groups: str = _DEFAULT_INBOUND_VAT_GROUPS,
+    total_before_tax: str = "2000000",
+    total_vat: str = "200000",
+    total_amount: str = "2200000",
+    namespace: str | None = None,
+    prologue: str = "",
+    related: str = "",
+) -> bytes:
+    """Một tệp XML hóa đơn đầu vào hình dạng TCT (TT78/QĐ1450).
+
+    Hình dạng bám bản tích hợp đang chạy thật ở `~/code/beta.konek.vn`, không
+    theo tài liệu — xem `inbound_parser` về ba thứ chỉ dữ liệu thật mới dạy.
+
+    `namespace` và `prologue` mở đúng hai biến thể mà bài test cần dựng: cùng
+    một tờ hóa đơn trong namespace của nhà cung cấp, và một tệp mang khối DTD
+    ở đầu.
+    """
+    root_open = f'<HDon xmlns="{namespace}">' if namespace else "<HDon>"
+    related_block = related
+    currency_tag = f"<DVTTe>{currency}</DVTTe>" if currency else ""
+    return (
+        f"""<?xml version="1.0" encoding="UTF-8"?>
+{prologue}{root_open}
+  <DLHDon>
+    <TTChung>
+      <KHMSHDon>{form}</KHMSHDon>
+      <KHHDon>{serial}</KHHDon>
+      <SHDon>{number}</SHDon>
+      <NLap>{invoice_date}</NLap>
+      {currency_tag}
+    </TTChung>
+    {related_block}
+    <NDHDon>
+      <NBan>
+        <Ten>{seller_name}</Ten>
+        <MST>{seller_tax_code}</MST>
+        <DChi>Số 1 phố Thử Nghiệm, Hà Nội</DChi>
+      </NBan>
+      <NMua>
+        <Ten>{buyer_name}</Ten>
+        <MST>{buyer_tax_code}</MST>
+        <DChi>Số 2 đường Kiểm Thử, TP.HCM</DChi>
+      </NMua>
+      <DSHHDVu>
+{lines}
+      </DSHHDVu>
+      <TToan>
+        <THTTLTSuat>
+{vat_groups}
+        </THTTLTSuat>
+        <TgTCThue>{total_before_tax}</TgTCThue>
+        <TgTThue>{total_vat}</TgTThue>
+        <TgTTTBSo>{total_amount}</TgTTTBSo>
+      </TToan>
+    </NDHDon>
+  </DLHDon>
+  <MCCQT>M1-26-ABCDE-12345678</MCCQT>
+</HDon>
+"""
+    ).encode()
+
+
+def inbound_lines_with(extra: str) -> str:
+    """Hai dòng hàng mặc định, cộng thêm một dòng của riêng bài test."""
+    return f"{_DEFAULT_INBOUND_LINES}\n{extra}"
+
+
+def related_invoice_block(
+    *,
+    nature: str | None = "3",
+    form: str = "1",
+    serial: str = "C26TAA",
+    number: str = "00001111",
+    invoice_date: str = "2026-02-01",
+) -> str:
+    """Khối `TTHDLQuan` — tờ hóa đơn bị điều chỉnh hoặc thay thế.
+
+    `nature=None` dựng đúng ca khó: khối liên quan **có mặt** mà `TCHDon` thì
+    không, tức tệp nói tờ này liên quan tới tờ khác nhưng không nói liên quan
+    kiểu gì — hai kiểu ấy ghi sổ ngược dấu nhau.
+    """
+    nature_tag = f"<TCHDon>{nature}</TCHDon>" if nature is not None else ""
+    return (
+        "<TTHDLQuan>"
+        f"{nature_tag}"
+        f"<KHMSHDCLQuan>{form}</KHMSHDCLQuan>"
+        f"<KHHDCLQuan>{serial}</KHHDCLQuan>"
+        f"<SHDCLQuan>{number}</SHDCLQuan>"
+        f"<NLHDCLQuan>{invoice_date}</NLHDCLQuan>"
+        "</TTHDLQuan>"
+    )

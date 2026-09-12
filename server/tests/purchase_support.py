@@ -123,8 +123,14 @@ def ensure_vendor(
     code: str,
     credit_limit: Decimal | None = None,
     payment_term_id: int | None = None,
+    tax_code: str | None = None,
 ) -> int:
-    """Một nhà cung cấp với `id` cố định — idempotent để fixture module dùng lại."""
+    """Một nhà cung cấp với `id` cố định — idempotent để fixture module dùng lại.
+
+    `tax_code` để trống ở phần lớn bài: nó chỉ có nghĩa với lượt nạp hóa đơn
+    đầu vào (7F-2b), nơi mã số thuế là đường duy nhất nối người bán trên tờ hóa
+    đơn với một dòng danh mục.
+    """
     existing = session.get(Partner, partner_id)
     if existing is None:
         session.add(
@@ -136,11 +142,18 @@ def ensure_vendor(
                 is_vendor=True,
                 credit_limit=credit_limit,
                 payment_term_id=payment_term_id,
+                tax_code=tax_code,
             )
         )
     else:
         existing.credit_limit = credit_limit
         existing.payment_term_id = payment_term_id
+        # `tax_code` chỉ ghi khi lượt gọi **có** nói tới nó, khác hai trường
+        # trên: một tệp test gọi lại `ensure_vendor` cho cùng `partner_id` mà
+        # không quan tâm mã số thuế sẽ xóa mất mã mà tệp khác vừa đặt — đúng
+        # khuôn bẫy "bài test phụ thuộc thứ tự tệp".
+        if tax_code is not None:
+            existing.tax_code = tax_code
     session.flush()
     return partner_id
 
