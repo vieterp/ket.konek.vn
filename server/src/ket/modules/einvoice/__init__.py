@@ -46,6 +46,7 @@ from ket.posting.contracts import EDIT_GUARDS, REFERENCE_GUARDS
 EINVOICE_PERMISSION_MODULE = "einvoice"
 INVOICE_PERMISSION_CODE = "invoice"
 REGISTRATION_PERMISSION_CODE = "registration"
+INBOUND_PERMISSION_CODE = "inbound"
 
 PERMISSION_REGISTRY.register(
     DocumentType(
@@ -78,6 +79,26 @@ PERMISSION_REGISTRY.register(
         # là cấp được cho mình một dải số hóa đơn. Cùng mức rủi ro với quyền
         # phát hành, nên cùng yêu cầu lớp thứ hai.
         requires_second_factor=True,
+    )
+)
+
+PERMISSION_REGISTRY.register(
+    DocumentType(
+        module=EINVOICE_PERMISSION_MODULE,
+        code=INBOUND_PERMISSION_CODE,
+        # Không `post`/`unpost`: tờ hóa đơn đầu vào không ghi sổ — thứ ghi sổ là
+        # chứng từ mua lập từ nó, và nó đi qua quyền của phân hệ mua.
+        # Không `edit`: nội dung một tờ hóa đơn nhận về là lời khai của người
+        # bán, không phải dữ liệu của mình; sửa nó nghĩa là sổ không còn khớp
+        # tệp XML đang lưu. Nhầm thì xóa rồi nạp lại tệp đúng.
+        actions=frozenset({Action.VIEW, Action.CREATE, Action.DELETE, Action.PRINT, Action.EXPORT}),
+        # **Không** yêu cầu lớp thứ hai, khác hai mã trên. Ranh giới là hệ quả
+        # pháp lý ngoài phần mềm: phát hành một tờ hóa đơn tạo ra một nghĩa vụ
+        # thuế và tiêu một số của dãy, còn *nhận* một tờ thì không tạo ra gì —
+        # nó chỉ ghi lại thứ người bán đã phát hành xong từ trước. Đòi mã OTP
+        # cho mỗi lượt nạp một tệp XML sẽ dạy người dùng rằng lớp thứ hai là
+        # thủ tục thường ngày, đúng thứ làm nó mất tác dụng ở chỗ nó cần.
+        requires_second_factor=False,
     )
 )
 

@@ -32,6 +32,7 @@ không thuộc về hóa đơn nào.
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from enum import IntEnum, StrEnum
 from uuid import UUID
 
@@ -46,6 +47,7 @@ from sqlalchemy import (
     Index,
     Integer,
     LargeBinary,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -56,8 +58,18 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ket.kernel.auditing.listener import Audited
+from ket.kernel.currency.models import CURRENCY_CODE_LENGTH, RATE_PRECISION
 from ket.kernel.identifiers import uuid7
+from ket.kernel.money import (
+    RATE_SCALE_DEFAULT,
+    UNIT_PRICE_PRECISION,
+    UNIT_PRICE_SCALE,
+    VAT_RATE_PRECISION,
+    VAT_RATE_SCALE,
+)
 from ket.kernel.persistence.base import DatasetBase
+from ket.kernel.quantity import QUANTITY_PRECISION, QUANTITY_SCALE
+from ket.posting.contracts import AMOUNT_PRECISION, AMOUNT_SCALE
 
 EINVOICE_TABLE_NAME = "einvoices"
 ERROR_NOTICE_TABLE_NAME = "einvoice_error_notices"
@@ -66,6 +78,15 @@ OUTBOX_TABLE_NAME = "einvoice_outbox"
 PROVIDER_PROFILE_TABLE_NAME = "einvoice_provider_profiles"
 REPRESENTATION_TABLE_NAME = "einvoice_representations"
 ERROR_FLOW_TABLE_NAME = "einvoice_error_flows"
+INBOUND_TABLE_NAME = "inbound_einvoices"
+INBOUND_LINE_TABLE_NAME = "inbound_einvoice_lines"
+
+IDENTITY_CONSTRAINT = "uq_inbound_einvoices_identity"
+"""Tên khóa nhận dạng tờ hóa đơn đầu vào.
+
+Một hằng số chứ hai chuỗi giống nhau: đường ghi phân biệt lượt trùng với mọi
+ràng buộc khác **theo tên**, nên tên gõ sai ở một trong hai chỗ sẽ làm lượt
+trùng thật báo sai loại lỗi — và đó là loại lỗi chỉ lộ ra ở bản cài."""
 
 INVOICE_NO_MAX_LENGTH = 50
 TAX_AUTHORITY_CODE_MAX_LENGTH = 100
@@ -92,6 +113,21 @@ XML_KIND = "xml"
 Chuỗi trần chứ không import `RepresentationKind`: `models` là tầng dưới của
 `providers`, và `CheckConstraint` cần một hằng số nội suy được lúc dựng bảng.
 `test_representation_kinds_match_the_protocol` ghim hai bộ giá trị bằng nhau."""
+
+PARTY_NAME_MAX_LENGTH = 400
+PARTY_ADDRESS_MAX_LENGTH = 500
+INVOICE_FORM_MAX_LENGTH = 20
+INVOICE_SERIAL_MAX_LENGTH = 20
+LINE_DESCRIPTION_MAX_LENGTH = 500
+"""Trần mô tả một dòng hàng của hóa đơn đầu vào — **cùng con số** với
+`purchase_invoice_lines.description`.
+
+Bằng nhau có chủ đích: dòng lưu ở đây tồn tại để thành dòng chứng từ mua, nên
+một trần rộng hơn chỉ dời chỗ hỏng từ lượt nạp sang lượt lập chứng từ — nơi
+người dùng đã tưởng tờ hóa đơn vào sổ rồi. Mô tả dài hơn thì lượt nạp nói ngay."""
+
+LINE_UNIT_MAX_LENGTH = 50
+VAT_RATE_TEXT_MAX_LENGTH = 50
 
 MEDIA_TYPE_MAX_LENGTH = 150
 FILE_NAME_MAX_LENGTH = 255
@@ -890,3 +926,302 @@ class EInvoiceRepresentation(DatasetBase, Audited):
     )
     created_by: Mapped[int] = mapped_column(Integer, nullable=False)
     """`user_id` trần như mọi tham chiếu `public.users`."""
+
+
+class InboundEInvoice(DatasetBase, Audited):
+    """Một tờ hóa đơn điện tử **đầu vào** đã nạp (FR-EIV-040).
+
+    **Vì sao là một bảng chứ không chỉ một payload điền sẵn.** Đường rẻ hơn là
+    phân giải tệp XML rồi trả về ngay một thân chứng từ mua để người dùng lưu.
+    Nó hỏng ở ba chỗ, và chỗ thứ nhất là chỗ không sửa được về sau:
+
+    * **Không khử trùng được.** Cùng một tờ hóa đơn thường đến hai lần — bản
+      nhà cung cấp gửi thư và bản tải từ cổng tra cứu — và không có một dòng
+      nào mang `(MST người bán, mẫu số, ký hiệu, số)` thì lần thứ hai đi thẳng
+      thành một chứng từ mua thứ hai. Hệ quả là khấu trừ thuế GTGT đầu vào hai
+      lần trên cùng một tờ hóa đơn.
+    * **Tờ chưa lập chứng từ thì biến mất**, nên không có danh sách việc cần làm
+      — thứ duy nhất trả lời được "tháng này còn hóa đơn nào chưa vào sổ".
+    * **Nghĩa vụ lưu trữ mười năm** (FR-NFR-023) đứng độc lập với chứng từ kế
+      toán: tờ hóa đơn phải còn đọc được kể cả khi chứng từ bị xóa và lập lại.
+
+    **`voucher_id` là một cột, và đó chính là luật "một tờ, một chứng từ".**
+    Không có bảng nối, không có trạng thái: `NULL` nghĩa là chưa lập chứng từ,
+    và một cột thì không mang được hai giá trị. Cột `status` riêng sẽ là nguồn
+    sự thật thứ hai cho cùng một câu hỏi — đúng thứ 7D đã tránh khi quyết định
+    hóa đơn không mang cột tiền.
+
+    **Không có cột `vendor_id`.** Người bán nhận ra bằng `seller_tax_code`,
+    tra vào danh mục **lúc lập chứng từ** chứ không lúc nạp. Một ảnh chụp lưu
+    sẵn sẽ lạc hậu ngay lần đầu ai đó sửa mã số thuế của đối tác, và nó không
+    mua lại được gì: lượt lập chứng từ dù sao cũng phải đọc danh mục để biết
+    điều khoản thanh toán và tài khoản phải trả.
+
+    **Đơn vị tiền và tỷ giá ghi nguyên như tờ hóa đơn khai**, không quy đổi:
+    quy đổi ở đây rồi để chứng từ nhân ngược lại là hai lần làm tròn, và hai
+    lần làm tròn là hai con số — cùng lập luận đã ghi ở `SubledgerEntry` và ở
+    bộ dựng XML chiều gửi.
+    """
+
+    __tablename__ = INBOUND_TABLE_NAME
+    __table_args__ = (
+        # Danh tính pháp lý của một tờ hóa đơn — bốn thứ, không thứ nào do phần
+        # mềm này cấp. Không có `branch_id` trong khóa có chủ đích: cùng một tờ
+        # hóa đơn không được vào sổ hai lần dù hai lượt nạp đứng ở hai chi
+        # nhánh khác nhau, vì sổ thì chỉ có một.
+        #
+        # RLS vì thế phải được tính tới ở đường ghi: người đứng ở chi nhánh B
+        # **không thấy** dòng chi nhánh A, nên phép tra trước lượt ghi sẽ trượt
+        # và ràng buộc này mới là thứ chặn thật. Xem `inbound.record`.
+        #
+        # **Khóa so trên dạng CHUẨN HÓA, không trên chuỗi thô**, và đó là phần
+        # quyết định xem nó có chặn thật hay không. Bản gửi qua thư và bản tải
+        # từ cổng tra cứu của **cùng một tờ** hay khác nhau đúng ở cách viết:
+        # số hóa đơn `00004994` với `4994` (số hóa đơn là một *số*, phần đệm chỉ
+        # để in), ký hiệu viết hoa ở nhà cung cấp này và viết thường ở nhà cung
+        # cấp kia, mã số thuế có khoảng trắng. So chuỗi thô thì cả hai lọt, và
+        # thuế đầu vào được khấu trừ hai lần trên một tờ hóa đơn.
+        #
+        # Chuẩn hóa nằm trong **biểu thức của chỉ mục** chứ không ở cột thứ hai:
+        # cột thô vẫn giữ nguyên chữ người bán viết (thứ phải in ra và đối chiếu
+        # với cơ quan thuế), và không có nguồn sự thật thứ hai nào để lệch.
+        Index(
+            IDENTITY_CONSTRAINT,
+            text("upper(btrim(seller_tax_code))"),
+            text("upper(btrim(invoice_form))"),
+            text("upper(btrim(invoice_serial))"),
+            text("coalesce(nullif(ltrim(btrim(invoice_no), '0'), ''), '0')"),
+            unique=True,
+        ),
+        CheckConstraint("seller_tax_code <> ''", name="seller_tax_code_not_blank"),
+        CheckConstraint("buyer_tax_code <> ''", name="buyer_tax_code_not_blank"),
+        CheckConstraint("seller_name <> ''", name="seller_name_not_blank"),
+        CheckConstraint("invoice_form <> ''", name="invoice_form_not_blank"),
+        CheckConstraint("invoice_serial <> ''", name="invoice_serial_not_blank"),
+        CheckConstraint("invoice_no <> ''", name="invoice_no_not_blank"),
+        CheckConstraint("exchange_rate > 0", name="exchange_rate_positive"),
+        CheckConstraint(
+            "total_before_tax >= 0 AND total_vat >= 0 AND total_amount >= 0",
+            name="totals_not_negative",
+        ),
+        CheckConstraint("byte_size > 0", name="byte_size_positive"),
+        CheckConstraint("file_name <> ''", name="file_name_not_blank"),
+        CheckConstraint(
+            f"char_length(content_hash) = {SHA256_HEX_LENGTH}", name="content_hash_is_sha256"
+        ),
+        CheckConstraint("nature IN (1, 2, 3, 9)", name="nature_known"),
+        # Hai vế của cùng một sự thật: tờ hóa đơn gốc không có gì để trỏ ngược,
+        # và một tờ mang đường trỏ ngược thì không phải tờ gốc. Viết thành ràng
+        # buộc bảng để `nature = 1` mang nghĩa "không liên quan tới tờ nào" thay
+        # vì "chưa ai điền" — cùng lối `adjustment_link_matches_kind` của
+        # `sales_invoices`.
+        CheckConstraint(
+            "nature = 1 OR (related_serial IS NOT NULL AND related_no IS NOT NULL) OR nature = 9",
+            name="related_only_when_not_original",
+        ),
+        CheckConstraint(
+            "nature <> 1 OR (related_form IS NULL AND related_serial IS NULL "
+            "AND related_no IS NULL AND related_date IS NULL)",
+            name="original_has_no_related_invoice",
+        ),
+        # Khóa ngoại **ghép** như `einvoices.source_voucher_id`: chứng từ lập ra
+        # từ tờ hóa đơn phải thuộc đúng chi nhánh đã nạp nó, và lệch chi nhánh
+        # thì không biểu diễn được thay vì phải nhớ kiểm.
+        #
+        # `SET NULL` **trên đúng một cột**, chứ không `RESTRICT` và cũng không
+        # `SET NULL` trơn. Ba lựa chọn, và hai cái kia đều hỏng:
+        #
+        # * `RESTRICT` biến mọi chứng từ mua lập từ hóa đơn đầu vào thành chứng
+        #   từ **không xóa được** — `REFERENCE_GUARDS` không chạy ở
+        #   `VoucherService.delete`, nên người dùng sẽ nhận một lỗi khóa ngoại
+        #   trần từ cơ sở dữ liệu. Đó là một hồi quy đặt lên phân hệ mua, và gỡ
+        #   nó đòi `einvoice` móc vào vòng đời chứng từ của `purchase` — đúng
+        #   thứ luật C3 cấm.
+        # * `SET NULL` trơn nhắm vào **cả hai** cột của khóa, mà `branch_id`
+        #   `NOT NULL` — lượt xóa sẽ đổ ngay tại ràng buộc ấy.
+        #
+        # `ON DELETE SET NULL (voucher_id)` (PostgreSQL 15+) trả tờ hóa đơn về
+        # đúng trạng thái đúng của nó — *chưa lập chứng từ*, vì chứng từ không
+        # còn nữa — mà không đụng tới chi nhánh. Lượt xóa chứng từ vẫn nằm
+        # nguyên trong nhật ký, nên không có gì bị giấu.
+        ForeignKeyConstraint(
+            ["voucher_id", "branch_id"],
+            ["vouchers.id", "vouchers.branch_id"],
+            name="fk_inbound_einvoices_voucher",
+            ondelete="SET NULL (voucher_id)",
+        ),
+        Index("ix_inbound_einvoices_branch_seller", "branch_id", "seller_tax_code"),
+        # Danh sách "còn tờ nào chưa vào sổ" — câu hỏi mở màn hình này tồn tại.
+        Index(
+            "ix_inbound_einvoices_pending",
+            "branch_id",
+            "invoice_date",
+            postgresql_where=text("voucher_id IS NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
+
+    branch_id: Mapped[int] = mapped_column(
+        ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False
+    )
+    """Chi nhánh **nhận** tờ hóa đơn — chi nhánh đang thao tác của người nạp.
+    Nó quyết định ai còn nhìn thấy tờ này, và nó là vế mà MST người mua trên
+    tờ hóa đơn phải khớp (xem `InboundInvoiceBuyerMismatchError`)."""
+
+    seller_tax_code: Mapped[str] = mapped_column(String(TAX_CODE_MAX_LENGTH), nullable=False)
+    seller_name: Mapped[str] = mapped_column(String(PARTY_NAME_MAX_LENGTH), nullable=False)
+    seller_address: Mapped[str | None] = mapped_column(
+        String(PARTY_ADDRESS_MAX_LENGTH), nullable=True
+    )
+
+    buyer_tax_code: Mapped[str] = mapped_column(String(TAX_CODE_MAX_LENGTH), nullable=False)
+    buyer_name: Mapped[str | None] = mapped_column(String(PARTY_NAME_MAX_LENGTH), nullable=True)
+    buyer_address: Mapped[str | None] = mapped_column(
+        String(PARTY_ADDRESS_MAX_LENGTH), nullable=True
+    )
+
+    invoice_form: Mapped[str] = mapped_column(String(INVOICE_FORM_MAX_LENGTH), nullable=False)
+    """`KHMSHDon` — mẫu số hóa đơn. `NOT NULL` **vì nó nằm trong khóa nhận
+    dạng**: một cột `NULL` được trong khóa duy nhất là một khóa không chặn gì
+    (PostgreSQL coi hai `NULL` là khác nhau), nên tờ hóa đơn thiếu mẫu số sẽ
+    nạp lại được vô hạn lần."""
+
+    invoice_serial: Mapped[str] = mapped_column(String(INVOICE_SERIAL_MAX_LENGTH), nullable=False)
+    """`KHHDon` — ký hiệu hóa đơn, ví dụ `C25TSV`."""
+
+    invoice_no: Mapped[str] = mapped_column(String(INVOICE_NO_MAX_LENGTH), nullable=False)
+    invoice_date: Mapped[date] = mapped_column(Date, nullable=False)
+    tax_authority_code: Mapped[str | None] = mapped_column(
+        String(TAX_AUTHORITY_CODE_MAX_LENGTH), nullable=True
+    )
+    """`MCCQT` — mã cơ quan thuế. Rỗng ở hóa đơn **không có mã**, một loại hợp
+    lệ của NĐ123, nên nó không bắt buộc."""
+
+    currency_code: Mapped[str] = mapped_column(String(CURRENCY_CODE_LENGTH), nullable=False)
+    exchange_rate: Mapped[Decimal] = mapped_column(
+        Numeric(RATE_PRECISION, RATE_SCALE_DEFAULT), nullable=False
+    )
+
+    total_before_tax: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False
+    )
+    total_vat: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False
+    )
+    total_amount: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False
+    )
+    """Ba con số **tờ hóa đơn tự khai**, giữ nguyên. Chúng là vế đối chứng của
+    lượt lập chứng từ: chứng từ dựng từ các dòng phải cộng ra đúng chúng, nếu
+    không thì có thứ gì đó chưa đọc được (xem `InboundInvoiceTotalsMismatchError`)."""
+
+    nature: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    """Tính chất tờ hóa đơn: 1 gốc · 2 thay thế · 3 điều chỉnh · 9 liên quan tới
+    tờ khác nhưng không khai kiểu (`inbound_parser.INVOICE_NATURE_*`).
+
+    Cột này là ranh giới giữa "một khoản mua" và "một lượt sửa khoản mua
+    trước". Thiếu nó, một tờ **điều chỉnh giảm** — nhất quán từng đồng, nên lọt
+    mọi phép kiểm số học — thành một chứng từ mua làm **tăng** chi phí và thuế
+    đầu vào đúng phần đáng lẽ phải giảm."""
+
+    related_form: Mapped[str | None] = mapped_column(String(INVOICE_FORM_MAX_LENGTH), nullable=True)
+    related_serial: Mapped[str | None] = mapped_column(
+        String(INVOICE_SERIAL_MAX_LENGTH), nullable=True
+    )
+    related_no: Mapped[str | None] = mapped_column(String(INVOICE_NO_MAX_LENGTH), nullable=True)
+    related_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    """Danh tính tờ hóa đơn **bị** thay thế hoặc điều chỉnh (`TTHDLQuan`).
+
+    Bốn trường chứ một chuỗi hiển thị: người dùng phải **tra được** tờ gốc
+    trong sổ, và một chuỗi ghép sẵn thì không tra được. Rỗng ở hóa đơn gốc —
+    ràng buộc `related_only_when_not_original` giữ hai vế không lệch nhau, nên
+    `nature = 1` kèm một đường trỏ ngược là trạng thái không biểu diễn được."""
+
+    voucher_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    """Chứng từ mua đã lập từ tờ hóa đơn này; `NULL` = chưa lập. Xem docstring
+    đầu lớp về việc vì sao đây là **cột** duy nhất nói lên điều đó."""
+
+    content_hash: Mapped[str] = mapped_column(String(SHA256_HEX_LENGTH), nullable=False)
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    file_name: Mapped[str] = mapped_column(String(FILE_NAME_MAX_LENGTH), nullable=False)
+    """Tệp XML gốc nằm ở **kho định địa chỉ theo nội dung** của phase 2, cùng
+    kho với bản thể hiện hóa đơn đầu ra — nên `pg_dump` hằng đêm không phải đọc
+    lại chúng, và hai tệp cùng nội dung là một tệp trên đĩa. Không có cột
+    `media_type`: bảng này chỉ nhận XML."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_by: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class InboundEInvoiceLine(DatasetBase):
+    """Một dòng hàng của tờ hóa đơn đầu vào.
+
+    **`vat_amount` được lưu, dù tờ hóa đơn không khai tiền thuế theo dòng.**
+    Chuẩn TCT cộng thuế theo **nhóm thuế suất** (`THTTLTSuat`), nên tiền thuế
+    từng dòng là kết quả một phép chia ngược — và phép chia ấy chạy **một lần**,
+    lúc nạp, chứ không mỗi lần dựng chứng từ. Lý do: chia lại ở mỗi lượt gọi là
+    hai đường sinh ra cùng một con số, và chúng sẽ lệch đúng vào lần ai đó sửa
+    luật làm tròn ở một đường. Cách chia ghi ở `inbound.py`.
+
+    **Không `Audited`.** Dòng là nội dung của tờ hóa đơn, mà tờ hóa đơn thì
+    không sửa được — nó chỉ được nạp và bị xóa, và cả hai lượt ấy nhật ký của
+    bảng cha đã ghi. Cùng lối `purchase_invoice_lines`.
+    """
+
+    __tablename__ = INBOUND_LINE_TABLE_NAME
+    __table_args__ = (
+        UniqueConstraint("invoice_id", "line_no", name="uq_inbound_einvoice_lines_no"),
+        CheckConstraint("line_no > 0", name="line_no_positive"),
+        CheckConstraint("description <> ''", name="description_not_blank"),
+        CheckConstraint("amount >= 0 AND vat_amount >= 0", name="amounts_not_negative"),
+        CheckConstraint("quantity IS NULL OR quantity > 0", name="quantity_positive"),
+        CheckConstraint("unit_price IS NULL OR unit_price >= 0", name="unit_price_not_negative"),
+        CheckConstraint("vat_rate IS NULL OR vat_rate >= 0", name="vat_rate_not_negative"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    invoice_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{INBOUND_TABLE_NAME}.id", ondelete="CASCADE"), nullable=False
+    )
+    """`CASCADE`: dòng là dẫn xuất của tờ hóa đơn, không phải một lời khai đứng
+    riêng — cùng lập luận `einvoice_representations`."""
+
+    line_no: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    """`STT` trên tờ hóa đơn. Có thể đứt quãng: dòng ghi chú (`TChat` = 4)
+    không mang tiền nên không được lưu, còn số thứ tự thì giữ nguyên như trên
+    giấy để đối chiếu được bằng mắt."""
+
+    description: Mapped[str] = mapped_column(String(LINE_DESCRIPTION_MAX_LENGTH), nullable=False)
+    unit: Mapped[str | None] = mapped_column(String(LINE_UNIT_MAX_LENGTH), nullable=True)
+    quantity: Mapped[Decimal | None] = mapped_column(
+        Numeric(QUANTITY_PRECISION, QUANTITY_SCALE), nullable=True
+    )
+    unit_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(UNIT_PRICE_PRECISION, UNIT_PRICE_SCALE), nullable=True
+    )
+    """`NULL` được, và đó là ca **thường gặp**: hóa đơn điện, nước và nhiều hóa
+    đơn dịch vụ chỉ khai thành tiền. Không chia ngược từ `amount / quantity` —
+    xem `inbound_parser._line`."""
+
+    amount: Mapped[Decimal] = mapped_column(Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False)
+    vat_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(VAT_RATE_PRECISION, VAT_RATE_SCALE), nullable=True
+    )
+    """Thuế suất **phần trăm** (`10`, `8`, `5`) — cùng đơn vị với
+    `purchase_invoice_lines.vat_rate`. `NULL` khi `TSuat` là một mã chữ."""
+
+    vat_rate_text: Mapped[str | None] = mapped_column(
+        String(VAT_RATE_TEXT_MAX_LENGTH), nullable=True
+    )
+    """Chuỗi `TSuat` nguyên văn. Tồn tại vì `vat_rate IS NULL` một mình không
+    phân biệt được **KCT** (không chịu thuế) với **KKKNT** (không kê khai nộp
+    thuế) — hai thứ khác nhau về quyền khấu trừ thuế đầu vào. Đây đúng là sự
+    phân biệt mà chiều gửi buộc phải đánh mất ở biên giới nhà cung cấp
+    (`xml_builder`), và chiều nhận không có lý do gì phải mất theo."""
+
+    vat_amount: Mapped[Decimal] = mapped_column(
+        Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False
+    )

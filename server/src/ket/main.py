@@ -61,6 +61,8 @@ from ket.api.routers.config_packages import CONFIG_PACKAGES_PREFIX
 from ket.api.routers.config_packages import router as config_packages_router
 from ket.api.routers.dimensions import router as dimensions_router
 from ket.api.routers.einvoice import router as einvoice_router
+from ket.api.routers.einvoice_inbound import INBOUND_PREFIX as EINVOICE_INBOUND_PREFIX
+from ket.api.routers.einvoice_inbound import router as einvoice_inbound_router
 from ket.api.routers.exports import router as exports_router
 from ket.api.routers.fiscal_years import router as fiscal_years_router
 from ket.api.routers.gl_journal import router as gl_journal_router
@@ -224,6 +226,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # (`MAX_ARCHIVE_BYTES`) cộng phụ phí multipart, cùng khuôn với
             # tệp đính kèm ở trên — không dùng trần mặc định 1 MiB.
             (CONFIG_PACKAGES_PREFIX, IMPORTER_MAX_ARCHIVE_BYTES + MULTIPART_OVERHEAD_BYTES),
+            # Lát 7F-2b: tệp XML hóa đơn đầu vào đi vào **cùng kho** với tệp
+            # đính kèm và bị `store_stream` canh bằng **cùng** một trần, nên
+            # trần thân request phải là cùng con số. Để nguyên mặc định 1 MiB
+            # thì hai trần lệch nhau, và triệu chứng là một tờ hóa đơn nhiều
+            # dòng bị chặn ở tầng middleware bằng một thông điệp không nói gì
+            # về hóa đơn.
+            (
+                EINVOICE_INBOUND_PREFIX,
+                resolved.attachment_max_bytes + MULTIPART_OVERHEAD_BYTES,
+            ),
         ),
     )
     app.add_middleware(
@@ -318,6 +330,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Lát 7D — nền hóa đơn điện tử (SRS 07) + quản lý hóa đơn (SRS 08). Sau
     # `sales_router` vì hóa đơn trỏ về chứng từ bán và giữ nó đứng yên
     # (FR-EIV-035), không phải ngược lại.
+    # Lát 7F-2b — hóa đơn điện tử **đầu vào** (FR-EIV-040). TRƯỚC `einvoice_router`
+    # và bắt buộc như vậy: router kia có `GET /api/v1/einvoices/{einvoice_id}`,
+    # nên đăng ký sau sẽ làm mọi đường dẫn ở đây bị đọc thành một `einvoice_id`
+    # và đổ ở phép ép UUID.
+    app.include_router(einvoice_inbound_router)
     app.include_router(einvoice_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])

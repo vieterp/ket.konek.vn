@@ -1058,6 +1058,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/einvoices/inbound": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Inbound Invoices
+         * @description Danh sách hóa đơn đầu vào trong phạm vi chi nhánh của người gọi.
+         */
+        get: operations["list_inbound_invoices_api_v1_einvoices_inbound_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/inbound/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Inbound Invoice
+         * @description Nạp một tệp XML hóa đơn đầu vào chuẩn TCT (FR-EIV-040).
+         *
+         *     Tệp ghi xuống kho **trước** khi mở transaction, cùng lối
+         *     `POST /api/v1/attachments`: vân tay idempotency của lượt này gồm hash nội
+         *     dung, nên không có cách nào biết hai lượt gửi có cùng một tệp trước khi đọc
+         *     hết tệp. Kho định địa chỉ theo nội dung nên "tệp thừa" là **cùng một tệp**,
+         *     không tốn thêm byte nào.
+         *
+         *     Chi nhánh của tờ hóa đơn = chi nhánh đang thao tác của người nạp — nó quyết
+         *     định ai còn nhìn thấy tờ này, và nó là vế mà mã số thuế người mua phải khớp.
+         *
+         *     FR-EIV-041 (kéo hóa đơn đầu vào thẳng từ hệ thống nhà cung cấp) **chưa làm**:
+         *     không có sandbox nào để chứng minh, cùng lập luận D3 đã dùng cho 7E-2.
+         */
+        post: operations["import_inbound_invoice_api_v1_einvoices_inbound_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/inbound/{inbound_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Inbound Invoice
+         * @description Một tờ hóa đơn đầu vào kèm từng dòng hàng.
+         */
+        get: operations["get_inbound_invoice_api_v1_einvoices_inbound__inbound_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Inbound Invoice
+         * @description Xóa một tờ hóa đơn đầu vào chưa lập chứng từ.
+         *
+         *     Đã lập chứng từ thì không: xóa chứng từ trước — khóa ngoại `SET NULL` trả
+         *     tờ hóa đơn về "chưa lập chứng từ" — rồi tờ hóa đơn mới xóa được. Thứ tự ấy
+         *     giữ cho không có chứng từ mua nào mồ côi tờ hóa đơn đã sinh ra nó.
+         */
+        delete: operations["delete_inbound_invoice_api_v1_einvoices_inbound__inbound_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/inbound/{inbound_id}/actions/create-purchase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Purchase From Inbound
+         * @description Lập chứng từ mua hàng từ một tờ hóa đơn đầu vào (FR-EIV-040).
+         *
+         *     Hai nửa dữ liệu, và ranh giới giữa chúng là điều đáng nói: tờ hóa đơn nói
+         *     **đã mua gì** (người bán, ký hiệu, số, ngày, từng dòng, thuế suất, tổng),
+         *     thân request nói **hạch toán vào đâu**. Không con số tiền nào nhận lại từ
+         *     client — nếu nhận thì phép kiểm tổng dưới đây chẳng còn gì để đối chứng.
+         *
+         *     Đòi **cả** `einvoice.inbound.create` lẫn `purchase.invoice.create`: chứng
+         *     từ dựng ra ở đây là chứng từ mua, nên nó phải đi qua đúng những mã quyền mà
+         *     một chứng từ mua lập bằng tay phải đi qua.
+         */
+        post: operations["create_purchase_from_inbound_api_v1_einvoices_inbound__inbound_id__actions_create_purchase_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/einvoices/inbound/{inbound_id}/xml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Inbound Xml
+         * @description Tải lại **đúng tệp** người bán gửi (nghĩa vụ lưu trữ, FR-NFR-023).
+         *
+         *     Tệp gốc chứ không một bản dựng lại: thứ có giá trị đối chiếu với cơ quan
+         *     thuế là tệp mang chữ ký số của người bán, và mọi lượt sinh lại đều làm mất
+         *     chữ ký ấy.
+         */
+        get: operations["download_inbound_xml_api_v1_einvoices_inbound__inbound_id__xml_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/einvoices/notices/{notice_id}": {
         parameters: {
             query?: never;
@@ -9438,6 +9571,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_import_inbound_invoice_api_v1_einvoices_inbound_import_post */
+        Body_import_inbound_invoice_api_v1_einvoices_inbound_import_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_attachment_api_v1_attachments_post */
         Body_upload_attachment_api_v1_attachments_post: {
             /** Entity Id */
@@ -11444,6 +11582,186 @@ export interface components {
             job_id: string;
             missing_reference: components["schemas"]["MissingReferenceMode"];
             mode: components["schemas"]["ImportMode"];
+        };
+        /**
+         * InboundEInvoiceListOut
+         * @description Một trang hóa đơn đầu vào.
+         *
+         *     `pending` đếm **toàn bộ** phạm vi người gọi, không riêng trang đang xem:
+         *     con số ấy trả lời "còn bao nhiêu tờ chưa vào sổ", câu hỏi làm nên màn hình
+         *     này — cùng lập luận `counts_by_status` của `EInvoiceListOut`.
+         */
+        InboundEInvoiceListOut: {
+            /** Items */
+            items: components["schemas"]["InboundEInvoiceOut"][];
+            /** Pending */
+            pending: number;
+        };
+        /**
+         * InboundEInvoiceOut
+         * @description Một tờ hóa đơn đầu vào đã nạp.
+         *
+         *     `vendor_id` **không** là một cột của bảng: nó tra từ `seller_tax_code` ở
+         *     mỗi lượt đọc, và rỗng nghĩa là chưa khớp được đối tác nào (hoặc khớp nhiều
+         *     hơn một). Đó là thứ màn hình dùng để hiện "chưa khớp đối tác", và cũng là
+         *     thứ quyết định lượt lập chứng từ có phải chỉ định đối tác tường minh không.
+         */
+        InboundEInvoiceOut: {
+            /** Branch Id */
+            branch_id: number;
+            /** Buyer Address */
+            buyer_address: string | null;
+            /** Buyer Name */
+            buyer_name: string | null;
+            /** Buyer Tax Code */
+            buyer_tax_code: string;
+            /** Byte Size */
+            byte_size: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency Code */
+            currency_code: string;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Invoice Date
+             * Format: date
+             */
+            invoice_date: string;
+            /** Invoice Form */
+            invoice_form: string;
+            /** Invoice No */
+            invoice_no: string;
+            /** Invoice Serial */
+            invoice_serial: string;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["InboundLineOut"][];
+            /**
+             * Tính chất hóa đơn
+             * @description 1 gốc · 2 thay thế · 3 điều chỉnh · 9 liên quan tới tờ khác nhưng không khai kiểu. Chỉ hóa đơn gốc lập được chứng từ mua.
+             */
+            nature: number;
+            /**
+             * Hóa đơn liên quan
+             * @description Tờ bị thay thế hoặc điều chỉnh; rỗng ở hóa đơn gốc.
+             */
+            related_date?: string | null;
+            /** Related Form */
+            related_form?: string | null;
+            /** Related No */
+            related_no?: string | null;
+            /** Related Serial */
+            related_serial?: string | null;
+            /** Seller Address */
+            seller_address: string | null;
+            /** Seller Name */
+            seller_name: string;
+            /** Seller Tax Code */
+            seller_tax_code: string;
+            /** Tax Authority Code */
+            tax_authority_code: string | null;
+            /** Total Amount */
+            total_amount: string;
+            /** Total Before Tax */
+            total_before_tax: string;
+            /** Total Vat */
+            total_vat: string;
+            /** Đối tác khớp mã số thuế */
+            vendor_id?: number | null;
+            /**
+             * Chứng từ đã lập
+             * @description Rỗng = tờ hóa đơn chưa vào sổ.
+             */
+            voucher_id?: string | null;
+        };
+        /**
+         * InboundLineOut
+         * @description Một dòng hàng của tờ hóa đơn đầu vào.
+         */
+        InboundLineOut: {
+            /** Amount */
+            amount: string;
+            /** Description */
+            description: string;
+            /** Line No */
+            line_no: number;
+            /** Quantity */
+            quantity: string | null;
+            /** Unit */
+            unit: string | null;
+            /** Unit Price */
+            unit_price: string | null;
+            /** Vat Amount */
+            vat_amount: string;
+            /**
+             * Thuế suất (%)
+             * @description Phần trăm (10, 8, 5); rỗng khi tờ hóa đơn ghi một mã chữ.
+             */
+            vat_rate?: string | null;
+            /**
+             * Thuế suất nguyên văn
+             * @description Chuỗi `TSuat` trên tờ hóa đơn — phân biệt KCT với KKKNT.
+             */
+            vat_rate_text?: string | null;
+        };
+        /**
+         * InboundPurchaseIn
+         * @description Phần **kế toán** của lượt lập chứng từ mua từ tờ hóa đơn đầu vào.
+         *
+         *     Tách khỏi thân hóa đơn có chủ đích: tờ hóa đơn nói *đã mua gì* — người bán,
+         *     ký hiệu, số, ngày, từng dòng hàng, thuế suất, tổng tiền — còn nó **không**
+         *     nói *hạch toán vào đâu*. Để tệp XML của nhà cung cấp chọn hộ tài khoản là
+         *     giao một quyết định kế toán cho dữ liệu bên ngoài.
+         *
+         *     Mọi trường ở đây vì thế là trường người dùng chọn, và mọi con số thì không:
+         *     số tiền, số lượng và thuế suất lấy từ tờ hóa đơn đã nạp, không nhận lại từ
+         *     client — nếu không thì phép kiểm tổng chẳng còn gì để đối chứng.
+         */
+        InboundPurchaseIn: {
+            /**
+             * Tài khoản Nợ của dòng hàng
+             * @description Áp cho mọi dòng; sửa lại từng dòng ở màn hình chứng từ sau khi lập.
+             */
+            account_id: number;
+            /** Description */
+            description?: string | null;
+            /**
+             * Loại chứng từ mua
+             * @description 0 hàng nhập kho · 1 dịch vụ / chi phí · 2 tài sản cố định · 3 hàng đang đi đường. Không nhận loại trả lại hàng: nó phải đối trừ một hóa đơn gốc, thứ tờ hóa đơn đầu vào không nói được.
+             * @default 1
+             */
+            kind: number;
+            /** Nghiệp vụ định khoản */
+            operation_code: string;
+            /** Tài khoản phải trả */
+            payable_account_id: number;
+            /** Điều khoản thanh toán */
+            payment_term_id?: number | null;
+            /**
+             * Ngày hạch toán
+             * @description Bỏ trống thì lấy ngày trên tờ hóa đơn.
+             */
+            posting_date?: string | null;
+            /** Tài khoản thuế GTGT được khấu trừ */
+            vat_account_id?: number | null;
+            /**
+             * Đối tác
+             * @description Bỏ trống thì lấy đối tác khớp mã số thuế người bán. Bắt buộc khi mã số thuế ấy chưa có trong danh mục, hoặc khớp nhiều hơn một dòng.
+             */
+            vendor_id?: number | null;
         };
         /**
          * InvoiceFormKind
@@ -17852,6 +18170,251 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorFlowOut"][];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_inbound_invoices_api_v1_einvoices_inbound_get: {
+        parameters: {
+            query?: {
+                pending_only?: boolean;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundEInvoiceListOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    import_inbound_invoice_api_v1_einvoices_inbound_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_inbound_invoice_api_v1_einvoices_inbound_import_post"];
+            };
+        };
+        responses: {
+            /** @description Lần gửi lại: tờ hóa đơn đã nạp */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundEInvoiceOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundEInvoiceOut"];
+                };
+            };
+            /** @description Tờ hóa đơn này đã có trong sổ */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tệp không đọc được, hoặc xuất cho mã số thuế khác */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_inbound_invoice_api_v1_einvoices_inbound__inbound_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inbound_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundEInvoiceOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_inbound_invoice_api_v1_einvoices_inbound__inbound_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inbound_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_purchase_from_inbound_api_v1_einvoices_inbound__inbound_id__actions_create_purchase_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inbound_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboundPurchaseIn"];
+            };
+        };
+        responses: {
+            /** @description Lần gửi lại: chứng từ đã lập */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundEInvoiceOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundEInvoiceOut"];
+                };
+            };
+            /** @description Tờ hóa đơn này đã lập chứng từ rồi */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Chưa khớp đối tác, hoặc tổng chứng từ lệch tổng tờ hóa đơn */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_inbound_xml_api_v1_einvoices_inbound__inbound_id__xml_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inbound_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tệp XML gốc người bán gửi */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/xml": unknown;
+                };
+            };
+            /** @description Không có tờ hóa đơn này */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {
