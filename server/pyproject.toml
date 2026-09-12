@@ -1,6 +1,6 @@
 [project]
 name = "ket-server"
-version = "0.36.0"
+version = "0.37.0"
 description = "Konek Két — app server phần mềm kế toán VN (TT99/TT133), chạy LAN hoặc offline một máy"
 requires-python = "==3.12.*"
 license = { text = "Proprietary" }
@@ -34,6 +34,12 @@ dependencies = [
     "weasyprint>=63",
     "xlsxwriter>=3.2",
     "pypdf>=6.16.1",
+    # Phân giải XML hóa đơn điện tử **đầu vào** (lát 7F-2b, FR-EIV-040). Chiều
+    # GỬI dựng XML bằng `xml.etree` stdlib và đúng như thế: chuỗi đi vào đó do
+    # chính máy chủ này sinh. Chiều NHẬN đọc một tệp người dùng tải lên, tức
+    # đúng ca mà tài liệu stdlib nói thẳng là nó không chống: thực thể ngoài
+    # (XXE) đọc trộm tệp của máy chủ, và bom thực thể lồng nhau làm nổ bộ nhớ.
+    "defusedxml>=0.7.1",
 ]
 
 [dependency-groups]
@@ -48,6 +54,7 @@ dev = [
     # `Any` — tức đúng đoạn mã đọc tệp người dùng gửi lên lại là đoạn không được
     # kiểm gì. Stub bên ngoài rẻ hơn nhiều so với một lớp bọc tự viết.
     "types-openpyxl>=3.1",
+    "types-defusedxml>=0.7",
 ]
 
 [build-system]

@@ -10,6 +10,7 @@ lập lại; đổi nội dung = sửa chứng từ bán.
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
@@ -333,3 +334,152 @@ class ProviderProfileOut(BaseModel):
     username: str
     tax_code: str
     is_active: bool
+
+
+class InboundLineOut(BaseModel):
+    """Một dòng hàng của tờ hóa đơn đầu vào."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    line_no: int
+    description: str
+    unit: str | None
+    quantity: Decimal | None
+    unit_price: Decimal | None
+    amount: Decimal
+    vat_rate: Decimal | None = Field(
+        default=None,
+        title="Thuế suất (%)",
+        description="Phần trăm (10, 8, 5); rỗng khi tờ hóa đơn ghi một mã chữ.",
+    )
+    vat_rate_text: str | None = Field(
+        default=None,
+        title="Thuế suất nguyên văn",
+        description="Chuỗi `TSuat` trên tờ hóa đơn — phân biệt KCT với KKKNT.",
+    )
+    vat_amount: Decimal
+
+
+class InboundEInvoiceOut(BaseModel):
+    """Một tờ hóa đơn đầu vào đã nạp.
+
+    `vendor_id` **không** là một cột của bảng: nó tra từ `seller_tax_code` ở
+    mỗi lượt đọc, và rỗng nghĩa là chưa khớp được đối tác nào (hoặc khớp nhiều
+    hơn một). Đó là thứ màn hình dùng để hiện "chưa khớp đối tác", và cũng là
+    thứ quyết định lượt lập chứng từ có phải chỉ định đối tác tường minh không.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    branch_id: int
+
+    seller_tax_code: str
+    seller_name: str
+    seller_address: str | None
+    buyer_tax_code: str
+    buyer_name: str | None
+    buyer_address: str | None
+
+    invoice_form: str
+    invoice_serial: str
+    invoice_no: str
+    invoice_date: date
+    tax_authority_code: str | None
+
+    currency_code: str
+    exchange_rate: Decimal
+    total_before_tax: Decimal
+    total_vat: Decimal
+    total_amount: Decimal
+
+    nature: int = Field(
+        title="Tính chất hóa đơn",
+        description=(
+            "1 gốc · 2 thay thế · 3 điều chỉnh · 9 liên quan tới tờ khác nhưng "
+            "không khai kiểu. Chỉ hóa đơn gốc lập được chứng từ mua."
+        ),
+    )
+    related_form: str | None = None
+    related_serial: str | None = None
+    related_no: str | None = None
+    related_date: date | None = Field(
+        default=None,
+        title="Hóa đơn liên quan",
+        description="Tờ bị thay thế hoặc điều chỉnh; rỗng ở hóa đơn gốc.",
+    )
+
+    voucher_id: UUID | None = Field(
+        default=None,
+        title="Chứng từ đã lập",
+        description="Rỗng = tờ hóa đơn chưa vào sổ.",
+    )
+    vendor_id: int | None = Field(default=None, title="Đối tác khớp mã số thuế")
+
+    file_name: str
+    byte_size: int
+    created_at: AwareDatetime
+
+    lines: tuple[InboundLineOut, ...] = ()
+
+
+class InboundEInvoiceListOut(BaseModel):
+    """Một trang hóa đơn đầu vào.
+
+    `pending` đếm **toàn bộ** phạm vi người gọi, không riêng trang đang xem:
+    con số ấy trả lời "còn bao nhiêu tờ chưa vào sổ", câu hỏi làm nên màn hình
+    này — cùng lập luận `counts_by_status` của `EInvoiceListOut`.
+    """
+
+    items: tuple[InboundEInvoiceOut, ...]
+    pending: int
+
+
+class InboundPurchaseIn(BaseModel):
+    """Phần **kế toán** của lượt lập chứng từ mua từ tờ hóa đơn đầu vào.
+
+    Tách khỏi thân hóa đơn có chủ đích: tờ hóa đơn nói *đã mua gì* — người bán,
+    ký hiệu, số, ngày, từng dòng hàng, thuế suất, tổng tiền — còn nó **không**
+    nói *hạch toán vào đâu*. Để tệp XML của nhà cung cấp chọn hộ tài khoản là
+    giao một quyết định kế toán cho dữ liệu bên ngoài.
+
+    Mọi trường ở đây vì thế là trường người dùng chọn, và mọi con số thì không:
+    số tiền, số lượng và thuế suất lấy từ tờ hóa đơn đã nạp, không nhận lại từ
+    client — nếu không thì phép kiểm tổng chẳng còn gì để đối chứng.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: int = Field(
+        default=1,
+        ge=0,
+        le=3,
+        title="Loại chứng từ mua",
+        description=(
+            "0 hàng nhập kho · 1 dịch vụ / chi phí · 2 tài sản cố định · "
+            "3 hàng đang đi đường. Không nhận loại trả lại hàng: nó phải đối "
+            "trừ một hóa đơn gốc, thứ tờ hóa đơn đầu vào không nói được."
+        ),
+    )
+    operation_code: str = Field(title="Nghiệp vụ định khoản", min_length=1, max_length=100)
+    payable_account_id: int = Field(title="Tài khoản phải trả")
+    account_id: int = Field(
+        title="Tài khoản Nợ của dòng hàng",
+        description="Áp cho mọi dòng; sửa lại từng dòng ở màn hình chứng từ sau khi lập.",
+    )
+    vat_account_id: int | None = Field(default=None, title="Tài khoản thuế GTGT được khấu trừ")
+    vendor_id: int | None = Field(
+        default=None,
+        title="Đối tác",
+        description=(
+            "Bỏ trống thì lấy đối tác khớp mã số thuế người bán. Bắt buộc khi "
+            "mã số thuế ấy chưa có trong danh mục, hoặc khớp nhiều hơn một dòng."
+        ),
+    )
+    posting_date: date | None = Field(
+        default=None,
+        title="Ngày hạch toán",
+        description="Bỏ trống thì lấy ngày trên tờ hóa đơn.",
+    )
+    payment_term_id: int | None = Field(default=None, title="Điều khoản thanh toán")
+    description: str | None = Field(default=None, max_length=1000)

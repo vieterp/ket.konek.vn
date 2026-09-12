@@ -1937,3 +1937,164 @@ class EInvoiceNotSentError(DomainError):
     """
 
     error_code: ClassVar[str] = "einvoice.not_sent"
+
+
+class InboundInvoiceNotFoundError(DomainError):
+    """Không tìm thấy tờ hóa đơn đầu vào.
+
+    Mã riêng chứ không dùng lại `einvoice.not_found`: hai bảng khác nhau, và
+    client phân biệt được hai ca ấy mới nói đúng cho người dùng — một tờ hóa
+    đơn **mình phát hành** biến mất là chuyện khác hẳn một tờ **nhận về** chưa
+    nạp. RLS cũng trả ra đúng lỗi này khi tờ hóa đơn thuộc chi nhánh ngoài phạm
+    vi, và đó là hành vi đúng: không tồn tại với người hỏi.
+    """
+
+    error_code: ClassVar[str] = "einvoice.inbound_not_found"
+    http_status: ClassVar[int] = 404
+
+
+class InboundInvoiceXmlInvalidError(DomainError):
+    """Tệp XML hóa đơn đầu vào không đọc được thành một tờ hóa đơn (FR-EIV-040).
+
+    Gộp bốn chuyện dưới một mã vì với người tải lên chúng là **một** việc —
+    "tệp này không dùng được, đây là chỗ hỏng": XML sai cú pháp, tệp mang DTD
+    hoặc thực thể (đường XXE và bom thực thể), thiếu một thẻ bắt buộc, và một
+    con số hoặc một ngày không đọc được. Trường `reason` mang chỗ hỏng cụ thể.
+
+    `422` chứ không `500`: tệp đến từ lượt gọi, nên "không đọc được" là lời
+    khai sai của lượt gọi ấy. Trả `500` sẽ giấu mất câu duy nhất giúp được
+    người dùng — *thẻ nào thiếu*.
+    """
+
+    error_code: ClassVar[str] = "einvoice.inbound_xml_invalid"
+    http_status: ClassVar[int] = 422
+
+
+class InboundInvoiceDuplicateError(DomainError):
+    """Tờ hóa đơn đầu vào này đã nạp rồi.
+
+    Khóa nhận dạng là `(MST người bán, mẫu số, ký hiệu, số)` — bốn thứ làm nên
+    danh tính pháp lý của một tờ hóa đơn, và không thứ nào trong đó do phần mềm
+    này cấp. Nó bền hơn một khóa idempotency (không hết hạn) và chặt hơn một
+    phép so nội dung: cùng một tờ hóa đơn tải lên hai lần dưới hai tệp khác
+    nhau — bản nhà cung cấp gửi thư và bản tải từ cổng tra cứu — vẫn là **một**
+    tờ, và ghi nó hai lần là khấu trừ thuế đầu vào hai lần.
+
+    `409` chứ không `422`: thứ chặn nằm ở **trạng thái của sổ**, không ở dữ liệu
+    lượt gọi — lượt gọi này sẽ hợp lệ trên một bản cài chưa có tờ hóa đơn ấy.
+    """
+
+    error_code: ClassVar[str] = "einvoice.inbound_duplicate"
+    http_status: ClassVar[int] = 409
+
+
+class InboundInvoiceBuyerMismatchError(DomainError):
+    """MST người mua trên tờ hóa đơn không phải MST của đơn vị nhận.
+
+    Đây là phép kiểm đắt nhất của lát này và cũng cần nhất: một tờ hóa đơn gửi
+    nhầm hộp thư mà lọt vào sổ trở thành một khoản **thuế GTGT đầu vào khấu trừ
+    không có căn cứ** — đơn vị khấu trừ thuế trên một tờ hóa đơn không xuất cho
+    mình. Không phép kiểm toàn vẹn nào của hệ thống thấy được: mọi con số đều
+    cân, chỉ có người mua là người khác.
+
+    So với MST của **chi nhánh nhận** và các cấp trên nó: chi nhánh hạch toán
+    phụ thuộc thường không có MST riêng mà dùng MST của đơn vị chủ quản, nên so
+    đúng một cấp sẽ từ chối những tờ hóa đơn hoàn toàn hợp lệ.
+    """
+
+    error_code: ClassVar[str] = "einvoice.inbound_buyer_mismatch"
+    http_status: ClassVar[int] = 422
+
+
+class InboundInvoiceVendorUnmatchedError(DomainError):
+    """Chưa biết người bán trên tờ hóa đơn là đối tác nào trong danh mục.
+
+    Tờ hóa đơn vẫn nạp được và vẫn lưu — nghĩa vụ lưu trữ không chờ danh mục.
+    Thứ chưa làm được là **lập chứng từ** từ nó: một khoản phải trả không nói
+    được trả cho ai thì không đứng trên sổ công nợ được.
+
+    Người bán lạ **không** tự thành một đối tác mới: danh mục đối tác là dữ liệu
+    dùng chung, và để một tệp XML bất kỳ ghi vào đó là mở đường cho mỗi cách
+    viết tên của cùng một nhà cung cấp thành một dòng danh mục riêng — thứ sau
+    đó làm vỡ mọi báo cáo công nợ theo đối tác.
+    """
+
+    error_code: ClassVar[str] = "einvoice.inbound_vendor_unmatched"
+    http_status: ClassVar[int] = 422
+
+
+class InboundInvoiceAlreadyLinkedError(DomainError):
+    """Tờ hóa đơn đầu vào này đã lập chứng từ rồi.
+
+    `voucher_id` là **một cột**, nên nó tự nó đã nói "một tờ, một chứng từ". Lỗi
+    này là câu trả lời cho lượt gọi thứ hai — không phải một cấm đoán thêm, mà
+    là cách nói ra điều cột ấy đã quy định.
+
+    Muốn lập lại thì xóa chứng từ cũ trước: lượt xóa gỡ luôn đường trỏ, và tờ
+    hóa đơn quay về trạng thái chưa lập chứng từ.
+    """
+
+    error_code: ClassVar[str] = "einvoice.inbound_already_linked"
+    http_status: ClassVar[int] = 409
+
+
+class InboundInvoiceTotalsMismatchError(DomainError):
+    """Chứng từ dựng từ tờ hóa đơn không cộng ra đúng tổng tờ hóa đơn khai.
+
+    Phép kiểm duy nhất giữ cho lượt "lập chứng từ từ hóa đơn" không lặng lẽ ghi
+    một số tiền khác số tiền phải trả. Nó đỏ ở đúng ba ca, và cả ba đều đáng:
+
+    * bộ đọc **bỏ sót dòng** — một hình dạng XML chưa gặp;
+    * hóa đơn có **chiết khấu thương mại** trên tổng (`TTCKTMai`): tổng các
+      dòng lớn hơn tổng phải trả, và một chứng từ dựng thẳng từ dòng sẽ ghi
+      thừa đúng phần chiết khấu;
+    * hóa đơn có **khoản phí khác** ngoài tiền hàng và tiền thuế.
+
+    Ba ca ấy không tự sửa được, và đoán cách sửa còn tệ hơn. Người dùng lập
+    chứng từ bằng tay cho tờ hóa đơn ấy — tệp XML vẫn nằm trong sổ để đối chiếu.
+    """
+
+    error_code: ClassVar[str] = "einvoice.inbound_totals_mismatch"
+    http_status: ClassVar[int] = 422
+
+
+class InboundInvoiceNotOriginalError(DomainError):
+    """Tờ hóa đơn đầu vào này điều chỉnh hoặc thay thế một tờ khác.
+
+    Nó **vẫn vào sổ** — nghĩa vụ lưu trữ không phân biệt loại — nhưng không
+    dựng được một chứng từ mua từ nó, và lý do là chiều của nghiệp vụ chứ không
+    một phép kiểm số học nào:
+
+    * **Hóa đơn điều chỉnh giảm** tự nó nhất quán từng đồng (tổng khớp dòng,
+      dòng khớp thuế), nên nó đi lọt mọi phép kiểm tổng rồi thành một chứng từ
+      mua **làm tăng** chi phí và thuế đầu vào đúng phần đáng lẽ phải giảm.
+    * **Hóa đơn thay thế** mang số hóa đơn **mới**, nên khóa nhận dạng không
+      nhận ra nó là lần thứ hai của cùng một khoản mua; tờ cũ vẫn nằm trong sổ
+      và khoản mua được ghi đủ hai lần.
+
+    Chiều điều chỉnh ở phân hệ bán nằm ở `kind` của chứng từ, không ở dấu của
+    số tiền; chiều nhận chưa có loại chứng từ tương ứng, nên đường đúng hôm nay
+    là lập chứng từ bằng tay — tệp XML vẫn nằm trong sổ để đối chiếu.
+    """
+
+    error_code: ClassVar[str] = "einvoice.inbound_not_original"
+    http_status: ClassVar[int] = 422
+
+
+class InboundInvoiceAccountMissingError(DomainError):
+    """Lượt lập chứng từ thiếu một tài khoản mà chính dữ liệu của nó đòi.
+
+    Ca duy nhất hôm nay: tờ hóa đơn có dòng mang thuế GTGT nhưng thân request
+    không chỉ tài khoản thuế được khấu trừ. `vat_account_id` là trường **tùy
+    chọn** vì hóa đơn không chịu thuế thì không cần nó — tùy chọn theo *dữ
+    liệu*, không phải tùy chọn vô điều kiện.
+
+    Nếu không nói ra ở đây thì chỗ nói là `PurchaseInvoiceLineIn`, và lỗi ở đó
+    là một `ValidationError` của pydantic dựng **bên trong** handler chứ không
+    phải `RequestValidationError` của FastAPI — nó không có handler nào và rơi
+    thẳng vào lưới `500`. Một lỗi nhập liệu thường gặp không được trả về câu
+    "đã xảy ra lỗi không mong muốn".
+    """
+
+    error_code: ClassVar[str] = "einvoice.inbound_account_missing"
+    http_status: ClassVar[int] = 422
