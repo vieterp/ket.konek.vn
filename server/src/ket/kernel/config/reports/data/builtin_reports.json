@@ -1,5 +1,5 @@
 {
-  "__doc__": "Báo cáo dựng sẵn. 4 dataset phủ 8 báo cáo bộ sổ đầu tiên (trần ≤5 dataset cho 10 báo cáo — phase-05 §Chiến lược quy mô); lát 6B thêm dataset thứ 5 `cash_forecast` (Dự báo dòng tiền FR-QUY-032, bước 11 phase-06 — dự báo là một dataset báo cáo, không màn hình riêng; scheme-agnostic nên `package_scheme` null). Mã definition = đúng mã mẫu thông tư (quyết định 5D, đóng câu hỏi mở #1 của 5C): TT99 Phụ lục III đối chiếu Công báo 1575+1576 (S03a/S03b/S38/S06-DN); TT133 Phụ lục 4 đối chiếu toàn văn thông tư (S03a/S03b/S19-DNN, F01-DNN Điều 83) — chờ kế toán trưởng duyệt cùng gói TT133. `package_scheme` gắn definition vào gói cấu hình builtin cùng scheme lúc gieo. Layout dùng chung giữa hai thông tư khi biểu mẫu trùng cột; nhãn cột dùng chữ 'kỳ' thay 'tháng/năm' vì bộ tham số là khoảng ngày tự do (Điều 12 k2 TT99 cho phép, ghi trong Quy chế hạch toán kèm phần mềm).",
+  "__doc__": "Báo cáo dựng sẵn. 4 dataset phủ 8 báo cáo bộ sổ đầu tiên (trần ≤5 dataset cho 10 báo cáo — phase-05 §Chiến lược quy mô); lát 6B thêm dataset thứ 5 `cash_forecast` (Dự báo dòng tiền FR-QUY-032, bước 11 phase-06 — dự báo là một dataset báo cáo, không màn hình riêng; scheme-agnostic nên `package_scheme` null). Mã definition = đúng mã mẫu thông tư (quyết định 5D, đóng câu hỏi mở #1 của 5C): TT99 Phụ lục III đối chiếu Công báo 1575+1576 (S03a/S03b/S38/S06-DN); TT133 Phụ lục 4 đối chiếu toàn văn thông tư (S03a/S03b/S19-DNN, F01-DNN Điều 83) — chờ kế toán trưởng duyệt cùng gói TT133. `package_scheme` gắn definition vào gói cấu hình builtin cùng scheme lúc gieo. Layout dùng chung giữa hai thông tư khi biểu mẫu trùng cột; nhãn cột dùng chữ 'kỳ' thay 'tháng/năm' vì bộ tham số là khoảng ngày tự do (Điều 12 k2 TT99 cho phép, ghi trong Quy chế hạch toán kèm phần mềm). Lát 7G-1 thêm hai dataset và mười định nghĩa cho mua hàng + công nợ phải trả (`docs/srs/05` §5 #1–#6 và #8). `purchase_register` đọc tiền VND từ `gl_postings` chứ không quy đổi lại từ cột nguyên tệ của dòng hàng — quy đổi lại là dựng cách làm tròn thứ hai, và báo cáo mua hàng sẽ không cộng ra đúng số phát sinh của chính tài khoản nó nói về. Sáu định nghĩa \"tổng hợp mua hàng\" chia nhau MỘT dataset, khác nhau chỉ ở chiều gộp của layout, vì engine gắn layout vào definition chứ không nhận `group_by` lúc chạy. `ar_ap_open_items` phục vụ cả hai chiều công nợ bằng `:direction` ghim, cùng khuôn `ar_ap_aging`; ánh xạ `target_kind` → chiều của hai dataset phải trùng nhau và có test ghim. Không có dataset \"tổng hợp công nợ\" riêng: báo cáo tổng hợp là layout gộp theo đối tác trên chính dataset chi tiết — một dataset thứ hai chỉ để GROUP BY sẽ là bản chép thứ ba của khối UNION hai nguồn. `ar_ap_aging` thêm cột `bucket_seq` (chỉ thêm, không đổi cột cũ): thứ tự chữ cái của `bucket` xếp nhóm chưa đến hạn vào giữa các nhóm quá hạn, nên layout nào gộp theo tuổi nợ phải sắp bằng cột số.",
   "datasets": [
     {
       "code": "gl_ledger",
@@ -159,7 +159,42 @@
       ],
       "supports_branch": false,
       "supports_ledger": false,
-      "description": "Tuổi nợ phải thu/phải trả theo mốc quá hạn, gộp sổ phụ công nợ và số dư ban đầu; direction ghim 'thu' hoặc 'chi'"
+      "description": "Tuổi nợ phải thu/phải trả theo mốc quá hạn, số đã thanh toán tính TẠI to_date; gộp sổ phụ công nợ và số dư ban đầu kể cả khoản ứng trước; direction ghim 'thu' hoặc 'chi'"
+    },
+    {
+      "code": "purchase_register",
+      "sql_file": "purchase_register.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "vendor_id",
+        "item_id",
+        "kind",
+        "buyer_id",
+        "project_id"
+      ],
+      "supports_branch": true,
+      "supports_ledger": true,
+      "description": "Dòng hàng mua của chứng từ đã ghi sổ; tiền VND đọc từ dòng phát sinh nên khớp sổ, trả lại hàng mang dấu âm theo sổ"
+    },
+    {
+      "code": "ar_ap_open_items",
+      "sql_file": "ar_ap_open_items.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "direction",
+        "partner_id",
+        "partner_kind",
+        "open_only"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Công nợ theo từng chứng từ với số đã thanh toán tính TẠI to_date; gộp sổ phụ công nợ và số dư ban đầu kể cả khoản ứng trước; direction ghim 'thu' hoặc 'chi'"
     }
   ],
   "param_sets": [
@@ -310,6 +345,83 @@
             "label": "Chiều công nợ",
             "label_en": "Debt direction",
             "required": true
+          }
+        ]
+      }
+    },
+    {
+      "code": "purchase_register_params",
+      "spec": {
+        "params": [
+          {
+            "name": "vendor_id",
+            "kind": "int",
+            "label": "Nhà cung cấp",
+            "label_en": "Vendor",
+            "required": false
+          },
+          {
+            "name": "item_id",
+            "kind": "int",
+            "label": "Vật tư hàng hóa",
+            "label_en": "Item",
+            "required": false
+          },
+          {
+            "name": "kind",
+            "kind": "int",
+            "label": "Loại chứng từ mua",
+            "label_en": "Purchase kind",
+            "required": false
+          },
+          {
+            "name": "buyer_id",
+            "kind": "int",
+            "label": "Nhân viên mua",
+            "label_en": "Buyer",
+            "required": false
+          },
+          {
+            "name": "project_id",
+            "kind": "int",
+            "label": "Công trình",
+            "label_en": "Project",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "ar_ap_open_items_params",
+      "spec": {
+        "params": [
+          {
+            "name": "direction",
+            "kind": "text",
+            "label": "Chiều công nợ",
+            "label_en": "Debt direction",
+            "required": true
+          },
+          {
+            "name": "partner_id",
+            "kind": "int",
+            "label": "Đối tác",
+            "label_en": "Partner",
+            "required": false
+          },
+          {
+            "name": "partner_kind",
+            "kind": "int",
+            "label": "Loại đối tượng công nợ",
+            "label_en": "Partner kind",
+            "required": false
+          },
+          {
+            "name": "open_only",
+            "kind": "bool",
+            "label": "Chỉ khoản còn nợ",
+            "label_en": "Open items only",
+            "required": false
           }
         ]
       }
@@ -1637,6 +1749,1060 @@
           "invoice_no"
         ]
       }
+    },
+    {
+      "code": "purchase-summary-by-item",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "vendor_name",
+            "label": "Nhà cung cấp",
+            "label_en": "Vendor",
+            "type": "text"
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount_fc",
+            "label": "Giá trị nhập (nguyên tệ)",
+            "label_en": "Value (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị nhập (VND)",
+            "label_en": "Value (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT (VND)",
+            "label_en": "VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "value_with_vat",
+            "label": "Giá trị nhập + thuế",
+            "label_en": "Value + VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "item_code",
+            "heading_keys": [
+              "item_code",
+              "item_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "value_with_vat"
+        ],
+        "sort": [
+          "item_code",
+          "vendor_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "purchase-summary-by-vendor",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "item_code",
+            "label": "Mã vật tư",
+            "label_en": "Item code",
+            "type": "text",
+            "width": 9
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount_fc",
+            "label": "Giá trị nhập (nguyên tệ)",
+            "label_en": "Value (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị nhập (VND)",
+            "label_en": "Value (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT (VND)",
+            "label_en": "VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "value_with_vat",
+            "label": "Giá trị nhập + thuế",
+            "label_en": "Value + VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "vendor_code",
+            "heading_keys": [
+              "vendor_code",
+              "vendor_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "value_with_vat"
+        ],
+        "sort": [
+          "vendor_code",
+          "item_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "purchase-summary-by-buyer",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "vendor_name",
+            "label": "Nhà cung cấp",
+            "label_en": "Vendor",
+            "type": "text"
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount_fc",
+            "label": "Giá trị nhập (nguyên tệ)",
+            "label_en": "Value (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị nhập (VND)",
+            "label_en": "Value (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT (VND)",
+            "label_en": "VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "value_with_vat",
+            "label": "Giá trị nhập + thuế",
+            "label_en": "Value + VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "buyer_code",
+            "heading_keys": [
+              "buyer_code",
+              "buyer_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "value_with_vat"
+        ],
+        "sort": [
+          "buyer_code",
+          "vendor_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "purchase-summary-by-project",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "vendor_name",
+            "label": "Nhà cung cấp",
+            "label_en": "Vendor",
+            "type": "text"
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount_fc",
+            "label": "Giá trị nhập (nguyên tệ)",
+            "label_en": "Value (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị nhập (VND)",
+            "label_en": "Value (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT (VND)",
+            "label_en": "VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "value_with_vat",
+            "label": "Giá trị nhập + thuế",
+            "label_en": "Value + VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "project_code",
+            "heading_keys": [
+              "project_code",
+              "project_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "value_with_vat"
+        ],
+        "sort": [
+          "project_code",
+          "vendor_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "purchase-detail",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "kind_label",
+            "label": "Loại nghiệp vụ",
+            "label_en": "Operation",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "vendor_code",
+            "label": "Mã NCC",
+            "label_en": "Vendor code",
+            "type": "text",
+            "width": 8
+          },
+          {
+            "key": "vendor_name",
+            "label": "Nhà cung cấp",
+            "label_en": "Vendor",
+            "type": "text"
+          },
+          {
+            "key": "item_code",
+            "label": "Mã vật tư",
+            "label_en": "Item code",
+            "type": "text",
+            "width": 9
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "unit_price_fc",
+            "label": "Đơn giá",
+            "label_en": "Unit price",
+            "type": "money",
+            "width": 10
+          },
+          {
+            "key": "goods_amount_fc",
+            "label": "Tiền hàng (nguyên tệ)",
+            "label_en": "Goods (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "landed_cost_fc",
+            "label": "CP mua phân bổ (nguyên tệ)",
+            "label_en": "Landed cost (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị nhập (VND)",
+            "label_en": "Value (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT (VND)",
+            "label_en": "VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "value_with_vat",
+            "label": "Giá trị nhập + thuế",
+            "label_en": "Value + VAT",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "account_code",
+            "label": "Tài khoản",
+            "label_en": "Account",
+            "type": "text",
+            "align": "center",
+            "width": 7
+          },
+          {
+            "key": "description",
+            "label": "Diễn giải",
+            "label_en": "Description",
+            "type": "text"
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "value_with_vat"
+        ],
+        "sort": [
+          "posting_date",
+          "voucher_no",
+          "item_code"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "purchase-journal",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "kind_label",
+            "label": "Loại nghiệp vụ",
+            "label_en": "Operation",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "vendor_name",
+            "label": "Nhà cung cấp",
+            "label_en": "Vendor",
+            "type": "text"
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị nhập (VND)",
+            "label_en": "Value (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT (VND)",
+            "label_en": "VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "value_with_vat",
+            "label": "Giá trị nhập + thuế",
+            "label_en": "Value + VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "account_code",
+            "heading_keys": [
+              "account_code"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "value_with_vat"
+        ],
+        "sort": [
+          "account_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "ap-summary-by-partner",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "source_label",
+            "label": "Nguồn khoản nợ",
+            "label_en": "Source",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "buyer_name",
+            "label": "Nhân viên mua",
+            "label_en": "Buyer",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "amount_fc",
+            "label": "Giá trị (nguyên tệ)",
+            "label_en": "Amount (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị (VND)",
+            "label_en": "Amount (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "settled",
+            "label": "Đã thanh toán (VND)",
+            "label_en": "Settled (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "remaining",
+            "label": "Còn lại (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "settled",
+          "remaining"
+        ],
+        "sort": [
+          "partner_code",
+          "document_date",
+          "document_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "ap-detail-by-account",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "partner_code",
+            "label": "Mã đối tác",
+            "label_en": "Partner code",
+            "type": "text",
+            "width": 9
+          },
+          {
+            "key": "partner_name",
+            "label": "Tên đối tác",
+            "label_en": "Partner",
+            "type": "text"
+          },
+          {
+            "key": "source_label",
+            "label": "Nguồn khoản nợ",
+            "label_en": "Source",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "amount_fc",
+            "label": "Giá trị (nguyên tệ)",
+            "label_en": "Amount (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị (VND)",
+            "label_en": "Amount (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "settled",
+            "label": "Đã thanh toán (VND)",
+            "label_en": "Settled (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "remaining",
+            "label": "Còn lại (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "account_code",
+            "heading_keys": [
+              "account_code",
+              "account_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "settled",
+          "remaining"
+        ],
+        "sort": [
+          "account_code",
+          "partner_code",
+          "document_date",
+          "document_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "ap-by-invoice",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "document_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "source_label",
+            "label": "Nguồn khoản nợ",
+            "label_en": "Source",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "account_code",
+            "label": "TK công nợ",
+            "label_en": "Account",
+            "type": "text",
+            "align": "center",
+            "width": 7
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "amount_fc",
+            "label": "Giá trị (nguyên tệ)",
+            "label_en": "Amount (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "settled_fc",
+            "label": "Đã thanh toán (nguyên tệ)",
+            "label_en": "Settled (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "remaining_fc",
+            "label": "Còn lại (nguyên tệ)",
+            "label_en": "Remaining (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị (VND)",
+            "label_en": "Amount (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "settled",
+            "label": "Đã thanh toán (VND)",
+            "label_en": "Settled (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "remaining",
+            "label": "Còn lại (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "settled",
+          "remaining"
+        ],
+        "sort": [
+          "partner_code",
+          "document_date",
+          "document_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "ap-aging-detail",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "invoice_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "invoice_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "days_overdue",
+            "label": "Số ngày quá hạn",
+            "label_en": "Days overdue",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "remaining_fc",
+            "label": "Còn nợ (nguyên tệ)",
+            "label_en": "Remaining (FC)",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "remaining",
+            "label": "Còn nợ (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          },
+          {
+            "key": "bucket_seq",
+            "heading_keys": [
+              "bucket"
+            ]
+          }
+        ],
+        "totals": [
+          "remaining"
+        ],
+        "sort": [
+          "partner_code",
+          "bucket_seq",
+          "due_date",
+          "invoice_no"
+        ]
+      }
     }
   ],
   "definitions": [
@@ -1898,6 +3064,148 @@
       "module": "purchase",
       "dataset_code": "ar_ap_aging",
       "layout_code": "ap-aging",
+      "param_set_code": "ar_ap_aging_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "chi"
+      },
+      "package_scheme": null,
+      "required_permission_module": "purchase"
+    },
+    {
+      "code": "tong-hop-mua-hang-theo-mat-hang",
+      "name": "Tổng hợp mua hàng theo mặt hàng",
+      "name_en": "Purchase summary by item",
+      "category": "mua-hang",
+      "module": "purchase",
+      "dataset_code": "purchase_register",
+      "layout_code": "purchase-summary-by-item",
+      "param_set_code": "purchase_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "purchase"
+    },
+    {
+      "code": "tong-hop-mua-hang-theo-nha-cung-cap",
+      "name": "Tổng hợp mua hàng theo nhà cung cấp",
+      "name_en": "Purchase summary by vendor",
+      "category": "mua-hang",
+      "module": "purchase",
+      "dataset_code": "purchase_register",
+      "layout_code": "purchase-summary-by-vendor",
+      "param_set_code": "purchase_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "purchase"
+    },
+    {
+      "code": "tong-hop-mua-hang-theo-nhan-vien",
+      "name": "Tổng hợp mua hàng theo nhân viên mua",
+      "name_en": "Purchase summary by buyer",
+      "category": "mua-hang",
+      "module": "purchase",
+      "dataset_code": "purchase_register",
+      "layout_code": "purchase-summary-by-buyer",
+      "param_set_code": "purchase_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "purchase"
+    },
+    {
+      "code": "tong-hop-mua-hang-theo-cong-trinh",
+      "name": "Tổng hợp mua hàng theo công trình",
+      "name_en": "Purchase summary by project",
+      "category": "mua-hang",
+      "module": "purchase",
+      "dataset_code": "purchase_register",
+      "layout_code": "purchase-summary-by-project",
+      "param_set_code": "purchase_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "purchase"
+    },
+    {
+      "code": "so-chi-tiet-mua-hang",
+      "name": "Sổ chi tiết mua hàng",
+      "name_en": "Purchase detail book",
+      "category": "mua-hang",
+      "module": "purchase",
+      "dataset_code": "purchase_register",
+      "layout_code": "purchase-detail",
+      "param_set_code": "purchase_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "purchase"
+    },
+    {
+      "code": "so-nhat-ky-mua-hang",
+      "name": "Sổ nhật ký mua hàng",
+      "name_en": "Purchase journal",
+      "category": "mua-hang",
+      "module": "purchase",
+      "dataset_code": "purchase_register",
+      "layout_code": "purchase-journal",
+      "param_set_code": "purchase_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "purchase"
+    },
+    {
+      "code": "tong-hop-cong-no-phai-tra",
+      "name": "Tổng hợp công nợ phải trả nhà cung cấp",
+      "name_en": "Accounts payable summary",
+      "category": "mua-hang",
+      "module": "purchase",
+      "dataset_code": "ar_ap_open_items",
+      "layout_code": "ap-summary-by-partner",
+      "param_set_code": "ar_ap_open_items_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "chi"
+      },
+      "package_scheme": null,
+      "required_permission_module": "purchase"
+    },
+    {
+      "code": "chi-tiet-cong-no-phai-tra",
+      "name": "Chi tiết công nợ phải trả nhà cung cấp",
+      "name_en": "Accounts payable detail",
+      "category": "mua-hang",
+      "module": "purchase",
+      "dataset_code": "ar_ap_open_items",
+      "layout_code": "ap-detail-by-account",
+      "param_set_code": "ar_ap_open_items_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "chi"
+      },
+      "package_scheme": null,
+      "required_permission_module": "purchase"
+    },
+    {
+      "code": "chi-tiet-cong-no-phai-tra-theo-hoa-don",
+      "name": "Chi tiết công nợ phải trả theo hóa đơn",
+      "name_en": "Accounts payable by invoice",
+      "category": "mua-hang",
+      "module": "purchase",
+      "dataset_code": "ar_ap_open_items",
+      "layout_code": "ap-by-invoice",
+      "param_set_code": "ar_ap_open_items_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "chi"
+      },
+      "package_scheme": null,
+      "required_permission_module": "purchase"
+    },
+    {
+      "code": "chi-tiet-tuoi-no-phai-tra",
+      "name": "Chi tiết công nợ phải trả theo tuổi nợ",
+      "name_en": "Accounts payable aging detail",
+      "category": "mua-hang",
+      "module": "purchase",
+      "dataset_code": "ar_ap_aging",
+      "layout_code": "ap-aging-detail",
       "param_set_code": "ar_ap_aging_params",
       "ledger_scope": "financial",
       "fixed_params": {

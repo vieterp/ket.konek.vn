@@ -29,12 +29,14 @@ DA_GUI`: dấu gửi luôn được đóng **sau** khi hóa đơn đã phát hà
 một lượt siết trigger thành danh sách cho phép ở lát sau sẽ làm cạnh `SEND` chết
 im lặng.
 
-**`_refresh_builtin_data` CHUYỂN TỪ `0028` SANG ĐÂY** — doctrine 5B M-1, và dự
-án đã sập bẫy này hai lần (6A, 6G-1). Revision này gieo mẫu in `HDDT` (bản thể
-hiện hóa đơn), mà dataset đang ở `0034` đã đi qua `0028` từ lâu; không dời bước
-làm mới lên head thì những dataset ấy **không bao giờ** thấy mẫu mới, và lượt
-tải bản thể hiện của hóa đơn phát hành nội bộ sẽ đổ "loại chứng từ chưa có mẫu
-in mặc định" trên đúng những bản cài đang chạy.
+**`_refresh_builtin_data` ĐÃ DỜI SANG `0039`** — doctrine 5B M-1: bước làm mới
+metadata builtin luôn đậu ở **head** của chuỗi, nên mỗi lát gieo dữ liệu builtin
+mới lại nhận nó. Revision này gieo mẫu in `HDDT` (bản thể hiện hóa đơn); mẫu ấy
+vẫn tới mọi dataset vì `ensure_builtin_print_templates` idempotent theo từng dòng
+`(document_type, code)` và `0039` gọi lại đúng hàm đó. Đừng thêm lượt gọi thứ hai
+vào đây: hai chỗ gọi cùng một bước làm mới là hai chỗ để chúng lệch nhau khi lát
+sau lại dời. Kiểm vị trí bằng
+`grep -rn "_refresh_builtin_data" migrations/versions/`.
 
 **Bảng `einvoice_representations`: vì sao KHÔNG dùng `attachments` chung.**
 Bản đầu của lát này cất bản thể hiện vào bảng đính kèm dùng chung rồi nhận dạng
@@ -65,8 +67,6 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import context, op
 
-from ket.kernel.config.printing.seed import ensure_builtin_print_templates
-from ket.kernel.config.reports.seed import refresh_builtin_reports
 from ket.kernel.datasets.naming import role_name_for_schema
 from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 from ket.kernel.security.grants import grant_read_write, serial_sequence_name
@@ -103,7 +103,6 @@ def upgrade() -> None:
     _add_sent_columns()
     _create_representations()
     _apply_security()
-    _refresh_builtin_data()
 
 
 def _add_sent_columns() -> None:
@@ -192,21 +191,6 @@ def _apply_security() -> None:
         op.execute(statement)
     for statement in enable_branch_rls_statements(_REPRESENTATION_TABLE):
         op.execute(statement)
-
-
-def _refresh_builtin_data() -> None:
-    """Làm mới metadata báo cáo + mẫu in builtin — lát này gieo mẫu `HDDT`.
-
-    Chỉ chạy online: bước đọc-rồi-ghi không diễn đạt được thành SQL tĩnh của
-    `upgrade --sql`. Vị trí của bước này phải luôn ở **head** của chuỗi — xem
-    docstring đầu tệp.
-    """
-    if context.is_offline_mode():
-        return
-    schema = _target_schema()
-    connection = op.get_bind()
-    refresh_builtin_reports(connection, schema)
-    ensure_builtin_print_templates(connection, schema)
 
 
 def downgrade() -> None:

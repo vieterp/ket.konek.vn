@@ -42,6 +42,7 @@ from ket.kernel.errors import (
     PostingViolation,
     VoucherBranchImmutableError,
 )
+from ket.kernel.master_data.models.employee import EMPLOYEE_TABLE_NAME
 from ket.kernel.master_data.models.partner import PARTNER_TABLE_NAME
 from ket.kernel.master_data.models.payment_term import PaymentTerm
 from ket.kernel.master_data.usage import record_use
@@ -357,6 +358,7 @@ class PurchaseInvoiceService:
     ) -> None:
         body.operation_code = payload.operation_code
         body.vendor_id = payload.vendor_id
+        body.buyer_id = payload.buyer_id
         body.vendor_invoice_status = payload.vendor_invoice_status
         body.vendor_invoice_form = payload.vendor_invoice_form
         body.vendor_invoice_serial = payload.vendor_invoice_serial
@@ -684,6 +686,8 @@ class PurchaseInvoiceService:
     def _usage_of(self, payload: PurchaseInvoiceIn) -> Counter[tuple[str, int]]:
         counters: Counter[tuple[str, int]] = Counter()
         counters[(PARTNER_TABLE_NAME, payload.vendor_id)] += 1
+        if payload.buyer_id is not None:
+            counters[(EMPLOYEE_TABLE_NAME, payload.buyer_id)] += 1
         for cost in payload.landed_costs:
             if cost.vendor_id is not None:
                 counters[(PARTNER_TABLE_NAME, cost.vendor_id)] += 1
@@ -692,6 +696,8 @@ class PurchaseInvoiceService:
     def _usage_of_stored(self, body: PurchaseInvoice) -> Counter[tuple[str, int]]:
         counters: Counter[tuple[str, int]] = Counter()
         counters[(PARTNER_TABLE_NAME, body.vendor_id)] += 1
+        if body.buyer_id is not None:
+            counters[(EMPLOYEE_TABLE_NAME, body.buyer_id)] += 1
         for cost in self._costs_of(body.id):
             if cost.vendor_id is not None:
                 counters[(PARTNER_TABLE_NAME, cost.vendor_id)] += 1
