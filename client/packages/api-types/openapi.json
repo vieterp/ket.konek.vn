@@ -18639,6 +18639,17 @@
             ],
             "title": "Unit Price Fc"
           },
+          "variant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variant Id"
+          },
           "vat_account_id": {
             "anyOf": [
               {
@@ -18918,6 +18929,17 @@
             ],
             "title": "Unit Price Fc"
           },
+          "variant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variant Id"
+          },
           "vat_account_id": {
             "anyOf": [
               {
@@ -18965,6 +18987,7 @@
           "item_id",
           "unit_id",
           "warehouse_id",
+          "variant_id",
           "quantity",
           "unit_price_fc",
           "discount_percent",
@@ -21611,7 +21634,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.38.0"
+    "version": "0.39.0"
   },
   "openapi": "3.1.0",
   "paths": {

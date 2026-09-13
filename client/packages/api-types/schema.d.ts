@@ -15287,6 +15287,8 @@ export interface components {
             unit_id?: number | null;
             /** Unit Price Fc */
             unit_price_fc?: number | string | null;
+            /** Variant Id */
+            variant_id?: number | null;
             /** Vat Account Id */
             vat_account_id?: number | null;
             /**
@@ -15350,6 +15352,8 @@ export interface components {
             unit_id: number | null;
             /** Unit Price Fc */
             unit_price_fc: string | null;
+            /** Variant Id */
+            variant_id: number | null;
             /** Vat Account Id */
             vat_account_id: number | null;
             /** Vat Amount Fc */

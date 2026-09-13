@@ -84,6 +84,12 @@ class SalesInvoiceLineIn(BaseModel):
     item_id: int | None = None
     unit_id: int | None = None
     warehouse_id: int | None = None
+    variant_id: int | None = None
+    """Quy cách của mã hàng — chiều gộp của SRS 06 §5.1 #3. Quy cách chỉ duy nhất
+    TRONG một mã hàng, nên nó vô nghĩa khi dòng không khai vật tư; kiểm ở
+    `_line_sane`, còn "quy cách thuộc đúng mã hàng nào" cần đọc danh mục nên nằm
+    ở service."""
+
     quantity: Decimal | None = Field(
         default=None, gt=_ZERO, max_digits=QUANTITY_PRECISION, decimal_places=QUANTITY_SCALE
     )
@@ -145,6 +151,8 @@ class SalesInvoiceLineIn(BaseModel):
             raise ValueError("Dòng có thuế GTGT phải có tài khoản thuế")
         if self.warehouse_id is not None and self.item_id is None:
             raise ValueError("Dòng xuất kho phải có vật tư/hàng hóa")
+        if self.variant_id is not None and self.item_id is None:
+            raise ValueError("Dòng khai quy cách phải có vật tư/hàng hóa")
         return self
 
 
@@ -250,6 +258,7 @@ class SalesInvoiceLineOut(BaseModel):
     item_id: int | None
     unit_id: int | None
     warehouse_id: int | None
+    variant_id: int | None
     quantity: Decimal | None
     unit_price_fc: Decimal | None
     discount_percent: Decimal | None

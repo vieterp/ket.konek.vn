@@ -29,11 +29,11 @@ DA_GUI`: dấu gửi luôn được đóng **sau** khi hóa đơn đã phát hà
 một lượt siết trigger thành danh sách cho phép ở lát sau sẽ làm cạnh `SEND` chết
 im lặng.
 
-**`_refresh_builtin_data` ĐÃ DỜI SANG `0039`** — doctrine 5B M-1: bước làm mới
+**`_refresh_builtin_data` ĐÃ DỜI SANG `0040`** — doctrine 5B M-1: bước làm mới
 metadata builtin luôn đậu ở **head** của chuỗi, nên mỗi lát gieo dữ liệu builtin
 mới lại nhận nó. Revision này gieo mẫu in `HDDT` (bản thể hiện hóa đơn); mẫu ấy
 vẫn tới mọi dataset vì `ensure_builtin_print_templates` idempotent theo từng dòng
-`(document_type, code)` và `0039` gọi lại đúng hàm đó. Đừng thêm lượt gọi thứ hai
+`(document_type, code)` và `0040` gọi lại đúng hàm đó. Đừng thêm lượt gọi thứ hai
 vào đây: hai chỗ gọi cùng một bước làm mới là hai chỗ để chúng lệch nhau khi lát
 sau lại dời. Kiểm vị trí bằng
 `grep -rn "_refresh_builtin_data" migrations/versions/`.

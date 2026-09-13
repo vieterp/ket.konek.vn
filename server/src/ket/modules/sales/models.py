@@ -316,6 +316,17 @@ class SalesInvoiceLine(DatasetBase, Audited):
     """Vật tư / đơn vị / kho — rỗng được với dòng dịch vụ. Phase 8 (kho) đọc ba
     cột này để lập phiếu xuất; ở đây chúng chỉ là chiều phân tích."""
 
+    variant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Quy cách của mã hàng (SRS 06 §5.1 #3 — sổ chi tiết bán hàng theo mã quy
+    cách). Rỗng được: phần lớn mã hàng không khai quy cách nào.
+
+    Không khóa ngoại tới `item_variants`, cùng lối `item_id`/`unit_id` bên trên:
+    vòng đời danh mục trong hệ này canh bằng bộ đếm tham chiếu, và một khóa ngoại
+    thật ở đây là luật thứ hai cho cùng câu hỏi "xóa được dòng danh mục này chưa".
+    Ràng buộc "quy cách phải thuộc đúng mã hàng của dòng" **không** diễn đạt được
+    bằng khóa ngoại một cột (nó là một cặp), nên nó nằm ở
+    `SalesInvoiceService._verify_variants_belong_to_items`."""
+
     quantity: Mapped[Decimal | None] = mapped_column(
         Numeric(QUANTITY_PRECISION, QUANTITY_SCALE), nullable=True
     )
