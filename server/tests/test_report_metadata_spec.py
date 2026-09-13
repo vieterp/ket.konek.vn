@@ -296,3 +296,110 @@ class TestGatingIsIndependentOfAccountingScheme:
             if definition.requires_full_branch_scope
         }
         assert demanding == {"doi-chieu-ngan-hang"}
+
+
+class TestPurchaseAndPayableManifest:
+    """Bất biến MỨC METADATA của mười báo cáo lát 7G-1.
+
+    Hành vi số liệu ở `test_purchase_reports.py` (cần PostgreSQL); ở đây chỉ
+    những thứ đọc được từ manifest — và đọc được *trước* khi có dữ liệu là đúng
+    lúc để bắt chúng.
+    """
+
+    _PURCHASE_SUMMARIES = (
+        "tong-hop-mua-hang-theo-mat-hang",
+        "tong-hop-mua-hang-theo-nha-cung-cap",
+        "tong-hop-mua-hang-theo-nhan-vien",
+        "tong-hop-mua-hang-theo-cong-trinh",
+    )
+    _SLICE_CODES = (
+        *_PURCHASE_SUMMARIES,
+        "so-chi-tiet-mua-hang",
+        "so-nhat-ky-mua-hang",
+        "tong-hop-cong-no-phai-tra",
+        "chi-tiet-cong-no-phai-tra",
+        "chi-tiet-cong-no-phai-tra-theo-hoa-don",
+        "chi-tiet-tuoi-no-phai-tra",
+    )
+
+    def test_all_ten_reports_are_registered_and_gated_by_the_purchase_module(self) -> None:
+        """Mười mã báo cáo có mặt và cả mười đòi quyền phân hệ `purchase`.
+
+        Mã quyền báo cáo chung (`reporting.report.view`) một mình không được mở
+        dữ liệu mua hàng — đúng bản vá H-1b của 6E-1. Bỏ trống
+        `required_permission_module` ở một dòng là mở toang lặng lẽ đúng dòng ấy.
+        """
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        for code in self._SLICE_CODES:
+            assert code in by_code, code
+            assert by_code[code].required_permission_module == "purchase", code
+            assert by_code[code].category == "mua-hang", code
+
+    def test_the_four_purchase_summaries_share_one_dataset_with_four_layouts(self) -> None:
+        """Bốn chiều gộp = bốn layout trên MỘT dataset.
+
+        Engine gắn layout vào definition và không nhận `group_by` lúc chạy, nên
+        "tổng hợp mua hàng theo bốn chiều" của SRS 05 §5 #1 chỉ diễn đạt được
+        bằng bốn definition. Điều phải canh là chúng không kéo theo bốn dataset:
+        đó sẽ là bốn bản chép của cùng một phép cộng tiền mua.
+        """
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        datasets = {by_code[code].dataset_code for code in self._PURCHASE_SUMMARIES}
+        layouts = {by_code[code].layout_code for code in self._PURCHASE_SUMMARIES}
+        assert datasets == {"purchase_register"}
+        assert len(layouts) == len(self._PURCHASE_SUMMARIES)
+
+    def test_the_payable_reports_pin_the_payable_direction(self) -> None:
+        """Ba báo cáo công nợ phải trả ghim `direction = 'chi'`.
+
+        Không ghim thì người gọi tự chọn chiều, và một báo cáo mang tên "phải
+        trả" sẽ in ra công nợ phải thu khi client gửi tham số khác — cùng lập
+        luận với `S03a1-DN`/`S03a2-DN` của 6E-1.
+        """
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        for code in (
+            "tong-hop-cong-no-phai-tra",
+            "chi-tiet-cong-no-phai-tra",
+            "chi-tiet-cong-no-phai-tra-theo-hoa-don",
+            "chi-tiet-tuoi-no-phai-tra",
+        ):
+            assert by_code[code].fixed_params == {"direction": "chi"}, code
+
+    def test_the_aging_detail_reuses_the_delivered_aging_dataset(self) -> None:
+        """ "Chi tiết công nợ theo tuổi nợ" KHÔNG có dataset riêng.
+
+        Nó là bảng tuổi nợ của 7A xem ở mức chứng từ, nên nó dùng lại
+        `ar_ap_aging`. Một dataset thứ hai sẽ là bản chép thứ hai của phép chia
+        mốc tuổi nợ — và hai bảng tuổi nợ lệch nhau là thứ không ai đối chiếu ra.
+        """
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        assert by_code["chi-tiet-tuoi-no-phai-tra"].dataset_code == "ar_ap_aging"
+        assert (
+            by_code["chi-tiet-tuoi-no-phai-tra"].dataset_code
+            == by_code["tuoi-no-phai-tra"].dataset_code
+        )
+
+    def test_no_layout_of_this_slice_totals_a_foreign_currency_column(self) -> None:
+        """Chỉ cột VND được cộng tổng — cột nguyên tệ thì không.
+
+        Cộng USD với EUR ra một con số là con số không có nghĩa, và nó nguy hiểm
+        hơn một ô trống vì nó trông như một con số. Cùng kỷ luật mà `ar_ap_aging`
+        đã áp từ 7A; ghim ở đây để một layout mới của 7G-2 không lặng lẽ phá nó.
+
+        Cột `quantity` cũng không cộng tổng: một vật tư mua bằng nhiều đơn vị
+        quy đổi (3B-3) thì tổng số lượng là phép cộng cái với thùng.
+        """
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        slice_layouts = {by_code[code].layout_code for code in self._SLICE_CODES}
+        for layout in loaded.manifest.layouts:
+            if layout.code not in slice_layouts:
+                continue
+            spec = loaded.layout_specs[layout.code]
+            for key in spec.totals:
+                assert not key.endswith("_fc"), f"{layout.code}: cộng tổng cột nguyên tệ {key}"
+                assert key != "quantity", f"{layout.code}: cộng tổng số lượng đa đơn vị"

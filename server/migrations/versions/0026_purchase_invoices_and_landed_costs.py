@@ -42,11 +42,22 @@ mọi dòng thuế của dịch vụ mua và của chi phí mua hàng (không c�
 (chỉ lấp nghiệp vụ/purpose thiếu), nên dataset đã cấp phải sửa ở đây; chỉ
 đụng dòng builtin còn nguyên `{item}` — người dùng đã tự sửa thì giữ.
 
-**`_refresh_builtin_data` CHUYỂN TỪ 0025 SANG ĐÂY**, cùng luật đã ghi ở 0025:
-bước làm mới metadata builtin phải đứng ở cuối chuỗi mỗi khi chuỗi thêm thứ
-dữ liệu builtin đọc. Lát này đổi quyền xem của báo cáo tuổi nợ phải trả sang
-module `purchase`; để bước làm mới ở 0025 thì dataset đã ở 0025 không bao giờ
-thấy thay đổi ấy.
+**`_refresh_builtin_data` ĐÃ DỜI SANG `0039`.** Lát này đổi quyền xem của báo
+cáo tuổi nợ phải trả sang module `purchase`, và thay đổi ấy vẫn tới mọi dataset
+vì `refresh_builtin_reports` gieo lại **toàn bộ** manifest ở head chứ không gieo
+phần chênh của một revision.
+
+Vì sao phải dời, không phải "để cũng chẳng sao": bước làm mới **chạy thử** SQL
+của mọi dataset builtin (probe `LIMIT 0` trong `reports/seed.py`). Một lượt gọi
+đứng giữa chuỗi vì thế chạy SQL của hôm nay trên schema của hôm đó, nên ngày đầu
+tiên có một dataset đọc cột được thêm ở revision sau, **cả chuỗi migration đứt**
+tại đây — đúng chỗ không ai tìm. Lát 7G-1 là ngày đó: `purchase_register` đọc
+`purchase_invoices.buyer_id`, cột mà `0039` mới thêm.
+
+Luật vì thế mạnh hơn "đứng ở cuối chuỗi": bước làm mới chỉ được có **một** lượt
+gọi, và nó ở head. Kiểm bằng
+`grep -rn "_refresh_builtin_data" migrations/versions/` — hai kết quả trở lên là
+một lỗi.
 """
 
 from __future__ import annotations
@@ -58,8 +69,6 @@ import sqlalchemy as sa
 from alembic import context, op
 from sqlalchemy.dialects.postgresql import JSONB
 
-from ket.kernel.config.printing.seed import ensure_builtin_print_templates
-from ket.kernel.config.reports.seed import refresh_builtin_reports
 from ket.kernel.datasets.naming import role_name_for_schema
 from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
 from ket.kernel.security.grants import grant_read_write
@@ -119,7 +128,6 @@ def upgrade() -> None:
     _apply_security()
     _create_partner_open_debt_function()
     _untrack_item_on_input_vat_account()
-    _refresh_builtin_data()
 
 
 def _create_purchase_invoices() -> None:
@@ -429,18 +437,6 @@ def _untrack_item_on_input_vat_account() -> None:
             "   AND c.detail_tracking = ARRAY['item']::varchar[]"
         )
     )
-
-
-def _refresh_builtin_data() -> None:
-    """Làm mới metadata báo cáo + mẫu in builtin — **CHUYỂN TỪ 0025** (xem
-    docstring đầu tệp). Chỉ chạy online: bước đọc-rồi-ghi không diễn đạt được
-    thành SQL tĩnh của `upgrade --sql`."""
-    if context.is_offline_mode():
-        return
-    schema = _target_schema()
-    connection = op.get_bind()
-    refresh_builtin_reports(connection, schema)
-    ensure_builtin_print_templates(connection, schema)
 
 
 def downgrade() -> None:

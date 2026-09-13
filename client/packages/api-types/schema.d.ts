@@ -14439,6 +14439,8 @@ export interface components {
         PurchaseInvoiceIn: {
             /** Branch Id */
             branch_id: number;
+            /** Buyer Id */
+            buyer_id?: number | null;
             /** Currency Code */
             currency_code: string;
             /** Description */
@@ -14613,6 +14615,8 @@ export interface components {
         PurchaseInvoiceOut: {
             /** Branch Id */
             branch_id: number;
+            /** Buyer Id */
+            buyer_id?: number | null;
             /** Cashflow Activity */
             cashflow_activity: number | null;
             /**
@@ -14744,6 +14748,8 @@ export interface components {
         PurchaseInvoiceUpdate: {
             /** Branch Id */
             branch_id: number;
+            /** Buyer Id */
+            buyer_id?: number | null;
             /** Currency Code */
             currency_code: string;
             /** Description */

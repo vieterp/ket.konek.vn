@@ -157,6 +157,13 @@ class PurchaseInvoice(DatasetBase, Audited):
     """Nhà cung cấp — luôn `PartnerKind.VENDOR`, nên không có cột `partner_kind`
     như phiếu quỹ (phiếu quỹ nhận cả ba loại đối tác, hóa đơn mua thì không)."""
 
+    buyer_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Nhân viên mua hàng (`employees.id`) — đối xứng `sales_invoices.
+    salesperson_id`, và là nguồn DUY NHẤT của chiều gộp "theo nhân viên" mà
+    FR-PUR-040 đòi ở mọi báo cáo mua hàng. Không khóa ngoại: cùng lập luận với
+    mọi tham chiếu danh mục khác trên chứng từ — vòng đời danh mục canh bằng bộ
+    đếm tham chiếu (`record_use`), không bằng `RESTRICT` của PostgreSQL."""
+
     vendor_invoice_status: Mapped[int] = mapped_column(
         SmallInteger, nullable=False, default=VendorInvoiceStatus.RECEIVED, server_default="0"
     )

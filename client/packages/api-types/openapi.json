@@ -16211,6 +16211,17 @@
             "title": "Branch Id",
             "type": "integer"
           },
+          "buyer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buyer Id"
+          },
           "currency_code": {
             "maxLength": 3,
             "minLength": 3,
@@ -16858,6 +16869,17 @@
             "title": "Branch Id",
             "type": "integer"
           },
+          "buyer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buyer Id"
+          },
           "cashflow_activity": {
             "anyOf": [
               {
@@ -17137,6 +17159,17 @@
           "branch_id": {
             "title": "Branch Id",
             "type": "integer"
+          },
+          "buyer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buyer Id"
           },
           "currency_code": {
             "maxLength": 3,
@@ -21578,7 +21611,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.37.0"
+    "version": "0.38.0"
   },
   "openapi": "3.1.0",
   "paths": {

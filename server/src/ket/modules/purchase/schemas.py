@@ -162,6 +162,7 @@ class PurchaseInvoiceIn(BaseModel):
     operation_code: str = Field(min_length=1, max_length=OPERATION_CODE_INPUT_MAX)
     vendor_id: int
     payable_account_id: int
+    buyer_id: int | None = None
 
     branch_id: int
     document_date: date
@@ -299,6 +300,7 @@ class PurchaseInvoiceOut(BaseModel):
     kind: int = 0
     operation_code: str = ""
     vendor_id: int = 0
+    buyer_id: int | None = None
     vendor_invoice_status: int = 0
     vendor_invoice_form: str | None = None
     vendor_invoice_serial: str | None = None

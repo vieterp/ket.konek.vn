@@ -94,6 +94,7 @@ def _to_response(
             "kind": body.kind,
             "operation_code": body.operation_code,
             "vendor_id": body.vendor_id,
+            "buyer_id": body.buyer_id,
             "vendor_invoice_status": body.vendor_invoice_status,
             "vendor_invoice_form": body.vendor_invoice_form,
             "vendor_invoice_serial": body.vendor_invoice_serial,

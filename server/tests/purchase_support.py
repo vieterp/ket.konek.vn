@@ -21,8 +21,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from ket.kernel.config.accounts_models import BalanceNature, ChartOfAccount, DefaultAccount
 from ket.kernel.config.auto_posting_models import AutoPostingRule
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.master_data.models.employee import Employee
+from ket.kernel.master_data.models.item import Item, ItemNature
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.master_data.models.payment_term import PaymentTerm
+from ket.kernel.master_data.models.project import Project
+from ket.kernel.master_data.models.unit_of_measure import UnitOfMeasure
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from posting_support import PostingContext, posting_scope
 
@@ -174,3 +178,55 @@ def ensure_payment_term(session: Session, *, term_id: int, code: str, due_days: 
         existing.due_days = due_days
     session.flush()
     return term_id
+
+
+def ensure_buyer(session: Session, *, employee_id: int, code: str) -> int:
+    """Một nhân viên mua hàng với `id` cố định — cùng khuôn `ensure_salesperson`.
+
+    Bộ đếm tham chiếu đọc bảng này, nên `purchase_invoices.buyer_id` phải trỏ
+    một dòng có thật để lượt tạo hóa đơn không nhích bộ đếm của một id không ai.
+    """
+    if session.get(Employee, employee_id) is None:
+        session.add(
+            Employee(id=employee_id, code=code, name=f"Nhân viên {code}", path=f"{employee_id}.")
+        )
+        session.flush()
+    return employee_id
+
+
+def ensure_unit(session: Session, *, unit_id: int, code: str) -> int:
+    if session.get(UnitOfMeasure, unit_id) is None:
+        session.add(UnitOfMeasure(id=unit_id, code=code, name=code, path=f"{unit_id}."))
+        session.flush()
+    return unit_id
+
+
+def ensure_item(session: Session, *, item_id: int, code: str, unit_id: int | None = None) -> int:
+    """Một dòng vật tư hàng hóa với `id` cố định.
+
+    `nature = goods` để dòng này giống hàng mua thật; báo cáo mua hàng không đọc
+    `nature`, nhưng một vật tư không tính chất là thứ phase 8 sẽ bỏ qua và bài
+    test sẽ đúng vì lý do khác lý do nó viết ra.
+    """
+    if session.get(Item, item_id) is None:
+        session.add(
+            Item(
+                id=item_id,
+                code=code,
+                name=f"Vật tư {code}",
+                path=f"{item_id}.",
+                nature=ItemNature.GOODS,
+                base_unit_id=unit_id,
+            )
+        )
+        session.flush()
+    return item_id
+
+
+def ensure_project(session: Session, *, project_id: int, code: str) -> int:
+    if session.get(Project, project_id) is None:
+        session.add(
+            Project(id=project_id, code=code, name=f"Công trình {code}", path=f"{project_id}.")
+        )
+        session.flush()
+    return project_id
