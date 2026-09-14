@@ -20,6 +20,19 @@
 -- * `purchase` (lát 7B): nhà cung cấp trên hóa đơn mua (header) và nhà cung
 --   cấp dịch vụ trên từng dòng chi phí mua hàng (`landed_costs.vendor_id`) —
 --   luôn là `partners`, cùng `_usage_of` của `modules/purchase/service.py`.
+-- * `sales` (lát 7C-2): khách hàng trên hóa đơn bán, và nhân viên bán hàng khi
+--   được khai (`partner_kind = 2` → `employees`).
+-- * `purchase` (lát 7G-1, nhánh bổ sung ở 7G-2a): người mua trên hóa đơn mua
+--   (`purchase_invoices.buyer_id` → `employees`).
+-- * `sales` (lát 7G-2a): mã quy cách trên từng DÒNG hóa đơn bán
+--   (`sales_invoice_lines.variant_id` → `item_variants`).
+--
+-- **Hai lát liên tiếp thêm một đường `record_use` mà quên nhánh đối chiếu của
+-- nó** (7G-1 với `buyer_id`, 7G-2a với `variant_id`), và cả hai lần hậu quả
+-- giống nhau: check ĐỎ trên dữ liệu ĐÚNG, tức tiếng chuông duy nhất báo "ai đó
+-- quên `record_use`" chìm trong tiếng ồn đã biết. Thêm một đường đếm thì phải
+-- thêm nhánh ở đây trong cùng lượt sửa; `test_the_usage_check_is_clean_on_
+-- correct_books` là bài kiểm canh điều đó.
 --
 -- Bút toán tổng hợp (`gl_journal_lines`) cố ý ĐỨNG NGOÀI bộ đếm, như từ đầu:
 -- nó không gọi `record_use` cho chiều nào cả. Vì thế lượt chuyển số dư đầu năm
@@ -66,7 +79,29 @@ WITH partner_refs AS (
         SELECT 2, salesperson_id
         FROM sales_invoices
         WHERE salesperson_id IS NOT NULL
+        UNION ALL
+        -- Người mua trên hóa đơn mua (lát 7G-1) — nhánh này THIẾU từ chính lát
+        -- ấy: `PurchaseInvoiceService._usage_of` đếm `(employees, buyer_id)`
+        -- nhưng phía tham chiếu không có nguồn nào, nên check ĐỎ ngay hóa đơn
+        -- mua đầu tiên khai người mua (bộ đếm nói 1, phía tham chiếu nói 0).
+        -- Cùng hình dạng bỏ sót với `bank_statements` ở khối dưới, và là lần
+        -- thứ hai trong hai lát liên tiếp: thêm một đường `record_use` mà không
+        -- thêm nhánh đối chiếu của nó.
+        SELECT 2, buyer_id
+        FROM purchase_invoices
+        WHERE buyer_id IS NOT NULL
     ) refs
+),
+variant_refs AS (
+    -- Mã quy cách trên dòng hóa đơn bán (lát 7G-2a). `sales_invoice_lines.
+    -- variant_id` cố ý KHÔNG có khóa ngoại (ràng buộc thật sự là một CẶP với
+    -- `item_id`, thứ khóa ngoại một cột không diễn đạt được), nên bộ đếm là thứ
+    -- duy nhất chặn xóa hoặc gộp mất một quy cách mà chứng từ đang trỏ tới —
+    -- xem `ItemVariantService.delete`. Đếm theo DÒNG, không theo chứng từ: hai
+    -- dòng của cùng hóa đơn khai cùng quy cách là hai lần dùng.
+    SELECT 'item_variants' AS entity_type, variant_id AS entity_id
+    FROM sales_invoice_lines
+    WHERE variant_id IS NOT NULL
 ),
 bank_account_refs AS (
     SELECT 'company_bank_accounts' AS entity_type, account_id AS entity_id
@@ -97,6 +132,8 @@ counted AS (
         SELECT entity_type, entity_id FROM partner_refs
         UNION ALL
         SELECT entity_type, entity_id FROM bank_account_refs
+        UNION ALL
+        SELECT entity_type, entity_id FROM variant_refs
     ) all_refs
     GROUP BY 1, 2
 )

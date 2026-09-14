@@ -42,7 +42,7 @@ mọi dòng thuế của dịch vụ mua và của chi phí mua hàng (không c�
 (chỉ lấp nghiệp vụ/purpose thiếu), nên dataset đã cấp phải sửa ở đây; chỉ
 đụng dòng builtin còn nguyên `{item}` — người dùng đã tự sửa thì giữ.
 
-**`_refresh_builtin_data` ĐÃ DỜI SANG `0039`.** Lát này đổi quyền xem của báo
+**`_refresh_builtin_data` ĐÃ DỜI SANG `0040`.** Lát này đổi quyền xem của báo
 cáo tuổi nợ phải trả sang module `purchase`, và thay đổi ấy vẫn tới mọi dataset
 vì `refresh_builtin_reports` gieo lại **toàn bộ** manifest ở head chứ không gieo
 phần chênh của một revision.
@@ -52,7 +52,7 @@ của mọi dataset builtin (probe `LIMIT 0` trong `reports/seed.py`). Một lư
 đứng giữa chuỗi vì thế chạy SQL của hôm nay trên schema của hôm đó, nên ngày đầu
 tiên có một dataset đọc cột được thêm ở revision sau, **cả chuỗi migration đứt**
 tại đây — đúng chỗ không ai tìm. Lát 7G-1 là ngày đó: `purchase_register` đọc
-`purchase_invoices.buyer_id`, cột mà `0039` mới thêm.
+`purchase_invoices.buyer_id`, cột mà `0039` thêm.
 
 Luật vì thế mạnh hơn "đứng ở cuối chuỗi": bước làm mới chỉ được có **một** lượt
 gọi, và nó ở head. Kiểm bằng

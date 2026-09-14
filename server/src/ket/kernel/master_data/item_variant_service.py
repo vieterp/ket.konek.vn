@@ -20,6 +20,7 @@ from ket.kernel.errors import (
 )
 from ket.kernel.master_data.models.item import INVENTORY_NATURES, ITEM_TABLE_NAME, Item
 from ket.kernel.master_data.models.item_variant import ITEM_VARIANT_TABLE_NAME, ItemVariant
+from ket.kernel.master_data.usage import ensure_deletable
 from ket.kernel.persistence.versioning import require_row_version
 
 
@@ -92,14 +93,22 @@ class ItemVariantService:
         return variant
 
     def delete(self, variant_id: int, *, item_id: int) -> None:
-        """Xóa hẳn một quy cách.
+        """Xóa hẳn một quy cách — chỉ khi chưa chứng từ nào trỏ tới (BR-SYS-02).
 
-        Còn mở vì ở lát này chưa chứng từ nào trỏ tới quy cách. Từ phase 8, khóa
-        ngoại `RESTRICT` từ dòng tồn kho sẽ tự chặn đường này, và `is_active` là
-        đường đúng cho quy cách đã có phát sinh — cùng lối FR-SYS-012 chỉ ra cho
-        danh mục.
+        Từ lát 7G-2a, dòng hóa đơn bán mang `variant_id` và sổ chi tiết bán hàng
+        theo mã quy cách nối theo id ấy. Xóa một quy cách đang dùng không làm sổ
+        cái sai một đồng — nó đẩy doanh thu của dòng sang nhóm "Không khai quy
+        cách" **im lặng**, và đó là hình dạng lỗi không ai đối chiếu ra.
+
+        Phép canh là **bộ đếm tham chiếu**, không phải khóa ngoại: module nghiệp
+        vụ ghi `record_use` khi cất chứng từ, và kernel không được phép đọc bảng
+        của module (luật C1) nên nó không có đường nào tự hỏi "dòng nào đang dùng".
+        Từ phase 8, khóa ngoại `RESTRICT` từ dòng tồn kho sẽ chặn thêm một lớp.
+        `is_active` vẫn là đường đúng cho quy cách đã có phát sinh (FR-SYS-012).
         """
-        self._session.delete(self.get(variant_id, item_id=item_id))
+        variant = self.get(variant_id, item_id=item_id)
+        ensure_deletable(self._session, entity_type=self.entity_type, entity_id=variant_id)
+        self._session.delete(variant)
         self._session.flush()
 
     def _ensure_stock_item(self, item_id: int) -> None:
@@ -138,12 +147,29 @@ class ItemVariantMergeHook:
     được giữ lại là bản quyết định, cùng luật đã áp cho tỷ lệ quy đổi và cho cờ
     mặc định của tài khoản ngân hàng.
 
+    **Dòng nguồn bị bỏ ấy có thể đang được chứng từ dùng** (từ 7G-2a: hóa đơn bán
+    mang `variant_id`), nên bước bỏ đi qua `ensure_deletable` — cùng phép canh với
+    `ItemVariantService.delete`, và lượt gộp ĐỔ khi dòng nguồn còn người dùng.
+
+    Đừng trông vào `MOVE_COUNTER` cho việc này: nó **chuyển** bộ đếm chứ không chặn
+    (`REFUSE_WHEN_PRESENT` mới là chính sách chặn, và nó gắn với `attachments`), nó
+    chạy với `entity_type` của thực thể được gộp — `items` — nên không bao giờ nhìn
+    tới `('item_variants', …)`, và nó chạy **sau** hook này nên không gate được lượt
+    xóa ở đây dù muốn. Ba điều ấy ghi lại vì bản đầu của lát 7G-2a đã viết ngược lại
+    cả ba trong một câu.
+
+    Đổ là hành vi đúng, không phải một sự bất tiện: không xóa gì thì doanh thu của
+    dòng hóa đơn ấy rơi vào nhóm "Không khai quy cách" trên sổ chi tiết theo mã quy
+    cách trong khi sổ cái vẫn đúng từng đồng — im lặng. Và đường sửa có sẵn, không
+    mất dữ liệu: đổi mã quy cách của bản nguồn cho khỏi trùng, rồi `_move_foreign_keys`
+    **chuyển** nó sang mã hàng đích thay vì xóa.
+
     **Nợ đã biết, thuộc phase 8**: từ khi dòng tồn kho mang `variant_id`, xóa dòng
-    quy cách của nguồn sẽ phải **trỏ lại** những dòng tồn kho ấy sang quy cách
-    cùng mã của bản đích trước khi xóa. Hôm nay chưa bảng nào trỏ tới
-    `item_variants.id`, nên bước đó chưa có gì để làm; khóa ngoại `RESTRICT` mà
-    phase 8 thêm sẽ làm lần gộp đổ thay vì âm thầm mất số tồn, tức nó không nằm
-    trong loại lỗi im lặng.
+    quy cách của nguồn sẽ phải **trỏ lại** những dòng tồn kho ấy sang quy cách cùng
+    mã của bản đích trước khi xóa. Khóa ngoại `RESTRICT` mà phase 8 thêm sẽ làm lần
+    gộp đổ thay vì âm thầm mất số tồn, tức vế tồn kho không nằm trong loại lỗi im
+    lặng — khác vế báo cáo ở trên, vốn im lặng vì `sales_invoice_lines.variant_id`
+    cố ý không có khóa ngoại.
     """
 
     def before_move(self, session: Session, *, source_id: int, target_id: int) -> None:
@@ -161,6 +187,17 @@ class ItemVariantMergeHook:
             .all()
         ):
             if variant.code in target_codes:
+                # Chặn TRƯỚC khi xóa, cùng phép canh với `ItemVariantService.delete`:
+                # dòng quy cách này có thể đang nằm trên một hóa đơn đã ghi sổ, và
+                # xóa nó làm doanh thu của dòng ấy rơi vào nhóm "Không khai quy
+                # cách" mà sổ cái vẫn đúng từng đồng — im lặng.
+                #
+                # Lượt gộp vì thế ĐỔ, và đổ là hành vi đúng ở đây: đường sửa có
+                # sẵn và không mất dữ liệu — đổi mã quy cách của bản nguồn cho
+                # khỏi trùng, rồi `_move_foreign_keys` sẽ **chuyển** nó sang mã
+                # hàng đích thay vì xóa. `merge_records` chạy trong transaction
+                # của người gọi nên không có lượt gộp nào dở dang.
+                ensure_deletable(session, entity_type=ITEM_VARIANT_TABLE_NAME, entity_id=variant.id)
                 # Qua ORM để có vết trong `audit_log` (FR-NFR-012).
                 session.delete(variant)
         session.flush()

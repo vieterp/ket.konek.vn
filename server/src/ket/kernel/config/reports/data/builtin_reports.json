@@ -1,5 +1,5 @@
 {
-  "__doc__": "Báo cáo dựng sẵn. 4 dataset phủ 8 báo cáo bộ sổ đầu tiên (trần ≤5 dataset cho 10 báo cáo — phase-05 §Chiến lược quy mô); lát 6B thêm dataset thứ 5 `cash_forecast` (Dự báo dòng tiền FR-QUY-032, bước 11 phase-06 — dự báo là một dataset báo cáo, không màn hình riêng; scheme-agnostic nên `package_scheme` null). Mã definition = đúng mã mẫu thông tư (quyết định 5D, đóng câu hỏi mở #1 của 5C): TT99 Phụ lục III đối chiếu Công báo 1575+1576 (S03a/S03b/S38/S06-DN); TT133 Phụ lục 4 đối chiếu toàn văn thông tư (S03a/S03b/S19-DNN, F01-DNN Điều 83) — chờ kế toán trưởng duyệt cùng gói TT133. `package_scheme` gắn definition vào gói cấu hình builtin cùng scheme lúc gieo. Layout dùng chung giữa hai thông tư khi biểu mẫu trùng cột; nhãn cột dùng chữ 'kỳ' thay 'tháng/năm' vì bộ tham số là khoảng ngày tự do (Điều 12 k2 TT99 cho phép, ghi trong Quy chế hạch toán kèm phần mềm). Lát 7G-1 thêm hai dataset và mười định nghĩa cho mua hàng + công nợ phải trả (`docs/srs/05` §5 #1–#6 và #8). `purchase_register` đọc tiền VND từ `gl_postings` chứ không quy đổi lại từ cột nguyên tệ của dòng hàng — quy đổi lại là dựng cách làm tròn thứ hai, và báo cáo mua hàng sẽ không cộng ra đúng số phát sinh của chính tài khoản nó nói về. Sáu định nghĩa \"tổng hợp mua hàng\" chia nhau MỘT dataset, khác nhau chỉ ở chiều gộp của layout, vì engine gắn layout vào definition chứ không nhận `group_by` lúc chạy. `ar_ap_open_items` phục vụ cả hai chiều công nợ bằng `:direction` ghim, cùng khuôn `ar_ap_aging`; ánh xạ `target_kind` → chiều của hai dataset phải trùng nhau và có test ghim. Không có dataset \"tổng hợp công nợ\" riêng: báo cáo tổng hợp là layout gộp theo đối tác trên chính dataset chi tiết — một dataset thứ hai chỉ để GROUP BY sẽ là bản chép thứ ba của khối UNION hai nguồn. `ar_ap_aging` thêm cột `bucket_seq` (chỉ thêm, không đổi cột cũ): thứ tự chữ cái của `bucket` xếp nhóm chưa đến hạn vào giữa các nhóm quá hạn, nên layout nào gộp theo tuổi nợ phải sắp bằng cột số.",
+  "__doc__": "Báo cáo dựng sẵn. 4 dataset phủ 8 báo cáo bộ sổ đầu tiên (trần ≤5 dataset cho 10 báo cáo — phase-05 §Chiến lược quy mô); lát 6B thêm dataset thứ 5 `cash_forecast` (Dự báo dòng tiền FR-QUY-032, bước 11 phase-06 — dự báo là một dataset báo cáo, không màn hình riêng; scheme-agnostic nên `package_scheme` null). Mã definition = đúng mã mẫu thông tư (quyết định 5D, đóng câu hỏi mở #1 của 5C): TT99 Phụ lục III đối chiếu Công báo 1575+1576 (S03a/S03b/S38/S06-DN); TT133 Phụ lục 4 đối chiếu toàn văn thông tư (S03a/S03b/S19-DNN, F01-DNN Điều 83) — chờ kế toán trưởng duyệt cùng gói TT133. `package_scheme` gắn definition vào gói cấu hình builtin cùng scheme lúc gieo. Layout dùng chung giữa hai thông tư khi biểu mẫu trùng cột; nhãn cột dùng chữ 'kỳ' thay 'tháng/năm' vì bộ tham số là khoảng ngày tự do (Điều 12 k2 TT99 cho phép, ghi trong Quy chế hạch toán kèm phần mềm). Lát 7G-1 thêm hai dataset và mười định nghĩa cho mua hàng + công nợ phải trả (`docs/srs/05` §5 #1–#6 và #8). `purchase_register` đọc tiền VND từ `gl_postings` chứ không quy đổi lại từ cột nguyên tệ của dòng hàng — quy đổi lại là dựng cách làm tròn thứ hai, và báo cáo mua hàng sẽ không cộng ra đúng số phát sinh của chính tài khoản nó nói về. Sáu định nghĩa \"tổng hợp mua hàng\" chia nhau MỘT dataset, khác nhau chỉ ở chiều gộp của layout, vì engine gắn layout vào definition chứ không nhận `group_by` lúc chạy. `ar_ap_open_items` phục vụ cả hai chiều công nợ bằng `:direction` ghim, cùng khuôn `ar_ap_aging`; ánh xạ `target_kind` → chiều của hai dataset phải trùng nhau và có test ghim. Không có dataset \"tổng hợp công nợ\" riêng: báo cáo tổng hợp là layout gộp theo đối tác trên chính dataset chi tiết — một dataset thứ hai chỉ để GROUP BY sẽ là bản chép thứ ba của khối UNION hai nguồn. `ar_ap_aging` thêm cột `bucket_seq` (chỉ thêm, không đổi cột cũ): thứ tự chữ cái của `bucket` xếp nhóm chưa đến hạn vào giữa các nhóm quá hạn, nên layout nào gộp theo tuổi nợ phải sắp bằng cột số. Lát 7G-2a thêm dataset `sales_register` và chín định nghĩa cho bán hàng (`docs/srs/06` §5.1 #1–#5). Cùng kỷ luật `purchase_register`: doanh thu VND đọc từ `gl_postings` chứ không quy đổi lại từ cột nguyên tệ của dòng hàng, và `SUM(credit - debit)` chứ không ngược lại vì doanh thu là số dư bên Có. Năm định nghĩa \"tổng hợp bán hàng\" chia nhau MỘT dataset, khác nhau chỉ ở chiều gộp của layout. Chứng từ ghi giảm (trả lại, giảm giá, điều chỉnh giảm) lấy dấu âm TỪ SỔ — bút toán đã đảo chiều ở `posting_mapper`, nên chỉ cột đến từ thân chứng từ mới nhân dấu; nhân cả cột lấy từ sổ là đảo dấu hai lần. Không có cột giá vốn hay lãi/lỗ: `cogs_posted` còn `false` tới phase 8, một cột lãi gộp hôm nay đọc ra \"lãi 100%\". Bốn báo cáo còn lại của SRS 06 §5.1 (#6–#9) chờ phân hệ đơn đặt hàng và giá vốn có chủ. #5 giao MỘT NỬA: so sánh doanh số theo tháng thì được, so sánh SỐ LƯỢNG bán theo thời gian thì không — số lượng không cộng tổng được khi một vật tư bán bằng nhiều đơn vị quy đổi, nên vế ấy chờ một layout gộp theo (vật tư, đơn vị).",
   "datasets": [
     {
       "code": "gl_ledger",
@@ -195,6 +195,25 @@
       "supports_branch": false,
       "supports_ledger": false,
       "description": "Công nợ theo từng chứng từ với số đã thanh toán tính TẠI to_date; gộp sổ phụ công nợ và số dư ban đầu kể cả khoản ứng trước; direction ghim 'thu' hoặc 'chi'"
+    },
+    {
+      "code": "sales_register",
+      "sql_file": "sales_register.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "customer_id",
+        "item_id",
+        "variant_id",
+        "kind",
+        "salesperson_id",
+        "project_id"
+      ],
+      "supports_branch": true,
+      "supports_ledger": true,
+      "description": "Dòng hàng bán của chứng từ đã ghi sổ; doanh thu VND đọc từ dòng phát sinh nên khớp sổ, trả lại / giảm giá / điều chỉnh giảm mang dấu âm theo sổ"
     }
   ],
   "param_sets": [
@@ -421,6 +440,55 @@
             "kind": "bool",
             "label": "Chỉ khoản còn nợ",
             "label_en": "Open items only",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "sales_register_params",
+      "spec": {
+        "params": [
+          {
+            "name": "customer_id",
+            "kind": "int",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "required": false
+          },
+          {
+            "name": "item_id",
+            "kind": "int",
+            "label": "Vật tư hàng hóa",
+            "label_en": "Item",
+            "required": false
+          },
+          {
+            "name": "variant_id",
+            "kind": "int",
+            "label": "Quy cách",
+            "label_en": "Variant",
+            "required": false
+          },
+          {
+            "name": "kind",
+            "kind": "int",
+            "label": "Loại chứng từ bán",
+            "label_en": "Sales kind",
+            "required": false
+          },
+          {
+            "name": "salesperson_id",
+            "kind": "int",
+            "label": "Nhân viên bán",
+            "label_en": "Salesperson",
+            "required": false
+          },
+          {
+            "name": "project_id",
+            "kind": "int",
+            "label": "Công trình",
+            "label_en": "Project",
             "required": false
           }
         ]
@@ -2803,6 +2871,958 @@
           "invoice_no"
         ]
       }
+    },
+    {
+      "code": "sales-summary-by-item",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "customer_name",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount_fc",
+            "label": "Doanh thu (nguyên tệ)",
+            "label_en": "Revenue (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Doanh thu (VND)",
+            "label_en": "Revenue (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT đầu ra (VND)",
+            "label_en": "Output VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount_with_vat",
+            "label": "Tổng tiền thanh toán",
+            "label_en": "Total incl. VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "item_code",
+            "heading_keys": [
+              "item_code",
+              "item_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "amount_with_vat"
+        ],
+        "sort": [
+          "item_code",
+          "customer_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "sales-summary-by-customer",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "item_code",
+            "label": "Mã vật tư",
+            "label_en": "Item code",
+            "type": "text",
+            "width": 9
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount_fc",
+            "label": "Doanh thu (nguyên tệ)",
+            "label_en": "Revenue (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Doanh thu (VND)",
+            "label_en": "Revenue (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT đầu ra (VND)",
+            "label_en": "Output VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount_with_vat",
+            "label": "Tổng tiền thanh toán",
+            "label_en": "Total incl. VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "customer_code",
+            "heading_keys": [
+              "customer_code",
+              "customer_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "amount_with_vat"
+        ],
+        "sort": [
+          "customer_code",
+          "item_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "sales-summary-by-salesperson",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "customer_name",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount_fc",
+            "label": "Doanh thu (nguyên tệ)",
+            "label_en": "Revenue (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Doanh thu (VND)",
+            "label_en": "Revenue (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT đầu ra (VND)",
+            "label_en": "Output VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount_with_vat",
+            "label": "Tổng tiền thanh toán",
+            "label_en": "Total incl. VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "salesperson_code",
+            "heading_keys": [
+              "salesperson_code",
+              "salesperson_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "amount_with_vat"
+        ],
+        "sort": [
+          "salesperson_code",
+          "customer_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "sales-summary-by-province",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "customer_code",
+            "label": "Mã khách hàng",
+            "label_en": "Customer code",
+            "type": "text",
+            "width": 8
+          },
+          {
+            "key": "customer_name",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount",
+            "label": "Doanh thu (VND)",
+            "label_en": "Revenue (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT đầu ra (VND)",
+            "label_en": "Output VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount_with_vat",
+            "label": "Tổng tiền thanh toán",
+            "label_en": "Total incl. VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "province_name",
+            "heading_keys": [
+              "province_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "amount_with_vat"
+        ],
+        "sort": [
+          "province_name",
+          "customer_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "sales-summary-by-branch",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "customer_name",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount_fc",
+            "label": "Doanh thu (nguyên tệ)",
+            "label_en": "Revenue (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Doanh thu (VND)",
+            "label_en": "Revenue (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT đầu ra (VND)",
+            "label_en": "Output VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount_with_vat",
+            "label": "Tổng tiền thanh toán",
+            "label_en": "Total incl. VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "branch_code",
+            "heading_keys": [
+              "branch_code",
+              "branch_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "amount_with_vat"
+        ],
+        "sort": [
+          "branch_code",
+          "customer_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "sales-detail",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "kind_label",
+            "label": "Loại nghiệp vụ",
+            "label_en": "Operation",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "customer_code",
+            "label": "Mã khách hàng",
+            "label_en": "Customer code",
+            "type": "text",
+            "width": 8
+          },
+          {
+            "key": "customer_name",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "item_code",
+            "label": "Mã vật tư",
+            "label_en": "Item code",
+            "type": "text",
+            "width": 9
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "variant_code",
+            "label": "Mã quy cách",
+            "label_en": "Variant code",
+            "type": "text",
+            "width": 8
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "unit_price_fc",
+            "label": "Đơn giá",
+            "label_en": "Unit price",
+            "type": "money",
+            "width": 10
+          },
+          {
+            "key": "discount_amount_fc",
+            "label": "Chiết khấu (nguyên tệ)",
+            "label_en": "Discount (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "goods_amount_fc",
+            "label": "Doanh thu sau CK (nguyên tệ)",
+            "label_en": "Revenue after discount (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Doanh thu (VND)",
+            "label_en": "Revenue (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT đầu ra (VND)",
+            "label_en": "Output VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount_with_vat",
+            "label": "Tổng tiền thanh toán",
+            "label_en": "Total incl. VAT",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "account_code",
+            "label": "Tài khoản",
+            "label_en": "Account",
+            "type": "text",
+            "align": "center",
+            "width": 7
+          },
+          {
+            "key": "description",
+            "label": "Diễn giải",
+            "label_en": "Description",
+            "type": "text"
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "amount_with_vat"
+        ],
+        "sort": [
+          "posting_date",
+          "voucher_no",
+          "item_code"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "sales-detail-by-variant",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "customer_name",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "kind_label",
+            "label": "Loại nghiệp vụ",
+            "label_en": "Operation",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "unit_price_fc",
+            "label": "Đơn giá",
+            "label_en": "Unit price",
+            "type": "money",
+            "width": 10
+          },
+          {
+            "key": "amount",
+            "label": "Doanh thu (VND)",
+            "label_en": "Revenue (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT đầu ra (VND)",
+            "label_en": "Output VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount_with_vat",
+            "label": "Tổng tiền thanh toán",
+            "label_en": "Total incl. VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "item_code",
+            "heading_keys": [
+              "item_code",
+              "item_name"
+            ]
+          },
+          {
+            "key": "variant_code",
+            "heading_keys": [
+              "variant_code",
+              "variant_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "amount_with_vat"
+        ],
+        "sort": [
+          "item_code",
+          "variant_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "sales-journal",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "kind_label",
+            "label": "Loại nghiệp vụ",
+            "label_en": "Operation",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "customer_name",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount",
+            "label": "Doanh thu (VND)",
+            "label_en": "Revenue (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT đầu ra (VND)",
+            "label_en": "Output VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount_with_vat",
+            "label": "Tổng tiền thanh toán",
+            "label_en": "Total incl. VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "account_code",
+            "heading_keys": [
+              "account_code"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "amount_with_vat"
+        ],
+        "sort": [
+          "account_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "sales-monthly",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "customer_name",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "posting_date",
+            "label": "Ngày ghi sổ",
+            "label_en": "Posting date",
+            "type": "date",
+            "width": 8
+          },
+          {
+            "key": "voucher_no",
+            "label": "Số chứng từ",
+            "label_en": "Voucher no.",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "amount",
+            "label": "Doanh thu (VND)",
+            "label_en": "Revenue (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT đầu ra (VND)",
+            "label_en": "Output VAT (VND)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount_with_vat",
+            "label": "Tổng tiền thanh toán",
+            "label_en": "Total incl. VAT",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "period_month",
+            "heading_keys": [
+              "period_month"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "vat_amount",
+          "amount_with_vat"
+        ],
+        "sort": [
+          "period_month",
+          "customer_code",
+          "posting_date",
+          "voucher_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
     }
   ],
   "definitions": [
@@ -3213,6 +4233,123 @@
       },
       "package_scheme": null,
       "required_permission_module": "purchase"
+    },
+    {
+      "code": "tong-hop-ban-hang-theo-mat-hang",
+      "name": "Tổng hợp bán hàng theo mặt hàng",
+      "name_en": "Sales summary by item",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "sales_register",
+      "layout_code": "sales-summary-by-item",
+      "param_set_code": "sales_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "tong-hop-ban-hang-theo-khach-hang",
+      "name": "Tổng hợp bán hàng theo khách hàng",
+      "name_en": "Sales summary by customer",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "sales_register",
+      "layout_code": "sales-summary-by-customer",
+      "param_set_code": "sales_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "tong-hop-ban-hang-theo-nhan-vien",
+      "name": "Tổng hợp bán hàng theo nhân viên bán",
+      "name_en": "Sales summary by salesperson",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "sales_register",
+      "layout_code": "sales-summary-by-salesperson",
+      "param_set_code": "sales_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "tong-hop-ban-hang-theo-dia-phuong",
+      "name": "Tổng hợp bán hàng theo địa phương",
+      "name_en": "Sales summary by province",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "sales_register",
+      "layout_code": "sales-summary-by-province",
+      "param_set_code": "sales_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "tong-hop-ban-hang-theo-don-vi",
+      "name": "Tổng hợp bán hàng theo đơn vị",
+      "name_en": "Sales summary by branch",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "sales_register",
+      "layout_code": "sales-summary-by-branch",
+      "param_set_code": "sales_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "so-chi-tiet-ban-hang",
+      "name": "Sổ chi tiết bán hàng",
+      "name_en": "Sales detail book",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "sales_register",
+      "layout_code": "sales-detail",
+      "param_set_code": "sales_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "so-chi-tiet-ban-hang-theo-quy-cach",
+      "name": "Sổ chi tiết bán hàng theo mã quy cách",
+      "name_en": "Sales detail book by variant",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "sales_register",
+      "layout_code": "sales-detail-by-variant",
+      "param_set_code": "sales_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "so-nhat-ky-ban-hang",
+      "name": "Sổ nhật ký bán hàng",
+      "name_en": "Sales journal",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "sales_register",
+      "layout_code": "sales-journal",
+      "param_set_code": "sales_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "doanh-so-ban-hang-theo-thang",
+      "name": "Doanh số bán hàng theo tháng",
+      "name_en": "Monthly sales revenue",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "sales_register",
+      "layout_code": "sales-monthly",
+      "param_set_code": "sales_register_params",
+      "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "sales"
     }
   ]
 }

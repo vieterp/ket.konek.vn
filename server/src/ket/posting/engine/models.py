@@ -103,6 +103,22 @@ class GlPosting(DatasetBase):
             "bank_account_id",
             postgresql_where=text("bank_account_id IS NOT NULL"),
         ),
+        # Đường nối của mọi dataset sổ chi tiết mua/bán: `purchase_register` và
+        # `sales_register` tương quan `gl_postings` theo `source_line_id` để lấy
+        # số tiền VND của từng dòng hàng. Không có index này planner phải rơi về
+        # `(ledger, posting_date)` rồi lọc, và chi phí tăng theo (số dòng hàng
+        # trong kỳ × số phát sinh của tài khoản trong kỳ) — 511 và 156 là những
+        # tài khoản dày nhất trong sổ.
+        #
+        # Index MỘT PHẦN, cùng lý do với `ix_gl_postings_bank_account`: phần lớn
+        # dòng phát sinh không đến từ một dòng hàng nào (bút toán tay, chênh lệch
+        # tỷ giá của lượt đối trừ — xem `posting.settlements.fx_adjustment_lines`
+        # ghi `source_line_id = None`), nên phủ chúng là phủ cả bảng.
+        Index(
+            "ix_gl_postings_source_line_id",
+            "source_line_id",
+            postgresql_where=text("source_line_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

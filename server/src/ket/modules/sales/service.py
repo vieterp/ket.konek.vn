@@ -21,7 +21,17 @@ không gọi lại `kernel.pricing.quote_price`. Lý do ở đầu `schemas.py` 
 đơn giá là đường hợp lệ, và bộ định giá trả `0` cho mã hàng chưa khai giá.
 
 Bộ đếm tham chiếu danh mục (BR-SYS-02): khách hàng và nhân viên bán hàng trên
-hóa đơn; nguồn đối chiếu ở `usage_counter_accurate.sql`.
+hóa đơn, cộng **mã quy cách** của từng dòng (7G-2a); nguồn đối chiếu ở
+`usage_counter_accurate.sql`.
+
+Quy cách được đếm dù `item_id`/`unit_id` trên cùng dòng thì không, và đó là
+một lựa chọn có lý do: `item_variants` là danh mục duy nhất mà một **báo cáo**
+đọc qua `LEFT JOIN` theo id (sổ chi tiết bán hàng theo mã quy cách, 7G-2a).
+Xóa hoặc gộp mất dòng danh mục ấy không làm sổ cái sai một đồng, nhưng nó đẩy
+doanh thu sang nhóm "Không khai quy cách" **im lặng** — và đường gộp hai mã
+hàng trùng nhau XÓA THẬT quy cách của bản nguồn khi bản đích đã có cùng mã,
+tức ca thường gặp chứ không phải ca hiếm. Bộ đếm là phép canh duy nhất mở cho
+kernel: `item_variant_service` không được phép đọc bảng của module (luật C1).
 """
 
 from __future__ import annotations
@@ -46,6 +56,7 @@ from ket.kernel.errors import (
     VoucherBranchImmutableError,
 )
 from ket.kernel.master_data.models.employee import EMPLOYEE_TABLE_NAME
+from ket.kernel.master_data.models.item_variant import ITEM_VARIANT_TABLE_NAME, ItemVariant
 from ket.kernel.master_data.models.partner import PARTNER_TABLE_NAME, Partner
 from ket.kernel.master_data.models.payment_term import PaymentTerm
 from ket.kernel.master_data.usage import record_use
@@ -96,6 +107,14 @@ RECEIVABLE_ACCOUNT_NOT_CUSTOMER_TRACKED_CODE = "sales.receivable_account_not_cus
 nợ sẽ có dòng mà sổ cái không đối chiếu được, và không phiếu thu nào đối trừ
 nổi. Cùng phép kiểm với `purchase`, đổi chiều theo dõi."""
 
+VARIANT_NOT_OF_ITEM_CODE = "sales.variant_not_of_item"
+"""Quy cách khai trên dòng không thuộc mã hàng của dòng.
+
+Mã quy cách chỉ duy nhất TRONG một mã hàng (`uq_item_variants_item_code`), nên
+`variant_id` của hàng khác là một giá trị **tồn tại** mà vẫn sai — sổ chi tiết
+bán hàng theo mã quy cách sẽ xếp doanh thu của áo vào nhóm quy cách của mũ, và
+không con số nào trên tờ báo cáo ấy chỉ ra chỗ lệch."""
+
 _ZERO = Decimal(0)
 
 
@@ -115,6 +134,7 @@ class SalesInvoiceService:
         self._verify_operation(payload)
         self._verify_client_amounts(payload, scale=scale)
         self._verify_customer_tracked_account(payload)
+        self._verify_variants_belong_to_items(payload)
         priced = price_settlements(self._session, payload, scale=scale)
 
         voucher = self._vouchers.create(
@@ -188,6 +208,7 @@ class SalesInvoiceService:
         self._verify_operation(payload)
         self._verify_client_amounts(payload, scale=scale)
         self._verify_customer_tracked_account(payload)
+        self._verify_variants_belong_to_items(payload)
         priced = price_settlements(self._session, payload, scale=scale)
 
         usage_before = self._usage_of_stored(body)
@@ -357,6 +378,7 @@ class SalesInvoiceService:
                     item_id=line.item_id,
                     unit_id=line.unit_id,
                     warehouse_id=line.warehouse_id,
+                    variant_id=line.variant_id,
                     quantity=line.quantity,
                     unit_price_fc=line.unit_price_fc,
                     discount_percent=line.discount_percent,
@@ -453,6 +475,47 @@ class SalesInvoiceService:
                 )
             ],
         )
+
+    def _verify_variants_belong_to_items(self, payload: SalesInvoiceIn) -> None:
+        """Quy cách trên dòng phải là quy cách của **chính** mã hàng dòng ấy khai.
+
+        Cặp (mã hàng, quy cách) không diễn đạt được bằng một khóa ngoại một cột,
+        nên phép kiểm nằm ở đây. Một truy vấn cho cả chứng từ: đọc từng dòng là
+        N lượt đi DB cho một phép kiểm mà tập id đã biết trước.
+        """
+        # Tập các CẶP, không phải bảng tra quy cách → mã hàng. Một `dict` khóa
+        # `variant_id` gộp hai dòng khai cùng quy cách với hai mã hàng khác nhau
+        # thành một mục, và **dòng cuối thắng**: hóa đơn có dòng sai đứng trước
+        # một dòng đúng sẽ đi qua phép kiểm này. Chính là ca vòng review bắt được.
+        wanted = {
+            (line.item_id, line.variant_id)
+            for line in payload.lines
+            if line.variant_id is not None and line.item_id is not None
+        }
+        if not wanted:
+            return
+        owner_rows = self._session.execute(
+            select(ItemVariant.id, ItemVariant.item_id).where(
+                ItemVariant.id.in_(sorted({variant_id for _, variant_id in wanted}))
+            )
+        ).all()
+        owners: dict[int, int] = {row.id: row.item_id for row in owner_rows}
+        violations = [
+            PostingViolation(
+                VARIANT_NOT_OF_ITEM_CODE,
+                "Chọn quy cách thuộc đúng mã hàng của dòng",
+                variant_id=variant_id,
+                item_id=item_id,
+            )
+            # Quy cách không tồn tại cũng vào đây: `owners.get` trả `None`, và
+            # "không có dòng danh mục" không bao giờ khớp mã hàng nào.
+            for item_id, variant_id in sorted(wanted)
+            if owners.get(variant_id) != item_id
+        ]
+        if violations:
+            raise PostingValidationError(
+                "Quy cách trên dòng không thuộc mã hàng của dòng", violations=violations
+            )
 
     def _verify_operation(self, payload: SalesInvoiceIn) -> None:
         """FR-SYS-025: nghiệp vụ phải thuộc gói hiệu lực cho loại `SAL`."""
@@ -594,6 +657,9 @@ class SalesInvoiceService:
         counters[(PARTNER_TABLE_NAME, payload.customer_id)] += 1
         if payload.salesperson_id is not None:
             counters[(EMPLOYEE_TABLE_NAME, payload.salesperson_id)] += 1
+        for line in payload.lines:
+            if line.variant_id is not None:
+                counters[(ITEM_VARIANT_TABLE_NAME, line.variant_id)] += 1
         return counters
 
     def _usage_of_stored(self, body: SalesInvoice) -> Counter[tuple[str, int]]:
@@ -601,6 +667,9 @@ class SalesInvoiceService:
         counters[(PARTNER_TABLE_NAME, body.customer_id)] += 1
         if body.salesperson_id is not None:
             counters[(EMPLOYEE_TABLE_NAME, body.salesperson_id)] += 1
+        for line in self._lines_of(body.id):
+            if line.variant_id is not None:
+                counters[(ITEM_VARIANT_TABLE_NAME, line.variant_id)] += 1
         return counters
 
     def _apply_usage(self, counters: Counter[tuple[str, int]]) -> None:

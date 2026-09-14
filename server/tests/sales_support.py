@@ -24,6 +24,7 @@ from ket.kernel.config.accounts_models import BalanceNature, ChartOfAccount, Def
 from ket.kernel.config.auto_posting_models import AutoPostingRule
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.master_data.models.employee import Employee
+from ket.kernel.master_data.models.item_variant import ItemVariant
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from posting_support import PostingContext, posting_scope
@@ -133,8 +134,14 @@ def ensure_customer(
     code: str,
     credit_limit: Decimal | None = None,
     payment_term_id: int | None = None,
+    province: str | None = None,
 ) -> int:
-    """Một khách hàng với `id` cố định — idempotent để fixture module dùng lại."""
+    """Một khách hàng với `id` cố định — idempotent để fixture module dùng lại.
+
+    `province` là chiều gộp "theo địa phương" của SRS 06 §5.1 #1: nó nằm trên
+    danh mục khách hàng, không trên chứng từ, nên báo cáo theo địa phương chỉ có
+    nhóm khi bước gieo khai nó.
+    """
     existing = session.get(Partner, partner_id)
     if existing is None:
         session.add(
@@ -146,13 +153,36 @@ def ensure_customer(
                 is_customer=True,
                 credit_limit=credit_limit,
                 payment_term_id=payment_term_id,
+                province=province,
             )
         )
     else:
         existing.credit_limit = credit_limit
         existing.payment_term_id = payment_term_id
+        existing.province = province
     session.flush()
     return partner_id
+
+
+def ensure_variant(session: Session, *, variant_id: int, item_id: int, code: str) -> int:
+    """Một quy cách của một mã hàng, `id` cố định.
+
+    Mã quy cách chỉ duy nhất TRONG một mã hàng
+    (`uq_item_variants_item_code`), nên hai mã hàng dùng chung một mã quy cách là
+    dữ liệu hợp lệ — và là dữ liệu duy nhất phân biệt được "gộp theo quy cách"
+    làm đúng với "gộp theo quy cách trộn hai mã hàng".
+    """
+    if session.get(ItemVariant, variant_id) is None:
+        session.add(
+            ItemVariant(
+                id=variant_id,
+                item_id=item_id,
+                code=code,
+                name=f"Quy cách {code}",
+            )
+        )
+        session.flush()
+    return variant_id
 
 
 def ensure_salesperson(session: Session, *, employee_id: int, code: str) -> int:

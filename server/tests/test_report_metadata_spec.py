@@ -34,6 +34,7 @@ from ket.kernel.config.reports.spec import (
     parse_param_set_spec,
 )
 from ket.kernel.errors import ReportDatasetInvalidError, ReportSpecInvalidError
+from ket.modules.sales.models import REVERSING_KINDS, SalesInvoiceKind
 
 BASE_LAYOUT: dict[str, object] = {
     "columns": [
@@ -383,23 +384,163 @@ class TestPurchaseAndPayableManifest:
             == by_code["tuoi-no-phai-tra"].dataset_code
         )
 
-    def test_no_layout_of_this_slice_totals_a_foreign_currency_column(self) -> None:
-        """Chỉ cột VND được cộng tổng — cột nguyên tệ thì không.
 
-        Cộng USD với EUR ra một con số là con số không có nghĩa, và nó nguy hiểm
-        hơn một ô trống vì nó trông như một con số. Cùng kỷ luật mà `ar_ap_aging`
-        đã áp từ 7A; ghim ở đây để một layout mới của 7G-2 không lặng lẽ phá nó.
+class TestNoLayoutTotalsAnUnaddableColumn:
+    """Chỉ cột VND được cộng tổng — cột nguyên tệ và cột số lượng thì không.
 
-        Cột `quantity` cũng không cộng tổng: một vật tư mua bằng nhiều đơn vị
-        quy đổi (3B-3) thì tổng số lượng là phép cộng cái với thùng.
-        """
+    Cộng USD với EUR ra một con số là con số không có nghĩa, và nó nguy hiểm hơn
+    một ô trống vì nó trông như một con số. Cột `quantity` cũng vậy: một vật tư
+    mua/bán bằng nhiều đơn vị quy đổi (3B-3) thì tổng số lượng là phép cộng cái
+    với thùng.
+
+    Kỷ luật này có từ `ar_ap_aging` (7A) và 7G-1 ghim nó cho **mười layout của
+    riêng lát ấy**. Lát 7G-2a nới ra **mọi layout builtin**: bản hẹp chỉ canh
+    được những layout đã biết tên, nên nó im lặng đúng vào lúc cần nói — khi một
+    lát sau thêm layout mới. Toàn bộ 34 layout hiện có đã đạt, nên nới ra không
+    phải một lời hứa cho tương lai mà là một phát biểu đúng ở hiện tại.
+    """
+
+    def test_no_builtin_layout_totals_a_foreign_currency_or_quantity_column(self) -> None:
         loaded = load_builtin_reports()
-        by_code = {d.code: d for d in loaded.manifest.definitions}
-        slice_layouts = {by_code[code].layout_code for code in self._SLICE_CODES}
         for layout in loaded.manifest.layouts:
-            if layout.code not in slice_layouts:
-                continue
             spec = loaded.layout_specs[layout.code]
             for key in spec.totals:
                 assert not key.endswith("_fc"), f"{layout.code}: cộng tổng cột nguyên tệ {key}"
                 assert key != "quantity", f"{layout.code}: cộng tổng số lượng đa đơn vị"
+
+
+_SALES_KINDS = tuple(
+    sorted(
+        value
+        for name, value in vars(SalesInvoiceKind).items()
+        if not name.startswith("_") and isinstance(value, int)
+    )
+)
+"""Mọi `kind` của `SalesInvoiceKind` — `kind_label` phải có nhãn cho từng cái.
+
+Đọc từ chính lớp hằng, **không** gõ tay: một tuple gõ tay không lớn lên khi
+`SalesInvoiceKind` thêm loại chứng từ, nên bài kiểm "liệt kê đủ" sẽ xanh đúng vào
+lúc có một `kind` mới chưa có nhãn — tức phantom cho đúng ca nó nói nó canh."""
+
+
+class TestSalesManifest:
+    """Bất biến MỨC METADATA của chín báo cáo bán hàng lát 7G-2a.
+
+    Hành vi số liệu ở `test_sales_reports.py` (cần PostgreSQL); ở đây chỉ những
+    thứ đọc được từ manifest.
+    """
+
+    _SALES_SUMMARIES = (
+        "tong-hop-ban-hang-theo-mat-hang",
+        "tong-hop-ban-hang-theo-khach-hang",
+        "tong-hop-ban-hang-theo-nhan-vien",
+        "tong-hop-ban-hang-theo-dia-phuong",
+        "tong-hop-ban-hang-theo-don-vi",
+    )
+    _SLICE_CODES = (
+        *_SALES_SUMMARIES,
+        "so-chi-tiet-ban-hang",
+        "so-chi-tiet-ban-hang-theo-quy-cach",
+        "so-nhat-ky-ban-hang",
+        "doanh-so-ban-hang-theo-thang",
+    )
+
+    def test_all_nine_reports_are_registered_and_gated_by_the_sales_module(self) -> None:
+        """Chín mã báo cáo có mặt và cả chín đòi quyền phân hệ `sales`.
+
+        Mã quyền báo cáo chung (`reporting.report.view`) một mình không được mở
+        dữ liệu bán hàng — đúng bản vá H-1b của 6E-1. Bỏ trống
+        `required_permission_module` ở một dòng là mở toang lặng lẽ đúng dòng ấy.
+        """
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        for code in self._SLICE_CODES:
+            assert code in by_code, code
+            assert by_code[code].required_permission_module == "sales", code
+            assert by_code[code].category == "ban-hang", code
+
+    def test_the_five_sales_summaries_share_one_dataset_with_five_layouts(self) -> None:
+        """Năm chiều gộp = năm layout trên MỘT dataset.
+
+        SRS 06 §5.1 #1 nêu năm chiều (địa phương / đơn vị / khách hàng / mặt hàng
+        / nhân viên). Engine gắn layout vào definition và không nhận `group_by`
+        lúc chạy, nên năm chiều chỉ diễn đạt được bằng năm definition. Điều phải
+        canh là chúng không kéo theo năm dataset: đó sẽ là năm bản chép của cùng
+        một phép cộng doanh thu.
+        """
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        datasets = {by_code[code].dataset_code for code in self._SALES_SUMMARIES}
+        layouts = {by_code[code].layout_code for code in self._SALES_SUMMARIES}
+        assert datasets == {"sales_register"}
+        assert len(layouts) == len(self._SALES_SUMMARIES)
+
+    def test_every_sales_report_reads_the_one_register_dataset(self) -> None:
+        """Cả chín báo cáo đọc `sales_register` — không có dataset thứ hai.
+
+        Sổ chi tiết, sổ nhật ký và doanh số theo tháng là ba cách XEM cùng một
+        tập dòng hàng bán; một dataset riêng cho mỗi cách xem là ba chỗ để phép
+        cộng doanh thu lệch nhau, và không con số nào trên ba tờ giấy ấy chỉ ra
+        chỗ lệch.
+        """
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        assert {by_code[code].dataset_code for code in self._SLICE_CODES} == {"sales_register"}
+
+    def test_the_variant_book_groups_by_item_before_variant(self) -> None:
+        """Gộp hai bậc: mã hàng trước, quy cách sau.
+
+        `uq_item_variants_item_code` cho phép hai mã hàng dùng chung một mã quy
+        cách ("M" của áo và "M" của mũ), nên gộp theo quy cách một bậc sẽ trộn
+        doanh thu của hai mặt hàng vào một nhóm mang một cái tên đúng.
+        """
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        spec = loaded.layout_specs[by_code["so-chi-tiet-ban-hang-theo-quy-cach"].layout_code]
+        assert [group.key for group in spec.group_by] == ["item_code", "variant_code"]
+
+    def test_the_sign_branch_lists_exactly_the_reversing_kinds(self) -> None:
+        """Tập đảo dấu của dataset = `REVERSING_KINDS` của `sales.models`, không
+        phải một tuple gõ tay trùng hợp đúng.
+
+        Bộ dữ liệu test ghi sổ `kind` 0/1/2/5, nên đổi `IN (2, 3, 6)` thành
+        `IN (2, 3)` hay `IN (2, 6)` **vẫn xanh** ở mọi bài kiểm số liệu — và hỏng
+        theo kiểu chia đôi: `amount`/`vat_amount` vẫn đúng (dấu đến từ sổ) trong
+        khi `quantity`, `goods_amount_fc` và `discount_amount_fc` của một chứng từ
+        giảm giá / điều chỉnh giảm ra DƯƠNG, tức số lượng trả lại cộng vào số
+        lượng bán. Ghim ở đây vì đó là chỗ duy nhất bắt được mà không phải ghi sổ
+        thêm hai chứng từ chỉ để canh một tuple.
+        """
+        sql = load_builtin_reports().sql_by_dataset["sales_register"]
+        expected = ", ".join(str(kind) for kind in sorted(REVERSING_KINDS))
+        assert f"si.kind IN ({expected})" in sql
+
+    def test_every_sales_kind_has_its_own_label(self) -> None:
+        """`kind_label` liệt kê ĐỦ các `kind` hiện có.
+
+        `ELSE` lộ số thô nên một `kind` mới không bị dán nhãn sai — nhưng nó cũng
+        không được dừng ở đó: một `kind` đã tồn tại mà thiếu nhãn thì cả một loại
+        chứng từ hiện ra dưới dạng "Loại chứng từ 4" trên báo cáo gửi ra ngoài.
+        """
+        sql = load_builtin_reports().sql_by_dataset["sales_register"]
+        for kind in _SALES_KINDS:
+            assert f"WHEN {kind} THEN" in sql, kind
+
+    def test_the_sales_register_declares_every_filter_its_sql_binds(self) -> None:
+        """Sáu chiều lọc của dataset đều khai ở param_set.
+
+        Loader đã bắt chiều ngược (tham số khai mà dataset không cho), nhưng
+        chiều này — SQL ràng một tham số mà không definition nào cấp — làm lượt
+        đọc đổ ở tầng bind, tức lỗi 500 thay vì một ô lọc trống.
+        """
+        loaded = load_builtin_reports()
+        by_code = {d.code: d for d in loaded.manifest.definitions}
+        param_set = loaded.param_set_specs[by_code["so-chi-tiet-ban-hang"].param_set_code]
+        assert {param.name for param in param_set.params} == {
+            "customer_id",
+            "item_id",
+            "variant_id",
+            "kind",
+            "salesperson_id",
+            "project_id",
+        }
