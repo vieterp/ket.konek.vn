@@ -1033,16 +1033,22 @@ def test_journal_debt_shows_up_in_aging_and_forecast_on_the_right_side(
             "to_date": JAN_15,
             "ledger": _FINANCIAL_LEDGER,
             "branch_ids": [context.branch_id],
+            "partner_id": None,
+            "partner_kind": None,
+            "open_only": True,
+            "due_state": None,
         }
-        aging_sql = _dataset_sql("ar_ap_aging.sql")
+        # `ar_ap_aging` nhập vào `ar_ap_open_items` ở lát 7G-2b; bộ tham số
+        # rộng hơn nên ba khóa tùy chọn phải truyền tường minh.
+        aging_sql = _dataset_sql("ar_ap_open_items.sql")
         receivable_rows = session.execute(
             text(aging_sql), {**aging_params, "direction": "thu"}
         ).mappings()
         payable_rows = session.execute(
             text(aging_sql), {**aging_params, "direction": "chi"}
         ).mappings()
-        receivable_nos = {row["invoice_no"] for row in receivable_rows}
-        payable_nos = {row["invoice_no"] for row in payable_rows}
+        receivable_nos = {row["document_no"] for row in receivable_rows}
+        payable_nos = {row["document_no"] for row in payable_rows}
         assert receivable_no in receivable_nos
         assert payable_no in payable_nos
         # Không rò chiều — đúng cái bẫy của nhánh `ELSE`.

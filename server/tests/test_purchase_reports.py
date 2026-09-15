@@ -171,6 +171,34 @@ CARRIED_VENDOR_CODE = "NCC-7G1-04"
 OPENING_DEBT = Decimal(1_000_000)
 OPENING_ADVANCE = Decimal(300_000)
 
+AGING_BEFORE_THE_MERGE: dict[str, dict[str, Decimal]] = {
+    "chi-tiet-tuoi-no-phai-tra": {
+        "GLE26-00001": Decimal("777000"),
+        "HD-DAU-KY-7G1": Decimal("1000000"),
+        "PUR26-00001": Decimal("1650000"),
+        "PUR26-00003": Decimal("20292536.5"),
+        "PUR26-00008": Decimal("150000"),
+    },
+    "tuoi-no-phai-tra": {
+        "GLE26-00001": Decimal("777000"),
+        "HD-DAU-KY-7G1": Decimal("1000000"),
+        "PUR26-00001": Decimal("1650000"),
+        "PUR26-00003": Decimal("20292536.5"),
+        "PUR26-00008": Decimal("150000"),
+    },
+    # Dòng duy nhất ở chiều phải thu là khoản ứng trước đầu kỳ, và nó không có
+    # số hóa đơn (`advance_has_no_invoice_ref`).
+    "tuoi-no-phai-thu": {"": Decimal("300000")},
+}
+"""Bộ số ba báo cáo tuổi nợ in ra TRƯỚC lượt gộp `ar_ap_aging` → `ar_ap_open_items`
+(lát 7G-2b), đo trên `master` tại commit ngay trước lượt gộp.
+
+Đây là bằng chứng của lượt refactor: rút một dataset ra khỏi ba báo cáo đang chạy
+là thao tác mà "test vẫn xanh" KHÔNG chứng minh được gì, vì phần lớn bài kiểm của
+chúng so tờ này với tờ kia — và sau lượt gộp hai tờ ấy đến từ một câu SQL nên
+chúng đồng ý với nhau bất kể đúng sai. Chỉ một bộ số đo từ bản CŨ mới đỏ được khi
+lượt gộp làm đổi con số."""
+
 # Hóa đơn ngoại tệ: tỷ giá cố ý KHÔNG tròn để phép "nhân lại tỷ giá" lệch thấy
 # được. 1.234,5 × 24.317 = 30.019.336,5 → sổ làm tròn một lần, ở một chỗ.
 FX_AMOUNT_FC = Decimal("1234.50")
@@ -909,19 +937,23 @@ class TestPayablesReadTheSubledger:
         assert all(money(row, "remaining_fc") > 0 for row in open_items.rows)
 
 
-class TestTheTwoDebtDatasetsAgree:
-    def test_every_target_kind_lands_on_the_same_side_in_both_datasets(
+class TestTheDirectionMappingHolds:
+    def test_every_target_kind_lands_on_the_side_its_case_branch_claims(
         self, preview: Preview, books: dict[str, UUID], manual_debt_no: str
     ) -> None:
-        """Ánh xạ `target_kind` → chiều phải TRÙNG giữa hai dataset công nợ.
+        """Ánh xạ `target_kind` → chiều không được rò sang phía bên kia.
 
-        `ar_ap_aging` (7A) và `ar_ap_open_items` (7G-1) chia nhau cùng một câu
-        hỏi "khoản này là phải thu hay phải trả". Lệch một giá trị thì bảng tuổi
-        nợ và bảng chi tiết nói hai điều khác nhau về cùng một khoản nợ, và
-        không có con số nào trên hai tờ giấy ấy chỉ ra chỗ lệch.
+        Chiều liệt kê theo `target_kind`, và mỗi loại đích phải có mặt ở CẢ HAI
+        chỗ của dataset: `CASE` sinh cột `direction` và `WHERE` lọc loại đích.
+        Nới mỗi `WHERE` thì khoản phải trả ghi tay rơi vào nhánh `ELSE` và hiện
+        ở phía phải thu — hỏng nặng hơn bỏ sót nó, vì nó vẫn ra số.
 
         So bằng **chứng từ có mặt**, không bằng văn bản SQL: một bài so chuỗi
-        SQL sẽ xanh khi hai tệp cùng sai giống nhau.
+        SQL sẽ xanh khi cả hai nhánh cùng sai giống nhau.
+
+        (Trước 7G-2b đây là bài canh lệch giữa `ar_ap_aging` và
+        `ar_ap_open_items`. Hai dataset ấy nay là một, nên bài kiểm đổi sang
+        canh chính phép ánh xạ — thứ vẫn hỏng được sau lượt gộp.)
         """
         payable_detail = preview("chi-tiet-cong-no-phai-tra")
         payable_aging = preview("chi-tiet-tuoi-no-phai-tra")
@@ -989,17 +1021,35 @@ class TestSettledAsOfTheCutOffDate:
     def test_the_aging_report_honours_the_same_cut_off(
         self, preview: Preview, books: dict[str, UUID]
     ) -> None:
-        """Bảng tuổi nợ của 7A mang cùng khiếm khuyết, nên nó cũng phải hết.
+        """Bảng tuổi nợ ghim CON SỐ của chính nó ở hai mốc, không so với tờ kia.
 
-        Nếu hai dataset công nợ trả lời khác nhau về cùng một hóa đơn tại cùng
-        một mốc thì người dùng không có cách nào biết tờ nào đúng.
+        Trước 7G-2b bài này so bảng tuổi nợ với bảng chi tiết theo hóa đơn — phép
+        so ấy có nghĩa khi hai tờ đến từ hai dataset. Sau lượt gộp chúng đến từ
+        một câu SQL, nên phép so cũ xanh bất kể câu ấy đúng hay sai: nó không còn
+        kiểm gì. Ghim thẳng hai con số là hình thức duy nhất còn đỏ được, và đây
+        đúng là bộ số bản trước lượt gộp in ra.
         """
-        detail = preview("chi-tiet-cong-no-phai-tra-theo-hoa-don", partner_id=VENDOR_ID)
-        aging = preview("chi-tiet-tuoi-no-phai-tra")
-        detail_row = next(row for row in detail.rows if row["source_label"] == "Hóa đơn mua")
-        aging_rows = [row for row in aging.rows if row["invoice_no"] == detail_row["document_no"]]
-        assert len(aging_rows) == 1
-        assert money(aging_rows[0], "remaining") == money(detail_row, "remaining")
+        gross = GOODS_AMOUNT + GOODS_VAT
+        april_settled = RETURN_AMOUNT + RETURN_VAT
+        may_settled = april_settled + LATE_RETURN_AMOUNT + LATE_RETURN_VAT
+
+        document_no = next(
+            row["document_no"]
+            for row in preview("chi-tiet-cong-no-phai-tra-theo-hoa-don", partner_id=VENDOR_ID).rows
+            if row["source_label"] == "Hóa đơn mua"
+        )
+        april = self._aging_row(preview("chi-tiet-tuoi-no-phai-tra"), document_no)
+        may = self._aging_row(
+            preview("chi-tiet-tuoi-no-phai-tra", to_date=MAY_31.isoformat()), document_no
+        )
+        assert money(april, "remaining") == gross - april_settled
+        assert money(may, "remaining") == gross - may_settled
+
+    @staticmethod
+    def _aging_row(report: PreviewResult, document_no: str) -> dict[str, str]:
+        rows = [row for row in report.rows if row["document_no"] == document_no]
+        assert len(rows) == 1, f"bảng tuổi nợ không có đúng một dòng cho {document_no}"
+        return rows[0]
 
     def test_a_settlement_on_an_unposted_voucher_is_not_counted(
         self,
@@ -1120,7 +1170,7 @@ class TestTheVndBasisMatchesTheLedger:
         dataset_alpha: DatasetRef,
         context: PostingContext,
     ) -> None:
-        """`ar_ap_aging` là dataset ĐÃ GIAO — nó phải giữ đúng cơ sở ấy.
+        """Bảng tuổi nợ là báo cáo ĐÃ GIAO — nó phải giữ đúng cơ sở ấy.
 
         Bản 7A đúng cơ sở bằng cách đọc thẳng `amount - settled` của bảng. Lượt
         sửa mốc chốt thay phép trừ ấy bằng một khối cộng lại, nên nó có thể **lấy
@@ -1154,25 +1204,27 @@ class TestTheVndBasisMatchesTheLedger:
             report = preview(code)
             assert all(money(row, "remaining") >= 0 for row in report.rows), code
 
-    def test_the_two_debt_datasets_report_the_same_remaining(
+    def test_the_merge_did_not_move_a_single_aging_number(
         self, preview: Preview, books: dict[str, UUID], opening_rows: dict[str, UUID]
     ) -> None:
-        """Chuông báo lệch giữa hai bản chép của `settled_as_of`.
+        """Ba báo cáo tuổi nợ in ĐÚNG bộ số chúng in trước lượt gộp 7G-2b.
 
-        Khối cộng số đã trả và khối UNION hai nguồn có mặt ở CẢ HAI dataset công
-        nợ (tệp SQL dataset không include được nhau). Hai bản chép sẽ lệch ở lần
-        sửa đầu tiên chỉ chạm một tệp, và không con số nào trên hai tờ giấy chỉ ra
-        chỗ lệch — nên phép so đứng ở đây.
+        Bài này trước đây so tổng của hai dataset — chuông báo cho hai bản chép
+        `settled_as_of`. Lượt gộp rút hai bản chép ấy về một, nên phép so cũ trở
+        thành hằng đúng: hai tờ giấy cùng một câu SQL thì chúng đồng ý kể cả khi
+        câu ấy sai. Thứ còn đỏ được là bộ số đo từ bản CŨ — xem
+        `AGING_BEFORE_THE_MERGE`.
 
-        So tổng phần còn treo: bảng tuổi nợ chỉ liệt kê khoản còn treo, nên vế
-        kia phải bật `open_only`.
+        So từng DÒNG chứ không chỉ tổng: hai lỗi bù nhau cho ra đúng một tổng, và
+        chiều nợ đi lạc không đổi tổng của bên nào cả khi nó đổi cả hai. Bộ số
+        phủ cả hai nguồn của khối UNION (`HD-DAU-KY-7G1` là nợ mang sang) và cả
+        khoản ứng trước đầu kỳ ở chiều ngược.
         """
-        detail = preview("chi-tiet-cong-no-phai-tra", open_only=True)
-        aging = preview("chi-tiet-tuoi-no-phai-tra")
-        assert detail.rows and aging.rows
-        # So cột VND: layout chi tiết theo TK công nợ không hiện cột nguyên tệ,
-        # và VND mới là cột mà lỗi cơ sở tiền làm lệch.
-        assert detail.sum_of("remaining") == aging.sum_of("remaining")
+        for code, expected in AGING_BEFORE_THE_MERGE.items():
+            report = preview(code)
+            actual = {row["document_no"]: money(row, "remaining") for row in report.rows}
+            assert actual == expected, code
+            assert report.sum_of("remaining") == sum(expected.values(), Decimal(0)), code
 
 
 class TestOpeningBalanceRows:
@@ -1184,7 +1236,7 @@ class TestOpeningBalanceRows:
         """Luật của kernel: ứng trước đi NGƯỢC chiều nợ của dòng cha.
 
         Dòng cha nhóm PHẢI TRẢ, nên khoản ta trả trước người bán là **quyền** của
-        ta và thuộc phía phải thu. Bản đầu của `ar_ap_aging` xếp chiều chỉ theo
+        ta và thuộc phía phải thu. Bản 7A của bảng tuổi nợ xếp chiều chỉ theo
         `detail_kind`, nên nó in khoản ấy thành một khoản ta còn NỢ: trên dữ liệu
         này bảng tuổi nợ phải trả nói 1.300.000 trong khi TK 331 ròng là 700.000.
         """
@@ -1212,14 +1264,16 @@ class TestOpeningBalanceRows:
         receivable = preview("tuoi-no-phai-thu")
         assert OPENING_ADVANCE in [money(row, "remaining") for row in receivable.rows]
 
-    def test_both_debt_datasets_place_the_opening_advance_on_the_same_side(
+    def test_the_aging_report_keeps_the_opening_advance_off_the_payable_side(
         self, preview: Preview, books: dict[str, UUID], opening_rows: dict[str, UUID]
     ) -> None:
-        """Chuông báo lệch giữa hai dataset công nợ, trên NHÁNH SỐ DƯ ĐẦU KỲ.
+        """Nhánh SỐ DƯ ĐẦU KỲ của bảng tuổi nợ xếp ứng trước đúng chiều.
 
-        Bài "hai dataset đồng ý" có trước chỉ so được nhánh `ar_ap_ledger`, vì
-        fixture chưa có dòng số dư đầu kỳ nào. Nhánh thứ hai là đúng chỗ hai
-        dataset đã lệch thật.
+        Đây là chỗ hai dataset công nợ đã lệch thật trước 7G-2b: bảng tuổi nợ
+        giữ khoản ứng trước ở phía phải trả trong khi bảng chi tiết đã đẩy nó
+        sang phía phải thu. Lượt gộp làm lệch ấy không còn xảy ra được, nhưng
+        chiều của chính khoản ứng trước thì vẫn hỏng được — nên bài kiểm ở lại,
+        đọc một tờ thay vì so hai tờ.
         """
         aging_amounts = [
             money(row, "remaining") for row in preview("chi-tiet-tuoi-no-phai-tra").rows

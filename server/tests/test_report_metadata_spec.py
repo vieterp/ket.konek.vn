@@ -365,24 +365,47 @@ class TestPurchaseAndPayableManifest:
             "tong-hop-cong-no-phai-tra",
             "chi-tiet-cong-no-phai-tra",
             "chi-tiet-cong-no-phai-tra-theo-hoa-don",
-            "chi-tiet-tuoi-no-phai-tra",
         ):
             assert by_code[code].fixed_params == {"direction": "chi"}, code
+        # Ba báo cáo tuổi nợ ghim thêm `open_only`: từ 7G-2b chúng đọc dataset
+        # công nợ chung, nơi phép lọc "chỉ khoản còn treo" là tham số chứ không
+        # phải điều kiện cứng trong SQL.
+        assert by_code["chi-tiet-tuoi-no-phai-tra"].fixed_params == {
+            "direction": "chi",
+            "open_only": True,
+        }
+        assert by_code["tuoi-no-phai-tra"].fixed_params == {
+            "direction": "chi",
+            "open_only": True,
+        }
+        assert by_code["tuoi-no-phai-thu"].fixed_params == {
+            "direction": "thu",
+            "open_only": True,
+        }
 
-    def test_the_aging_detail_reuses_the_delivered_aging_dataset(self) -> None:
-        """ "Chi tiết công nợ theo tuổi nợ" KHÔNG có dataset riêng.
+    def test_every_debt_report_reads_the_one_debt_dataset(self) -> None:
+        """Năm báo cáo công nợ — hai bảng tuổi nợ, chi tiết theo tuổi nợ, tổng
+        hợp và chi tiết — đọc **đúng một** dataset.
 
-        Nó là bảng tuổi nợ của 7A xem ở mức chứng từ, nên nó dùng lại
-        `ar_ap_aging`. Một dataset thứ hai sẽ là bản chép thứ hai của phép chia
-        mốc tuổi nợ — và hai bảng tuổi nợ lệch nhau là thứ không ai đối chiếu ra.
+        7A dựng `ar_ap_aging`, 7G-1 dựng `ar_ap_open_items`, và hai tệp ấy chia
+        nhau nguyên khối `settled_as_of` năm bảng lẫn khối UNION hai nguồn kèm
+        phép chọn niên độ per-branch. Chúng đã lệch thật hai lần trong một vòng
+        review, nên 7G-2b nhập chúng lại. Bài này là thứ chặn một lát sau tách
+        chúng ra lần nữa: một phép chia mốc tuổi nợ, một phép cộng tiền đã trả.
         """
         loaded = load_builtin_reports()
         by_code = {d.code: d for d in loaded.manifest.definitions}
-        assert by_code["chi-tiet-tuoi-no-phai-tra"].dataset_code == "ar_ap_aging"
-        assert (
-            by_code["chi-tiet-tuoi-no-phai-tra"].dataset_code
-            == by_code["tuoi-no-phai-tra"].dataset_code
-        )
+        datasets = {
+            by_code[code].dataset_code
+            for code in (
+                "tuoi-no-phai-thu",
+                "tuoi-no-phai-tra",
+                "chi-tiet-tuoi-no-phai-tra",
+                "tong-hop-cong-no-phai-tra",
+                "chi-tiet-cong-no-phai-tra",
+            )
+        }
+        assert datasets == {"ar_ap_open_items"}
 
 
 class TestNoLayoutTotalsAnUnaddableColumn:

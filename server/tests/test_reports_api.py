@@ -31,22 +31,27 @@ import openpyxl
 import pytest
 from fastapi.testclient import TestClient
 from pypdf import PdfReader
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, insert, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from catalog_api_support import UserFactory, actor, all_branch_codes, ensure_role
 from conftest import api_test_client
 from ket.api.dependencies import BRANCH_HEADER
+from ket.kernel.config.reports.loader import load_builtin_reports
 from ket.kernel.config.reports.models import (
     ReportDataset,
     ReportDefinition,
     ReportLayout,
     ReportParamSet,
 )
-from ket.kernel.config.reports.seed import ensure_builtin_reports
+from ket.kernel.config.reports.seed import (
+    drop_retired_builtin_metadata,
+    ensure_builtin_reports,
+)
 from ket.kernel.config.reports.spec import parse_layout_spec
 from ket.kernel.datasets.provisioning import DatasetRef, drop_dataset_schema, provision_dataset
 from ket.kernel.errors import ReportDatasetNotExecutableError
+from ket.kernel.persistence.seeding import bind_seed_schema
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
@@ -695,6 +700,20 @@ class TestReportsApi:
         run(probe_gate_on_each_path)
 
 
+_STRAY_DATASET = "da_rut_khoi_manifest_7g2b"
+_CLAIMED_DATASET = "da_rut_nhung_con_nguoi_dung_7g2b"
+
+RETIRED_DATASETS = frozenset({"ar_ap_aging"})
+RETIRED_PARAM_SETS = frozenset({"ar_ap_aging_params"})
+"""Mã builtin đã rút khỏi manifest — chúng phải không còn dòng nào trong bảng.
+
+Bồi hai tập này mỗi lần một lát rút một mã builtin, và dọn dòng cũ bằng
+`drop_retired_builtin_metadata` trong migration của chính lát ấy. Không cột nào
+phân biệt dòng do bản phát hành đóng gói với dòng người quản trị đăng ký lúc
+chạy — `is_builtin` nói về QUYỀN CHẠY chứ không về nguồn gốc — nên liệt kê mã đã
+rút là phép so chặt nhất còn lại."""
+
+
 class TestBuiltinSeed:
     def test_seed_is_idempotent_per_row(
         self, owner_engine: Engine, report_dataset: DatasetRef
@@ -724,6 +743,131 @@ class TestBuiltinSeed:
             } <= codes
             dataset = session.get(ReportDataset, "gl_ledger")
             assert dataset is not None and dataset.is_builtin
+
+    def test_no_retired_metadata_outlives_the_manifest(
+        self,
+        session_factory: sessionmaker[Session],
+        report_dataset: DatasetRef,
+        context: PostingContext,
+    ) -> None:
+        """Mã rời manifest thì dòng của nó cũng phải rời bảng.
+
+        `refresh_builtin_reports` xóa sạch `report_definitions` builtin rồi gieo
+        lại, nhưng với dataset / layout / param set nó chỉ `UPDATE` **theo mã
+        còn trong manifest**. Mã nào rời manifest thì không đường nào chạm tới
+        nữa: dòng ấy ở lại bảng mang SQL của bản phát hành cũ, vô hình vì không
+        definition nào trỏ tới — cho tới ngày ai đó đăng ký một báo cáo trỏ vào
+        mã ấy và nhận về SQL của tháng trước.
+
+        Lỗ này lộ ra ở 7G-2b, lát đầu tiên **rút** một dataset (`ar_ap_aging`
+        nhập vào `ar_ap_open_items`); migration `0041` dọn hai dòng ấy.
+
+        **Phép so mạnh hơn không dựng được, và lý do đáng ghi:** `is_builtin`
+        KHÔNG có nghĩa "do bản phát hành đóng gói" — nó có nghĩa "SQL này chạy
+        bằng quyền runtime được" (RT-07, review 5C M1), và người quản trị đăng ký
+        một báo cáo lúc chạy cũng đặt cờ ấy (xem `thu_chi_5c` trong chính tệp
+        này). Nên "mọi dòng builtin đều thuộc manifest" là một khẳng định SAI, và
+        bản đầu của bài kiểm này đỏ vì đúng lý do đó. Không cột nào phân biệt
+        được hai nguồn, nên phép so còn lại là: manifest có đủ mặt, và mã đã rút
+        không còn.
+
+        Danh sách mã đã rút phải được bồi mỗi lần rút một mã builtin — nó là chỗ
+        duy nhất lát sau có thể quên, và quên thì bài kiểm này không nói gì.
+        """
+        manifest = load_builtin_reports().manifest
+        scope = posting_scope(report_dataset, context, user_id=ACTOR_ID)
+        with unit_of_work(session_factory, scope) as session:
+            stored_datasets = set(session.scalars(select(ReportDataset.code)))
+            stored_layouts = set(session.scalars(select(ReportLayout.code)))
+            stored_param_sets = set(session.scalars(select(ReportParamSet.code)))
+        assert {entry.code for entry in manifest.datasets} <= stored_datasets
+        assert {entry.code for entry in manifest.layouts} <= stored_layouts
+        assert {entry.code for entry in manifest.param_sets} <= stored_param_sets
+        assert RETIRED_DATASETS.isdisjoint(stored_datasets)
+        assert RETIRED_PARAM_SETS.isdisjoint(stored_param_sets)
+
+
+class TestRetiredBuiltinMetadata:
+    """Lượt dọn của migration `0041`, kiểm trên chính hàm nó gọi.
+
+    Lượt xóa ấy chỉ chạy trên bản cài **nâng cấp**: schema dựng mới trong test đi
+    thẳng tới head, và bước làm mới ở head đọc manifest hôm nay nên nó không bao
+    giờ gieo mã đã rút. Không có bài kiểm nào chạm tới thì lượt xóa là mã chưa
+    từng chạy — nên hai bài dưới dựng lại đúng trạng thái của bản nâng cấp: gieo
+    một dòng builtin mang mã ngoài manifest, rồi gọi hàm.
+    """
+
+    def test_a_retired_dataset_row_is_removed(
+        self, owner_engine: Engine, report_dataset: DatasetRef
+    ) -> None:
+        with owner_engine.begin() as connection:
+            bind_seed_schema(connection, report_dataset.schema_name)
+            connection.execute(
+                insert(ReportDataset).values(
+                    code=_STRAY_DATASET,
+                    sql_text="SELECT 1 AS n",
+                    allowed_params=[],
+                    supports_branch=False,
+                    supports_ledger=False,
+                    is_builtin=True,
+                    description="dòng mồ côi dựng cho bài kiểm",
+                )
+            )
+        with owner_engine.begin() as connection:
+            drop_retired_builtin_metadata(
+                connection, report_dataset.schema_name, dataset_codes=(_STRAY_DATASET,)
+            )
+        with owner_engine.begin() as connection:
+            bind_seed_schema(connection, report_dataset.schema_name)
+            remaining = set(connection.scalars(select(ReportDataset.code)))
+        assert _STRAY_DATASET not in remaining
+        # Không được dọn lây: mã còn trong manifest phải nguyên vẹn.
+        assert "ar_ap_open_items" in remaining
+
+    def test_a_dataset_someone_still_points_at_survives(
+        self, owner_engine: Engine, report_dataset: DatasetRef
+    ) -> None:
+        """Khóa ngoại là `RESTRICT`, nên xóa trần sẽ làm ĐỔ cả bản nâng cấp.
+
+        Một definition người dùng tự đăng ký trỏ vào mã đang rút là trạng thái
+        hợp lệ — báo cáo riêng của họ phải tiếp tục chạy. Dòng ở lại là kết cục
+        đúng, không phải một lỗi cần dừng bản nâng cấp.
+        """
+        with owner_engine.begin() as connection:
+            bind_seed_schema(connection, report_dataset.schema_name)
+            connection.execute(
+                insert(ReportDataset).values(
+                    code=_CLAIMED_DATASET,
+                    sql_text="SELECT 1 AS n",
+                    allowed_params=[],
+                    supports_branch=False,
+                    supports_ledger=False,
+                    is_builtin=True,
+                    description="dòng mồ côi còn người dùng",
+                )
+            )
+            connection.execute(
+                insert(ReportDefinition).values(
+                    code="bao-cao-rieng-cua-nguoi-dung",
+                    name="Báo cáo riêng",
+                    category="tong-hop",
+                    module="general_ledger",
+                    dataset_code=_CLAIMED_DATASET,
+                    layout_code="gl-ledger",
+                    param_set_code="gl_ledger_params",
+                    ledger_scope="financial",
+                    fixed_params={},
+                    is_builtin=False,
+                    required_permission_module="general_ledger",
+                )
+            )
+        with owner_engine.begin() as connection:
+            drop_retired_builtin_metadata(
+                connection, report_dataset.schema_name, dataset_codes=(_CLAIMED_DATASET,)
+            )
+        with owner_engine.begin() as connection:
+            bind_seed_schema(connection, report_dataset.schema_name)
+            assert _CLAIMED_DATASET in set(connection.scalars(select(ReportDataset.code)))
 
 
 class TestCompanyWideScopeGate:

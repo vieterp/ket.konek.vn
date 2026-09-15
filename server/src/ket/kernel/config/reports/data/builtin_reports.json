@@ -148,20 +148,6 @@
       "description": "Bảng kê số dư ngân hàng theo từng TK ngân hàng và loại tiền (FR-BNK-041)"
     },
     {
-      "code": "ar_ap_aging",
-      "sql_file": "ar_ap_aging.sql",
-      "allowed_params": [
-        "from_date",
-        "to_date",
-        "ledger",
-        "branch_ids",
-        "direction"
-      ],
-      "supports_branch": false,
-      "supports_ledger": false,
-      "description": "Tuổi nợ phải thu/phải trả theo mốc quá hạn, số đã thanh toán tính TẠI to_date; gộp sổ phụ công nợ và số dư ban đầu kể cả khoản ứng trước; direction ghim 'thu' hoặc 'chi'"
-    },
-    {
       "code": "purchase_register",
       "sql_file": "purchase_register.sql",
       "allowed_params": [
@@ -190,11 +176,12 @@
         "direction",
         "partner_id",
         "partner_kind",
-        "open_only"
+        "open_only",
+        "due_state"
       ],
       "supports_branch": false,
       "supports_ledger": false,
-      "description": "Công nợ theo từng chứng từ với số đã thanh toán tính TẠI to_date; gộp sổ phụ công nợ và số dư ban đầu kể cả khoản ứng trước; direction ghim 'thu' hoặc 'chi'"
+      "description": "Công nợ theo từng chứng từ với số đã thanh toán tính TẠI to_date và nhóm tuổi nợ của phần còn treo; gộp sổ phụ công nợ và số dư ban đầu kể cả khoản ứng trước; direction ghim 'thu' hoặc 'chi', due_state ghim 'qua-han' hoặc 'chua-den-han'"
     },
     {
       "code": "sales_register",
@@ -355,20 +342,6 @@
       }
     },
     {
-      "code": "ar_ap_aging_params",
-      "spec": {
-        "params": [
-          {
-            "name": "direction",
-            "kind": "text",
-            "label": "Chiều công nợ",
-            "label_en": "Debt direction",
-            "required": true
-          }
-        ]
-      }
-    },
-    {
       "code": "purchase_register_params",
       "spec": {
         "params": [
@@ -440,6 +413,13 @@
             "kind": "bool",
             "label": "Chỉ khoản còn nợ",
             "label_en": "Open items only",
+            "required": false
+          },
+          {
+            "name": "due_state",
+            "kind": "text",
+            "label": "Tình trạng hạn",
+            "label_en": "Due state",
             "required": false
           }
         ]
@@ -1643,14 +1623,14 @@
             "type": "text"
           },
           {
-            "key": "invoice_no",
+            "key": "document_no",
             "label": "Số chứng từ",
             "label_en": "Document no.",
             "type": "text",
             "width": 12
           },
           {
-            "key": "invoice_date",
+            "key": "document_date",
             "label": "Ngày chứng từ",
             "label_en": "Document date",
             "type": "date",
@@ -1717,7 +1697,7 @@
         "sort": [
           "partner_code",
           "due_date",
-          "invoice_no"
+          "document_no"
         ]
       }
     },
@@ -1740,14 +1720,14 @@
             "type": "text"
           },
           {
-            "key": "invoice_no",
+            "key": "document_no",
             "label": "Số chứng từ",
             "label_en": "Document no.",
             "type": "text",
             "width": 12
           },
           {
-            "key": "invoice_date",
+            "key": "document_date",
             "label": "Ngày chứng từ",
             "label_en": "Document date",
             "type": "date",
@@ -1814,7 +1794,7 @@
         "sort": [
           "partner_code",
           "due_date",
-          "invoice_no"
+          "document_no"
         ]
       }
     },
@@ -2795,14 +2775,14 @@
       "spec": {
         "columns": [
           {
-            "key": "invoice_no",
+            "key": "document_no",
             "label": "Số chứng từ",
             "label_en": "Document no.",
             "type": "text",
             "width": 12
           },
           {
-            "key": "invoice_date",
+            "key": "document_date",
             "label": "Ngày chứng từ",
             "label_en": "Document date",
             "type": "date",
@@ -2868,7 +2848,7 @@
           "partner_code",
           "bucket_seq",
           "due_date",
-          "invoice_no"
+          "document_no"
         ]
       }
     },
@@ -4066,12 +4046,13 @@
       "name_en": "Accounts receivable aging",
       "category": "ban-hang",
       "module": "sales",
-      "dataset_code": "ar_ap_aging",
+      "dataset_code": "ar_ap_open_items",
       "layout_code": "ar-aging",
-      "param_set_code": "ar_ap_aging_params",
+      "param_set_code": "ar_ap_open_items_params",
       "ledger_scope": "financial",
       "fixed_params": {
-        "direction": "thu"
+        "direction": "thu",
+        "open_only": true
       },
       "package_scheme": null,
       "required_permission_module": "sales"
@@ -4082,12 +4063,13 @@
       "name_en": "Accounts payable aging",
       "category": "mua-hang",
       "module": "purchase",
-      "dataset_code": "ar_ap_aging",
+      "dataset_code": "ar_ap_open_items",
       "layout_code": "ap-aging",
-      "param_set_code": "ar_ap_aging_params",
+      "param_set_code": "ar_ap_open_items_params",
       "ledger_scope": "financial",
       "fixed_params": {
-        "direction": "chi"
+        "direction": "chi",
+        "open_only": true
       },
       "package_scheme": null,
       "required_permission_module": "purchase"
@@ -4224,12 +4206,13 @@
       "name_en": "Accounts payable aging detail",
       "category": "mua-hang",
       "module": "purchase",
-      "dataset_code": "ar_ap_aging",
+      "dataset_code": "ar_ap_open_items",
       "layout_code": "ap-aging-detail",
-      "param_set_code": "ar_ap_aging_params",
+      "param_set_code": "ar_ap_open_items_params",
       "ledger_scope": "financial",
       "fixed_params": {
-        "direction": "chi"
+        "direction": "chi",
+        "open_only": true
       },
       "package_scheme": null,
       "required_permission_module": "purchase"
