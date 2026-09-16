@@ -201,6 +201,22 @@
       "supports_branch": true,
       "supports_ledger": true,
       "description": "Dòng hàng bán của chứng từ đã ghi sổ; doanh thu VND đọc từ dòng phát sinh nên khớp sổ, trả lại / giảm giá / điều chỉnh giảm mang dấu âm theo sổ"
+    },
+    {
+      "code": "ar_open_items_by_item",
+      "sql_file": "ar_open_items_by_item.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "customer_id",
+        "item_id",
+        "open_only"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Công nợ phải thu còn treo xem theo dòng hàng của hóa đơn sinh ra khoản nợ; cột nợ là của CẢ hóa đơn, lặp trên mọi dòng — không layout nào được cộng tổng nó"
     }
   ],
   "param_sets": [
@@ -469,6 +485,34 @@
             "kind": "int",
             "label": "Công trình",
             "label_en": "Project",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "ar_open_items_by_item_params",
+      "spec": {
+        "params": [
+          {
+            "name": "customer_id",
+            "kind": "int",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "required": false
+          },
+          {
+            "name": "item_id",
+            "kind": "int",
+            "label": "Vật tư",
+            "label_en": "Item",
+            "required": false
+          },
+          {
+            "name": "open_only",
+            "kind": "bool",
+            "label": "Chỉ khoản còn nợ",
+            "label_en": "Open items only",
             "required": false
           }
         ]
@@ -4477,6 +4521,107 @@
           "document_no"
         ]
       }
+    },
+    {
+      "code": "ar-debt-by-item",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "item_code",
+            "label": "Mã vật tư",
+            "label_en": "Item code",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "variant_code",
+            "label": "Mã quy cách",
+            "label_en": "Variant",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "goods_amount_fc",
+            "label": "Giá trị dòng (nguyên tệ)",
+            "label_en": "Line amount (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "goods_amount",
+            "label": "Giá trị dòng (VND)",
+            "label_en": "Line amount (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "invoice_remaining",
+            "label": "Còn nợ của HÓA ĐƠN (VND)",
+            "label_en": "Invoice remaining (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          },
+          {
+            "key": "document_no",
+            "heading_keys": [
+              "document_no",
+              "document_date",
+              "due_date"
+            ]
+          }
+        ],
+        "totals": [
+          "goods_amount"
+        ],
+        "sort": [
+          "partner_code",
+          "document_no",
+          "item_code"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
     }
   ],
   "definitions": [
@@ -5121,6 +5266,22 @@
       "ledger_scope": "financial",
       "fixed_params": {
         "direction": "thu"
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "chi-tiet-cong-no-phai-thu-theo-mat-hang",
+      "name": "Chi tiết công nợ phải thu theo mặt hàng",
+      "name_en": "Receivables detail by item",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_open_items_by_item",
+      "layout_code": "ar-debt-by-item",
+      "param_set_code": "ar_open_items_by_item_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "open_only": true
       },
       "package_scheme": null,
       "required_permission_module": "sales"

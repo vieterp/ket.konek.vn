@@ -27,7 +27,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
-from importlib import resources
 from uuid import UUID
 
 import pytest
@@ -87,6 +86,7 @@ OTHER_CUSTOMER_ID = 9622
 UNGROUPED_CUSTOMER_ID = 9623
 UNIT_ID = 9631
 ITEM_ID = 9641
+SECOND_ITEM_ID = 9642
 
 GROUP_NORTH_CODE = "NHOM-7G2B-BAC"
 GROUP_DEALER_CODE = "NHOM-7G2B-DAI-LY"
@@ -96,6 +96,7 @@ OTHER_CUSTOMER_CODE = "KH-7G2B-02"
 UNGROUPED_CUSTOMER_CODE = "KH-7G2B-03"
 UNIT_CODE = "Cai-7G2B"
 ITEM_CODE = "VT-7G2B"
+SECOND_ITEM_CODE = "VT-7G2B-B"
 
 UNGROUPED_LABEL = "Chưa phân nhóm"
 OPENING_INVOICE_NO = "HD-DAU-KY-7G2B"
@@ -107,8 +108,15 @@ NEAR_AMOUNT = Decimal(1_000_000)  # hạn 20/09 → quá hạn 10 ngày → nhó
 NEAR_VAT = Decimal(100_000)
 MID_AMOUNT = Decimal(2_000_000)  # hạn 20/08 → quá hạn 41 ngày → nhóm '31-60'
 MID_VAT = Decimal(200_000)
-FUTURE_AMOUNT = Decimal(3_000_000)  # hạn 15/10 → chưa đến hạn
-FUTURE_VAT = Decimal(300_000)
+# Hóa đơn "chưa đến hạn" tách HAI dòng hàng: trên hóa đơn một dòng, "không phân
+# bổ phần còn nợ cho dòng hàng" và "phân bổ" cho ra cùng một con số, nên bài kiểm
+# không phân biệt được hai cách làm.
+FUTURE_GOODS_A = Decimal(2_000_000)
+FUTURE_VAT_A = Decimal(200_000)
+FUTURE_GOODS_B = Decimal(1_000_000)
+FUTURE_VAT_B = Decimal(100_000)
+FUTURE_AMOUNT = FUTURE_GOODS_A + FUTURE_GOODS_B  # hạn 15/10 → chưa đến hạn
+FUTURE_VAT = FUTURE_VAT_A + FUTURE_VAT_B
 OPENING_AMOUNT = Decimal(1_000_000)  # nợ mang sang, hạn 20/02 → nhóm 'tren-90'
 
 # Ghi giảm một phần khoản '31-60', ghi sổ 10/09 — TRƯỚC mốc chốt, nên nó phải trừ.
@@ -197,7 +205,25 @@ def accounts(
         ensure_customer(session, partner_id=UNGROUPED_CUSTOMER_ID, code=UNGROUPED_CUSTOMER_CODE)
         ensure_unit(session, unit_id=UNIT_ID, code=UNIT_CODE)
         ensure_item(session, item_id=ITEM_ID, code=ITEM_CODE, unit_id=UNIT_ID)
+        ensure_item(session, item_id=SECOND_ITEM_ID, code=SECOND_ITEM_CODE, unit_id=UNIT_ID)
     return codes
+
+
+def _line(
+    accounts: dict[str, int], *, item_id: int, amount: Decimal, vat: Decimal
+) -> SalesInvoiceLineIn:
+    return SalesInvoiceLineIn(
+        description=f"Hàng {item_id}",
+        item_id=item_id,
+        unit_id=UNIT_ID,
+        quantity=Decimal(1),
+        unit_price_fc=amount,
+        amount_fc=amount,
+        vat_rate=Decimal(10) if vat else Decimal(0),
+        vat_amount_fc=vat,
+        account_id=accounts["5111"],
+        vat_account_id=accounts["33311"] if vat else None,
+    )
 
 
 def _invoice(
@@ -212,6 +238,7 @@ def _invoice(
     kind: int = SalesInvoiceKind.GOODS,
     operation: str = "ban-hang-hoa",
     settlements: tuple[SalesSettlementIn, ...] = (),
+    lines: tuple[SalesInvoiceLineIn, ...] | None = None,
 ) -> SalesInvoiceIn:
     return SalesInvoiceIn(
         kind=kind,
@@ -225,20 +252,7 @@ def _invoice(
         currency_code="VND",
         exchange_rate=Decimal(1),
         description="công nợ phải thu 7G-2b",
-        lines=(
-            SalesInvoiceLineIn(
-                description="Hàng 7G-2b",
-                item_id=ITEM_ID,
-                unit_id=UNIT_ID,
-                quantity=Decimal(1),
-                unit_price_fc=amount,
-                amount_fc=amount,
-                vat_rate=Decimal(10) if vat else Decimal(0),
-                vat_amount_fc=vat,
-                account_id=accounts["5111"],
-                vat_account_id=accounts["33311"] if vat else None,
-            ),
-        ),
+        lines=lines or (_line(accounts, item_id=ITEM_ID, amount=amount, vat=vat),),
         settlements=settlements,
     )
 
@@ -260,21 +274,35 @@ def books(
         for key, amount, vat, due in (
             ("near", NEAR_AMOUNT, NEAR_VAT, SEP_20),
             ("mid", MID_AMOUNT, MID_VAT, AUG_20),
-            ("future", FUTURE_AMOUNT, FUTURE_VAT, OCT_15),
         ):
             invoice = service.create(
                 _invoice(
-                    context,
-                    accounts,
-                    amount=amount,
-                    vat=vat,
-                    posting_date=AUG_05 if due is not OCT_15 else AUG_10,
-                    due_date=due,
+                    context, accounts, amount=amount, vat=vat, posting_date=AUG_05, due_date=due
                 ),
                 user_id=ACTOR_ID,
             )
             service.post(invoice.id, user_id=ACTOR_ID)
             ids[key] = invoice.id
+
+        future = service.create(
+            _invoice(
+                context,
+                accounts,
+                amount=FUTURE_AMOUNT,
+                vat=FUTURE_VAT,
+                posting_date=AUG_10,
+                due_date=OCT_15,
+                lines=(
+                    _line(accounts, item_id=ITEM_ID, amount=FUTURE_GOODS_A, vat=FUTURE_VAT_A),
+                    _line(
+                        accounts, item_id=SECOND_ITEM_ID, amount=FUTURE_GOODS_B, vat=FUTURE_VAT_B
+                    ),
+                ),
+            ),
+            user_id=ACTOR_ID,
+        )
+        service.post(future.id, user_id=ACTOR_ID)
+        ids["future"] = future.id
 
         # Khoản KHÔNG ghi hạn, của khách hàng thứ hai.
         undated = service.create(
@@ -618,6 +646,82 @@ class TestTheSheetsAgreeWithTheSubledger:
         assert {row["partner_code"] for row in report.rows} == {CUSTOMER_CODE}
 
 
+class TestTheItemSheetDoesNotAllocate:
+    """SRS 06 §5.2 #4 — công nợ xem theo dòng hàng, KHÔNG chia phần còn nợ.
+
+    Sổ đối trừ theo khoản, không theo dòng hóa đơn. Chia phần còn nợ cho các
+    dòng theo tỷ lệ giá trị là dựng một phép chia mà không sổ nào ghi, và nó vẫn
+    cộng ra đúng tổng nên không có gì đối chiếu ra.
+    """
+
+    def test_each_line_carries_its_own_value_and_the_invoice_debt_unchanged(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Hóa đơn HAI dòng: mỗi dòng mang giá trị của chính nó, cột nợ mang số
+        của CẢ hóa đơn — lặp lại, không chia đôi.
+
+        Trên hóa đơn một dòng, "chia" và "không chia" cho ra cùng con số, nên bài
+        kiểm này đứng trên hóa đơn hai dòng của bộ gieo.
+        """
+        report = preview(
+            "chi-tiet-cong-no-phai-thu-theo-mat-hang",
+            customer_id=CUSTOMER_ID,
+            item_id=SECOND_ITEM_ID,
+        )
+        assert len(report.rows) == 1
+        row = report.rows[0]
+        assert money(row, "goods_amount") == FUTURE_GOODS_B
+        # Phần còn nợ của hóa đơn, NGUYÊN VẸN — không phải 1/3 theo tỷ lệ dòng.
+        assert money(row, "invoice_remaining") == FUTURE_REMAINING
+
+    def test_the_lines_of_one_invoice_add_up_to_its_revenue_not_its_debt(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Cộng cột giá trị dòng ra DOANH THU của hóa đơn, không ra phần còn nợ.
+
+        Hai con số ấy khác nhau (doanh thu chưa gồm thuế, phần còn nợ thì có),
+        nên đây là phép so phân biệt được "cột giá trị dòng" với "một phép chia
+        phần nợ đội lốt giá trị dòng".
+        """
+        report = preview("chi-tiet-cong-no-phai-thu-theo-mat-hang", customer_id=CUSTOMER_ID)
+        # Nhận dạng hóa đơn bằng cột nợ của nó, KHÔNG bằng giá trị dòng: hai hóa
+        # đơn khác của bộ gieo có giá trị trùng với hai dòng của hóa đơn này, và
+        # một bộ lọc theo giá trị dòng gom cả bốn.
+        future_lines = [
+            row for row in report.rows if money(row, "invoice_remaining") == FUTURE_REMAINING
+        ]
+        assert len(future_lines) == 2
+        assert (
+            sum((money(row, "goods_amount") for row in future_lines), Decimal(0)) == FUTURE_AMOUNT
+        )
+        assert FUTURE_AMOUNT != FUTURE_REMAINING
+
+    def test_a_settled_invoice_has_no_lines_here(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """`open_only` ghim trên tờ này: nó nói về hàng đứng sau tiền CÒN NỢ."""
+        report = preview(
+            "chi-tiet-cong-no-phai-thu-theo-mat-hang", customer_id=UNGROUPED_CUSTOMER_ID
+        )
+        assert report.rows == []
+
+    def test_debts_without_invoice_lines_are_absent_and_the_total_is_smaller(
+        self,
+        preview: Preview,
+        books: dict[str, UUID],
+    ) -> None:
+        """Nợ mang sang không có dòng hàng nào, nên tờ này NHỎ HƠN tờ tổng hợp.
+
+        Đó là giới hạn có chủ đích, không phải bỏ sót — và nó phải được canh, vì
+        một người đọc mặc nhiên tin hai tờ công nợ cộng ra cùng một số. Ai cần
+        con số đối chiếu TK 131 thì đọc tờ tổng hợp.
+        """
+        by_item = preview("chi-tiet-cong-no-phai-thu-theo-mat-hang", customer_id=CUSTOMER_ID)
+        invoice_debts = {money(row, "invoice_remaining") for row in by_item.rows}
+        assert OPENING_AMOUNT not in invoice_debts
+        assert sum(invoice_debts, Decimal(0)) == CUSTOMER_OPEN_TOTAL - OPENING_AMOUNT
+
+
 class TestTheMetadataContract:
     def test_all_seven_sheets_read_the_one_debt_dataset(self) -> None:
         """Bảy tờ, một dataset — cùng dataset mà chiều phải trả đọc.
@@ -649,11 +753,10 @@ def _dataset_rows(
     context: PostingContext,
 ) -> list[dict[str, str]]:
     """Dòng thô của dataset ở chiều phải thu, thu về ba khách hàng của tệp này."""
-    sql = (
-        resources.files("ket.kernel.config.reports.data.datasets")
-        .joinpath("ar_ap_open_items.sql")
-        .read_text("utf-8")
-    )
+    # Qua LOADER, không đọc thẳng tệp: từ lát 7G-2b tệp dataset nhúng mảnh dùng
+    # chung bằng `-- #include:`, và chỉ loader bung nó. Đọc thẳng tệp cho ra một
+    # câu SQL còn nguyên dòng chỉ thị — PostgreSQL đổ ở đúng chỗ CTE rỗng.
+    sql = load_builtin_reports().sql_by_dataset["ar_ap_open_items"]
     scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
     with unit_of_work(session_factory, scope) as session:
         rows = session.execute(
