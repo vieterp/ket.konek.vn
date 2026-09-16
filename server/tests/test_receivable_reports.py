@@ -53,7 +53,7 @@ from ket.modules.sales.models import SalesInvoiceKind
 from ket.modules.sales.schemas import SalesInvoiceIn, SalesInvoiceLineIn, SalesSettlementIn
 from ket.modules.sales.service import SalesInvoiceService
 from ket.posting.engine.models import Ledger
-from ket.posting.opening_balances.models import OpeningDetailKind
+from ket.posting.opening_balances.models import OpeningBalanceInvoice, OpeningDetailKind
 from ket.settings import Settings
 from posting_support import PostingContext, posting_scope, seed_posting_context
 from purchase_support import ensure_item, ensure_unit, ensure_vendor
@@ -72,9 +72,11 @@ AUG_01 = date(2026, 8, 1)
 AUG_05 = date(2026, 8, 5)
 AUG_10 = date(2026, 8, 10)
 AUG_20 = date(2026, 8, 20)
+AUG_28 = date(2026, 8, 28)
 SEP_10 = date(2026, 9, 10)
 SEP_15 = date(2026, 9, 15)
 SEP_20 = date(2026, 9, 20)
+AUG_31 = date(2026, 8, 31)
 SEP_30 = date(2026, 9, 30)
 OCT_15 = date(2026, 10, 15)
 
@@ -120,6 +122,12 @@ OPENING_PAYABLE_NO = "HD-DAU-KY-7G2B-NCC"
 OPENING_PAYABLE = Decimal(800_000)
 PAYABLE_PAID = Decimal(300_000)
 
+# Và một phiếu THU đối trừ khoản PHẢI THU mang sang. Không có nó, nhánh
+# `detail_kind` chỉ được kiểm ở một chiều — `target_kind = 2` rơi vào `ELSE
+# 'chi'` nên bản đọc sai trúng đáp án do TÌNH CỜ trên dữ liệu chỉ có nợ phải
+# trả. Vòng review chứng minh: xóa nguyên nhánh ấy vẫn 26/26 xanh.
+OPENING_COLLECTED = Decimal(250_000)
+
 # Bốn khoản của khách hàng thứ nhất, chọn hạn để rơi vào bốn nhóm tuổi nợ KHÁC
 # NHAU tại mốc chốt 30/09 — một bộ dữ liệu một nhóm không phân biệt được "lọc
 # theo tình trạng hạn" với "không lọc gì".
@@ -137,6 +145,15 @@ FUTURE_VAT_B = Decimal(100_000)
 FUTURE_AMOUNT = FUTURE_GOODS_A + FUTURE_GOODS_B  # hạn 15/10 → chưa đến hạn
 FUTURE_VAT = FUTURE_VAT_A + FUTURE_VAT_B
 OPENING_AMOUNT = Decimal(1_000_000)  # nợ mang sang, hạn 20/02 → nhóm 'tren-90'
+
+# Hóa đơn LẬP 28/08 nhưng GHI SỔ 10/09 — hai ngày khác nhau, và đó là trạng thái
+# thường chứ không phải ngoại lệ (`posting/documents/models.py`). Nó ở đây vì
+# `_invoice()` luôn đặt hai ngày bằng nhau, nên trước nó không bài kiểm nào phân
+# biệt được "cắt theo ngày chứng từ" với "cắt theo ngày ghi sổ" — và tờ công nợ
+# theo mặt hàng đã cắt nhầm vế, đánh rơi TRỌN hóa đơn.
+LATE_POSTED_AMOUNT = Decimal(700_000)
+LATE_POSTED_VAT = Decimal(70_000)
+LATE_POSTED_REMAINING = LATE_POSTED_AMOUNT + LATE_POSTED_VAT
 
 # Ghi giảm một phần khoản '31-60', ghi sổ 10/09 — TRƯỚC mốc chốt, nên nó phải trừ.
 PART_GOODS = Decimal(200_000)
@@ -189,7 +206,9 @@ CLEARED_VAT = Decimal(50_000)
 NEAR_REMAINING = NEAR_AMOUNT + NEAR_VAT - EARLY_SETTLED
 MID_REMAINING = MID_AMOUNT + MID_VAT - PART_SETTLED
 FUTURE_REMAINING = FUTURE_AMOUNT + FUTURE_VAT
-OVERDUE_TOTAL = NEAR_REMAINING + MID_REMAINING + OPENING_AMOUNT
+# Hóa đơn ghi sổ muộn cũng quá hạn tại mốc chốt (hạn 20/09), nên nó vào vế này.
+OPENING_REMAINING = OPENING_AMOUNT - OPENING_COLLECTED
+OVERDUE_TOTAL = NEAR_REMAINING + MID_REMAINING + OPENING_REMAINING + LATE_POSTED_REMAINING
 NOT_OVERDUE_TOTAL = FUTURE_REMAINING
 CUSTOMER_OPEN_TOTAL = OVERDUE_TOTAL + NOT_OVERDUE_TOTAL
 
@@ -292,6 +311,7 @@ def _invoice(
     vat: Decimal,
     posting_date: date,
     due_date: date | None,
+    document_date: date | None = None,
     customer_id: int = CUSTOMER_ID,
     kind: int = SalesInvoiceKind.GOODS,
     operation: str = "ban-hang-hoa",
@@ -306,7 +326,7 @@ def _invoice(
         customer_id=customer_id,
         receivable_account_id=accounts["131"],
         branch_id=context.branch_id,
-        document_date=posting_date,
+        document_date=document_date or posting_date,
         posting_date=posting_date,
         due_date=due_date,
         currency_code=currency_code,
@@ -365,6 +385,21 @@ def books(
         ids["future"] = future.id
 
         # Khoản KHÔNG ghi hạn, của khách hàng thứ hai.
+        late_posted = service.create(
+            _invoice(
+                context,
+                accounts,
+                amount=LATE_POSTED_AMOUNT,
+                vat=LATE_POSTED_VAT,
+                document_date=AUG_28,
+                posting_date=SEP_10,
+                due_date=SEP_20,
+            ),
+            user_id=ACTOR_ID,
+        )
+        service.post(late_posted.id, user_id=ACTOR_ID)
+        ids["late_posted"] = late_posted.id
+
         undated = service.create(
             _invoice(
                 context,
@@ -488,35 +523,37 @@ def books(
     )
     scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
     with unit_of_work(session_factory, scope) as session:
+        opening_receivable = session.execute(
+            select(OpeningBalanceInvoice).where(
+                OpeningBalanceInvoice.invoice_no == OPENING_INVOICE_NO
+            )
+        ).scalar_one()
         cash = CashVoucherService(session)
+        receipt = cash.create(
+            _cash_voucher(
+                context,
+                accounts,
+                kind=CashVoucherKind.RECEIPT,
+                operation_code="thu-no-khach-hang",
+                business_account_id=accounts["131"],
+                partner=(PartnerKind.CUSTOMER, CUSTOMER_ID),
+                amount_fc=OPENING_COLLECTED,
+                target_id=opening_receivable.id,
+            ),
+            user_id=ACTOR_ID,
+        )
+        cash.post(receipt.id, user_id=ACTOR_ID)
+        ids["opening_receipt"] = receipt.id
         payment = cash.create(
-            CashVoucherIn(
+            _cash_voucher(
+                context,
+                accounts,
                 kind=CashVoucherKind.PAYMENT,
                 operation_code="tra-no-ncc",
-                cash_account_id=accounts["111"],
-                branch_id=context.branch_id,
-                document_date=SEP_15,
-                posting_date=SEP_15,
-                currency_code="VND",
-                exchange_rate=Decimal(1),
-                partner_kind=PartnerKind.VENDOR,
-                partner_id=VENDOR_ID,
-                lines=(
-                    CashVoucherLineIn(
-                        debit_account_id=accounts["331"],
-                        credit_account_id=accounts["111"],
-                        amount_fc=PAYABLE_PAID,
-                        partner_kind=PartnerKind.VENDOR,
-                        partner_id=VENDOR_ID,
-                    ),
-                ),
-                settlements=(
-                    CashSettlementIn(
-                        target_kind=SettlementTargetKind.OPENING_BALANCE,
-                        target_id=payable_id,
-                        amount_fc=PAYABLE_PAID,
-                    ),
-                ),
+                business_account_id=accounts["331"],
+                partner=(PartnerKind.VENDOR, VENDOR_ID),
+                amount_fc=PAYABLE_PAID,
+                target_id=payable_id,
             ),
             user_id=ACTOR_ID,
         )
@@ -575,6 +612,50 @@ def _settle(
     if post:
         service.post(voucher.id, user_id=ACTOR_ID)
     return voucher.id
+
+
+def _cash_voucher(
+    context: PostingContext,
+    accounts: dict[str, int],
+    *,
+    kind: int,
+    operation_code: str,
+    business_account_id: int,
+    partner: tuple[int, int],
+    amount_fc: Decimal,
+    target_id: UUID,
+) -> CashVoucherIn:
+    """Một phiếu thu / phiếu chi đối trừ đúng một khoản số dư đầu kỳ."""
+    partner_kind, partner_id = partner
+    receipt = kind == CashVoucherKind.RECEIPT
+    return CashVoucherIn(
+        kind=kind,
+        operation_code=operation_code,
+        cash_account_id=accounts["111"],
+        branch_id=context.branch_id,
+        document_date=SEP_15,
+        posting_date=SEP_15,
+        currency_code="VND",
+        exchange_rate=Decimal(1),
+        partner_kind=partner_kind,
+        partner_id=partner_id,
+        lines=(
+            CashVoucherLineIn(
+                debit_account_id=accounts["111"] if receipt else business_account_id,
+                credit_account_id=business_account_id if receipt else accounts["111"],
+                amount_fc=amount_fc,
+                partner_kind=partner_kind,
+                partner_id=partner_id,
+            ),
+        ),
+        settlements=(
+            CashSettlementIn(
+                target_kind=SettlementTargetKind.OPENING_BALANCE,
+                target_id=target_id,
+                amount_fc=amount_fc,
+            ),
+        ),
+    )
 
 
 @pytest.fixture(scope="module")
@@ -785,7 +866,7 @@ class TestTheSheetsAgreeWithTheSubledger:
             booked = sum((entry.amount - entry.settled for entry in entries), Decimal(0))
         report = preview("tong-hop-cong-no-phai-thu", partner_id=CUSTOMER_ID)
         # Sổ phụ không mang nợ đầu kỳ — nó ở `opening_balance_invoices`.
-        assert report.total("remaining") - OPENING_AMOUNT == booked
+        assert report.total("remaining") - OPENING_REMAINING == booked
 
     def test_no_sheet_prints_a_negative_remaining(
         self, preview: Preview, books: dict[str, UUID]
@@ -865,6 +946,59 @@ class TestTheItemSheetDoesNotAllocate:
         )
         assert FUTURE_AMOUNT != FUTURE_REMAINING
 
+    def test_an_invoice_posted_after_its_document_date_keeps_its_lines(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Ngày chứng từ và ngày GHI SỔ là hai ngày khác nhau.
+
+        Vòng review bắt được: bản đầu cắt LATERAL doanh thu theo
+        `gp.posting_date <= :to_date` trong khi khoản nợ vào theo
+        `d.document_date <= :to_date`. Hóa đơn lập 28/08 ghi sổ 10/09 đọc tại mốc
+        31/08 vì thế có khoản nợ đi qua `WHERE` nhưng **không dòng hàng nào** đi
+        qua LATERAL — và vì `ON revenue.amount IS NOT NULL` là INNER JOIN, cả hóa
+        đơn biến mất khỏi tờ giấy. Đo được: tờ tổng hợp in 770.000 đ, tờ theo mặt
+        hàng in không dòng nào.
+
+        Bộ gieo trước đó không bắt được vì `_invoice()` luôn đặt hai ngày bằng
+        nhau — nên bài kiểm này đọc tại **đúng mốc nằm giữa hai ngày ấy**.
+        """
+        by_item = preview(
+            "chi-tiet-cong-no-phai-thu-theo-mat-hang",
+            customer_id=CUSTOMER_ID,
+            to_date=AUG_31.isoformat(),
+        )
+        assert LATE_POSTED_REMAINING in {money(row, "invoice_remaining") for row in by_item.rows}
+
+    def test_both_debt_sheets_see_the_same_set_of_invoices(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Tờ theo mặt hàng và tờ theo hóa đơn nhận CÙNG một tập hóa đơn bán.
+
+        Hai tờ cắt hai thứ khác nhau (một bên lọc khoản nợ, một bên còn phải nối
+        sang dòng hàng), nên chúng có thể rời nhau mà mỗi tờ vẫn tự nhất quán —
+        đúng hình dạng lỗi vòng review bắt được. Chỉ so phần hóa đơn bán: nợ ghi
+        tay và nợ mang sang không có dòng hàng nào, và giới hạn ấy có bài riêng.
+        """
+        for cut_off in (AUG_31, SEP_30):
+            by_item = preview(
+                "chi-tiet-cong-no-phai-thu-theo-mat-hang",
+                customer_id=CUSTOMER_ID,
+                to_date=cut_off.isoformat(),
+            )
+            by_invoice = preview(
+                "chi-tiet-cong-no-phai-thu-theo-hoa-don",
+                partner_id=CUSTOMER_ID,
+                to_date=cut_off.isoformat(),
+                open_only=True,
+            )
+            from_items = {money(row, "invoice_remaining") for row in by_item.rows}
+            from_invoices = {
+                money(row, "remaining")
+                for row in by_invoice.rows
+                if row["source_label"] == "Hóa đơn bán"
+            }
+            assert from_items == from_invoices, cut_off
+
     def test_a_settled_invoice_has_no_lines_here(
         self, preview: Preview, books: dict[str, UUID]
     ) -> None:
@@ -887,11 +1021,11 @@ class TestTheItemSheetDoesNotAllocate:
         """
         by_item = preview("chi-tiet-cong-no-phai-thu-theo-mat-hang", customer_id=CUSTOMER_ID)
         invoice_debts = {money(row, "invoice_remaining") for row in by_item.rows}
-        assert OPENING_AMOUNT not in invoice_debts
-        assert sum(invoice_debts, Decimal(0)) == CUSTOMER_OPEN_TOTAL - OPENING_AMOUNT
+        assert OPENING_REMAINING not in invoice_debts
+        assert sum(invoice_debts, Decimal(0)) == CUSTOMER_OPEN_TOTAL - OPENING_REMAINING
 
 
-CUSTOMER_SETTLED_IN_WINDOW = EARLY_SETTLED + PART_SETTLED
+CUSTOMER_SETTLED_IN_WINDOW = EARLY_SETTLED + PART_SETTLED + OPENING_COLLECTED
 
 
 class TestTheSettlementHistorySheets:
@@ -962,7 +1096,11 @@ class TestTheSettlementHistorySheets:
             from_date=SEP_10.isoformat(),
             to_date=SEP_30.isoformat(),
         )
-        assert [money(row, "amount") for row in september.rows] == [PART_SETTLED]
+        # Tháng 9 có hai lượt: ghi giảm 10/09 và phiếu thu nợ đầu kỳ 15/09.
+        assert [money(row, "amount") for row in september.rows] == [
+            PART_SETTLED,
+            OPENING_COLLECTED,
+        ]
 
     def test_the_payment_days_sheet_counts_from_the_document_and_the_due_date(
         self, preview: Preview, books: dict[str, UUID]
@@ -1007,9 +1145,25 @@ class TestTheOpeningBalanceDirection:
     đúng phần ấy trong khi mọi dòng vẫn trông hợp lệ.
     """
 
+    def test_collecting_a_carried_receivable_lands_on_the_receivable_sheet(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Vế DƯƠNG, và nó là vế duy nhất canh được nhánh `detail_kind`.
+
+        Vòng review chứng minh bài kiểm cũ vacuous: xóa nguyên nhánh đọc
+        `detail_kind` thì `target_kind = 2` rơi vào `ELSE 'chi'` — đúng đáp án
+        cho khoản PHẢI TRẢ mang sang, nên 26/26 bài vẫn xanh. Chỉ một lượt THU
+        một khoản PHẢI THU mang sang mới phân biệt được, và mất nó thì tờ #10
+        hụt đúng phần ấy trong khi mọi dòng còn lại vẫn đúng.
+        """
+        report = preview("tong-hop-thanh-toan-cong-no-khach-hang", partner_id=CUSTOMER_ID)
+        assert OPENING_COLLECTED in {money(row, "amount") for row in report.rows}
+        assert OPENING_INVOICE_NO in report.all_text()
+
     def test_paying_a_carried_payable_stays_off_the_receivable_sheet(
         self, preview: Preview, books: dict[str, UUID]
     ) -> None:
+        """Vế ÂM: lượt ta TRẢ nhà cung cấp không được lọt sang tờ phải thu."""
         report = preview("tong-hop-thanh-toan-cong-no-khach-hang")
         assert PAYABLE_PAID not in {money(row, "amount") for row in report.rows}
         assert OPENING_PAYABLE_NO not in report.all_text()

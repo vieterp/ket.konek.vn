@@ -16,8 +16,7 @@ phát hành cũ, vô hình vì không definition nào trỏ tới. Lát này rú
 vào `ar_ap_open_items`, nên nếu không dọn tay thì mọi bản cài đang chạy giữ một
 `report_datasets('ar_ap_aging')` chết cùng `report_param_sets('ar_ap_aging_params')`
 — và ngày ai đó đăng ký một báo cáo trỏ vào mã ấy, họ nhận SQL của tháng trước.
-Cổng `test_no_builtin_report_metadata_outlives_the_manifest` là chuông báo cho
-lần sau.
+Cổng `test_no_retired_metadata_outlives_the_manifest` là chuông báo cho lần sau.
 
 **Xóa CÓ ĐIỀU KIỆN, không xóa trần.** `report_definitions.dataset_code` là khóa
 ngoại `ondelete=RESTRICT`, nên một definition **không-builtin** (người dùng tự

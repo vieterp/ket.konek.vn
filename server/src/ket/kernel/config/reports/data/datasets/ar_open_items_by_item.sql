@@ -35,11 +35,22 @@
 -- phát sinh của chính tài khoản nó nói về. Nối theo `source_line_id` **và**
 -- `account_id` để số lượng không nhân bản lên dòng thuế.
 --
--- **LATERAL doanh thu KHÔNG cắt theo `:from_date`.** Công nợ là một con số
--- TỒN, không phải phát sinh trong kỳ: khoản nợ vào báo cáo theo `document_date
--- <= :to_date`, nên cắt dưới ở phần doanh thu sẽ làm dòng hàng của một hóa đơn
--- cũ biến mất trong khi khoản nợ của nó vẫn hiện — một hóa đơn còn nợ mà không
--- có dòng hàng nào.
+-- **LATERAL doanh thu KHÔNG cắt theo NGÀY, cả hai đầu.** Công nợ là một con số
+-- TỒN, không phải phát sinh trong kỳ: phép chọn khoản nợ nằm ở `WHERE` bên dưới
+-- (`d.document_date <= :to_date`), còn LATERAL này chỉ để ĐỌC giá trị VND của
+-- dòng hàng. Mọi dòng phát sinh của một chứng từ mang cùng một `posting_date`,
+-- nên ở đây không có gì để lọc — chỉ có thứ để đánh rơi.
+--
+-- Bản đầu của lát 7G-2b cắt `gp.posting_date <= :to_date`, và vòng review bắt
+-- được: **ngày chứng từ và ngày ghi sổ là HAI ngày khác nhau** (xem
+-- `posting/documents/models.py`), nên một hóa đơn lập 28/08 ghi sổ 10/09 đọc tại
+-- mốc 31/08 có khoản nợ đi qua `WHERE` nhưng **không dòng hàng nào** đi qua
+-- LATERAL — và vì `ON revenue.amount IS NOT NULL` biến nó thành INNER JOIN, cả
+-- hóa đơn biến mất. Đo được: `ar_ap_open_items` in 777.000 đ, tờ này in không
+-- dòng nào. Bộ gieo không bắt được vì `_invoice()` luôn đặt hai ngày bằng nhau.
+--
+-- Hai tờ công nợ phải nhận **cùng một tập hóa đơn**; chỗ duy nhất quyết định tập
+-- ấy là `WHERE` bên dưới, và nó chép đúng điều kiện của `ar_ap_open_items`.
 --
 -- Tham số: :from_date (không dùng — thuộc bộ chuẩn engine luôn truyền),
 -- :to_date (mốc chốt số), :ledger, :branch_ids, :customer_id, :item_id,
@@ -82,7 +93,6 @@ JOIN LATERAL (
     WHERE gp.source_line_id = l.id
       AND gp.account_id = l.account_id
       AND gp.ledger = :ledger
-      AND gp.posting_date <= :to_date
 ) AS revenue ON revenue.amount IS NOT NULL
 LEFT JOIN settled_as_of sa
        ON sa.target_kind = d.target_kind
