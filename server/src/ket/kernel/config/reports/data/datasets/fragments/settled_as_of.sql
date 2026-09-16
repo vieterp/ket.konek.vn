@@ -6,6 +6,11 @@
 -- có hai bản chép vì tệp dataset chưa include được nhau — hai bản ấy đã lệch
 -- thật hai lần trong một vòng review (7G-1).
 --
+-- Khối UNION năm bảng nằm ở `settlement_rows.sql` — mảnh này chỉ thêm phần GỘP
+-- và phép lọc "chỉ chứng từ đã ghi sổ, ghi sổ không muộn hơn `:to_date`". Dataset
+-- nào cần từng DÒNG đối trừ (lịch sử thanh toán) thì nhúng thẳng mảnh kia, đừng
+-- bóc ngược mảnh này.
+--
 -- Tham số mà mảnh này đòi tệp gọi phải khai: `:to_date`.
 -- Đã đối trừ bao nhiêu, tính tới `:to_date`. Năm bảng vì có năm phân hệ ghi
 -- lượt đối trừ; cả năm mang đúng một bộ cột, nên khối này là một phép cộng
@@ -24,20 +29,7 @@ SELECT s.target_kind,
        SUM(s.amount_fc)          AS settled_fc,
        SUM(s.amount - s.fx_diff) AS settled
 FROM (
-    SELECT voucher_id, target_kind, target_id, amount_fc, amount, fx_diff
-      FROM cash_settlements
-    UNION ALL
-    SELECT voucher_id, target_kind, target_id, amount_fc, amount, fx_diff
-      FROM bank_settlements
-    UNION ALL
-    SELECT voucher_id, target_kind, target_id, amount_fc, amount, fx_diff
-      FROM purchase_settlements
-    UNION ALL
-    SELECT voucher_id, target_kind, target_id, amount_fc, amount, fx_diff
-      FROM sales_settlements
-    UNION ALL
-    SELECT voucher_id, target_kind, target_id, amount_fc, amount, fx_diff
-      FROM gl_journal_settlements
+    -- #include: settlement_rows.sql
 ) AS s
 -- `EXISTS` chứ không `JOIN`: khối này bị vật chất hóa (có hàm gộp, tham
 -- chiếu hai lần), và một `JOIN vouchers` buộc planner dựng hash của **mọi**

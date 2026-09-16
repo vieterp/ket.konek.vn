@@ -34,24 +34,29 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from cash_book_support import seed_open_invoice
+from cash_book_support import seed_cash_book_package_data, seed_open_invoice
 from catalog_api_support import UserFactory, actor, ensure_role
 from conftest import api_test_client
 from ket.api.dependencies import BRANCH_HEADER
 from ket.kernel.config.reports.loader import load_builtin_reports
+from ket.kernel.contracts import PartnerKind
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.protocols import SettlementTargetKind
 from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
+from ket.modules.cash_book.models import CashVoucherKind
+from ket.modules.cash_book.schemas import CashSettlementIn, CashVoucherIn, CashVoucherLineIn
+from ket.modules.cash_book.service import CashVoucherService
 from ket.modules.receivables.models import ArApLedgerEntry
 from ket.modules.sales.models import SalesInvoiceKind
 from ket.modules.sales.schemas import SalesInvoiceIn, SalesInvoiceLineIn, SalesSettlementIn
 from ket.modules.sales.service import SalesInvoiceService
 from ket.posting.engine.models import Ledger
+from ket.posting.opening_balances.models import OpeningDetailKind
 from ket.settings import Settings
 from posting_support import PostingContext, posting_scope, seed_posting_context
-from purchase_support import ensure_item, ensure_unit
+from purchase_support import ensure_item, ensure_unit, ensure_vendor
 from report_preview_support import Preview, PreviewResult, money
 from sales_support import ensure_customer, ensure_customer_group, seed_sales_package_data
 
@@ -84,6 +89,8 @@ GROUP_SOUTH_ID = 9629
 CUSTOMER_ID = 9621
 OTHER_CUSTOMER_ID = 9622
 UNGROUPED_CUSTOMER_ID = 9623
+FX_CUSTOMER_ID = 9624
+VENDOR_ID = 9625
 UNIT_ID = 9631
 ITEM_ID = 9641
 SECOND_ITEM_ID = 9642
@@ -94,12 +101,24 @@ GROUP_SOUTH_CODE = "NHOM-7G2B-NAM"
 CUSTOMER_CODE = "KH-7G2B-01"
 OTHER_CUSTOMER_CODE = "KH-7G2B-02"
 UNGROUPED_CUSTOMER_CODE = "KH-7G2B-03"
+FX_CUSTOMER_CODE = "KH-7G2B-04"
+VENDOR_CODE = "NCC-7G2B-01"
 UNIT_CODE = "Cai-7G2B"
 ITEM_CODE = "VT-7G2B"
 SECOND_ITEM_CODE = "VT-7G2B-B"
 
 UNGROUPED_LABEL = "Chưa phân nhóm"
 OPENING_INVOICE_NO = "HD-DAU-KY-7G2B"
+OPENING_PAYABLE_NO = "HD-DAU-KY-7G2B-NCC"
+
+# Nợ PHẢI TRẢ đầu kỳ, trả một phần bằng phiếu chi. Nó ở đây vì một lý do duy
+# nhất: chiều của khoản nợ mang sang KHÔNG suy được từ `target_kind` — số dư đầu
+# kỳ mang `target_kind = 2` ở cả hai chiều, và chiều thật nằm ở `detail_kind` của
+# dòng cha. Không có dòng phải trả nào thì một bản đọc chiều từ `target_kind` vẫn
+# xanh, và tờ "thanh toán công nợ KHÁCH HÀNG" sẽ lặng lẽ liệt kê cả những lượt ta
+# trả tiền cho nhà cung cấp.
+OPENING_PAYABLE = Decimal(800_000)
+PAYABLE_PAID = Decimal(300_000)
 
 # Bốn khoản của khách hàng thứ nhất, chọn hạn để rơi vào bốn nhóm tuổi nợ KHÁC
 # NHAU tại mốc chốt 30/09 — một bộ dữ liệu một nhóm không phân biệt được "lọc
@@ -124,17 +143,50 @@ PART_GOODS = Decimal(200_000)
 PART_VAT = Decimal(20_000)
 PART_SETTLED = PART_GOODS + PART_VAT
 
+# Một lượt thu SỚM (20/08) của khoản '1-30'. Nó ở đây để cửa sổ kỳ của tờ thanh
+# toán có cận DƯỚI kiểm được: không có lượt thu nào trước cửa sổ thì bỏ hẳn
+# `>= :from_date` cũng không đổi kết quả, và bài kiểm không phân biệt được
+# "cắt theo kỳ" với "cắt theo mốc chốt".
+EARLY_GOODS = Decimal(150_000)
+EARLY_VAT = Decimal(15_000)
+EARLY_SETTLED = EARLY_GOODS + EARLY_VAT
+
 # Khoản của khách hàng thứ hai: KHÔNG ghi hạn. Nó là dòng mà phép chia quá hạn /
 # trước hạn dễ để rơi nhất, vì `NULL` trượt khỏi cả hai vế của một phép so ngày.
+# Nó cũng được thu một phần, để tờ "ngày thanh toán" có một lượt thu của khoản
+# KHÔNG có hạn — cột trễ hạn của dòng ấy phải để TRỐNG, không phải 0.
 UNDATED_AMOUNT = Decimal(400_000)
 UNDATED_VAT = Decimal(40_000)
+UNDATED_PART_GOODS = Decimal(100_000)
+UNDATED_PART_VAT = Decimal(10_000)
+UNDATED_SETTLED = UNDATED_PART_GOODS + UNDATED_PART_VAT
+UNDATED_REMAINING = UNDATED_AMOUNT + UNDATED_VAT - UNDATED_SETTLED
+UNDATED_CUSTOMER_PAYER = OTHER_CUSTOMER_ID
+
+# Lượt đối trừ của một chứng từ CHỈ CẤT, chưa ghi sổ: dòng đối trừ đã nằm trong
+# bảng (`_write_settlements` chạy lúc cất) nhưng chưa đồng nào lên sổ, nên nó
+# không được có mặt ở bất kỳ tờ nào.
+DRAFT_GOODS = Decimal(300_000)
+DRAFT_VAT = Decimal(30_000)
+DRAFT_SETTLEMENT = DRAFT_GOODS + DRAFT_VAT
+
+# Hóa đơn NGOẠI TỆ thu một phần ở tỷ giá KHÁC tỷ giá ghi nhận — khách hàng riêng
+# để nó không xê dịch con số của ba khách kia. Đây là ca duy nhất phân biệt được
+# `amount` với `amount - fx_diff`: cột `amount` của bảng đối trừ là VND theo tỷ
+# giá THANH TOÁN, còn phần thật sự giải phóng trên sổ là `amount - fx_diff` (phần
+# chênh đi vào 515/635). Trên hóa đơn VND hai cách cho cùng một con số, nên một
+# bộ gieo toàn VND để lọt đúng lỗi mà vòng review 7G-1 đã bắt ở chiều phải trả.
+FX_RATE = Decimal(24_317)
+FX_SETTLE_RATE = Decimal(25_110)
+FX_GOODS_FC = Decimal(1_000)
+FX_SETTLE_FC = Decimal(400)
 
 # Khoản của khách hàng không thuộc nhóm nào, THU ĐỦ trước mốc chốt: nó phải biến
 # mất khỏi ba tờ ghim `open_only` và ở lại trên bốn tờ còn lại.
 CLEARED_AMOUNT = Decimal(500_000)
 CLEARED_VAT = Decimal(50_000)
 
-NEAR_REMAINING = NEAR_AMOUNT + NEAR_VAT
+NEAR_REMAINING = NEAR_AMOUNT + NEAR_VAT - EARLY_SETTLED
 MID_REMAINING = MID_AMOUNT + MID_VAT - PART_SETTLED
 FUTURE_REMAINING = FUTURE_AMOUNT + FUTURE_VAT
 OVERDUE_TOTAL = NEAR_REMAINING + MID_REMAINING + OPENING_AMOUNT
@@ -176,6 +228,10 @@ def accounts(
     session_factory: sessionmaker[Session], dataset_alpha: DatasetRef, context: PostingContext
 ) -> dict[str, int]:
     codes = seed_sales_package_data(session_factory, dataset_alpha, context)
+    # Hai bước gieo gói đều idempotent theo khóa tự nhiên trên cùng một gói, nên
+    # gọi cả hai là hợp lệ: tệp này cần TK doanh thu của phân hệ bán VÀ TK quỹ
+    # của phiếu chi trả nợ nhà cung cấp.
+    codes |= seed_cash_book_package_data(session_factory, dataset_alpha, context)
     scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
     with unit_of_work(session_factory, scope) as session:
         # Cây SÂU HAI CẤP cho khách hàng thứ nhất — "Miền Bắc > Đại lý > khách".
@@ -203,6 +259,8 @@ def accounts(
         # Khách hàng đứng ở GỐC cây: nhóm của nó là nhóm "chưa phân nhóm", và
         # tiêu đề nhóm ấy phải có chữ chứ không được để trống.
         ensure_customer(session, partner_id=UNGROUPED_CUSTOMER_ID, code=UNGROUPED_CUSTOMER_CODE)
+        ensure_customer(session, partner_id=FX_CUSTOMER_ID, code=FX_CUSTOMER_CODE)
+        ensure_vendor(session, partner_id=VENDOR_ID, code=VENDOR_CODE)
         ensure_unit(session, unit_id=UNIT_ID, code=UNIT_CODE)
         ensure_item(session, item_id=ITEM_ID, code=ITEM_CODE, unit_id=UNIT_ID)
         ensure_item(session, item_id=SECOND_ITEM_ID, code=SECOND_ITEM_CODE, unit_id=UNIT_ID)
@@ -239,6 +297,8 @@ def _invoice(
     operation: str = "ban-hang-hoa",
     settlements: tuple[SalesSettlementIn, ...] = (),
     lines: tuple[SalesInvoiceLineIn, ...] | None = None,
+    currency_code: str = "VND",
+    exchange_rate: Decimal = Decimal(1),
 ) -> SalesInvoiceIn:
     return SalesInvoiceIn(
         kind=kind,
@@ -249,8 +309,8 @@ def _invoice(
         document_date=posting_date,
         posting_date=posting_date,
         due_date=due_date,
-        currency_code="VND",
-        exchange_rate=Decimal(1),
+        currency_code=currency_code,
+        exchange_rate=exchange_rate,
         description="công nợ phải thu 7G-2b",
         lines=lines or (_line(accounts, item_id=ITEM_ID, amount=amount, vat=vat),),
         settlements=settlements,
@@ -336,6 +396,9 @@ def books(
         service.post(cleared.id, user_id=ACTOR_ID)
         ids["cleared"] = cleared.id
 
+        ids["early_return"] = _settle(
+            session, service, context, accounts, ids["near"], EARLY_GOODS, EARLY_VAT, AUG_20
+        )
         ids["mid_return"] = _settle(
             session, service, context, accounts, ids["mid"], PART_GOODS, PART_VAT, SEP_10
         )
@@ -350,6 +413,59 @@ def books(
             SEP_15,
             customer_id=UNGROUPED_CUSTOMER_ID,
         )
+        ids["undated_return"] = _settle(
+            session,
+            service,
+            context,
+            accounts,
+            ids["undated"],
+            UNDATED_PART_GOODS,
+            UNDATED_PART_VAT,
+            SEP_15,
+            customer_id=OTHER_CUSTOMER_ID,
+        )
+        fx = service.create(
+            _invoice(
+                context,
+                accounts,
+                amount=FX_GOODS_FC,
+                vat=Decimal(0),
+                posting_date=AUG_10,
+                due_date=SEP_20,
+                customer_id=FX_CUSTOMER_ID,
+                currency_code="USD",
+                exchange_rate=FX_RATE,
+            ),
+            user_id=ACTOR_ID,
+        )
+        service.post(fx.id, user_id=ACTOR_ID)
+        ids["fx"] = fx.id
+        ids["fx_return"] = _settle(
+            session,
+            service,
+            context,
+            accounts,
+            ids["fx"],
+            FX_SETTLE_FC,
+            Decimal(0),
+            SEP_15,
+            customer_id=FX_CUSTOMER_ID,
+            currency_code="USD",
+            exchange_rate=FX_SETTLE_RATE,
+        )
+
+        # Chỉ CẤT, không ghi sổ.
+        ids["draft_return"] = _settle(
+            session,
+            service,
+            context,
+            accounts,
+            ids["near"],
+            DRAFT_GOODS,
+            DRAFT_VAT,
+            SEP_15,
+            post=False,
+        )
 
     seed_open_invoice(
         session_factory,
@@ -359,6 +475,53 @@ def books(
         amount_fc=OPENING_AMOUNT,
         invoice_no=OPENING_INVOICE_NO,
     )
+    payable_id = seed_open_invoice(
+        session_factory,
+        dataset_alpha,
+        context,
+        detail_kind=OpeningDetailKind.PAYABLE,
+        account_code="331",
+        partner_kind=PartnerKind.VENDOR,
+        partner_id=VENDOR_ID,
+        amount_fc=OPENING_PAYABLE,
+        invoice_no=OPENING_PAYABLE_NO,
+    )
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        cash = CashVoucherService(session)
+        payment = cash.create(
+            CashVoucherIn(
+                kind=CashVoucherKind.PAYMENT,
+                operation_code="tra-no-ncc",
+                cash_account_id=accounts["111"],
+                branch_id=context.branch_id,
+                document_date=SEP_15,
+                posting_date=SEP_15,
+                currency_code="VND",
+                exchange_rate=Decimal(1),
+                partner_kind=PartnerKind.VENDOR,
+                partner_id=VENDOR_ID,
+                lines=(
+                    CashVoucherLineIn(
+                        debit_account_id=accounts["331"],
+                        credit_account_id=accounts["111"],
+                        amount_fc=PAYABLE_PAID,
+                        partner_kind=PartnerKind.VENDOR,
+                        partner_id=VENDOR_ID,
+                    ),
+                ),
+                settlements=(
+                    CashSettlementIn(
+                        target_kind=SettlementTargetKind.OPENING_BALANCE,
+                        target_id=payable_id,
+                        amount_fc=PAYABLE_PAID,
+                    ),
+                ),
+            ),
+            user_id=ACTOR_ID,
+        )
+        cash.post(payment.id, user_id=ACTOR_ID)
+        ids["payable_payment"] = payment.id
     return ids
 
 
@@ -373,6 +536,9 @@ def _settle(
     posting_date: date,
     *,
     customer_id: int = CUSTOMER_ID,
+    post: bool = True,
+    currency_code: str = "VND",
+    exchange_rate: Decimal = Decimal(1),
 ) -> UUID:
     """Một chứng từ ghi giảm đối trừ khoản nợ của hóa đơn gốc.
 
@@ -394,6 +560,8 @@ def _settle(
             customer_id=customer_id,
             kind=SalesInvoiceKind.RETURN,
             operation="tra-lai-hang-ban",
+            currency_code=currency_code,
+            exchange_rate=exchange_rate,
             settlements=(
                 SalesSettlementIn(
                     target_kind=SettlementTargetKind.SALES_INVOICE,
@@ -404,7 +572,8 @@ def _settle(
         ),
         user_id=ACTOR_ID,
     )
-    service.post(voucher.id, user_id=ACTOR_ID)
+    if post:
+        service.post(voucher.id, user_id=ACTOR_ID)
     return voucher.id
 
 
@@ -490,7 +659,7 @@ class TestTheDueStateSplitsTheDebtWholly:
         overdue = preview("phan-tich-cong-no-phai-thu-qua-han", partner_id=OTHER_CUSTOMER_ID)
         not_overdue = preview("phan-tich-cong-no-phai-thu-truoc-han", partner_id=OTHER_CUSTOMER_ID)
         assert overdue.rows == []
-        assert not_overdue.sum_of("remaining") == UNDATED_AMOUNT + UNDATED_VAT
+        assert not_overdue.sum_of("remaining") == UNDATED_REMAINING
         assert [row["bucket"] for row in not_overdue.rows] == ["khong-han"]
 
     def test_the_overdue_sheet_carries_only_overdue_buckets(
@@ -720,6 +889,170 @@ class TestTheItemSheetDoesNotAllocate:
         invoice_debts = {money(row, "invoice_remaining") for row in by_item.rows}
         assert OPENING_AMOUNT not in invoice_debts
         assert sum(invoice_debts, Decimal(0)) == CUSTOMER_OPEN_TOTAL - OPENING_AMOUNT
+
+
+CUSTOMER_SETTLED_IN_WINDOW = EARLY_SETTLED + PART_SETTLED
+
+
+class TestTheSettlementHistorySheets:
+    """SRS 06 §5.2 #10/#11 — từng lượt thu, không phải số dư.
+
+    Dataset này cắt theo CẢ `:from_date` lẫn `:to_date` (phát sinh trong kỳ),
+    khác hẳn dataset công nợ vốn chỉ có mốc chốt. Nó dùng chung với dataset công
+    nợ đúng một thứ: khối nguồn năm bảng đối trừ.
+    """
+
+    def test_a_partial_receipt_shows_up_as_one_line_at_its_posting_date(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        report = preview("tong-hop-thanh-toan-cong-no-khach-hang", partner_id=CUSTOMER_ID)
+        rows = [row for row in report.rows if money(row, "amount") == PART_SETTLED]
+        assert len(rows) == 1
+        assert rows[0]["settled_on"] == SEP_10.strftime("%d/%m/%Y")
+
+    def test_the_sheet_total_matches_what_the_debt_sheet_says_was_settled(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Tổng của tờ thanh toán bằng đúng cột "đã thu" của tờ công nợ.
+
+        Hai tờ đọc hai câu SQL khác nhau trên cùng một khối nguồn, nên đây là
+        phép so bắt được lệch cơ sở tiền: cộng `amount` trần thay vì
+        `amount - fx_diff` sẽ làm hai vế rời nhau trên hóa đơn ngoại tệ.
+
+        Cửa sổ của bộ gieo chứa mọi lượt thu của khách hàng này, nên hai vế phải
+        bằng nhau tuyệt đối chứ không chỉ "xấp xỉ".
+        """
+        settlements = preview("tong-hop-thanh-toan-cong-no-khach-hang", partner_id=CUSTOMER_ID)
+        debts = preview("chi-tiet-cong-no-phai-thu-theo-hoa-don", partner_id=CUSTOMER_ID)
+        assert settlements.rows
+        assert settlements.total("amount") == debts.sum_of("settled")
+        assert settlements.total("amount") == CUSTOMER_SETTLED_IN_WINDOW
+
+    def test_a_settlement_on_an_unposted_voucher_is_absent(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Dòng đối trừ ghi xuống bảng lúc CẤT, phần nhích `settled` lúc GHI SỔ.
+
+        Liệt kê mọi dòng trong bảng vì thế in ra những lượt thu chưa có đồng nào
+        lên sổ. Bộ gieo có đúng một chứng từ chỉ-cất; nó không được có mặt.
+        """
+        report = preview("tong-hop-thanh-toan-cong-no-khach-hang", partner_id=CUSTOMER_ID)
+        assert DRAFT_SETTLEMENT not in {money(row, "amount") for row in report.rows}
+
+    def test_the_period_window_cuts_by_the_settlement_date_not_the_invoice_date(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Cửa sổ kỳ cắt theo ngày THU, và cắt ở CẢ HAI đầu.
+
+        Khách hàng này có hai lượt thu: 20/08 và 10/09. Đọc kỳ tháng 8 phải thấy
+        đúng lượt đầu, đọc kỳ từ 10/09 phải thấy đúng lượt sau. Một bản thiếu cận
+        DƯỚI xanh ở vế tháng 8 (mọi thứ vẫn ≤ 20/08) và chỉ đỏ ở vế sau — nên bài
+        kiểm phải có cả hai vế, và cả hai phải khác nhau.
+        """
+        august = preview(
+            "tong-hop-thanh-toan-cong-no-khach-hang",
+            partner_id=CUSTOMER_ID,
+            from_date=AUG_01.isoformat(),
+            to_date=AUG_20.isoformat(),
+        )
+        assert [money(row, "amount") for row in august.rows] == [EARLY_SETTLED]
+        september = preview(
+            "tong-hop-thanh-toan-cong-no-khach-hang",
+            partner_id=CUSTOMER_ID,
+            from_date=SEP_10.isoformat(),
+            to_date=SEP_30.isoformat(),
+        )
+        assert [money(row, "amount") for row in september.rows] == [PART_SETTLED]
+
+    def test_the_payment_days_sheet_counts_from_the_document_and_the_due_date(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Hai cột ngày đếm từ hai mốc khác nhau, và cả hai đều kiểm được.
+
+        Khoản '31-60': chứng từ 05/08, hạn 20/08, thu 10/09 ⇒ 36 ngày kể từ
+        chứng từ và trễ 21 ngày so với hạn. Một bản nhầm hai mốc cho ra cùng một
+        con số ở cả hai cột, nên bài kiểm đòi chúng KHÁC nhau.
+        """
+        report = preview("bao-cao-ngay-thanh-toan-theo-khach-hang", partner_id=CUSTOMER_ID)
+        rows = [row for row in report.rows if money(row, "amount") == PART_SETTLED]
+        assert len(rows) == 1
+        assert int(rows[0]["days_to_pay"]) == (SEP_10 - AUG_05).days
+        assert int(rows[0]["days_late"]) == (SEP_10 - AUG_20).days
+        assert rows[0]["days_to_pay"] != rows[0]["days_late"]
+
+    def test_a_debt_without_a_due_date_leaves_days_late_empty(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """ "Trả đúng hạn" và "không có hạn để mà trễ" là hai câu khác nhau.
+
+        Điền 0 vào cột trễ hạn của một khoản không ghi hạn là nói dối theo hướng
+        dễ chịu — cùng lý do bảng tuổi nợ tách nhóm `khong-han`.
+        """
+        report = preview(
+            "bao-cao-ngay-thanh-toan-theo-khach-hang", partner_id=UNDATED_CUSTOMER_PAYER
+        )
+        rows = [row for row in report.rows if money(row, "amount") == UNDATED_SETTLED]
+        assert len(rows) == 1
+        assert rows[0]["days_late"].strip() == ""
+        assert int(rows[0]["days_to_pay"]) >= 0
+
+
+class TestTheOpeningBalanceDirection:
+    """Chiều của nợ MANG SANG nằm ở `detail_kind`, không ở `target_kind`.
+
+    Số dư đầu kỳ mang `target_kind = 2` ở **cả hai** chiều — phải thu và phải
+    trả — nên một bản đọc chiều từ loại đích sẽ dán nhãn "phải thu" cho mọi khoản
+    nợ mang sang. Hậu quả im lặng: tờ "tổng hợp thanh toán công nợ khách hàng"
+    liệt kê cả những lượt ta TRẢ TIỀN cho nhà cung cấp, và tổng của nó phình lên
+    đúng phần ấy trong khi mọi dòng vẫn trông hợp lệ.
+    """
+
+    def test_paying_a_carried_payable_stays_off_the_receivable_sheet(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        report = preview("tong-hop-thanh-toan-cong-no-khach-hang")
+        assert PAYABLE_PAID not in {money(row, "amount") for row in report.rows}
+        assert OPENING_PAYABLE_NO not in report.all_text()
+
+
+class TestTheForeignCurrencyBasis:
+    """Cột tiền của lượt thu đọc theo tỷ giá GHI NHẬN, không theo tỷ giá thu.
+
+    `amount` của bảng đối trừ là VND theo tỷ giá **thanh toán**; phần VND thật sự
+    giải phóng trên sổ là `amount - fx_diff`, và đó đúng là con số
+    `apply_settlement_rows` cộng vào khoản đích — phần chênh đi vào 515/635
+    (FR-SYS-066). Vòng review 7G-1 bắt được đúng lỗi này ở chiều phải trả, và nó
+    hỏng theo hướng tệ nhất: `settled` vượt `amount` thì phần còn lại ra số ÂM.
+
+    Chỉ hóa đơn ngoại tệ trả TỪNG PHẦN bắt được: trả trọn vẹn thì dòng rơi khỏi
+    tờ công nợ, còn hóa đơn VND thì `fx_diff` luôn bằng 0.
+    """
+
+    def test_the_settlement_sheet_uses_the_recognition_rate(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        recognised = FX_SETTLE_FC * FX_RATE
+        paid_at_settlement_rate = FX_SETTLE_FC * FX_SETTLE_RATE
+        # Nếu hai con số này bằng nhau thì bài kiểm không kiểm gì.
+        assert recognised != paid_at_settlement_rate
+
+        report = preview("tong-hop-thanh-toan-cong-no-khach-hang", partner_id=FX_CUSTOMER_ID)
+        assert [money(row, "amount") for row in report.rows] == [recognised]
+
+    def test_the_settlement_sheet_and_the_debt_sheet_agree_on_the_fx_invoice(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Hai tờ đọc hai câu SQL khác nhau — chúng phải nói cùng một con số.
+
+        Đây là phép so bắt được lệch cơ sở tiền giữa hai dataset: một bên cộng
+        `amount` trần, một bên cộng `amount - fx_diff`, và không con số nào trên
+        hai tờ giấy chỉ ra chỗ lệch.
+        """
+        settlements = preview("tong-hop-thanh-toan-cong-no-khach-hang", partner_id=FX_CUSTOMER_ID)
+        debts = preview("chi-tiet-cong-no-phai-thu-theo-hoa-don", partner_id=FX_CUSTOMER_ID)
+        assert settlements.total("amount") == debts.sum_of("settled")
+        # Và phần còn lại không bao giờ âm — hướng hỏng của lỗi cơ sở tiền.
+        assert all(money(row, "remaining") >= 0 for row in debts.rows)
 
 
 class TestTheMetadataContract:

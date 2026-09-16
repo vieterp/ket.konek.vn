@@ -205,8 +205,12 @@ chỉnh: engine, probe `LIMIT 0`, `assert_placeholders_allowed` và lớp bọc 
 không biết cơ chế này tồn tại, và một bản cài cũ đọc dòng dataset của bản mới
 vẫn chạy được.
 
-Một cấp, không đệ quy: mảnh dùng chung là một khối `SELECT` gọn, và một cây
-include nhiều tầng biến bốn tệp SQL đọc được thành một trò ghép hình.
+Mảnh nhúng được mảnh khác, nhưng **có trần và chặn vòng lặp**: một cây include
+sâu biến vài tệp SQL đọc được thành một trò ghép hình, còn một vòng lặp thì treo
+bước đọc manifest. Bản đầu cấm hẳn lồng nhau; lần dùng thứ hai (lát 7G-2b, dataset
+thanh toán công nợ) đã đụng ngay giới hạn ấy — nó cần khối UNION năm bảng ở mức
+DÒNG, còn `settled_as_of` cần chính khối ấy đã gộp. Cấm lồng nhau ở đó nghĩa là
+chép khối union lần nữa, tức đúng thứ cơ chế này sinh ra để bỏ.
 
 Mảnh nằm trong thư mục con `fragments/`, và ranh giới ấy là CẤU TRÚC chứ không
 phải quy ước đặt tên: một tệp trong đó không bao giờ lẫn với tệp dataset, và vì
@@ -218,12 +222,27 @@ swapfile của Vim (`[._]*.s[a-w][a-z]`) trong một `.gitignore` toàn cục kh
 """
 
 
-def _expand_includes(sql_text: str, *, dataset_code: str) -> str:
+_MAX_INCLUDE_DEPTH: Final = 3
+"""Trần độ sâu của cây include. Ba cấp là thừa cho mọi thứ dataset cần hôm nay
+(dataset → mảnh gộp → mảnh union), và một trần thấp là thứ giữ cho tệp SQL còn
+đọc được bằng mắt."""
+
+
+def _expand_includes(
+    sql_text: str,
+    *,
+    dataset_code: str,
+    seen: tuple[str, ...] = (),
+) -> str:
     """Thay mỗi dòng `-- #include: <tệp>` bằng nội dung mảnh, GIỮ THỤT ĐẦU DÒNG.
 
     Thụt đầu dòng của chỉ thị áp cho mọi dòng của mảnh: SQL không cần nó, nhưng
     người đọc thì cần — một khối bung ra sát lề trong khi nó nằm giữa một `WITH`
     đọc như một mảnh lạc.
+
+    `seen` là **đường đi** từ dataset tới mảnh đang bung, không phải tập đã gặp:
+    một mảnh được nhúng hai lần ở hai nhánh khác nhau là chuyện hợp lệ, chỉ mảnh
+    gặp lại chính nó **trên đường đi của mình** mới là vòng lặp.
     """
     if _INCLUDE_PREFIX not in sql_text:
         return sql_text  # lối tắt; phép dò thật đi theo từng dòng bên dưới
@@ -235,15 +254,26 @@ def _expand_includes(sql_text: str, *, dataset_code: str) -> str:
             continue
         name = stripped[len(_INCLUDE_PREFIX) :].strip()
         indent = line[: len(line) - len(line.lstrip())]
-        out.extend(indent + fragment for fragment in _fragment_lines(name, dataset_code))
+        body = _fragment_text(name, dataset_code=dataset_code, seen=seen)
+        out.extend(indent + fragment for fragment in body.splitlines())
     return "\n".join(out) + ("\n" if sql_text.endswith("\n") else "")
 
 
-def _fragment_lines(name: str, dataset_code: str) -> list[str]:
+def _fragment_text(name: str, *, dataset_code: str, seen: tuple[str, ...]) -> str:
     if not name.endswith(".sql") or "/" in name or name.startswith("."):
         raise ReportDatasetInvalidError(
             f"Mảnh SQL {name!r} của dataset {dataset_code!r} phải là một tên tệp "
             f"`*.sql` trần nằm trong thư mục `datasets/{_FRAGMENT_DIR}/`",
+            dataset_code=dataset_code,
+        )
+    if name in seen:
+        raise ReportDatasetInvalidError(
+            f"Mảnh SQL {name!r} nhúng vòng lại chính nó: {' → '.join([*seen, name])}",
+            dataset_code=dataset_code,
+        )
+    if len(seen) >= _MAX_INCLUDE_DEPTH:
+        raise ReportDatasetInvalidError(
+            f"Cây nhúng mảnh SQL sâu quá {_MAX_INCLUDE_DEPTH} cấp: {' → '.join([*seen, name])}",
             dataset_code=dataset_code,
         )
     fragment = _DATA_ROOT.joinpath("datasets").joinpath(_FRAGMENT_DIR).joinpath(name)
@@ -253,17 +283,9 @@ def _fragment_lines(name: str, dataset_code: str) -> list[str]:
             dataset_code=dataset_code,
         )
     text = fragment.read_text("utf-8")
-    # Dò theo DÒNG chỉ thị, không theo chuỗi con: chính docstring của mảnh nhắc
-    # tới cú pháp nhúng để người đọc biết cách dùng nó, và một phép `in` trên cả
-    # tệp coi lời nhắc ấy là một lượt nhúng.
-    if any(line.strip().startswith(_INCLUDE_PREFIX) for line in text.splitlines()):
-        raise ReportDatasetInvalidError(
-            f"Mảnh SQL {name!r} lại nhúng mảnh khác — chỉ cho phép MỘT cấp",
-            dataset_code=dataset_code,
-        )
     if not text.strip():
         raise ReportDatasetInvalidError(f"Mảnh SQL {name!r} rỗng", dataset_code=dataset_code)
-    return text.splitlines()
+    return _expand_includes(text, dataset_code=dataset_code, seen=(*seen, name))
 
 
 def _assert_definitions_wired(

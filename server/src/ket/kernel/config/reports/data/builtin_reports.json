@@ -217,6 +217,21 @@
       "supports_branch": false,
       "supports_ledger": false,
       "description": "Công nợ phải thu còn treo xem theo dòng hàng của hóa đơn sinh ra khoản nợ; cột nợ là của CẢ hóa đơn, lặp trên mọi dòng — không layout nào được cộng tổng nó"
+    },
+    {
+      "code": "ar_ap_settlements",
+      "sql_file": "ar_ap_settlements.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "direction",
+        "partner_id"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Từng lượt đối trừ công nợ trong kỳ kèm số ngày so với ngày chứng từ và hạn thanh toán; direction ghim 'thu' hoặc 'chi'"
     }
   ],
   "param_sets": [
@@ -513,6 +528,27 @@
             "kind": "bool",
             "label": "Chỉ khoản còn nợ",
             "label_en": "Open items only",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "ar_ap_settlements_params",
+      "spec": {
+        "params": [
+          {
+            "name": "direction",
+            "kind": "text",
+            "label": "Chiều công nợ",
+            "label_en": "Debt direction",
+            "required": true
+          },
+          {
+            "name": "partner_id",
+            "kind": "int",
+            "label": "Đối tác",
+            "label_en": "Partner",
             "required": false
           }
         ]
@@ -4622,6 +4658,171 @@
           "orientation": "landscape"
         }
       }
+    },
+    {
+      "code": "ar-settlements-by-partner",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "settled_on",
+            "label": "Ngày thu",
+            "label_en": "Settled on",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "settlement_no",
+            "label": "Số chứng từ thu",
+            "label_en": "Settlement no.",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "document_no",
+            "label": "Chứng từ nợ",
+            "label_en": "Debt document",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ nợ",
+            "label_en": "Debt date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "amount_fc",
+            "label": "Số thu (nguyên tệ)",
+            "label_en": "Amount (FC)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "amount",
+            "label": "Số thu (VND)",
+            "label_en": "Amount (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount"
+        ],
+        "sort": [
+          "partner_code",
+          "settled_on",
+          "settlement_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "ar-payment-days",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "document_no",
+            "label": "Chứng từ nợ",
+            "label_en": "Debt document",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "settled_on",
+            "label": "Ngày thu",
+            "label_en": "Settled on",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "days_to_pay",
+            "label": "Số ngày thu tiền",
+            "label_en": "Days to pay",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "days_late",
+            "label": "Số ngày trễ hạn",
+            "label_en": "Days late",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "amount",
+            "label": "Số thu (VND)",
+            "label_en": "Amount (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount"
+        ],
+        "sort": [
+          "partner_code",
+          "settled_on",
+          "document_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
     }
   ],
   "definitions": [
@@ -5282,6 +5483,38 @@
       "ledger_scope": "financial",
       "fixed_params": {
         "open_only": true
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "tong-hop-thanh-toan-cong-no-khach-hang",
+      "name": "Tổng hợp thanh toán công nợ khách hàng",
+      "name_en": "Customer settlements summary",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_settlements",
+      "layout_code": "ar-settlements-by-partner",
+      "param_set_code": "ar_ap_settlements_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu"
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "bao-cao-ngay-thanh-toan-theo-khach-hang",
+      "name": "Báo cáo ngày thanh toán theo khách hàng",
+      "name_en": "Customer payment days",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_settlements",
+      "layout_code": "ar-payment-days",
+      "param_set_code": "ar_ap_settlements_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu"
       },
       "package_scheme": null,
       "required_permission_module": "sales"
