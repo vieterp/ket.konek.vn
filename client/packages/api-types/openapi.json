@@ -6241,6 +6241,50 @@
         "title": "DatasetSummary",
         "type": "object"
       },
+      "DebtSide": {
+        "description": "Một chiều công nợ của đối tác tại `as_of`, trong phạm vi RLS người xem.\n\nSố VND theo tỷ giá GHI NHẬN nợ (cùng cột `remaining` của báo cáo tuổi nợ);\nkhoản nhiều đồng tiền cộng được trên trục này, còn nguyên tệ thì không.\n`oldest_due_date` là hạn sớm nhất trong các khoản QUÁ HẠN — chỗ bấu đầu tiên.",
+        "properties": {
+          "oldest_due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Due Date"
+          },
+          "open_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Open Amount",
+            "type": "string"
+          },
+          "open_count": {
+            "title": "Open Count",
+            "type": "integer"
+          },
+          "overdue_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Overdue Amount",
+            "type": "string"
+          },
+          "overdue_count": {
+            "title": "Overdue Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "open_amount",
+          "open_count",
+          "overdue_amount",
+          "overdue_count",
+          "oldest_due_date"
+        ],
+        "title": "DebtSide",
+        "type": "object"
+      },
       "DimensionDeclareRequest": {
         "additionalProperties": false,
         "description": "Khai một chiều mới — thao tác **cấu hình**, không phải nhập liệu hằng ngày.\n\nĐây là đường mà tiêu chí \"chiều mở rộng khai bằng cấu hình, không sửa code\"\nđi qua ở v1. Màn hình cho người dùng cuối hoãn tới v1.1 (RT-20), nên ở v1\nngười gọi là công cụ quản trị và gói cấu hình phase 5.",
@@ -13060,6 +13104,329 @@
         "title": "PartnerBankAccountUpdateRequest",
         "type": "object"
       },
+      "PartnerDebtCard": {
+        "description": "Thẻ công nợ (nguyên tắc nhóm 07: \"thẻ công nợ hiện ngay\").\n\nMỗi nửa chỉ có mặt khi người xem có quyền xem chứng từ của chiều đó\n(`sales.invoice.view` ↔ phải thu, `purchase.invoice.view` ↔ phải trả —\nquyết định user 2026-09-17, cùng trục với báo cáo tuổi nợ). Thiếu quyền →\nnửa ấy `null`, không phải 403: kế toán bán hàng vẫn mở được hồ sơ khách.\n\n`credit_available` = `credit_limit` − phải thu còn treo **không kể khoản ứng\ntrước** (cùng luật với `partner_open_debt()` của guard ngưỡng nợ); `null` khi\nđối tác không khai ngưỡng HOẶC người xem không thấy nửa phải thu (không có\ngì để trừ). Chỉ sổ tài chính — cùng sổ với `PartnerDebtGuard`; khác guard ở\nphạm vi chi nhánh (thẻ theo RLS người xem, guard toàn công ty).",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "credit_available": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Available"
+          },
+          "credit_limit": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Limit"
+          },
+          "payable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DebtSide"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "receivable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DebtSide"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "as_of",
+          "receivable",
+          "payable",
+          "credit_limit",
+          "credit_available"
+        ],
+        "title": "PartnerDebtCard",
+        "type": "object"
+      },
+      "PartnerInfo": {
+        "description": "Hồ sơ đối tác — cùng bộ trường với `PartnersResponse` của router danh mục.\n\nLớp TĨNH kế thừa đúng hai mảnh mà `build_schemas` ghép cho danh mục đối tác,\nthay vì gọi `build_schemas` lần nữa: hàm ấy dựng model bằng `create_model`\nvà gọi hai lần là hai lớp cùng tên `PartnersResponse` trên OpenAPI — bộ sinh\ntype cho client sẽ đổi tên một trong hai, và client không biết cái nào là\ncái nào. Tên khác (`PartnerInfo`) nói thẳng: đây là phần \"thông tin\" của\nthẻ, và thêm cột vào `PartnerFields` thì cả hai cùng nhận.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Địa chỉ"
+          },
+          "branch_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch Id"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Người liên hệ"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quốc gia"
+          },
+          "credit_limit": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ngưỡng nợ"
+          },
+          "district": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quận/Huyện"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "invoice_email": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email nhận hóa đơn"
+          },
+          "invoice_recipient": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Người nhận hóa đơn"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_customer": {
+            "default": false,
+            "title": "Là khách hàng",
+            "type": "boolean"
+          },
+          "is_group": {
+            "title": "Is Group",
+            "type": "boolean"
+          },
+          "is_organization": {
+            "default": true,
+            "title": "Là tổ chức",
+            "type": "boolean"
+          },
+          "is_vendor": {
+            "default": false,
+            "title": "Là nhà cung cấp",
+            "type": "boolean"
+          },
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "payment_term_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Điều khoản thanh toán"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Điện thoại"
+          },
+          "province": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tỉnh/Thành phố"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "tax_code": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mã số thuế"
+          },
+          "uid": {
+            "title": "Uid",
+            "type": "string"
+          },
+          "website": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website"
+          }
+        },
+        "required": [
+          "id",
+          "uid",
+          "code",
+          "name",
+          "name_en",
+          "parent_id",
+          "path",
+          "level",
+          "is_group",
+          "is_active",
+          "branch_id",
+          "row_version"
+        ],
+        "title": "PartnerInfo",
+        "type": "object"
+      },
       "PartnerKind": {
         "description": "Loại đối tác trên dòng hạch toán và trong công nợ — `0 customer 1 vendor 2 employee`.\n\nMột cột `partner_id` + một cột loại, chứ không ba cột khóa riêng: TK 131\ntheo dõi khách, 331 theo dõi nhà cung cấp, 141 theo dõi nhân viên — mỗi\ndòng chỉ có **một** đối tượng công nợ, và ba cột sẽ cho phép điền hai.",
         "enum": [
@@ -13069,6 +13436,23 @@
         ],
         "title": "PartnerKind",
         "type": "integer"
+      },
+      "PartnerOverviewResponse": {
+        "description": "Thông tin + thẻ công nợ của một đối tác — hai module, một màn hình (RT-21).",
+        "properties": {
+          "debt": {
+            "$ref": "#/components/schemas/PartnerDebtCard"
+          },
+          "partner": {
+            "$ref": "#/components/schemas/PartnerInfo"
+          }
+        },
+        "required": [
+          "partner",
+          "debt"
+        ],
+        "title": "PartnerOverviewResponse",
+        "type": "object"
       },
       "PartnersCreateRequest": {
         "additionalProperties": false,
@@ -20643,6 +21027,199 @@
         "title": "TotpEnrollResponse",
         "type": "object"
       },
+      "TradePendingIssueGroup": {
+        "description": "Một nhóm việc: đếm đủ, nêu đích danh tới `PENDING_SAMPLE_LIMIT` chứng từ.",
+        "properties": {
+          "code": {
+            "enum": [
+              "chua-ghi-so",
+              "chua-co-hoa-don",
+              "qua-han"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "next_action": {
+            "enum": [
+              "post",
+              "attach-vendor-invoice",
+              "issue-einvoice",
+              "pay",
+              "collect"
+            ],
+            "title": "Next Action",
+            "type": "string"
+          },
+          "sample": {
+            "items": {
+              "$ref": "#/components/schemas/TradePendingVoucher"
+            },
+            "title": "Sample",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "count",
+          "next_action",
+          "sample"
+        ],
+        "title": "TradePendingIssueGroup",
+        "type": "object"
+      },
+      "TradePendingIssuesResponse": {
+        "description": "Tab U1 của một chiều. Nhóm không có việc thì KHÔNG xuất hiện, cùng luật\nvới `/vouchers/pending-issues`: tab là danh sách việc, không phải bảng\ntrạng thái.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/TradePendingIssueGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "side": {
+            "enum": [
+              "purchase",
+              "sales"
+            ],
+            "title": "Side",
+            "type": "string"
+          }
+        },
+        "required": [
+          "side",
+          "as_of",
+          "groups"
+        ],
+        "title": "TradePendingIssuesResponse",
+        "type": "object"
+      },
+      "TradePendingVoucher": {
+        "description": "Một chứng từ trong nhóm — đủ để UI mở đúng chứng từ và nói \"của ai,\nbao nhiêu, hạn nào\".\n\n`amount_fc` theo NGUYÊN TỆ của chứng từ, kèm `currency_code`: ở nhóm\n`qua-han` là phần **còn nợ** tại `as_of` (cùng con số với báo cáo tuổi nợ),\nở hai nhóm kia là tổng thanh toán của chứng từ. Thân hóa đơn mua/bán chỉ giữ\ntổng nguyên tệ (VND là chuyện của từng dòng định khoản), nên đây là trục\nduy nhất mà cả ba nhóm nói cùng một thứ. Với nợ mang sang từ số dư ban đầu\n`voucher_id` là `None` — không có chứng từ để mở, nhưng khoản nợ vẫn là việc\nphải làm.",
+        "properties": {
+          "amount_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Fc",
+            "type": "string"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "days_overdue": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Overdue"
+          },
+          "document_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Date"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "partner_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Code"
+          },
+          "partner_id": {
+            "title": "Partner Id",
+            "type": "integer"
+          },
+          "partner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Name"
+          },
+          "source_label": {
+            "title": "Source Label",
+            "type": "string"
+          },
+          "voucher_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voucher Id"
+          },
+          "voucher_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voucher No"
+          }
+        },
+        "required": [
+          "voucher_id",
+          "source_label",
+          "voucher_no",
+          "document_date",
+          "partner_id",
+          "partner_code",
+          "partner_name",
+          "currency_code",
+          "amount_fc",
+          "due_date",
+          "days_overdue"
+        ],
+        "title": "TradePendingVoucher",
+        "type": "object"
+      },
       "TreasurerBookRequest": {
         "additionalProperties": false,
         "description": "Ghi sổ quỹ hàng loạt (FR-WHK-002/003): chọn ngày theo chứng từ hoặc một\nngày tùy chọn áp cho cả lô (BR-WHK-05 kiểm với TỪNG phiếu).",
@@ -21634,7 +22211,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.41.0"
+    "version": "0.42.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -40122,6 +40699,66 @@
         ]
       }
     },
+    "/api/v1/partners/{partner_id}/overview": {
+      "get": {
+        "description": "Hồ sơ đối tác kèm thẻ công nợ tại `as_of` (mặc định hôm nay).\n\nNhóm đối tác (`is_group`) cũng trả được: thẻ của nhóm là tổng của các đối\ntác trong nhóm? **Không** — dataset lọc theo `partner_id` đúng một bản ghi,\nnên thẻ của một nhóm là hai nửa rỗng (0 khoản). Cộng theo cây là báo cáo\n\"tổng hợp theo nhóm khách hàng\" (7G-2b), không phải việc của thẻ.",
+        "operationId": "partner_overview_api_v1_partners__partner_id__overview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "partner_id",
+            "required": true,
+            "schema": {
+              "title": "Partner Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerOverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Partner Overview",
+        "tags": [
+          "partners"
+        ]
+      }
+    },
     "/api/v1/periods/{period_id}/actions/lock": {
       "post": {
         "description": "Khóa sổ một kỳ (RT-09, U11). Cảnh báo trong response, không nằm trong khóa replay.\n\nLần gửi lại trả về dòng kỳ với danh sách cảnh báo **rỗng**: khóa idempotency\nlưu *tham chiếu* kết quả chứ không phải thân response (RT-12), và cảnh báo\nlà thông tin của đúng khoảnh khắc khóa — phát lại một con số đếm cũ còn dễ\ngây hiểu nhầm hơn là không nói gì.",
@@ -40561,6 +41198,57 @@
         "summary": "List Open Payables",
         "tags": [
           "purchase"
+        ]
+      }
+    },
+    "/api/v1/purchase/pending-issues": {
+      "get": {
+        "description": "Tab \"việc còn thiếu\" của màn hình mua hàng.",
+        "operationId": "purchase_pending_issues_api_v1_purchase_pending_issues_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TradePendingIssuesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Purchase Pending Issues",
+        "tags": [
+          "pending-issues"
         ]
       }
     },
@@ -41049,6 +41737,57 @@
         "summary": "List Open Receivables",
         "tags": [
           "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/pending-issues": {
+      "get": {
+        "description": "Tab \"việc còn thiếu\" của màn hình bán hàng.",
+        "operationId": "sales_pending_issues_api_v1_sales_pending_issues_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TradePendingIssuesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Sales Pending Issues",
+        "tags": [
+          "pending-issues"
         ]
       }
     },

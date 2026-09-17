@@ -1,8 +1,10 @@
 /**
  * Màn hình chi tiết đối tác — danh mục dùng chung cho cả mua và bán (nhóm 07).
  *
- * Ba thẻ: thông tin danh mục, tài khoản ngân hàng (FR-SYS-033), công nợ (giữ
- * chỗ tới phase 7 — H56). Đọc thẳng router module chứ không BFF, cùng lý do.
+ * Ba thẻ: thông tin danh mục, tài khoản ngân hàng (FR-SYS-033), công nợ. Hai
+ * thẻ đầu + công nợ đến từ MỘT lượt đọc BFF `partners/{id}/overview` (nợ H56,
+ * lát 7G-4) — màn hình đọc hai module nên BFF là đúng chỗ (RT-21); tài khoản
+ * ngân hàng là bảng con có đường ghi riêng nên vẫn đọc thẳng router module.
  *
  * Nút "Sửa" mở lại đúng `CatalogEditDrawer` của danh mục đối tác: một form cho
  * một việc, dù đi vào từ danh sách hay từ trang chi tiết.
@@ -23,7 +25,7 @@ import { FeatureNav } from './feature-nav'
 import { PartnerBankAccountsCard } from './partner-bank-accounts-card'
 import { PartnerDebtCard } from './partner-debt-card'
 import type { Partner } from './use-partner'
-import { usePartner } from './use-partner'
+import { usePartnerOverview } from './use-partner'
 
 function InfoRow({ label, value }: { readonly label: string; readonly value: string }): ReactElement | null {
   if (value === '') {
@@ -43,11 +45,12 @@ export function PartnerPage(): ReactElement {
   const { id } = useParams()
   const partnerId = Number.parseInt(id ?? '', 10)
   const idInvalid = Number.isNaN(partnerId)
-  const query = usePartner(idInvalid ? null : partnerId)
+  const query = usePartnerOverview(idInvalid ? null : partnerId)
   const [editing, setEditing] = useState(false)
 
   const partnersDef = catalogBySlug('partners')
-  const partner: Partner | undefined = query.data
+  const overview = query.data
+  const partner: Partner | undefined = overview?.partner
 
   // Đường dẫn gõ tay `/doi-tac/abc` phải ra thông báo, không phải vòng chờ
   // vĩnh viễn (truy vấn bị tắt thì `isPending` đứng yên mãi).
@@ -98,7 +101,7 @@ export function PartnerPage(): ReactElement {
         )}
         {error !== null && <Alert tone="error">{error}</Alert>}
 
-        {partner !== undefined && (
+        {overview !== undefined && partner !== undefined && (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <section
               aria-label={t('partner.info.title')}
@@ -148,7 +151,7 @@ export function PartnerPage(): ReactElement {
             </section>
 
             <div className="flex flex-col gap-4">
-              <PartnerDebtCard />
+              <PartnerDebtCard debt={overview.debt} />
               <PartnerBankAccountsCard partnerId={partner.id} />
             </div>
           </div>

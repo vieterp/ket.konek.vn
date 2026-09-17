@@ -90,7 +90,7 @@ Mỗi spike là **cổng chặn (blocking gate)** — trượt → quay lại qu
 | **Thuế** | Tờ khai GTGT/TNDN/TNCN (config) | TTĐB, tài nguyên, nhà thầu | Đặc thù ngành hoãn (phủ bằng chiều mở rộng + config — RT-20) |
 | **Hợp đồng & Ngân sách** | Chiều `contract_id` sẵn schema | SRS 16 đầy đủ (CTR module) | COULD, hoãn sau v1 (phạm vi v1, FR-NFR-070) |
 | **Báo cáo 4 form BCTC** | BCTC 4 báo cáo, drill-down GL | — | Không cắt |
-| **BFF thẻ công nợ đối tác** | — | `GET /partners/{id}/overview` (phase 7) | Thẻ công nợ đọc `ar_ap_ledger` của module `receivables`, mà module đó có ở phase 7. Dựng BFF ở phase 3 thì nó chỉ đọc **một** module — RT-21 cho phép BFF khi và chỉ khi màn hình đọc ≥2 module. Hoãn sang phase 7 (H56) |
+| **BFF thẻ công nợ đối tác** | `GET /partners/{id}/overview` (**xong 7G-4**, 2026-09-17) + `GET /{purchase,sales}/pending-issues` | — | Hoãn từ phase 3 (H56) vì thẻ công nợ đọc `ar_ap_ledger` của `receivables`; nay đọc dataset `ar_ap_open_items` của báo cáo tuổi nợ, quyền theo từng nửa |
 | **Dashboard phân tích** | — | **SRS 18 §4 (6 nhóm biểu đồ)** | SHOULD/COULD, hoãn v1.1; tách phase 10 → 10a/10b |
 | **Column-designer / Mail-merge** | — | FR-RPT-004/005/009/013 | End-user tùy chỉnh báo cáo / mail-merge tờ khai (phase 5, hoãn — RT-20) |
 | **Đặc thù ngành (SRS 20)** | — | — | Phủ bằng chiều mở rộng + gói config; không code riêng theo ngành |

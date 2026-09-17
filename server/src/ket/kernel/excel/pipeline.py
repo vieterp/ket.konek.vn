@@ -31,6 +31,7 @@ from sqlalchemy import (
     literal,
     or_,
     select,
+    true,
     update,
 )
 from sqlalchemy.orm import Session
@@ -420,23 +421,38 @@ def _new_rows_source(
     * `NOT EXISTS existing` — mã chưa có trong danh mục. Ở chế độ cập nhật, dòng
       trùng mã thuộc phần `UPDATE`, không phải phần `INSERT`.
 
-    `nextval` nằm trong một truy vấn con dẫn xuất để giá trị của nó dùng được
+    `nextval` nằm trong một truy vấn con **LATERAL** để giá trị của nó dùng được
     **hai lần** (khóa chính, và phần đuôi của `path`). Gọi `nextval` hai lần sẽ
     cho hai số khác nhau — `path` trỏ vào một id không tồn tại, và cây gãy ở
     đúng chỗ không ai kiểm.
+
+    Vì sao LATERAL chứ không một truy vấn con dẫn xuất rồi JOIN lại theo
+    `staging_id` (bản đầu): phép nối ấy giao cho planner chọn chiến lược, và
+    khi thống kê của `import_staging_rows` còn cũ (bảng vừa được đổ 10.000 dòng
+    mà autoanalyze chưa kịp chạy) nó ước lượng một dòng, chọn nested loop và
+    **quét lại** truy vấn con `nextval` cho từng dòng ngoài — 10.000 × 10.000,
+    đo được 169 s cho lượt nhập mà bình thường mất dưới một giây, và chỉ đỏ khi
+    chạy cả nhóm `db` (thứ tự tệp quyết định thống kê còn cũ hay không). LATERAL
+    không có phép nối để chọn: mỗi dòng ngoài gọi `nextval` đúng một lần, tuyến
+    tính bất kể thống kê.
     """
     table = table_for(spec.model)
     parent = table.alias("parent")
     existing = table.alias("existing")
     sequence = f"{table.name}_id_seq"
 
+    # Cột `staging_id` là THAM CHIẾU RA NGOÀI có chủ đích: một LATERAL không
+    # nhắc tới dòng ngoài thì planner coi như truy vấn con thường, tính MỘT lần
+    # và phát cùng một `new_id` cho mọi dòng (đã đo: trùng khóa chính ngay dòng
+    # thứ hai). Có tham chiếu thì nó phải chạy lại cho từng dòng — đúng nghĩa
+    # "mỗi dòng một số".
     numbered = (
         select(
             ImportStagingRow.id.label("staging_id"),
             func.nextval(func.pg_get_serial_sequence(table.name, "id")).label("new_id"),
         )
-        .where(ImportStagingRow.job_id == job_id)
-        .subquery("numbered")
+        .correlate(ImportStagingRow)
+        .lateral("numbered")
     )
     del sequence
 
@@ -484,7 +500,7 @@ def _new_rows_source(
     return (
         select(*columns)
         .select_from(ImportStagingRow)
-        .join(numbered, numbered.c.staging_id == ImportStagingRow.id)
+        .join(numbered, true())
         .outerjoin(parent, parent_visible)
         .where(ImportStagingRow.job_id == job_id)
         .where(or_(cell_or_null("parent_code").is_(None), parent.c.id.is_not(None)))

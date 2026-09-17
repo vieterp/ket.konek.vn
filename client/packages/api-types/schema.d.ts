@@ -7539,6 +7539,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partners/{partner_id}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Partner Overview
+         * @description Hồ sơ đối tác kèm thẻ công nợ tại `as_of` (mặc định hôm nay).
+         *
+         *     Nhóm đối tác (`is_group`) cũng trả được: thẻ của nhóm là tổng của các đối
+         *     tác trong nhóm? **Không** — dataset lọc theo `partner_id` đúng một bản ghi,
+         *     nên thẻ của một nhóm là hai nửa rỗng (0 khoản). Cộng theo cây là báo cáo
+         *     "tổng hợp theo nhóm khách hàng" (7G-2b), không phải việc của thẻ.
+         */
+        get: operations["partner_overview_api_v1_partners__partner_id__overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/periods/{period_id}/actions/lock": {
         parameters: {
             query?: never;
@@ -7736,6 +7761,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchase/pending-issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Purchase Pending Issues
+         * @description Tab "việc còn thiếu" của màn hình mua hàng.
+         */
+        get: operations["purchase_pending_issues_api_v1_purchase_pending_issues_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports": {
         parameters: {
             query?: never;
@@ -7922,6 +7967,26 @@ export interface paths {
          *     ấy là trả tiền lại khách bằng phiếu chi.
          */
         get: operations["list_open_receivables_api_v1_sales_open_invoices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/pending-issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sales Pending Issues
+         * @description Tab "việc còn thiếu" của màn hình bán hàng.
+         */
+        get: operations["sales_pending_issues_api_v1_sales_pending_issues_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10734,6 +10799,26 @@ export interface components {
             scheme: string;
         };
         /**
+         * DebtSide
+         * @description Một chiều công nợ của đối tác tại `as_of`, trong phạm vi RLS người xem.
+         *
+         *     Số VND theo tỷ giá GHI NHẬN nợ (cùng cột `remaining` của báo cáo tuổi nợ);
+         *     khoản nhiều đồng tiền cộng được trên trục này, còn nguyên tệ thì không.
+         *     `oldest_due_date` là hạn sớm nhất trong các khoản QUÁ HẠN — chỗ bấu đầu tiên.
+         */
+        DebtSide: {
+            /** Oldest Due Date */
+            oldest_due_date: string | null;
+            /** Open Amount */
+            open_amount: string;
+            /** Open Count */
+            open_count: number;
+            /** Overdue Amount */
+            overdue_amount: string;
+            /** Overdue Count */
+            overdue_count: number;
+        };
+        /**
          * DimensionDeclareRequest
          * @description Khai một chiều mới — thao tác **cấu hình**, không phải nhập liệu hằng ngày.
          *
@@ -13310,6 +13395,112 @@ export interface components {
             row_version: number;
         };
         /**
+         * PartnerDebtCard
+         * @description Thẻ công nợ (nguyên tắc nhóm 07: "thẻ công nợ hiện ngay").
+         *
+         *     Mỗi nửa chỉ có mặt khi người xem có quyền xem chứng từ của chiều đó
+         *     (`sales.invoice.view` ↔ phải thu, `purchase.invoice.view` ↔ phải trả —
+         *     quyết định user 2026-09-17, cùng trục với báo cáo tuổi nợ). Thiếu quyền →
+         *     nửa ấy `null`, không phải 403: kế toán bán hàng vẫn mở được hồ sơ khách.
+         *
+         *     `credit_available` = `credit_limit` − phải thu còn treo **không kể khoản ứng
+         *     trước** (cùng luật với `partner_open_debt()` của guard ngưỡng nợ); `null` khi
+         *     đối tác không khai ngưỡng HOẶC người xem không thấy nửa phải thu (không có
+         *     gì để trừ). Chỉ sổ tài chính — cùng sổ với `PartnerDebtGuard`; khác guard ở
+         *     phạm vi chi nhánh (thẻ theo RLS người xem, guard toàn công ty).
+         */
+        PartnerDebtCard: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Credit Available */
+            credit_available: string | null;
+            /** Credit Limit */
+            credit_limit: string | null;
+            payable: components["schemas"]["DebtSide"] | null;
+            receivable: components["schemas"]["DebtSide"] | null;
+        };
+        /**
+         * PartnerInfo
+         * @description Hồ sơ đối tác — cùng bộ trường với `PartnersResponse` của router danh mục.
+         *
+         *     Lớp TĨNH kế thừa đúng hai mảnh mà `build_schemas` ghép cho danh mục đối tác,
+         *     thay vì gọi `build_schemas` lần nữa: hàm ấy dựng model bằng `create_model`
+         *     và gọi hai lần là hai lớp cùng tên `PartnersResponse` trên OpenAPI — bộ sinh
+         *     type cho client sẽ đổi tên một trong hai, và client không biết cái nào là
+         *     cái nào. Tên khác (`PartnerInfo`) nói thẳng: đây là phần "thông tin" của
+         *     thẻ, và thêm cột vào `PartnerFields` thì cả hai cùng nhận.
+         */
+        PartnerInfo: {
+            /** Địa chỉ */
+            address?: string | null;
+            /** Branch Id */
+            branch_id: number | null;
+            /** Code */
+            code: string;
+            /** Người liên hệ */
+            contact_name?: string | null;
+            /** Quốc gia */
+            country?: string | null;
+            /** Ngưỡng nợ */
+            credit_limit?: string | null;
+            /** Quận/Huyện */
+            district?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Id */
+            id: number;
+            /** Email nhận hóa đơn */
+            invoice_email?: string | null;
+            /** Người nhận hóa đơn */
+            invoice_recipient?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /**
+             * Là khách hàng
+             * @default false
+             */
+            is_customer: boolean;
+            /** Is Group */
+            is_group: boolean;
+            /**
+             * Là tổ chức
+             * @default true
+             */
+            is_organization: boolean;
+            /**
+             * Là nhà cung cấp
+             * @default false
+             */
+            is_vendor: boolean;
+            /** Level */
+            level: number;
+            /** Name */
+            name: string;
+            /** Name En */
+            name_en: string | null;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Path */
+            path: string;
+            /** Điều khoản thanh toán */
+            payment_term_id?: number | null;
+            /** Điện thoại */
+            phone?: string | null;
+            /** Tỉnh/Thành phố */
+            province?: string | null;
+            /** Row Version */
+            row_version: number;
+            /** Mã số thuế */
+            tax_code?: string | null;
+            /** Uid */
+            uid: string;
+            /** Website */
+            website?: string | null;
+        };
+        /**
          * PartnerKind
          * @description Loại đối tác trên dòng hạch toán và trong công nợ — `0 customer 1 vendor 2 employee`.
          *
@@ -13319,6 +13510,14 @@ export interface components {
          * @enum {integer}
          */
         PartnerKind: 0 | 1 | 2;
+        /**
+         * PartnerOverviewResponse
+         * @description Thông tin + thẻ công nợ của một đối tác — hai module, một màn hình (RT-21).
+         */
+        PartnerOverviewResponse: {
+            debt: components["schemas"]["PartnerDebtCard"];
+            partner: components["schemas"]["PartnerInfo"];
+        };
         /**
          * PartnersCreateRequest
          * @description Đối tác — tạo mới.
@@ -15996,6 +16195,83 @@ export interface components {
         TotpEnrollResponse: {
             /** Provisioning Uri */
             provisioning_uri: string;
+        };
+        /**
+         * TradePendingIssueGroup
+         * @description Một nhóm việc: đếm đủ, nêu đích danh tới `PENDING_SAMPLE_LIMIT` chứng từ.
+         */
+        TradePendingIssueGroup: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "chua-ghi-so" | "chua-co-hoa-don" | "qua-han";
+            /** Count */
+            count: number;
+            /**
+             * Next Action
+             * @enum {string}
+             */
+            next_action: "post" | "attach-vendor-invoice" | "issue-einvoice" | "pay" | "collect";
+            /** Sample */
+            sample: components["schemas"]["TradePendingVoucher"][];
+        };
+        /**
+         * TradePendingIssuesResponse
+         * @description Tab U1 của một chiều. Nhóm không có việc thì KHÔNG xuất hiện, cùng luật
+         *     với `/vouchers/pending-issues`: tab là danh sách việc, không phải bảng
+         *     trạng thái.
+         */
+        TradePendingIssuesResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Groups */
+            groups: components["schemas"]["TradePendingIssueGroup"][];
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "purchase" | "sales";
+        };
+        /**
+         * TradePendingVoucher
+         * @description Một chứng từ trong nhóm — đủ để UI mở đúng chứng từ và nói "của ai,
+         *     bao nhiêu, hạn nào".
+         *
+         *     `amount_fc` theo NGUYÊN TỆ của chứng từ, kèm `currency_code`: ở nhóm
+         *     `qua-han` là phần **còn nợ** tại `as_of` (cùng con số với báo cáo tuổi nợ),
+         *     ở hai nhóm kia là tổng thanh toán của chứng từ. Thân hóa đơn mua/bán chỉ giữ
+         *     tổng nguyên tệ (VND là chuyện của từng dòng định khoản), nên đây là trục
+         *     duy nhất mà cả ba nhóm nói cùng một thứ. Với nợ mang sang từ số dư ban đầu
+         *     `voucher_id` là `None` — không có chứng từ để mở, nhưng khoản nợ vẫn là việc
+         *     phải làm.
+         */
+        TradePendingVoucher: {
+            /** Amount Fc */
+            amount_fc: string;
+            /** Currency Code */
+            currency_code: string;
+            /** Days Overdue */
+            days_overdue: number | null;
+            /** Document Date */
+            document_date: string | null;
+            /** Due Date */
+            due_date: string | null;
+            /** Partner Code */
+            partner_code: string | null;
+            /** Partner Id */
+            partner_id: number;
+            /** Partner Name */
+            partner_name: string | null;
+            /** Source Label */
+            source_label: string;
+            /** Voucher Id */
+            voucher_id: string | null;
+            /** Voucher No */
+            voucher_no: string | null;
         };
         /**
          * TreasurerBookRequest
@@ -28478,6 +28754,39 @@ export interface operations {
             };
         };
     };
+    partner_overview_api_v1_partners__partner_id__overview_get: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+            };
+            header?: never;
+            path: {
+                partner_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerOverviewResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     lock_period_api_v1_periods__period_id__actions_lock_post: {
         parameters: {
             query?: never;
@@ -28762,6 +29071,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpenInvoicesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    purchase_pending_issues_api_v1_purchase_pending_issues_get: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TradePendingIssuesResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -29099,6 +29439,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpenInvoicesResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    sales_pending_issues_api_v1_sales_pending_issues_get: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TradePendingIssuesResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

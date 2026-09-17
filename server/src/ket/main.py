@@ -74,6 +74,7 @@ from ket.api.routers.jobs import router as jobs_router
 from ket.api.routers.ledger import router as ledger_router
 from ket.api.routers.master_data import router as master_data_router
 from ket.api.routers.opening_balances import router as opening_balances_router
+from ket.api.routers.partner_overview import router as partner_overview_router
 from ket.api.routers.partners import router as partner_bank_accounts_router
 from ket.api.routers.period_lock import router as period_lock_router
 from ket.api.routers.price_list_lines import router as price_list_lines_router
@@ -86,6 +87,7 @@ from ket.api.routers.setup import router as setup_router
 from ket.api.routers.statements import router as statements_router
 from ket.api.routers.system import router as system_router
 from ket.api.routers.system_settings import router as settings_router
+from ket.api.routers.trade_pending_issues import router as trade_pending_issues_router
 from ket.api.routers.treasurer import router as treasurer_router
 from ket.api.routers.updates import router as updates_router
 from ket.api.routers.vouchers import router as vouchers_router
@@ -336,6 +338,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # và đổ ở phép ép UUID.
     app.include_router(einvoice_inbound_router)
     app.include_router(einvoice_router)
+    # Lát 7G-4 — hai BFF chỉ-đọc (RT-21), sau mọi router module chúng đọc:
+    # tab "việc còn thiếu" mua/bán (purchase|sales + einvoice + dataset công nợ)
+    # và thẻ công nợ đối tác (danh mục + dataset công nợ, nợ H56 phase 3).
+    app.include_router(trade_pending_issues_router)
+    app.include_router(partner_overview_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

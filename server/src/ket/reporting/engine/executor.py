@@ -17,7 +17,7 @@ XLSX `constant_memory` và grouping streaming có ý nghĩa.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Final, cast
 
 from sqlalchemy import text
@@ -27,7 +27,7 @@ from ket.kernel.config.reports.models import ReportDataset
 from ket.kernel.config.reports.scope import (
     assert_placeholders_allowed,
     compose_count_query,
-    compose_scoped_query,
+    compose_ordered_query,
 )
 from ket.kernel.config.reports.spec import LayoutSpec
 from ket.kernel.errors import ReportDatasetNotExecutableError
@@ -48,8 +48,27 @@ def execute_dataset(
     tra cột theo `key` của layout — dataset thêm cột mới không xô lệch báo cáo
     đang chạy.
     """
+    return execute_dataset_ordered(session, dataset=dataset, sort=layout_spec.sort, binds=binds)
+
+
+def execute_dataset_ordered(
+    session: Session,
+    *,
+    dataset: ReportDataset,
+    sort: Sequence[str],
+    binds: Mapping[str, object],
+) -> Iterator[Mapping[str, object]]:
+    """Cùng đường chạy, cho cửa đọc KHÔNG có layout (BFF lát 7G-4).
+
+    Ba lớp phòng thủ ở docstring đầu tệp giữ nguyên: bind-only, câu bọc phạm vi
+    của kernel (`compose_ordered_query`), RLS trên bảng gốc. Người gọi tự chịu
+    trách nhiệm về bộ bind — không đi qua `validate_params` vì không có
+    `ParamSetSpec` nào để kiểm; đổi lại họ chỉ được bind giá trị hằng hoặc giá
+    trị đã qua kiểm của chính họ (ngày, id đối tác), không phải tham số tự do
+    từ client.
+    """
     _require_executable(dataset)
-    statement = text(compose_scoped_query(dataset, layout_spec)).execution_options(
+    statement = text(compose_ordered_query(dataset, sort=sort)).execution_options(
         yield_per=FETCH_BATCH_SIZE
     )
     result = session.execute(statement, dict(binds))
