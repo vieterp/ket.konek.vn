@@ -408,6 +408,14 @@ class TestPurchaseAndPayableManifest:
         assert datasets == {"ar_ap_open_items"}
 
 
+_LINE_LEVEL_DEBT_DATASETS = frozenset({"ar_open_items_by_item"})
+"""Dataset trả một dòng cho mỗi DÒNG HÀNG trong khi cột nợ là của cả hóa đơn.
+
+Bồi tập này khi có dataset thứ hai cùng hình dạng. Nó ngắn vì hình dạng ấy hiếm —
+và chính vì hiếm mà nó nguy hiểm: mọi dataset khác cộng tổng cột tiền được, nên
+phản xạ mặc định là cộng."""
+
+
 class TestNoLayoutTotalsAnUnaddableColumn:
     """Chỉ cột VND được cộng tổng — cột nguyên tệ và cột số lượng thì không.
 
@@ -440,14 +448,25 @@ class TestNoLayoutTotalsAnUnaddableColumn:
         lựa chọn ấy: cộng tổng một cột `invoice_*` là **nhân khoản nợ lên đúng
         số dòng hàng**, và con số ra vẫn trông như một con số.
 
-        Canh theo tiền tố tên cột chứ không theo danh sách layout: một layout mới
-        trên dataset ấy sẽ chạm cổng này mà không ai phải nhớ bồi tên vào đâu.
+        Canh theo **dataset**, không theo tên cột và cũng không theo danh sách
+        layout gõ tay. Bản đầu (7G-2b) canh theo tiền tố `invoice_`, và lát 7G-3
+        chứng minh ngay là sai: `einvoice_revenue_check` có cột `invoice_amount`
+        **một dòng một hóa đơn**, cộng tổng nó là đúng — cổng theo tên bắt nhầm
+        một cột hợp lệ ở một dataset không liên quan. Bất biến thật sự thuộc về
+        dataset nào KHÔNG có một-dòng-một-khoản-nợ, nên phép canh đi từ đó; một
+        layout mới trên dataset ấy vẫn chạm cổng mà không ai phải nhớ gì.
         """
         loaded = load_builtin_reports()
-        for layout in loaded.manifest.layouts:
-            for key in loaded.layout_specs[layout.code].totals:
+        layouts_of_line_level_debt = {
+            definition.layout_code
+            for definition in loaded.manifest.definitions
+            if definition.dataset_code in _LINE_LEVEL_DEBT_DATASETS
+        }
+        assert layouts_of_line_level_debt, "không còn layout nào — cổng thành rỗng"
+        for layout_code in layouts_of_line_level_debt:
+            for key in loaded.layout_specs[layout_code].totals:
                 assert not key.startswith("invoice_"), (
-                    f"{layout.code}: cộng tổng {key} — cột của cả hóa đơn, lặp theo dòng hàng"
+                    f"{layout_code}: cộng tổng {key} — cột của cả hóa đơn, lặp theo dòng hàng"
                 )
 
 

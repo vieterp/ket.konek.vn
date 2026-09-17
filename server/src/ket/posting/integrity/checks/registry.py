@@ -17,9 +17,16 @@ Hợp đồng của một tệp check:
 * cột trả về tự mô tả được dòng chênh (khóa + hai vế lệch), và dòng nào lần
   về chứng từ được thì mang `voucher_id` — U11 đòi mỗi lỗi dẫn tới chỗ sửa.
 
-Thư mục này có MỘT tệp `.sql` **không** nằm trong `CHECKS`:
-`opening_detail_matches_control.sql`. Nó đứng trong registry từ 4C và đỏ trên
-dữ liệu ĐÚNG suốt từ đó — lát 7C-5 phát hiện khi đi đóng điều kiện cuối của
+Thư mục này có HAI tệp `.sql` **không** nằm trong `CHECKS`.
+
+`einvoice_matches_revenue.sql` (7G-3) chưa **bao giờ** được đăng ký: ba điều kiện
+phải đóng ghi ở đầu tệp, và cả ba đều là ca đẳng thức sai trên dữ liệu ĐÚNG (hóa
+đơn thay thế/điều chỉnh, `PHAT_HANH_LOI` giữ số, bút toán tay vào 511). Cộng một
+khiếm khuyết hạ tầng: nó nhận diện nhóm tài khoản doanh thu bằng **tiền tố số
+hiệu**, trong khi hệ thống tài khoản là dữ liệu của gói cấu hình.
+
+`opening_detail_matches_control.sql` thì ngược lại — nó đã TỪNG ở trong: đứng
+trong registry từ 4C và đỏ trên dữ liệu ĐÚNG suốt từ đó — lát 7C-5 phát hiện khi đi đóng điều kiện cuối của
 `arap_matches_control` và **gỡ nó ra** (quyết định user 2026-09-06); đầu tệp
 ghi đủ hai nguyên nhân và điều kiện đăng ký lại.
 

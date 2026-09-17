@@ -232,6 +232,51 @@
       "supports_branch": false,
       "supports_ledger": false,
       "description": "Từng lượt đối trừ công nợ trong kỳ kèm số ngày so với ngày chứng từ và hạn thanh toán; direction ghim 'thu' hoặc 'chi'"
+    },
+    {
+      "code": "einvoice_register",
+      "sql_file": "einvoice_register.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "issued_only",
+        "status",
+        "invoice_form_id",
+        "customer_id"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Sổ hóa đơn điện tử theo từng tờ kèm trạng thái vòng đời và tiền đọc từ sổ; cửa sổ kỳ cắt theo ngày hóa đơn, lùi về ngày chứng từ khi tờ chưa cấp số"
+    },
+    {
+      "code": "einvoice_revenue_check",
+      "sql_file": "einvoice_revenue_check.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "mismatch_only"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Đối chiếu tổng tiền tờ hóa đơn đã tiêu số với doanh thu và thuế đầu ra ghi sổ của cùng chứng từ; cột chênh là cột người đọc tìm"
+    },
+    {
+      "code": "invoice_number_ranges",
+      "sql_file": "invoice_number_ranges.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "branch_ids",
+        "invoice_form_id",
+        "active_only"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Dải số hóa đơn đã thông báo phát hành đối chiếu số đã tiêu / đã hủy / còn lại theo từng (chi nhánh, mẫu hóa đơn)"
     }
   ],
   "param_sets": [
@@ -549,6 +594,76 @@
             "kind": "int",
             "label": "Đối tác",
             "label_en": "Partner",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "einvoice_register_params",
+      "spec": {
+        "params": [
+          {
+            "name": "issued_only",
+            "kind": "bool",
+            "label": "Chỉ hóa đơn đã tiêu số",
+            "label_en": "Issued only",
+            "required": false
+          },
+          {
+            "name": "status",
+            "kind": "int",
+            "label": "Trạng thái hóa đơn",
+            "label_en": "Invoice status",
+            "required": false
+          },
+          {
+            "name": "invoice_form_id",
+            "kind": "int",
+            "label": "Mẫu hóa đơn",
+            "label_en": "Invoice form",
+            "required": false
+          },
+          {
+            "name": "customer_id",
+            "kind": "int",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "einvoice_revenue_check_params",
+      "spec": {
+        "params": [
+          {
+            "name": "mismatch_only",
+            "kind": "bool",
+            "label": "Chỉ dòng lệch",
+            "label_en": "Mismatches only",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "invoice_number_ranges_params",
+      "spec": {
+        "params": [
+          {
+            "name": "invoice_form_id",
+            "kind": "int",
+            "label": "Mẫu hóa đơn",
+            "label_en": "Invoice form",
+            "required": false
+          },
+          {
+            "name": "active_only",
+            "kind": "bool",
+            "label": "Chỉ hồ sơ đang hiệu lực",
+            "label_en": "Active only",
             "required": false
           }
         ]
@@ -4823,6 +4938,409 @@
           "orientation": "landscape"
         }
       }
+    },
+    {
+      "code": "einvoice-register",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          {
+            "key": "invoice_date",
+            "label": "Ngày hóa đơn",
+            "label_en": "Invoice date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "invoice_no",
+            "label": "Số hóa đơn",
+            "label_en": "Invoice no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "form_no",
+            "label": "Mẫu số",
+            "label_en": "Form no.",
+            "type": "text",
+            "align": "center",
+            "width": 9
+          },
+          {
+            "key": "form_code",
+            "label": "Ký hiệu",
+            "label_en": "Series",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "customer_code",
+            "label": "Mã KH",
+            "label_en": "Customer code",
+            "type": "text",
+            "width": 9
+          },
+          {
+            "key": "customer_name",
+            "label": "Tên khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "customer_tax_code",
+            "label": "Mã số thuế",
+            "label_en": "Tax code",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "tax_authority_code",
+            "label": "Mã CQT",
+            "label_en": "Tax authority code",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "total_fc",
+            "label": "Tổng tiền (nguyên tệ)",
+            "label_en": "Total (FC)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "total_amount",
+            "label": "Tổng tiền (VND)",
+            "label_en": "Total (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "totals": [],
+        "sort": [
+          "invoice_date",
+          "invoice_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "einvoice-by-status",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "period_date",
+            "label": "Ngày",
+            "label_en": "Date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "invoice_no",
+            "label": "Số hóa đơn",
+            "label_en": "Invoice no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "form_no",
+            "label": "Mẫu số",
+            "label_en": "Form no.",
+            "type": "text",
+            "align": "center",
+            "width": 9
+          },
+          {
+            "key": "form_code",
+            "label": "Ký hiệu",
+            "label_en": "Series",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "source_voucher_no",
+            "label": "Chứng từ gốc",
+            "label_en": "Source voucher",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "customer_name",
+            "label": "Tên khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "replaces_invoice_no",
+            "label": "Thay thế cho",
+            "label_en": "Replaces",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "adjusts_invoice_no",
+            "label": "Điều chỉnh cho",
+            "label_en": "Adjusts",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "total_amount",
+            "label": "Tổng tiền (VND)",
+            "label_en": "Total (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "status",
+            "heading_keys": [
+              "status_label"
+            ]
+          }
+        ],
+        "totals": [
+          "total_amount"
+        ],
+        "sort": [
+          "status",
+          "period_date",
+          "invoice_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "einvoice-revenue-check",
+      "kind": "table",
+      "spec": {
+        "columns": [
+          {
+            "key": "invoice_date",
+            "label": "Ngày hóa đơn",
+            "label_en": "Invoice date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "invoice_no",
+            "label": "Số hóa đơn",
+            "label_en": "Invoice no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "form_code",
+            "label": "Ký hiệu",
+            "label_en": "Series",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "source_voucher_no",
+            "label": "Chứng từ gốc",
+            "label_en": "Source voucher",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "customer_name",
+            "label": "Tên khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "status_label",
+            "label": "Trạng thái",
+            "label_en": "Status",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "posting_state",
+            "label": "Tình trạng ghi sổ",
+            "label_en": "Posting state",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "invoice_amount",
+            "label": "Tiền trên hóa đơn",
+            "label_en": "Invoice total",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "revenue_amount",
+            "label": "Doanh thu ghi sổ",
+            "label_en": "Booked revenue",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "vat_amount",
+            "label": "Thuế GTGT ghi sổ",
+            "label_en": "Booked VAT",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "variance",
+            "label": "Chênh lệch",
+            "label_en": "Variance",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "totals": [
+          "invoice_amount",
+          "revenue_amount",
+          "vat_amount",
+          "variance"
+        ],
+        "sort": [
+          "invoice_date",
+          "invoice_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "invoice-number-ranges",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "form_no",
+            "label": "Mẫu số",
+            "label_en": "Form no.",
+            "type": "text",
+            "align": "center",
+            "width": 9
+          },
+          {
+            "key": "form_code",
+            "label": "Ký hiệu",
+            "label_en": "Series",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "notice_no",
+            "label": "Số thông báo",
+            "label_en": "Notice no.",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "notice_date",
+            "label": "Ngày thông báo",
+            "label_en": "Notice date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "start_date",
+            "label": "Bắt đầu sử dụng",
+            "label_en": "Start date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "status_label",
+            "label": "Trạng thái",
+            "label_en": "Status",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "range_from",
+            "label": "Từ số",
+            "label_en": "From",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "range_to",
+            "label": "Đến số",
+            "label_en": "To",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "used_count",
+            "label": "Đã dùng",
+            "label_en": "Used",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "cancelled_count",
+            "label": "Trong đó đã hủy",
+            "label_en": "Cancelled",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "remaining_count",
+            "label": "Còn lại",
+            "label_en": "Remaining",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          }
+        ],
+        "group_by": [
+          {
+            "key": "branch_code",
+            "heading_keys": [
+              "branch_code",
+              "branch_name"
+            ]
+          }
+        ],
+        "totals": [],
+        "sort": [
+          "branch_code",
+          "form_no",
+          "form_code",
+          "start_date"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
     }
   ],
   "definitions": [
@@ -5518,6 +6036,64 @@
       },
       "package_scheme": null,
       "required_permission_module": "sales"
+    },
+    {
+      "code": "bang-ke-hoa-don-dien-tu",
+      "name": "Bảng kê hóa đơn điện tử đã phát hành",
+      "name_en": "Issued e-invoice register",
+      "category": "ban-hang",
+      "module": "einvoice",
+      "dataset_code": "einvoice_register",
+      "layout_code": "einvoice-register",
+      "param_set_code": "einvoice_register_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "issued_only": true
+      },
+      "package_scheme": null,
+      "required_permission_module": "einvoice"
+    },
+    {
+      "code": "danh-sach-hoa-don-theo-trang-thai",
+      "name": "Danh sách hóa đơn theo trạng thái",
+      "name_en": "E-invoices by status",
+      "category": "ban-hang",
+      "module": "einvoice",
+      "dataset_code": "einvoice_register",
+      "layout_code": "einvoice-by-status",
+      "param_set_code": "einvoice_register_params",
+      "ledger_scope": "financial",
+      "fixed_params": {},
+      "package_scheme": null,
+      "required_permission_module": "einvoice"
+    },
+    {
+      "code": "doi-chieu-hoa-don-voi-doanh-thu",
+      "name": "Đối chiếu hóa đơn đã phát hành với doanh thu",
+      "name_en": "Invoice to revenue reconciliation",
+      "category": "ban-hang",
+      "module": "einvoice",
+      "dataset_code": "einvoice_revenue_check",
+      "layout_code": "einvoice-revenue-check",
+      "param_set_code": "einvoice_revenue_check_params",
+      "ledger_scope": "financial",
+      "fixed_params": {},
+      "package_scheme": null,
+      "required_permission_module": "einvoice"
+    },
+    {
+      "code": "bang-ke-dai-so-hoa-don",
+      "name": "Bảng kê dải số hóa đơn",
+      "name_en": "Invoice number ranges",
+      "category": "ban-hang",
+      "module": "einvoice",
+      "dataset_code": "invoice_number_ranges",
+      "layout_code": "invoice-number-ranges",
+      "param_set_code": "invoice_number_ranges_params",
+      "ledger_scope": "financial",
+      "fixed_params": {},
+      "package_scheme": null,
+      "required_permission_module": "einvoice"
     }
   ]
 }

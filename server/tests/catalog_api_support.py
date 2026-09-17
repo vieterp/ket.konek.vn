@@ -13,9 +13,11 @@ người đọc thấy được cái được khẳng định ngay cạnh cái �
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import httpx
+import pyotp
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -26,8 +28,10 @@ from ket.kernel.datasets.models import User
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.master_data.registry import REGISTRY
 from ket.kernel.organization.service import BranchService
+from ket.kernel.persistence.session import control_session
 from ket.kernel.persistence.unit_of_work import RequestScope, unit_of_work
-from ket.kernel.security import role_service
+from ket.kernel.security import account_service, role_service, totp
+from ket.kernel.security.keystore import SecretBox
 from ket.kernel.security.models import Branch, Permission, Role, RolePermission
 from ket.kernel.security.permissions import Action
 
@@ -180,6 +184,81 @@ def actor(
         )
     response = client.post(
         "/api/v1/auth/login", json={"username": user.username, "password": test_password}
+    )
+    assert response.status_code == 200, response.text
+    return {
+        "Authorization": f"Bearer {response.json()['token']}",
+        DATASET_HEADER: dataset.code,
+    }
+
+
+def actor_with_totp(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset: DatasetRef,
+    user_factory: UserFactory,
+    secret_box: SecretBox,
+    role_code: str,
+    prefix: str,
+    test_password: str,
+    *,
+    branch_codes: list[str],
+) -> dict[str, str]:
+    """Như `actor`, nhưng cho vai trò nắm quyền khai `requires_second_factor`.
+
+    `actor` đăng nhập bằng mật khẩu trần, mà một vai trò nắm quyền đòi lớp thứ
+    hai (FR-SYS-074) chỉ nhận về **phiên hạn chế** `SessionScope.TOTP_ENROLLMENT`
+    — mọi lượt gọi API sau đó trả 403 `auth.session_scope_limited`, và thông điệp
+    lỗi ấy nói về đăng ký thiết bị chứ không nói về quyền, nên nó đọc như một lỗi
+    cấu hình test. Đây chính là hệ quả `deployment-guide` cảnh báo người vận
+    hành: cấp quyền hóa đơn điện tử là bắt người giữ phải đăng ký TOTP.
+
+    Rút ra đây ở lát 7G-3 theo đúng ngưỡng repo tự đặt: `test_einvoice_api` dựng
+    bản đầu, `test_einvoice_representation_api` chép bản thứ hai kèm lời hẹn, và
+    `test_einvoice_reports` là **tệp thứ ba**.
+    """
+    user = user_factory(prefix)
+    role_service.grant_role(
+        session_factory,
+        dataset_schema=dataset.schema_name,
+        user_id=user.id,
+        role_code=role_code,
+        actor_user_id=user.id,
+        actor_permissions=None,
+    )
+    for branch_code in branch_codes:
+        role_service.assign_branch(
+            session_factory,
+            dataset_schema=dataset.schema_name,
+            user_id=user.id,
+            branch_code=branch_code,
+            actor_user_id=user.id,
+            actor_branch_ids=None,
+        )
+
+    with control_session(session_factory) as session:
+        enrolling = account_service.find_user(session, user.username)
+        uri = account_service.begin_totp_enrollment(session, user=enrolling, secret_box=secret_box)
+    secret = uri.split("secret=")[1].split("&")[0]
+    generator = pyotp.TOTP(secret, digits=totp.DIGITS, interval=totp.PERIOD_SECONDS)
+    with control_session(session_factory) as session:
+        account_service.confirm_totp_enrollment(
+            session,
+            user=account_service.find_user(session, user.username),
+            code=generator.now(),
+            secret_box=secret_box,
+        )
+
+    # Chu kỳ KHÁC mã vừa dùng để xác nhận: mã đã dùng bị từ chối dùng lại
+    # (`TotpCodeReusedError`), và đó là chống phát lại chứ không phải một lỗi.
+    later = datetime.now(UTC) + timedelta(seconds=totp.PERIOD_SECONDS)
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": user.username,
+            "password": test_password,
+            "totp_code": generator.at(later),
+        },
     )
     assert response.status_code == 200, response.text
     return {

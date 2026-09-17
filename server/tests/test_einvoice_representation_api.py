@@ -27,24 +27,21 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import httpx
-import pyotp
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from catalog_api_support import UserFactory, ensure_role
+from catalog_api_support import UserFactory, actor_with_totp, ensure_role
 from conftest import api_test_client
 from einvoice_support import ensure_active_registration, ensure_invoice_form
 from ket.api.idempotency import IDEMPOTENCY_HEADER
 from ket.kernel.config.printing.voucher_fields import RATE_DECIMALS
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.formatting import format_money, format_quantity
-from ket.kernel.persistence.session import control_session
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.pricing import PriceSource
-from ket.kernel.security import account_service, role_service, totp
 from ket.kernel.security.keystore import SecretBox
 from ket.kernel.security.permissions import SYSTEM_MODULE, Action, permission_code
 from ket.main import create_app
@@ -134,69 +131,6 @@ def accounts(
     return account_ids
 
 
-def _login(
-    client: TestClient,
-    session_factory: sessionmaker[Session],
-    dataset: DatasetRef,
-    user_factory: UserFactory,
-    secret_box: SecretBox,
-    test_password: str,
-    *,
-    role_code: str,
-    prefix: str,
-    branch_code: str,
-) -> dict[str, str]:
-    """Người dùng có vai trò đòi 2FA, đã đăng ký TOTP, đã đăng nhập.
-
-    Cùng khuôn `test_einvoice_api._login_with_totp`: cả hai mã quyền của phân hệ
-    khai `requires_second_factor`, nên đăng nhập bằng mật khẩu trần chỉ nhận
-    được một phiên hạn chế.
-    """
-    user = user_factory(prefix)
-    role_service.grant_role(
-        session_factory,
-        dataset_schema=dataset.schema_name,
-        user_id=user.id,
-        role_code=role_code,
-        actor_user_id=user.id,
-        actor_permissions=None,
-    )
-    role_service.assign_branch(
-        session_factory,
-        dataset_schema=dataset.schema_name,
-        user_id=user.id,
-        branch_code=branch_code,
-        actor_user_id=user.id,
-        actor_branch_ids=None,
-    )
-    with control_session(session_factory) as session:
-        enrolling = account_service.find_user(session, user.username)
-        uri = account_service.begin_totp_enrollment(session, user=enrolling, secret_box=secret_box)
-    secret = uri.split("secret=")[1].split("&")[0]
-    generator = pyotp.TOTP(secret, digits=totp.DIGITS, interval=totp.PERIOD_SECONDS)
-    with control_session(session_factory) as session:
-        account_service.confirm_totp_enrollment(
-            session,
-            user=account_service.find_user(session, user.username),
-            code=generator.now(),
-            secret_box=secret_box,
-        )
-    later = datetime.now(UTC) + timedelta(seconds=totp.PERIOD_SECONDS)
-    response = client.post(
-        "/api/v1/auth/login",
-        json={
-            "username": user.username,
-            "password": test_password,
-            "totp_code": generator.at(later),
-        },
-    )
-    assert response.status_code == 200, response.text
-    return {
-        "Authorization": f"Bearer {response.json()['token']}",
-        DATASET_HEADER: dataset.code,
-    }
-
-
 def _permissions(*actions: Action) -> list[str]:
     return (
         [
@@ -236,16 +170,16 @@ def printer_headers(
         PRINTER_ROLE,
         _permissions(Action.VIEW, Action.CREATE, Action.EDIT, Action.PRINT),
     )
-    return _login(
+    return actor_with_totp(
         app_client,
         session_factory,
         dataset_alpha,
         user_factory,
         secret_box,
+        PRINTER_ROLE,
+        "banthehien",
         test_password,
-        role_code=PRINTER_ROLE,
-        prefix="banthehien",
-        branch_code=context.branch_code,
+        branch_codes=[context.branch_code],
     )
 
 
@@ -271,16 +205,16 @@ def viewer_headers(
         VIEWER_ROLE,
         _permissions(Action.VIEW, Action.CREATE, Action.EDIT),
     )
-    return _login(
+    return actor_with_totp(
         app_client,
         session_factory,
         dataset_alpha,
         user_factory,
         secret_box,
+        VIEWER_ROLE,
+        "chixem",
         test_password,
-        role_code=VIEWER_ROLE,
-        prefix="chixem",
-        branch_code=context.branch_code,
+        branch_codes=[context.branch_code],
     )
 
 
