@@ -82,7 +82,7 @@ def partner_overview(
     "tổng hợp theo nhóm khách hàng" (7G-2b), không phải việc của thẻ.
     """
     with unit_of_work(factory, authorized.scope) as session:
-        partner = _load_partner(session, partner_id, authorized)
+        partner = load_partner(session, partner_id, authorized)
         # Ngày địa phương của máy chủ, cùng khuôn với `cashflow.py`.
         effective_as_of = as_of or datetime.now(UTC).astimezone().date()
 
@@ -119,7 +119,7 @@ def partner_overview(
         )
 
 
-def _load_partner(session: Session, partner_id: int, authorized: AuthorizedRequest) -> Partner:
+def load_partner(session: Session, partner_id: int, authorized: AuthorizedRequest) -> Partner:
     """Cùng cửa với router danh mục: không tồn tại hay thuộc chi nhánh khác đều
     là `404` (xem `ensure_visible`)."""
     service: MasterDataService[MasterDataRow] = MasterDataService(session, PARTNER_SPEC.model)

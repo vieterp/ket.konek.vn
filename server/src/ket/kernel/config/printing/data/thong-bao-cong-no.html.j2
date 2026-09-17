@@ -1,0 +1,104 @@
+{#- Thông báo công nợ gửi khách hàng (SRS 06 §5.2 #12).
+
+    Thư một chiều, KHÔNG phải chứng từ và KHÔNG lưu dòng nào (7G-5): số còn nợ
+    và phần quá hạn tính tại ngày thông báo từ dataset công nợ, cùng nguồn với
+    báo cáo tuổi nợ. `fields` là khối người nhận, `tables` là bảng khoản còn
+    treo kèm hạn và số ngày quá hạn, `notes` là tài khoản ngân hàng nhận tiền
+    của đơn vị (mọi TK ngân hàng doanh nghiệp đang hoạt động), `amount_in_words`
+    là tổng còn nợ bằng chữ. Không có chữ ký bên nhận: thư thông báo chỉ một
+    bên ký.
+-#}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+</head>
+<body class="page-portrait">
+  <div class="voucher-header">
+    <div class="voucher-unit">
+      {% if logo_url %}<img class="unit-logo" src="{{ logo_url }}" alt="">{% endif %}
+      <div class="unit-name">{{ unit.name }}</div>
+      {% if unit.address %}<div>Địa chỉ: {{ unit.address }}</div>{% endif %}
+      {% if unit.tax_code %}<div>MST: {{ unit.tax_code }}</div>{% endif %}
+    </div>
+    <div class="form-code">
+      <div class="code">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+      <div class="note">Độc lập - Tự do - Hạnh phúc</div>
+    </div>
+  </div>
+
+  <h1 class="report-title">{{ title }}</h1>
+
+  <div class="voucher-fields">
+    <p><strong>Kính gửi:</strong></p>
+    {% for entry in fields %}
+    <p>{{ entry.label }}: <span class="field-value">{{ entry.value }}</span></p>
+    {% endfor %}
+    <p>{{ unit.name }} trân trọng thông báo tình hình công nợ của Quý khách tính đến ngày {{ document_date }} như sau:</p>
+  </div>
+
+  {% for table in tables %}
+  {% if table.caption %}<p class="voucher-fields"><strong>{{ table.caption }}</strong></p>{% endif %}
+  <table class="report-table">
+    <colgroup>
+      {% for column in table.columns %}
+      <col{% if column.width %} style="width: {{ column.width }}"{% endif %}>
+      {% endfor %}
+    </colgroup>
+    <thead>
+      <tr>
+        {% for column in table.columns %}
+        <th class="cell-{{ column.align }}">{{ column.label }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in table.rows %}
+      <tr>
+        {% for cell in row %}
+        <td class="cell-{{ table.columns[loop.index0].align }}">{{ cell }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+      {% if table.total_row %}
+      <tr class="grand-total">
+        {% for cell in table.total_row %}
+        <td class="cell-{{ table.columns[loop.index0].align }}">{{ cell }}</td>
+        {% endfor %}
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+  {% endfor %}
+
+  <div class="voucher-fields">
+    <p>Tổng số tiền còn phải thanh toán: <span class="field-value">{{ amount }}</span></p>
+    <p>(Viết bằng chữ): <span class="amount-words">{{ amount_in_words }}</span></p>
+    <p>Đề nghị Quý khách thu xếp thanh toán các khoản đến hạn và quá hạn. Nếu có chênh lệch so với sổ sách của Quý khách, vui lòng thông báo lại cho chúng tôi để cùng đối chiếu.</p>
+    {% if notes %}<p><strong>Thông tin tài khoản nhận tiền:</strong></p>{% endif %}
+    {% for entry in notes %}
+    <p>- {{ entry.label }}: <span class="field-value">{{ entry.value }}</span></p>
+    {% endfor %}
+  </div>
+
+  <div class="signature-date">{{ signature_date_line }}</div>
+  <div class="signature-block">
+    <div class="signature">
+      <div class="role">Người lập</div>
+      <div class="note">(Ký, họ tên)</div>
+      <div class="gap"></div>
+    </div>
+    <div class="signature">
+      <div class="role">Kế toán trưởng</div>
+      <div class="note">(Ký, họ tên)</div>
+      <div class="gap"></div>
+    </div>
+    <div class="signature">
+      <div class="role">Giám đốc</div>
+      <div class="note">(Ký, họ tên, đóng dấu)</div>
+      <div class="gap"></div>
+    </div>
+  </div>
+</body>
+</html>

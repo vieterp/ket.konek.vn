@@ -325,6 +325,11 @@ class TestBuiltinManifest:
             # Chỉ dùng cho hóa đơn phát hành nội bộ (đặt in / tự in); hóa đơn
             # qua nhà cung cấp lấy bản thể hiện của chính họ.
             ("HDDT", "HOA-DON-BAN-THE-HIEN"),
+            # Ba văn bản gửi đối tác (7G-5) — in từ sổ, tính tại chỗ, không lưu:
+            # biên bản đối chiếu hai chiều + thông báo công nợ.
+            ("BBDC-THU", "BIEN-BAN-DOI-CHIEU-CONG-NO-PHAI-THU"),
+            ("BBDC-TRA", "BIEN-BAN-DOI-CHIEU-CONG-NO-PHAI-TRA"),
+            ("TBCN", "THONG-BAO-CONG-NO"),
         }
         assert set(by_key) == expected
         assert all(entry.is_default for entry in by_key.values())

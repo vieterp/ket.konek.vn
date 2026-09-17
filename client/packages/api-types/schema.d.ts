@@ -7539,6 +7539,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partners/{partner_id}/documents/thong-bao-cong-no/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Print Debt Notice
+         * @description Thông báo công nợ phải thu tại `as_of` (mặc định hôm nay): tổng còn nợ,
+         *     phần quá hạn, từng khoản kèm hạn và số ngày quá hạn, TK nhận tiền.
+         */
+        post: operations["print_debt_notice_api_v1_partners__partner_id__documents_thong_bao_cong_no_print_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partners/{partner_id}/documents/{kind}/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Print Partner Statement
+         * @description Biên bản đối chiếu công nợ theo kỳ `[from_date, to_date]`.
+         *
+         *     Bốn số của kỳ đến từ HAI lượt đọc dataset (`open_only=False`) — tại ngày
+         *     liền trước kỳ và tại cuối kỳ — ghép THEO TỪNG KHOẢN bằng `period_summary`,
+         *     nên đẳng thức đầu + tăng − giảm = cuối đúng bằng cấu trúc, kể cả khi kỳ
+         *     vắt qua lượt chuyển số dư sang niên độ mới. Bảng chi tiết là khoản còn treo
+         *     tại cuối kỳ.
+         *
+         *     "In lại cùng (đối tác, kỳ) ra cùng số" đúng khi mọi chứng từ có ngày trong
+         *     kỳ đã ghi sổ: khoản vào biên bản theo NGÀY CHỨNG TỪ còn đối trừ theo NGÀY
+         *     GHI SỔ (luật dataset từ 7A), nên một hóa đơn ghi sổ muộn sẽ đổi tờ đã in.
+         */
+        post: operations["print_partner_statement_api_v1_partners__partner_id__documents__kind__print_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partners/{partner_id}/overview": {
         parameters: {
             query?: never;
@@ -28742,6 +28793,90 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OpeningInvoiceListResponse"];
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    print_debt_notice_api_v1_partners__partner_id__documents_thong_bao_cong_no_print_post: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+                template_code?: string | null;
+            };
+            header?: never;
+            path: {
+                partner_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description PDF văn bản gửi đối tác */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description Không có đối tác / mẫu in */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    print_partner_statement_api_v1_partners__partner_id__documents__kind__print_post: {
+        parameters: {
+            query: {
+                from_date: string;
+                to_date: string;
+                template_code?: string | null;
+            };
+            header?: never;
+            path: {
+                partner_id: number;
+                kind: "doi-chieu-phai-thu" | "doi-chieu-phai-tra";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description PDF văn bản gửi đối tác */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description Không có đối tác / mẫu in */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {

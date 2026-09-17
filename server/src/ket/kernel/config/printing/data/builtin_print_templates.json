@@ -63,6 +63,27 @@
       "name": "Hóa đơn giá trị gia tăng (bản thể hiện)",
       "html_file": "hoa-don-ban-the-hien.html.j2",
       "is_default": true
+    },
+    {
+      "document_type": "BBDC-THU",
+      "code": "BIEN-BAN-DOI-CHIEU-CONG-NO-PHAI-THU",
+      "name": "Biên bản đối chiếu và xác nhận công nợ phải thu",
+      "html_file": "bien-ban-doi-chieu-cong-no-phai-thu.html.j2",
+      "is_default": true
+    },
+    {
+      "document_type": "BBDC-TRA",
+      "code": "BIEN-BAN-DOI-CHIEU-CONG-NO-PHAI-TRA",
+      "name": "Biên bản đối chiếu và xác nhận công nợ phải trả",
+      "html_file": "bien-ban-doi-chieu-cong-no-phai-tra.html.j2",
+      "is_default": true
+    },
+    {
+      "document_type": "TBCN",
+      "code": "THONG-BAO-CONG-NO",
+      "name": "Thông báo công nợ",
+      "html_file": "thong-bao-cong-no.html.j2",
+      "is_default": true
     }
   ]
 }
