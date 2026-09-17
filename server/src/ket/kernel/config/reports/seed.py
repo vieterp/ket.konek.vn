@@ -20,14 +20,14 @@ kết quả**. Chạy lúc gieo (dataset rỗng) nên miễn phí.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date
 from decimal import Decimal
 from types import MappingProxyType
 from typing import Final
 
 import structlog
-from sqlalchemy import Connection, delete, insert, select, text, update
+from sqlalchemy import Connection, delete, exists, insert, select, text, update
 
 from ket.kernel.config.accounts_models import ConfigPackage
 from ket.kernel.config.reports.loader import LoadedReports, load_builtin_reports
@@ -123,6 +123,46 @@ def refresh_builtin_reports(connection: Connection, schema: str) -> None:
             .values(spec=param_set.spec)
         )
     ensure_builtin_reports(connection, schema)
+
+
+def drop_retired_builtin_metadata(
+    connection: Connection,
+    schema: str,
+    *,
+    dataset_codes: Sequence[str] = (),
+    param_set_codes: Sequence[str] = (),
+) -> None:
+    """Dọn dataset / bộ tham số builtin đã RỜI manifest — đường dành cho migration.
+
+    `refresh_builtin_reports` xóa sạch definition builtin rồi gieo lại, nhưng với
+    dataset / layout / param set nó chỉ `UPDATE` **theo mã còn trong manifest**.
+    Mã nào rời manifest thì không đường nào chạm tới nữa: dòng ấy ở lại bảng mang
+    SQL của bản phát hành cũ, vô hình vì không definition nào trỏ tới — cho tới
+    ngày ai đó đăng ký một báo cáo trỏ vào mã ấy và nhận về SQL của tháng trước.
+
+    Xóa **có điều kiện**, không xóa trần. `report_definitions.dataset_code` là
+    khóa ngoại `ondelete=RESTRICT`, nên một definition không-builtin (người dùng
+    tự đăng ký) trỏ vào mã đang rút sẽ làm lượt xóa đổ giữa chuỗi migration.
+    Trạng thái ấy hợp lệ — báo cáo riêng của người dùng phải tiếp tục chạy — nên
+    "không còn ai trỏ tới" là phép canh, và dòng ở lại là kết cục ĐÚNG khi có
+    người trỏ tới, không phải một lỗi cần dừng bản nâng cấp.
+    """
+    bind_seed_schema(connection, schema)
+    for code in dataset_codes:
+        connection.execute(
+            delete(ReportDataset).where(
+                ReportDataset.code == code,
+                ReportDataset.is_builtin.is_(True),
+                ~exists().where(ReportDefinition.dataset_code == code),
+            )
+        )
+    for code in param_set_codes:
+        connection.execute(
+            delete(ReportParamSet).where(
+                ReportParamSet.code == code,
+                ~exists().where(ReportDefinition.param_set_code == code),
+            )
+        )
 
 
 def _seed_datasets(connection: Connection, loaded: LoadedReports) -> int:

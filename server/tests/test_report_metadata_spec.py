@@ -21,7 +21,7 @@ import pytest
 # đã import hộ — đúng kiểu phụ thuộc thứ tự làm bài kiểm xanh vì lý do khác lý
 # do nó viết ra.
 from ket import model_registry as _model_registry  # noqa: F401
-from ket.kernel.config.reports.loader import load_builtin_reports
+from ket.kernel.config.reports.loader import _expand_includes, load_builtin_reports
 from ket.kernel.config.reports.models import ReportDataset
 from ket.kernel.config.reports.scope import (
     assert_placeholders_allowed,
@@ -365,24 +365,47 @@ class TestPurchaseAndPayableManifest:
             "tong-hop-cong-no-phai-tra",
             "chi-tiet-cong-no-phai-tra",
             "chi-tiet-cong-no-phai-tra-theo-hoa-don",
-            "chi-tiet-tuoi-no-phai-tra",
         ):
             assert by_code[code].fixed_params == {"direction": "chi"}, code
+        # Ba báo cáo tuổi nợ ghim thêm `open_only`: từ 7G-2b chúng đọc dataset
+        # công nợ chung, nơi phép lọc "chỉ khoản còn treo" là tham số chứ không
+        # phải điều kiện cứng trong SQL.
+        assert by_code["chi-tiet-tuoi-no-phai-tra"].fixed_params == {
+            "direction": "chi",
+            "open_only": True,
+        }
+        assert by_code["tuoi-no-phai-tra"].fixed_params == {
+            "direction": "chi",
+            "open_only": True,
+        }
+        assert by_code["tuoi-no-phai-thu"].fixed_params == {
+            "direction": "thu",
+            "open_only": True,
+        }
 
-    def test_the_aging_detail_reuses_the_delivered_aging_dataset(self) -> None:
-        """ "Chi tiết công nợ theo tuổi nợ" KHÔNG có dataset riêng.
+    def test_every_debt_report_reads_the_one_debt_dataset(self) -> None:
+        """Năm báo cáo công nợ — hai bảng tuổi nợ, chi tiết theo tuổi nợ, tổng
+        hợp và chi tiết — đọc **đúng một** dataset.
 
-        Nó là bảng tuổi nợ của 7A xem ở mức chứng từ, nên nó dùng lại
-        `ar_ap_aging`. Một dataset thứ hai sẽ là bản chép thứ hai của phép chia
-        mốc tuổi nợ — và hai bảng tuổi nợ lệch nhau là thứ không ai đối chiếu ra.
+        7A dựng `ar_ap_aging`, 7G-1 dựng `ar_ap_open_items`, và hai tệp ấy chia
+        nhau nguyên khối `settled_as_of` năm bảng lẫn khối UNION hai nguồn kèm
+        phép chọn niên độ per-branch. Chúng đã lệch thật hai lần trong một vòng
+        review, nên 7G-2b nhập chúng lại. Bài này là thứ chặn một lát sau tách
+        chúng ra lần nữa: một phép chia mốc tuổi nợ, một phép cộng tiền đã trả.
         """
         loaded = load_builtin_reports()
         by_code = {d.code: d for d in loaded.manifest.definitions}
-        assert by_code["chi-tiet-tuoi-no-phai-tra"].dataset_code == "ar_ap_aging"
-        assert (
-            by_code["chi-tiet-tuoi-no-phai-tra"].dataset_code
-            == by_code["tuoi-no-phai-tra"].dataset_code
-        )
+        datasets = {
+            by_code[code].dataset_code
+            for code in (
+                "tuoi-no-phai-thu",
+                "tuoi-no-phai-tra",
+                "chi-tiet-tuoi-no-phai-tra",
+                "tong-hop-cong-no-phai-tra",
+                "chi-tiet-cong-no-phai-tra",
+            )
+        }
+        assert datasets == {"ar_ap_open_items"}
 
 
 class TestNoLayoutTotalsAnUnaddableColumn:
@@ -407,6 +430,25 @@ class TestNoLayoutTotalsAnUnaddableColumn:
             for key in spec.totals:
                 assert not key.endswith("_fc"), f"{layout.code}: cộng tổng cột nguyên tệ {key}"
                 assert key != "quantity", f"{layout.code}: cộng tổng số lượng đa đơn vị"
+
+    def test_no_layout_totals_a_column_that_repeats_per_line(self) -> None:
+        """Cột `invoice_*` là số của CẢ hóa đơn, lặp trên mọi dòng hàng của nó.
+
+        `ar_open_items_by_item` (SRS 06 §5.2 #4, lát 7G-2b) không phân bổ phần
+        còn nợ cho dòng hàng — sổ đối trừ theo khoản chứ không theo dòng, và một
+        phép chia theo tỷ lệ là phép chia không sổ nào ghi. Hệ quả bắt buộc của
+        lựa chọn ấy: cộng tổng một cột `invoice_*` là **nhân khoản nợ lên đúng
+        số dòng hàng**, và con số ra vẫn trông như một con số.
+
+        Canh theo tiền tố tên cột chứ không theo danh sách layout: một layout mới
+        trên dataset ấy sẽ chạm cổng này mà không ai phải nhớ bồi tên vào đâu.
+        """
+        loaded = load_builtin_reports()
+        for layout in loaded.manifest.layouts:
+            for key in loaded.layout_specs[layout.code].totals:
+                assert not key.startswith("invoice_"), (
+                    f"{layout.code}: cộng tổng {key} — cột của cả hóa đơn, lặp theo dòng hàng"
+                )
 
 
 _SALES_KINDS = tuple(
@@ -544,3 +586,48 @@ class TestSalesManifest:
             "salesperson_id",
             "project_id",
         }
+
+
+class TestSharedSqlFragments:
+    """Cơ chế `-- #include:` của lát 7G-2b — bung mảnh SQL dùng chung ở LOADER.
+
+    Hai dataset công nợ hỏi cùng một câu ("khoản này đã đối trừ bao nhiêu tính
+    tới ngày X") và câu trả lời là một phép cộng trên năm bảng. Trước lát này nó
+    có hai bản chép, hai docstring đều ghi lý do là "tệp SQL dataset không
+    include được nhau", và hai bản ấy đã lệch thật hai lần trong một vòng review.
+
+    Ba bài dưới đây canh cho cơ chế **fail-closed**: một chỉ thị sai phải nổ lúc
+    đọc manifest (lúc cấp dữ liệu / lúc test), không phải lúc người dùng bấm "Xem
+    báo cáo" — đúng triết lý fail-closed của chính `loader.py`.
+    """
+
+    def test_the_directive_is_replaced_and_keeps_its_indentation(self) -> None:
+        loaded = load_builtin_reports()
+        sql = loaded.sql_by_dataset["ar_ap_open_items"]
+        # Dò theo DÒNG chỉ thị: chính docstring của mảnh nhắc tới cú pháp nhúng
+        # để người đọc biết cách dùng nó, nên một phép `in` trên cả câu SQL coi
+        # lời nhắc ấy là một chỉ thị chưa bung.
+        assert not any(line.strip().startswith("-- #include:") for line in sql.splitlines())
+        # Thân mảnh phải có mặt, và phải giữ thụt đầu dòng của chỉ thị: một khối
+        # bung ra sát lề giữa một `WITH` đọc như một mảnh lạc.
+        assert "    SELECT s.target_kind," in sql
+        assert "      FROM cash_settlements" in sql
+
+    def test_both_debt_datasets_get_the_very_same_fragment(self) -> None:
+        """Hai dataset công nợ mang ĐÚNG một khối — đó là cả mục đích của cơ chế."""
+        loaded = load_builtin_reports()
+        marker = "SUM(s.amount - s.fx_diff) AS settled"
+        assert marker in loaded.sql_by_dataset["ar_ap_open_items"]
+        assert marker in loaded.sql_by_dataset["ar_open_items_by_item"]
+
+    @pytest.mark.parametrize(
+        "directive",
+        [
+            "-- #include: khong_co_that.sql",  # mảnh không tồn tại
+            "-- #include: ../ar_ap_open_items.sql",  # thoát khỏi thư mục mảnh
+            "-- #include: settled_as_of.txt",  # không phải tệp SQL
+        ],
+    )
+    def test_a_bad_directive_raises_instead_of_reaching_the_database(self, directive: str) -> None:
+        with pytest.raises(ReportDatasetInvalidError):
+            _expand_includes(f"SELECT 1\n{directive}\n", dataset_code="bat_ky")

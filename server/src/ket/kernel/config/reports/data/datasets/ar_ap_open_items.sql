@@ -1,11 +1,21 @@
 -- Dataset `ar_ap_open_items`: khoản công nợ theo TỪNG chứng từ — giá trị gốc,
--- số đã thanh toán **tại `:to_date`**, số còn lại. Nền của SRS 05 §5 #4/#5/#6
--- (tổng hợp / chi tiết / chi tiết theo hóa đơn của công nợ phải trả) và, qua
--- `:direction`, của SRS 06 §5.2 #1/#2/#3 ở chiều phải thu.
+-- số đã thanh toán **tại `:to_date`**, số còn lại, và nhóm tuổi nợ của phần còn
+-- treo. Nền của SRS 05 §5 #4/#5/#6/#8 (công nợ phải trả) và, qua `:direction`,
+-- của SRS 06 §5.2 #1/#2/#3/#5/#6/#7/#8/#9 ở chiều phải thu.
 --
 -- Một SQL phục vụ CẢ HAI chiều, đúng khuôn `ar_ap_aging` của lát 7A: chiều là
 -- tham số ghim (`fixed_params`), không phải hai tệp SQL. Hai bản chép của cùng
 -- phép cộng công nợ sẽ lệch nhau ở lần sửa đầu tiên.
+--
+-- **Lát 7G-2b rút `ar_ap_aging` vào đây.** Hai dataset ấy khác nhau đúng ba
+-- điểm — aging có ba cột tuổi nợ, aging luôn lọc phần còn treo, và aging gọi
+-- `invoice_no`/`invoice_date` chỗ này gọi `document_no`/`document_date` — trong
+-- khi chúng chia nhau NGUYÊN hai khối khó nhất: `settled_as_of` năm bảng và
+-- khối UNION hai nguồn kèm phép chọn niên độ per-branch. Hai bản chép ấy đã
+-- lệch thật hai lần trong một vòng review (7G-1), nên chúng nhập một: ba cột
+-- tuổi nợ về đây, phần "chỉ khoản còn treo" thành `fixed_params.open_only`, và
+-- ba định nghĩa tuổi nợ đổi khóa layout sang từ vựng `document_*` — "phải thu
+-- ghi tay" (3) và "khách ứng trước" (5) vốn không phải hóa đơn nào cả.
 --
 -- **Hai nguồn, một mặt phẳng.** Nợ mang sang từ trước khi hệ chạy ở
 -- `opening_balance_invoices` (4C), nợ do hệ sinh ra ở `ar_ap_ledger` (7A, và từ
@@ -23,12 +33,6 @@
 -- 30/04 là 1.000.000. Không có gì trên tờ giấy nói rằng nó lệch — đúng hình dạng
 -- lỗi mà báo cáo công nợ phải chặn, vì nó là số người ta mang đi đối chiếu với
 -- nhà cung cấp.
---
--- `settled_as_of` vì thế cộng lại từ **năm bảng đối trừ** và cắt theo
--- `vouchers.posting_date`. Cùng khối ấy có mặt ở `ar_ap_aging` — hai bản chép,
--- và `test_the_two_debt_datasets_report_the_same_remaining` là cái chuông báo
--- khi chúng lệch. (Gộp hai dataset thành một là việc đúng nhưng nó rút một
--- dataset đã giao khỏi hai định nghĩa đang chạy; để lát sau.)
 --
 -- **Chỉ đối trừ của chứng từ ĐÃ GHI SỔ được tính.** Dòng đối trừ ghi xuống bảng
 -- lúc **cất** chứng từ (`_write_settlements`), còn phần nhích `settled` của khoản
@@ -57,6 +61,19 @@
 -- `amount`/`settled`/`remaining` (VND) là giá trị sổ theo tỷ giá GHI NHẬN nợ,
 -- không quy đổi lại theo tỷ giá hôm nay.
 --
+-- **Mốc tuổi nợ đếm từ HẠN THANH TOÁN**, và khoản không ghi hạn có nhóm riêng
+-- (`khong-han`) thay vì bị coi là quá hạn 0 ngày — "không ghi hạn" và "đến hạn
+-- hôm nay" là hai tình trạng khác nhau, gộp chúng làm cột "quá hạn" nói dối.
+--
+-- **`:due_state` chia đôi TRỌN VẸN, không để rơi dòng nào.** SRS 06 §5.2 tách
+-- "phân tích quá hạn" (#5) và "phân tích trước hạn" (#6) thành hai tờ, mà engine
+-- gắn layout vào definition và không nhận điều kiện lọc lúc chạy — nên phép chia
+-- là một tham số ghim, đúng khuôn `:direction`. `chua-den-han` ở đây nghĩa là
+-- **chưa quá hạn**, tức gồm cả khoản không ghi hạn: định nghĩa hẹp hơn ("đúng
+-- những khoản có hạn nằm sau mốc chốt") làm tổng hai tờ **nhỏ hơn** tổng nợ mà
+-- không tờ nào nói ra phần thiếu. Cột `bucket` vẫn tách `khong-han` khỏi
+-- `chua-den-han` trên từng dòng, nên người đọc không bị gộp nhầm hai thứ.
+--
 -- **Vì sao KHÔNG có dataset "tổng hợp" riêng.** Báo cáo tổng hợp công nợ dùng
 -- chính câu này với layout gộp theo đối tác (tổng nhóm là dòng tổng hợp). Một
 -- dataset thứ hai chỉ để `GROUP BY partner_id` sẽ là bản chép thứ ba của khối
@@ -64,56 +81,15 @@
 --
 -- *Giới hạn đã biết — khoản treo lên NHÂN VIÊN không có tên.* `partner_kind = 2`
 -- trỏ `employees`, không trỏ `partners`; join thẳng sẽ in tên của một đối tác
--- trùng id (sai mà trông đúng). Cùng giới hạn và cùng lời hẹn với `ar_ap_aging`.
+-- trùng id (sai mà trông đúng). Mở rộng bằng một nhánh `employees` khi phân hệ
+-- tạm ứng có mặt — phase 9, cùng lúc với công nợ nhân viên.
 --
 -- Tham số: :from_date (không dùng — thuộc bộ chuẩn engine luôn truyền),
--- :to_date (mốc chốt số, áp cho CẢ phát sinh nợ lẫn lượt đối trừ), :ledger,
--- :branch_ids, :direction, :partner_id, :partner_kind, :open_only.
+-- :to_date (mốc chốt số VÀ mốc tính tuổi nợ, áp cho CẢ phát sinh nợ lẫn lượt
+-- đối trừ), :ledger, :branch_ids, :direction, :partner_id, :partner_kind,
+-- :open_only, :due_state.
 WITH settled_as_of AS (
-    -- Đã đối trừ bao nhiêu, tính tới `:to_date`. Năm bảng vì có năm phân hệ ghi
-    -- lượt đối trừ; cả năm mang đúng một bộ cột, nên khối này là một phép cộng
-    -- chứ không phải năm.
-    --
-    -- **`amount - fx_diff`, không phải `amount`.** Cột `amount` của bảng đối trừ
-    -- là VND theo tỷ giá **THANH TOÁN**; phần VND thật sự giải phóng trên sổ là
-    -- `amount - fx_diff`, và đó đúng là con số `apply_settlement_rows` cộng vào
-    -- khoản đích (phần chênh đi vào 515/635 — FR-SYS-066). Cộng `amount` trần
-    -- làm cột VND lệch trên **mọi** khoản nợ ngoại tệ trả từng phần, và lệch
-    -- theo hướng tệ nhất: `settled` vượt `amount` thì `remaining` ra số ÂM trên
-    -- một khoản đã tất toán. Cơ sở ghi nhận cũng là điều docstring dưới đây
-    -- hứa, và là điều bản 7A làm đúng bằng `amount - settled`.
-    SELECT s.target_kind,
-           s.target_id,
-           SUM(s.amount_fc)          AS settled_fc,
-           SUM(s.amount - s.fx_diff) AS settled
-    FROM (
-        SELECT voucher_id, target_kind, target_id, amount_fc, amount, fx_diff
-          FROM cash_settlements
-        UNION ALL
-        SELECT voucher_id, target_kind, target_id, amount_fc, amount, fx_diff
-          FROM bank_settlements
-        UNION ALL
-        SELECT voucher_id, target_kind, target_id, amount_fc, amount, fx_diff
-          FROM purchase_settlements
-        UNION ALL
-        SELECT voucher_id, target_kind, target_id, amount_fc, amount, fx_diff
-          FROM sales_settlements
-        UNION ALL
-        SELECT voucher_id, target_kind, target_id, amount_fc, amount, fx_diff
-          FROM gl_journal_settlements
-    ) AS s
-    -- `EXISTS` chứ không `JOIN`: khối này bị vật chất hóa (có hàm gộp, tham
-    -- chiếu hai lần), và một `JOIN vouchers` buộc planner dựng hash của **mọi**
-    -- chứng từ đã ghi sổ cho một báo cáo ra vài chục dòng. `EXISTS` đi khóa
-    -- chính từng dòng đối trừ.
-    WHERE EXISTS (
-        SELECT 1
-        FROM vouchers sv
-        WHERE sv.id = s.voucher_id
-          AND sv.status = 2
-          AND sv.posting_date <= :to_date
-    )
-    GROUP BY s.target_kind, s.target_id
+    -- #include: settled_as_of.sql
 ),
 items AS (
     -- Nguồn 1: sổ phụ công nợ.
@@ -236,6 +212,16 @@ SELECT it.direction,
        it.branch_id,
        p.code                       AS partner_code,
        p.name                       AS partner_name,
+       -- Nhóm khách hàng / nhóm nhà cung cấp (SRS 06 §5.2 #9): cây của
+       -- `MasterDataRow` chứ không một danh mục riêng (xem docstring
+       -- `partner.py`), nên nhóm của một đối tác là **nút cha trực tiếp** của
+       -- nó. Không đi `path` lấy nút gốc: cây hai cấp trở lên thì mọi đại lý và
+       -- mọi cửa hàng dưới "Miền Bắc" gộp thành một dòng mang tên vùng, tức
+       -- một báo cáo "theo nhóm khách hàng" không còn nói về nhóm nào cả.
+       -- Đối tác đứng ngay ở gốc không thuộc nhóm nào, và nó gộp vào một nhóm
+       -- CÓ TÊN thay vì một nhóm rỗng — nhóm rỗng trên tờ giấy đọc như một lỗi.
+       pg.code                      AS partner_group_code,
+       COALESCE(pg.name, 'Chưa phân nhóm') AS partner_group_name,
        coa.code                     AS account_code,
        coa.name                     AS account_name,
        -- Nguồn của khoản nợ, nói bằng tiếng người: "hóa đơn mua" và "phải trả
@@ -266,10 +252,39 @@ SELECT it.direction,
        it.amount_fc - it.settled_fc AS remaining_fc,
        it.amount,
        it.settled,
-       it.amount - it.settled       AS remaining
+       it.amount - it.settled       AS remaining,
+       -- Ba cột tuổi nợ, rút từ `ar_ap_aging` (7A) ở lát 7G-2b. Mốc đếm từ HẠN
+       -- THANH TOÁN; khoản không ghi hạn có nhóm riêng thay vì bị coi là quá
+       -- hạn 0 ngày — xem docstring đầu tệp.
+       CASE
+           WHEN it.due_date IS NULL          THEN NULL
+           WHEN it.due_date >= :to_date      THEN 0
+           ELSE (:to_date - it.due_date)
+       END                          AS days_overdue,
+       CASE
+           WHEN it.due_date IS NULL              THEN 'khong-han'
+           WHEN it.due_date >= :to_date          THEN 'chua-den-han'
+           WHEN it.due_date >= :to_date - 30     THEN '1-30'
+           WHEN it.due_date >= :to_date - 60     THEN '31-60'
+           WHEN it.due_date >= :to_date - 90     THEN '61-90'
+           ELSE 'tren-90'
+       END                          AS bucket,
+       -- Thứ tự ĐỌC của nhóm tuổi nợ, vì thứ tự chữ cái của `bucket` sai hẳn:
+       -- '1-30' < '31-60' < '61-90' < 'chua-den-han' < 'khong-han' < 'tren-90'
+       -- xếp nhóm chưa đến hạn vào giữa các nhóm quá hạn. Layout nào gộp theo
+       -- nhóm tuổi nợ phải sắp bằng cột này.
+       CASE
+           WHEN it.due_date IS NULL              THEN 0
+           WHEN it.due_date >= :to_date          THEN 1
+           WHEN it.due_date >= :to_date - 30     THEN 2
+           WHEN it.due_date >= :to_date - 60     THEN 3
+           WHEN it.due_date >= :to_date - 90     THEN 4
+           ELSE 5
+       END                          AS bucket_seq
 FROM items it
 -- `partner_kind = 2` (nhân viên) trỏ `employees`, KHÔNG trỏ `partners`.
 LEFT JOIN partners p ON p.id = it.partner_id AND it.partner_kind IN (0, 1)
+LEFT JOIN partners pg ON pg.id = p.parent_id
 LEFT JOIN chart_of_accounts coa ON coa.id = it.account_id
 LEFT JOIN purchase_invoices pi ON pi.id = it.document_id AND it.target_kind = 1
 LEFT JOIN employees buyer ON buyer.id = pi.buyer_id
@@ -292,3 +307,14 @@ WHERE it.direction = :direction
   -- trả hết vẫn là một dòng có nghĩa trong kỳ. Ai muốn chỉ phần còn treo thì
   -- ghim tham số này. Đóng theo NGUYÊN TỆ — xem docstring đầu tệp.
   AND (CAST(:open_only AS BOOLEAN) IS NOT TRUE OR it.amount_fc > it.settled_fc)
+  -- Phép chia quá hạn / chưa quá hạn viết THẲNG trên `due_date`, không trên
+  -- `bucket_seq`: bí danh của mệnh đề `SELECT` không dùng được trong `WHERE`
+  -- cùng cấp. Hai vế bù nhau trọn vẹn (`NULL` thuộc vế 'chua-den-han'), nên
+  -- tổng hai tờ #5 và #6 bằng đúng tổng nợ — xem docstring đầu tệp.
+  AND (
+      CAST(:due_state AS TEXT) IS NULL
+      OR (CAST(:due_state AS TEXT) = 'qua-han'
+          AND it.due_date IS NOT NULL AND it.due_date < :to_date)
+      OR (CAST(:due_state AS TEXT) = 'chua-den-han'
+          AND (it.due_date IS NULL OR it.due_date >= :to_date))
+  )

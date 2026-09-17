@@ -33,14 +33,11 @@ cột, nên cột mới nằm trong quyền `sales_invoice_lines` đã cấp t�
 `0022`, `0035`, `0039`). RLS cũng không đổi — phạm vi chi nhánh vẫn là của header
 `vouchers`.
 
-**`_refresh_builtin_data` CHUYỂN TỪ `0039` SANG ĐÂY** — doctrine 5B M-1, và dự án
-đã sập bẫy này bốn lần (6A, 6G-1, 7A, rồi 7G-1 nơi hai lượt gọi cùng tồn tại và
-cả chuỗi migration đứt vì lượt đứng giữa chạy thử SQL của hôm nay trên schema của
-hôm đó). Revision này gieo chín định nghĩa báo cáo mới cùng dataset
-`sales_register` của chúng; bản cài đang ở `0039` đã đi qua bước làm mới của
-`0039` **trước khi** manifest có chín báo cáo ấy, nên không dời bước làm mới lên
-**head** thì màn hình báo cáo của phân hệ bán hàng sẽ trống trên đúng những bản
-cài đang chạy.
+**`_refresh_builtin_data` từng ở đây** (chuyển `0039` → `0040` ở lát 7G-2a, rồi
+`0040` → `0041` ở lát 7G-2b): doctrine 5B M-1 đòi bước ấy đậu ở **head** của
+chuỗi, vì nó chạy thử SQL của manifest HÔM NAY trên schema của revision nó đứng.
+Dự án đã sập bẫy này năm lần (6A, 6G-1, 7A, 7G-1 nơi hai lượt gọi cùng tồn tại
+và cả chuỗi đứt, rồi 7G-2a).
 
 Luật siết lại sau 7G-1: **đúng một lượt gọi, ở head**. Kiểm bằng
 `grep -rn "_refresh_builtin_data" migrations/versions/` chứ đừng tin con số ở đây.
@@ -51,11 +48,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import context, op
-
-from ket.kernel.config.printing.seed import ensure_builtin_print_templates
-from ket.kernel.config.reports.seed import refresh_builtin_reports
-from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
+from alembic import op
 
 revision: str = "0040"
 down_revision: str | None = "0039"
@@ -65,16 +58,6 @@ depends_on: str | Sequence[str] | None = None
 _SALES_LINE_TABLE = "sales_invoice_lines"
 _POSTINGS_TABLE = "gl_postings"
 _SOURCE_LINE_INDEX = "ix_gl_postings_source_line_id"
-
-
-def _target_schema() -> str:
-    schema = context.config.attributes.get(ALEMBIC_SCHEMA_ATTRIBUTE)
-    if not isinstance(schema, str):
-        raise RuntimeError(
-            f"Không xác định được schema đích: `{ALEMBIC_SCHEMA_ATTRIBUTE}` chưa được "
-            "`migrations/env.py` ghi vào Config.attributes"
-        )
-    return schema
 
 
 def upgrade() -> None:
@@ -97,23 +80,6 @@ def upgrade() -> None:
         unique=False,
         postgresql_where=sa.text("source_line_id IS NOT NULL"),
     )
-    _refresh_builtin_data()
-
-
-def _refresh_builtin_data() -> None:
-    """Làm mới metadata báo cáo + mẫu in builtin — lát này gieo chín báo cáo bán
-    hàng cùng dataset `sales_register` của chúng.
-
-    Chỉ chạy online: bước đọc-rồi-ghi không diễn đạt được thành SQL tĩnh của
-    `upgrade --sql`. Vị trí của bước này phải luôn ở **head** của chuỗi, và chỉ
-    có **một** lượt gọi trong cả chuỗi — xem docstring đầu tệp.
-    """
-    if context.is_offline_mode():
-        return
-    schema = _target_schema()
-    connection = op.get_bind()
-    refresh_builtin_reports(connection, schema)
-    ensure_builtin_print_templates(connection, schema)
 
 
 def downgrade() -> None:

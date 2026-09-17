@@ -148,20 +148,6 @@
       "description": "Bảng kê số dư ngân hàng theo từng TK ngân hàng và loại tiền (FR-BNK-041)"
     },
     {
-      "code": "ar_ap_aging",
-      "sql_file": "ar_ap_aging.sql",
-      "allowed_params": [
-        "from_date",
-        "to_date",
-        "ledger",
-        "branch_ids",
-        "direction"
-      ],
-      "supports_branch": false,
-      "supports_ledger": false,
-      "description": "Tuổi nợ phải thu/phải trả theo mốc quá hạn, số đã thanh toán tính TẠI to_date; gộp sổ phụ công nợ và số dư ban đầu kể cả khoản ứng trước; direction ghim 'thu' hoặc 'chi'"
-    },
-    {
       "code": "purchase_register",
       "sql_file": "purchase_register.sql",
       "allowed_params": [
@@ -190,11 +176,12 @@
         "direction",
         "partner_id",
         "partner_kind",
-        "open_only"
+        "open_only",
+        "due_state"
       ],
       "supports_branch": false,
       "supports_ledger": false,
-      "description": "Công nợ theo từng chứng từ với số đã thanh toán tính TẠI to_date; gộp sổ phụ công nợ và số dư ban đầu kể cả khoản ứng trước; direction ghim 'thu' hoặc 'chi'"
+      "description": "Công nợ theo từng chứng từ với số đã thanh toán tính TẠI to_date và nhóm tuổi nợ của phần còn treo; gộp sổ phụ công nợ và số dư ban đầu kể cả khoản ứng trước; direction ghim 'thu' hoặc 'chi', due_state ghim 'qua-han' hoặc 'chua-den-han'"
     },
     {
       "code": "sales_register",
@@ -214,6 +201,37 @@
       "supports_branch": true,
       "supports_ledger": true,
       "description": "Dòng hàng bán của chứng từ đã ghi sổ; doanh thu VND đọc từ dòng phát sinh nên khớp sổ, trả lại / giảm giá / điều chỉnh giảm mang dấu âm theo sổ"
+    },
+    {
+      "code": "ar_open_items_by_item",
+      "sql_file": "ar_open_items_by_item.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "customer_id",
+        "item_id",
+        "open_only"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Công nợ phải thu còn treo xem theo dòng hàng của hóa đơn sinh ra khoản nợ; cột nợ là của CẢ hóa đơn, lặp trên mọi dòng — không layout nào được cộng tổng nó"
+    },
+    {
+      "code": "ar_ap_settlements",
+      "sql_file": "ar_ap_settlements.sql",
+      "allowed_params": [
+        "from_date",
+        "to_date",
+        "ledger",
+        "branch_ids",
+        "direction",
+        "partner_id"
+      ],
+      "supports_branch": false,
+      "supports_ledger": false,
+      "description": "Từng lượt đối trừ công nợ trong kỳ kèm số ngày so với ngày chứng từ và hạn thanh toán; direction ghim 'thu' hoặc 'chi'"
     }
   ],
   "param_sets": [
@@ -355,20 +373,6 @@
       }
     },
     {
-      "code": "ar_ap_aging_params",
-      "spec": {
-        "params": [
-          {
-            "name": "direction",
-            "kind": "text",
-            "label": "Chiều công nợ",
-            "label_en": "Debt direction",
-            "required": true
-          }
-        ]
-      }
-    },
-    {
       "code": "purchase_register_params",
       "spec": {
         "params": [
@@ -441,6 +445,13 @@
             "label": "Chỉ khoản còn nợ",
             "label_en": "Open items only",
             "required": false
+          },
+          {
+            "name": "due_state",
+            "kind": "text",
+            "label": "Tình trạng hạn",
+            "label_en": "Due state",
+            "required": false
           }
         ]
       }
@@ -489,6 +500,55 @@
             "kind": "int",
             "label": "Công trình",
             "label_en": "Project",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "ar_open_items_by_item_params",
+      "spec": {
+        "params": [
+          {
+            "name": "customer_id",
+            "kind": "int",
+            "label": "Khách hàng",
+            "label_en": "Customer",
+            "required": false
+          },
+          {
+            "name": "item_id",
+            "kind": "int",
+            "label": "Vật tư",
+            "label_en": "Item",
+            "required": false
+          },
+          {
+            "name": "open_only",
+            "kind": "bool",
+            "label": "Chỉ khoản còn nợ",
+            "label_en": "Open items only",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "code": "ar_ap_settlements_params",
+      "spec": {
+        "params": [
+          {
+            "name": "direction",
+            "kind": "text",
+            "label": "Chiều công nợ",
+            "label_en": "Debt direction",
+            "required": true
+          },
+          {
+            "name": "partner_id",
+            "kind": "int",
+            "label": "Đối tác",
+            "label_en": "Partner",
             "required": false
           }
         ]
@@ -1643,14 +1703,14 @@
             "type": "text"
           },
           {
-            "key": "invoice_no",
+            "key": "document_no",
             "label": "Số chứng từ",
             "label_en": "Document no.",
             "type": "text",
             "width": 12
           },
           {
-            "key": "invoice_date",
+            "key": "document_date",
             "label": "Ngày chứng từ",
             "label_en": "Document date",
             "type": "date",
@@ -1717,7 +1777,7 @@
         "sort": [
           "partner_code",
           "due_date",
-          "invoice_no"
+          "document_no"
         ]
       }
     },
@@ -1740,14 +1800,14 @@
             "type": "text"
           },
           {
-            "key": "invoice_no",
+            "key": "document_no",
             "label": "Số chứng từ",
             "label_en": "Document no.",
             "type": "text",
             "width": 12
           },
           {
-            "key": "invoice_date",
+            "key": "document_date",
             "label": "Ngày chứng từ",
             "label_en": "Document date",
             "type": "date",
@@ -1814,7 +1874,7 @@
         "sort": [
           "partner_code",
           "due_date",
-          "invoice_no"
+          "document_no"
         ]
       }
     },
@@ -2795,14 +2855,14 @@
       "spec": {
         "columns": [
           {
-            "key": "invoice_no",
+            "key": "document_no",
             "label": "Số chứng từ",
             "label_en": "Document no.",
             "type": "text",
             "width": 12
           },
           {
-            "key": "invoice_date",
+            "key": "document_date",
             "label": "Ngày chứng từ",
             "label_en": "Document date",
             "type": "date",
@@ -2868,7 +2928,7 @@
           "partner_code",
           "bucket_seq",
           "due_date",
-          "invoice_no"
+          "document_no"
         ]
       }
     },
@@ -3823,6 +3883,946 @@
           "orientation": "landscape"
         }
       }
+    },
+    {
+      "code": "ar-summary-by-partner",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "source_label",
+            "label": "Nguồn khoản nợ",
+            "label_en": "Source",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "amount_fc",
+            "label": "Giá trị (nguyên tệ)",
+            "label_en": "Amount (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị (VND)",
+            "label_en": "Amount (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "settled",
+            "label": "Đã thu (VND)",
+            "label_en": "Settled (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "remaining",
+            "label": "Còn lại (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "settled",
+          "remaining"
+        ],
+        "sort": [
+          "partner_code",
+          "document_date",
+          "document_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "ar-summary-by-group",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "source_label",
+            "label": "Nguồn khoản nợ",
+            "label_en": "Source",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "amount_fc",
+            "label": "Giá trị (nguyên tệ)",
+            "label_en": "Amount (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị (VND)",
+            "label_en": "Amount (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "settled",
+            "label": "Đã thu (VND)",
+            "label_en": "Settled (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "remaining",
+            "label": "Còn lại (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_group_code",
+            "heading_keys": [
+              "partner_group_name"
+            ]
+          },
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "settled",
+          "remaining"
+        ],
+        "sort": [
+          "partner_group_code",
+          "partner_code",
+          "document_date",
+          "document_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "ar-detail-by-account",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "partner_code",
+            "label": "Mã khách hàng",
+            "label_en": "Customer code",
+            "type": "text",
+            "width": 9
+          },
+          {
+            "key": "partner_name",
+            "label": "Tên khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "source_label",
+            "label": "Nguồn khoản nợ",
+            "label_en": "Source",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "amount_fc",
+            "label": "Giá trị (nguyên tệ)",
+            "label_en": "Amount (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị (VND)",
+            "label_en": "Amount (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "settled",
+            "label": "Đã thu (VND)",
+            "label_en": "Settled (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "remaining",
+            "label": "Còn lại (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "account_code",
+            "heading_keys": [
+              "account_code",
+              "account_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "settled",
+          "remaining"
+        ],
+        "sort": [
+          "account_code",
+          "partner_code",
+          "document_date",
+          "document_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "ar-by-invoice",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "document_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "source_label",
+            "label": "Nguồn khoản nợ",
+            "label_en": "Source",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "account_code",
+            "label": "TK công nợ",
+            "label_en": "Account",
+            "type": "text",
+            "align": "center",
+            "width": 7
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "amount_fc",
+            "label": "Giá trị (nguyên tệ)",
+            "label_en": "Amount (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "settled_fc",
+            "label": "Đã thu (nguyên tệ)",
+            "label_en": "Settled (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "remaining_fc",
+            "label": "Còn lại (nguyên tệ)",
+            "label_en": "Remaining (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "amount",
+            "label": "Giá trị (VND)",
+            "label_en": "Amount (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "settled",
+            "label": "Đã thu (VND)",
+            "label_en": "Settled (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "remaining",
+            "label": "Còn lại (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 12
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount",
+          "settled",
+          "remaining"
+        ],
+        "sort": [
+          "partner_code",
+          "document_date",
+          "document_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "ar-aging-detail",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "document_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "days_overdue",
+            "label": "Số ngày quá hạn",
+            "label_en": "Days overdue",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "remaining_fc",
+            "label": "Còn nợ (nguyên tệ)",
+            "label_en": "Remaining (FC)",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "remaining",
+            "label": "Còn nợ (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          },
+          {
+            "key": "bucket_seq",
+            "heading_keys": [
+              "bucket"
+            ]
+          }
+        ],
+        "totals": [
+          "remaining"
+        ],
+        "sort": [
+          "partner_code",
+          "bucket_seq",
+          "due_date",
+          "document_no"
+        ]
+      }
+    },
+    {
+      "code": "ar-overdue",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "partner_code",
+            "label": "Mã khách hàng",
+            "label_en": "Customer code",
+            "type": "text",
+            "width": 9
+          },
+          {
+            "key": "partner_name",
+            "label": "Tên khách hàng",
+            "label_en": "Customer",
+            "type": "text"
+          },
+          {
+            "key": "document_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "days_overdue",
+            "label": "Số ngày quá hạn",
+            "label_en": "Days overdue",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "remaining_fc",
+            "label": "Còn nợ (nguyên tệ)",
+            "label_en": "Remaining (FC)",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "remaining",
+            "label": "Còn nợ (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "bucket_seq",
+            "heading_keys": [
+              "bucket"
+            ]
+          },
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "remaining"
+        ],
+        "sort": [
+          "bucket_seq",
+          "partner_code",
+          "due_date",
+          "document_no"
+        ]
+      }
+    },
+    {
+      "code": "ar-not-overdue",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "document_no",
+            "label": "Số chứng từ",
+            "label_en": "Document no.",
+            "type": "text",
+            "width": 11
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "bucket",
+            "label": "Tình trạng hạn",
+            "label_en": "Due state",
+            "type": "text",
+            "align": "center",
+            "width": 10
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "remaining_fc",
+            "label": "Còn nợ (nguyên tệ)",
+            "label_en": "Remaining (FC)",
+            "type": "money",
+            "width": 13
+          },
+          {
+            "key": "remaining",
+            "label": "Còn nợ (VND)",
+            "label_en": "Remaining (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "remaining"
+        ],
+        "sort": [
+          "partner_code",
+          "due_date",
+          "document_no"
+        ]
+      }
+    },
+    {
+      "code": "ar-debt-by-item",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "item_code",
+            "label": "Mã vật tư",
+            "label_en": "Item code",
+            "type": "text",
+            "width": 10
+          },
+          {
+            "key": "item_name",
+            "label": "Tên vật tư",
+            "label_en": "Item",
+            "type": "text"
+          },
+          {
+            "key": "variant_code",
+            "label": "Mã quy cách",
+            "label_en": "Variant",
+            "type": "text",
+            "align": "center",
+            "width": 8
+          },
+          {
+            "key": "unit_name",
+            "label": "ĐVT",
+            "label_en": "Unit",
+            "type": "text",
+            "align": "center",
+            "width": 6
+          },
+          {
+            "key": "quantity",
+            "label": "Số lượng",
+            "label_en": "Quantity",
+            "type": "quantity",
+            "width": 9
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "goods_amount_fc",
+            "label": "Giá trị dòng (nguyên tệ)",
+            "label_en": "Line amount (FC)",
+            "type": "money",
+            "width": 11
+          },
+          {
+            "key": "goods_amount",
+            "label": "Giá trị dòng (VND)",
+            "label_en": "Line amount (VND)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "invoice_remaining",
+            "label": "Còn nợ của HÓA ĐƠN (VND)",
+            "label_en": "Invoice remaining (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          },
+          {
+            "key": "document_no",
+            "heading_keys": [
+              "document_no",
+              "document_date",
+              "due_date"
+            ]
+          }
+        ],
+        "totals": [
+          "goods_amount"
+        ],
+        "sort": [
+          "partner_code",
+          "document_no",
+          "item_code"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "ar-settlements-by-partner",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "settled_on",
+            "label": "Ngày thu",
+            "label_en": "Settled on",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "settlement_no",
+            "label": "Số chứng từ thu",
+            "label_en": "Settlement no.",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "document_no",
+            "label": "Chứng từ nợ",
+            "label_en": "Debt document",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ nợ",
+            "label_en": "Debt date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "amount_fc",
+            "label": "Số thu (nguyên tệ)",
+            "label_en": "Amount (FC)",
+            "type": "money",
+            "width": 12
+          },
+          {
+            "key": "amount",
+            "label": "Số thu (VND)",
+            "label_en": "Amount (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount"
+        ],
+        "sort": [
+          "partner_code",
+          "settled_on",
+          "settlement_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
+    },
+    {
+      "code": "ar-payment-days",
+      "kind": "grouped",
+      "spec": {
+        "columns": [
+          {
+            "key": "document_no",
+            "label": "Chứng từ nợ",
+            "label_en": "Debt document",
+            "type": "text",
+            "width": 12
+          },
+          {
+            "key": "document_date",
+            "label": "Ngày chứng từ",
+            "label_en": "Document date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "due_date",
+            "label": "Hạn thanh toán",
+            "label_en": "Due date",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "settled_on",
+            "label": "Ngày thu",
+            "label_en": "Settled on",
+            "type": "date",
+            "width": 9
+          },
+          {
+            "key": "days_to_pay",
+            "label": "Số ngày thu tiền",
+            "label_en": "Days to pay",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "days_late",
+            "label": "Số ngày trễ hạn",
+            "label_en": "Days late",
+            "type": "text",
+            "align": "right",
+            "width": 8
+          },
+          {
+            "key": "currency_code",
+            "label": "Tiền tệ",
+            "label_en": "Currency",
+            "type": "text",
+            "align": "center",
+            "width": 5
+          },
+          {
+            "key": "amount",
+            "label": "Số thu (VND)",
+            "label_en": "Amount (VND)",
+            "type": "money",
+            "width": 13
+          }
+        ],
+        "group_by": [
+          {
+            "key": "partner_code",
+            "heading_keys": [
+              "partner_code",
+              "partner_name"
+            ]
+          }
+        ],
+        "totals": [
+          "amount"
+        ],
+        "sort": [
+          "partner_code",
+          "settled_on",
+          "document_no"
+        ],
+        "page": {
+          "orientation": "landscape"
+        }
+      }
     }
   ],
   "definitions": [
@@ -4066,12 +5066,13 @@
       "name_en": "Accounts receivable aging",
       "category": "ban-hang",
       "module": "sales",
-      "dataset_code": "ar_ap_aging",
+      "dataset_code": "ar_ap_open_items",
       "layout_code": "ar-aging",
-      "param_set_code": "ar_ap_aging_params",
+      "param_set_code": "ar_ap_open_items_params",
       "ledger_scope": "financial",
       "fixed_params": {
-        "direction": "thu"
+        "direction": "thu",
+        "open_only": true
       },
       "package_scheme": null,
       "required_permission_module": "sales"
@@ -4082,12 +5083,13 @@
       "name_en": "Accounts payable aging",
       "category": "mua-hang",
       "module": "purchase",
-      "dataset_code": "ar_ap_aging",
+      "dataset_code": "ar_ap_open_items",
       "layout_code": "ap-aging",
-      "param_set_code": "ar_ap_aging_params",
+      "param_set_code": "ar_ap_open_items_params",
       "ledger_scope": "financial",
       "fixed_params": {
-        "direction": "chi"
+        "direction": "chi",
+        "open_only": true
       },
       "package_scheme": null,
       "required_permission_module": "purchase"
@@ -4224,12 +5226,13 @@
       "name_en": "Accounts payable aging detail",
       "category": "mua-hang",
       "module": "purchase",
-      "dataset_code": "ar_ap_aging",
+      "dataset_code": "ar_ap_open_items",
       "layout_code": "ap-aging-detail",
-      "param_set_code": "ar_ap_aging_params",
+      "param_set_code": "ar_ap_open_items_params",
       "ledger_scope": "financial",
       "fixed_params": {
-        "direction": "chi"
+        "direction": "chi",
+        "open_only": true
       },
       "package_scheme": null,
       "required_permission_module": "purchase"
@@ -4348,6 +5351,171 @@
       "layout_code": "sales-monthly",
       "param_set_code": "sales_register_params",
       "ledger_scope": "both",
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "tong-hop-cong-no-phai-thu",
+      "name": "Tổng hợp công nợ phải thu khách hàng",
+      "name_en": "Accounts receivable summary",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_open_items",
+      "layout_code": "ar-summary-by-partner",
+      "param_set_code": "ar_ap_open_items_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu"
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "chi-tiet-cong-no-phai-thu",
+      "name": "Chi tiết công nợ phải thu khách hàng",
+      "name_en": "Accounts receivable detail",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_open_items",
+      "layout_code": "ar-detail-by-account",
+      "param_set_code": "ar_ap_open_items_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu"
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "chi-tiet-cong-no-phai-thu-theo-hoa-don",
+      "name": "Chi tiết công nợ phải thu theo hóa đơn",
+      "name_en": "Accounts receivable by invoice",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_open_items",
+      "layout_code": "ar-by-invoice",
+      "param_set_code": "ar_ap_open_items_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu"
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "phan-tich-cong-no-phai-thu-qua-han",
+      "name": "Phân tích công nợ phải thu quá hạn",
+      "name_en": "Overdue receivables analysis",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_open_items",
+      "layout_code": "ar-overdue",
+      "param_set_code": "ar_ap_open_items_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu",
+        "open_only": true,
+        "due_state": "qua-han"
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "phan-tich-cong-no-phai-thu-truoc-han",
+      "name": "Phân tích công nợ phải thu trước hạn",
+      "name_en": "Not-yet-due receivables analysis",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_open_items",
+      "layout_code": "ar-not-overdue",
+      "param_set_code": "ar_ap_open_items_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu",
+        "open_only": true,
+        "due_state": "chua-den-han"
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "chi-tiet-tuoi-no-phai-thu",
+      "name": "Chi tiết công nợ phải thu theo tuổi nợ",
+      "name_en": "Accounts receivable aging detail",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_open_items",
+      "layout_code": "ar-aging-detail",
+      "param_set_code": "ar_ap_open_items_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu",
+        "open_only": true
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "tong-hop-cong-no-phai-thu-theo-nhom-khach-hang",
+      "name": "Tổng hợp công nợ phải thu theo nhóm khách hàng",
+      "name_en": "Accounts receivable summary by customer group",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_open_items",
+      "layout_code": "ar-summary-by-group",
+      "param_set_code": "ar_ap_open_items_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu"
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "chi-tiet-cong-no-phai-thu-theo-mat-hang",
+      "name": "Chi tiết công nợ phải thu theo mặt hàng",
+      "name_en": "Receivables detail by item",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_open_items_by_item",
+      "layout_code": "ar-debt-by-item",
+      "param_set_code": "ar_open_items_by_item_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "open_only": true
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "tong-hop-thanh-toan-cong-no-khach-hang",
+      "name": "Tổng hợp thanh toán công nợ khách hàng",
+      "name_en": "Customer settlements summary",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_settlements",
+      "layout_code": "ar-settlements-by-partner",
+      "param_set_code": "ar_ap_settlements_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu"
+      },
+      "package_scheme": null,
+      "required_permission_module": "sales"
+    },
+    {
+      "code": "bao-cao-ngay-thanh-toan-theo-khach-hang",
+      "name": "Báo cáo ngày thanh toán theo khách hàng",
+      "name_en": "Customer payment days",
+      "category": "ban-hang",
+      "module": "sales",
+      "dataset_code": "ar_ap_settlements",
+      "layout_code": "ar-payment-days",
+      "param_set_code": "ar_ap_settlements_params",
+      "ledger_scope": "financial",
+      "fixed_params": {
+        "direction": "thu"
+      },
       "package_scheme": null,
       "required_permission_module": "sales"
     }

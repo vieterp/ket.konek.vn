@@ -127,6 +127,33 @@ def seed_sales_package_data(
     return accounts
 
 
+def ensure_customer_group(
+    session: Session, *, partner_id: int, code: str, parent_id: int | None = None
+) -> int:
+    """Một NÚT NHÓM của cây đối tác — chiều gộp "theo nhóm khách hàng"
+    (SRS 06 §5.2 #9).
+
+    Nhóm khách hàng không phải một danh mục riêng: nó là chính cây của
+    `MasterDataRow` (`parent_id` + `is_group`), xem docstring `partner.py`. Nút
+    nhóm được miễn ràng buộc "phải là khách hoặc nhà cung cấp" — nó chỉ để gom
+    cây và không bao giờ lên chứng từ.
+    """
+    if session.get(Partner, partner_id) is None:
+        path = f"{partner_id}." if parent_id is None else f"{parent_id}.{partner_id}."
+        session.add(
+            Partner(
+                id=partner_id,
+                code=code,
+                name=f"Nhóm {code}",
+                path=path,
+                parent_id=parent_id,
+                is_group=True,
+            )
+        )
+        session.flush()
+    return partner_id
+
+
 def ensure_customer(
     session: Session,
     *,
@@ -135,13 +162,27 @@ def ensure_customer(
     credit_limit: Decimal | None = None,
     payment_term_id: int | None = None,
     province: str | None = None,
+    group_id: int | None = None,
 ) -> int:
     """Một khách hàng với `id` cố định — idempotent để fixture module dùng lại.
 
     `province` là chiều gộp "theo địa phương" của SRS 06 §5.1 #1: nó nằm trên
     danh mục khách hàng, không trên chứng từ, nên báo cáo theo địa phương chỉ có
     nhóm khi bước gieo khai nó.
+
+    `group_id` treo khách hàng dưới một nút nhóm (`ensure_customer_group`), kể cả
+    một nút nhóm nằm sâu trong cây — `path` ghép từ path của nhóm cha, nên bước
+    gieo dựng được cây nhiều cấp.
+    `path` ghép tay ở đây vì bước gieo đi thẳng vào model chứ không qua service
+    — đúng lối mọi helper khác của tệp này; đường sinh path thật nằm ở
+    `tree_path`, và không đường ghi SẢN PHẨM nào ghép chuỗi path.
     """
+    if group_id is None:
+        path = f"{partner_id}."
+    else:
+        group = session.get(Partner, group_id)
+        assert group is not None, f"nhóm {group_id} chưa được gieo"
+        path = f"{group.path}{partner_id}."
     existing = session.get(Partner, partner_id)
     if existing is None:
         session.add(
@@ -149,7 +190,8 @@ def ensure_customer(
                 id=partner_id,
                 code=code,
                 name=f"Khách hàng {code}",
-                path=f"{partner_id}.",
+                path=path,
+                parent_id=group_id,
                 is_customer=True,
                 credit_limit=credit_limit,
                 payment_term_id=payment_term_id,
@@ -160,6 +202,8 @@ def ensure_customer(
         existing.credit_limit = credit_limit
         existing.payment_term_id = payment_term_id
         existing.province = province
+        existing.parent_id = group_id
+        existing.path = path
     session.flush()
     return partner_id
 
