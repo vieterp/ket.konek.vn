@@ -5024,9 +5024,7 @@
             "width": 13
           }
         ],
-        "totals": [
-          "total_amount"
-        ],
+        "totals": [],
         "sort": [
           "invoice_date",
           "invoice_no"
@@ -5173,6 +5171,13 @@
             "label_en": "Status",
             "type": "text",
             "width": 12
+          },
+          {
+            "key": "posting_state",
+            "label": "Tình trạng ghi sổ",
+            "label_en": "Posting state",
+            "type": "text",
+            "width": 11
           },
           {
             "key": "invoice_amount",

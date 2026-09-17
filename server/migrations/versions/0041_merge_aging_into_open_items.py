@@ -25,12 +25,15 @@ thái ấy hợp lệ: báo cáo riêng của người dùng phải tiếp tục
 "không còn ai trỏ tới" là phép canh, và dòng ở lại là kết cục ĐÚNG khi có người
 trỏ tới — không phải một lỗi cần dừng bản nâng cấp.
 
-**`_refresh_builtin_data` CHUYỂN TỪ `0040` SANG ĐÂY** — doctrine 5B M-1, lần thứ
-sáu của dự án (6A, 6G-1, 7A, 7G-1, 7G-2a, và lát này). Bản cài đang ở `0040` đã
-đi qua bước làm mới **trước khi** manifest có chín báo cáo phải thu, và trước khi
-ba định nghĩa tuổi nợ đổi sang dataset mới — không dời lên **head** thì chúng giữ
-ba báo cáo tuổi nợ trỏ vào một dataset đã rời manifest, còn màn hình công nợ phải
-thu thì trống.
+**`_refresh_builtin_data` và lượt dọn TỪNG Ở ĐÂY** (lát 7G-2b), rồi **cả hai cùng
+dời sang `0042`** ở lát 7G-3 — doctrine 5B M-1 đòi bước làm mới đậu ở **head** của
+chuỗi, vì nó chạy thử SQL của manifest HÔM NAY trên schema của revision nó đứng.
+
+Hai bước ấy **không tách rời được**, và đó là lý do lượt dọn đi theo: guard "không
+định nghĩa nào trỏ tới" chỉ đúng SAU khi bước làm mới đã gieo lại definition. Để
+lượt dọn ở lại đây trong khi bước làm mới lên `0042` thì trên bản cài nâng cấp, ba
+định nghĩa tuổi nợ cũ vẫn còn trỏ `ar_ap_aging` lúc revision này chạy — guard chặn,
+dòng mồ côi ở lại vĩnh viễn, và không gì kêu.
 
 Luật giữ nguyên: **đúng một lượt gọi, ở head**. Kiểm bằng
 `grep -rn "_refresh_builtin_data" migrations/versions/` chứ đừng tin con số ở đây.

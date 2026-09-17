@@ -34,12 +34,14 @@ from catalog_api_support import UserFactory, actor_with_totp, ensure_role
 from conftest import api_test_client
 from einvoice_support import ensure_active_registration, ensure_invoice_form
 from ket.api.dependencies import BRANCH_HEADER
+from ket.kernel.config.reports.loader import load_builtin_reports
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.keystore import SecretBox
 from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
-from ket.modules.einvoice.models import EInvoiceStatus, ErrorNoticeKind
+from ket.modules.einvoice.error_flow import ErrorFlowService
+from ket.modules.einvoice.models import EInvoiceStatus, ErrorKind, ErrorNoticeKind
 from ket.modules.einvoice.service import EInvoiceService
 from ket.modules.sales.models import SalesInvoiceKind
 from ket.modules.sales.schemas import SalesInvoiceIn, SalesInvoiceLineIn
@@ -65,9 +67,11 @@ NOV_30 = date(2026, 11, 30)
 
 FORM_ID = 9501
 SECOND_FORM_ID = 9502
+PROVIDER_FORM_ID = 9503
 CUSTOMER_ID = 9511
 SERIAL = "C26TGA"
 SECOND_SERIAL = "C26TGB"
+PROVIDER_SERIAL = "C26TGC"
 CUSTOMER_CODE = "KH-7G3-01"
 
 GOODS_AMOUNT = Decimal(1_000_000)
@@ -78,6 +82,15 @@ INVOICE_TOTAL = GOODS_AMOUNT + GOODS_VAT
 RANGE_FROM = 1
 RANGE_TO = 100
 RANGE_QUANTITY = RANGE_TO - RANGE_FROM + 1
+
+# Hồ sơ THỨ HAI trên cùng ký hiệu, dải kế tiếp. Một ký hiệu được thông báo phát
+# hành nhiều lần (xem `registration_service.effective_for`; không có `UNIQUE` trên
+# cặp (ký hiệu, chi nhánh)), và bộ gieo một-hồ-sơ không phân biệt được "đếm số của
+# chính hồ sơ này" với "đếm mọi số của cặp ấy" — vòng review chứng minh bản đầu
+# in `đã dùng 3 / còn 97` trên CẢ HAI dòng.
+SECOND_RANGE_FROM = 101
+SECOND_RANGE_TO = 200
+SECOND_RANGE_QUANTITY = SECOND_RANGE_TO - SECOND_RANGE_FROM + 1
 
 
 @pytest.fixture
@@ -104,6 +117,16 @@ def accounts(
         ensure_customer(session, partner_id=CUSTOMER_ID, code=CUSTOMER_CODE)
         ensure_invoice_form(session, form_id=FORM_ID, serial=SERIAL)
         ensure_invoice_form(session, form_id=SECOND_FORM_ID, serial=SECOND_SERIAL)
+        # Ký hiệu khai NHÀ CUNG CẤP: nhà cung cấp cấp số, nên tờ ở
+        # `DANG_PHAT_HANH` **chưa có số** — số về ở lượt xác nhận (7E-2). Đây là
+        # ca duy nhất phân biệt "đã tiêu một số" với "đã qua một ngưỡng trạng
+        # thái", và bộ gieo không có nó thì hai cách viết ngưỡng cho cùng kết quả.
+        ensure_invoice_form(
+            session,
+            form_id=PROVIDER_FORM_ID,
+            serial=PROVIDER_SERIAL,
+            provider_code="easyinvoice",
+        )
         # Dải số khai TƯỜNG MINH ở ký hiệu thứ nhất, BỎ TRỐNG ở ký hiệu thứ hai:
         # "không khai dải" là trạng thái hợp lệ của hồ sơ đăng ký HĐĐT theo NĐ123,
         # và cột "còn lại" phải trả rỗng chứ không trả 0 — một bộ gieo chỉ có hồ sơ
@@ -119,7 +142,21 @@ def accounts(
         ensure_active_registration(
             session,
             branch_id=context.branch_id,
+            invoice_form_id=FORM_ID,
+            start_date=OCT_05,
+            range_from=SECOND_RANGE_FROM,
+            range_to=SECOND_RANGE_TO,
+        )
+        ensure_active_registration(
+            session,
+            branch_id=context.branch_id,
             invoice_form_id=SECOND_FORM_ID,
+            start_date=OCT_01,
+        )
+        ensure_active_registration(
+            session,
+            branch_id=context.branch_id,
+            invoice_form_id=PROVIDER_FORM_ID,
             start_date=OCT_01,
         )
     return codes
@@ -239,6 +276,53 @@ def books(
         service.issue(other.id, invoice_date=OCT_20)
         service.confirm(other.id, tax_authority_code="M2-7G3-0001")
         ids["other_form"] = other.id
+
+        # (6) Tờ bị THAY THẾ + tờ thay thế nó. `_supersede` dùng lại **chính**
+        # `source_voucher_id`, nên hai tờ đọc cùng một bộ `gl_postings` — không có
+        # ca này thì phép cộng đôi của tờ đối chiếu không ai thấy.
+        replaced_voucher = _sales_voucher(session, context, accounts, posting_date=OCT_20)
+        replaced = service.create_draft(source_voucher_id=replaced_voucher, invoice_form_id=FORM_ID)
+        service.issue(replaced.id, invoice_date=OCT_20)
+        service.confirm(replaced.id, tax_authority_code="M1-7G3-0003")
+        outcome = ErrorFlowService(session).apply(
+            replaced.id,
+            error_kind=ErrorKind.SAI_THONG_TIN,
+            buyer_declared=False,
+            notice_no="TBSS-7G3-01",
+            notice_date=OCT_20,
+            reason="sai tên người mua — bài kiểm 7G-3",
+        )
+        assert outcome.replacement is not None
+        # Tờ thay thế phải được PHÁT HÀNH: `_supersede` dựng một bản nháp, và một
+        # bản nháp không có số nên nó không lọt vào tờ đối chiếu — tức phép cộng
+        # đôi mà lát này sửa sẽ không có ca nào chứng minh.
+        service.issue(outcome.replacement.id, invoice_date=OCT_20)
+        service.confirm(outcome.replacement.id, tax_authority_code="M1-7G3-0005")
+        ids["replaced"] = replaced.id
+        ids["replacement"] = outcome.replacement.id
+
+        # (7) Tờ ĐÃ PHÁT HÀNH trên chứng từ CHƯA GHI SỔ. Vòng đời cho phép
+        # (FR-EIV-011), và cả ba vế tiền của tờ đối chiếu đều đọc `gl_postings`,
+        # nên đây là ca duy nhất sinh ra một dòng LỆCH thật — không có nó thì cột
+        # chênh và nhánh lọc "chỉ dòng lệch" chưa từng chạy.
+        unposted_voucher = _sales_voucher(
+            session, context, accounts, posting_date=OCT_20, post=False
+        )
+        unposted = service.create_draft(source_voucher_id=unposted_voucher, invoice_form_id=FORM_ID)
+        service.issue(unposted.id, invoice_date=OCT_20)
+        service.confirm(unposted.id, tax_authority_code="M1-7G3-0004")
+        ids["issued_unposted"] = unposted.id
+
+        # (8) Tờ trên ký hiệu của NHÀ CUNG CẤP, đã qua lượt phát hành nhưng
+        # **chưa có số** — nhà cung cấp cấp số ở lượt xác nhận.
+        provider_voucher = _sales_voucher(session, context, accounts, posting_date=OCT_20)
+        provider_invoice = service.create_draft(
+            source_voucher_id=provider_voucher, invoice_form_id=PROVIDER_FORM_ID
+        )
+        service.issue(provider_invoice.id, invoice_date=OCT_20)
+        assert provider_invoice.invoice_no is None, "ký hiệu này phải để nhà cung cấp cấp số"
+        assert provider_invoice.status == EInvoiceStatus.DANG_PHAT_HANH
+        ids["provider_issuing"] = provider_invoice.id
     return ids
 
 
@@ -314,9 +398,8 @@ class TestTheDraftInvoiceSurvivesThePeriodWindow:
     ) -> None:
         report = preview("danh-sach-hoa-don-theo-trang-thai", status=EInvoiceStatus.CHUA_PHAT_HANH)
         assert len(report.rows) == 1
-        row = report.rows[0]
         # Chưa cấp số thì cột số hóa đơn rỗng — và dòng vẫn phải có mặt.
-        assert row["invoice_no"].strip() == ""
+        assert all(row["invoice_no"].strip() == "" for row in report.rows)
         assert "Chưa phát hành" in report.headings
 
     def test_the_draft_falls_into_the_period_of_its_source_document(
@@ -353,7 +436,12 @@ class TestTheDraftInvoiceSurvivesThePeriodWindow:
         một tờ giấy trống.
         """
         report = preview("danh-sach-hoa-don-theo-trang-thai", status=EInvoiceStatus.CHUA_PHAT_HANH)
-        assert money(report.rows[0], "total_amount") == 0
+        # Đúng tờ nháp của chứng từ CHƯA ghi sổ — nhận ra bằng ngày chứng từ của
+        # nó, không bằng vị trí trong danh sách: tờ thay thế cũng là một bản nháp
+        # nhưng chứng từ của nó đã ghi sổ, nên ô tiền của nó KHÁC 0.
+        rows = [row for row in report.rows if row["period_date"] == "05/10/2026"]
+        assert len(rows) == 1
+        assert money(rows[0], "total_amount") == 0
 
 
 class TestIssuedIsAThresholdNotAStatus:
@@ -372,7 +460,10 @@ class TestIssuedIsAThresholdNotAStatus:
         report = preview("bang-ke-hoa-don-dien-tu")
         numbers = {row["invoice_no"] for row in report.rows}
         assert "" not in numbers, "tờ chưa cấp số không thuộc bảng kê đã phát hành"
-        assert len(report.rows) == 4
+        # Sáu tờ có số trên ký hiệu thứ nhất + một tờ của ký hiệu thứ hai. Tờ trên
+        # ký hiệu của nhà cung cấp KHÔNG có mặt: nó đã qua lượt phát hành nhưng
+        # chưa có số, và đó đúng là ca mà ngưỡng theo trạng thái đọc sai.
+        assert len(report.rows) == 7
 
     def test_the_draft_is_the_only_invoice_left_out(
         self, preview: Preview, books: dict[str, UUID]
@@ -383,11 +474,13 @@ class TestIssuedIsAThresholdNotAStatus:
         """
         everything = preview("danh-sach-hoa-don-theo-trang-thai")
         register = preview("bang-ke-hoa-don-dien-tu")
-        assert len(everything.rows) == len(register.rows) + 1
+        numberless = [row for row in everything.rows if row["invoice_no"].strip() == ""]
+        assert numberless, "bộ gieo không còn tờ nào chưa cấp số"
+        assert len(everything.rows) == len(register.rows) + len(numberless)
 
 
 class TestTheMoneyComesFromTheBooks:
-    def test_the_register_total_is_the_receivable_side_of_each_invoice(
+    def test_each_posted_invoice_shows_the_receivable_side_of_its_voucher(
         self, preview: Preview, books: dict[str, UUID]
     ) -> None:
         """Tiền trên bảng kê = tiền hàng + thuế, đọc từ vế ghi Nợ TK phải thu.
@@ -396,9 +489,26 @@ class TestTheMoneyComesFromTheBooks:
         phép cộng thay vì một — và hai phép cộng ấy lệch nhau ở hóa đơn nào mapper
         ghi thêm một cặp.
         """
-        report = preview("bang-ke-hoa-don-dien-tu")
-        assert all(money(row, "total_amount") == INVOICE_TOTAL for row in report.rows)
-        assert report.total("total_amount") == INVOICE_TOTAL * len(report.rows)
+        rows = preview("bang-ke-hoa-don-dien-tu").rows
+        amounts = [money(row, "total_amount") for row in rows]
+        # Đúng một tờ mang 0: tờ đã phát hành trên chứng từ CHƯA ghi sổ. Mọi tờ
+        # còn lại mang trọn tiền hàng + thuế.
+        assert amounts.count(Decimal(0)) == 1
+        assert all(amount in (Decimal(0), INVOICE_TOTAL) for amount in amounts)
+
+    def test_the_register_does_not_total_its_money_column(self) -> None:
+        """Bảng kê KHÔNG có dòng tổng tiền, và đó là một quyết định.
+
+        Lượt THAY THẾ dựng một tờ mới trên **chính** chứng từ cũ, nên tờ bị thay
+        thế và tờ thay thế nó đọc cùng một bộ phát sinh. Cả hai đều là chứng từ
+        pháp lý đã tồn tại và bảng kê không được giấu tờ nào, nhưng cộng chúng lại
+        cho ra 2,2 triệu cho một lần bán 1,1 triệu — một con số trông như doanh
+        thu mà không phải doanh thu. Cùng doctrine với "không cộng USD với EUR":
+        thứ không cộng được thì đừng in, vì nó nguy hiểm hơn một ô trống.
+        """
+        layouts = {layout.code: layout for layout in load_builtin_reports().manifest.layouts}
+        assert load_builtin_reports().layout_specs["einvoice-register"].totals == ()
+        assert layouts["einvoice-register"].kind == "table"
 
 
 class TestTheReconciliationSheet:
@@ -406,9 +516,9 @@ class TestTheReconciliationSheet:
         self, preview: Preview, books: dict[str, UUID]
     ) -> None:
         report = preview("doi-chieu-hoa-don-voi-doanh-thu")
-        assert report.rows
-        assert all(money(row, "variance") == 0 for row in report.rows)
-        assert report.total("variance") == 0
+        posted = [row for row in report.rows if row["posting_state"] == "Đã ghi sổ"]
+        assert posted
+        assert all(money(row, "variance") == 0 for row in posted)
 
     def test_the_two_sides_are_measured_separately(
         self, preview: Preview, books: dict[str, UUID]
@@ -419,25 +529,57 @@ class TestTheReconciliationSheet:
         THUẦN. Một bản đọc cùng một cột cho cả hai vế sẽ luôn cho chênh bằng 0 —
         xanh tuyệt đối, và vô dụng tuyệt đối.
         """
-        row = preview("doi-chieu-hoa-don-voi-doanh-thu").rows[0]
+        row = next(
+            row
+            for row in preview("doi-chieu-hoa-don-voi-doanh-thu").rows
+            if row["posting_state"] == "Đã ghi sổ"
+        )
         assert money(row, "invoice_amount") == INVOICE_TOTAL
         assert money(row, "revenue_amount") == GOODS_AMOUNT
         assert money(row, "vat_amount") == GOODS_VAT
         assert money(row, "revenue_amount") != money(row, "invoice_amount")
 
-    def test_mismatch_only_narrows_to_nothing_on_clean_books(
+    def test_an_issued_invoice_on_an_unposted_voucher_is_a_mismatch(
         self, preview: Preview, books: dict[str, UUID]
     ) -> None:
-        """Trên sổ sạch, lọc "chỉ dòng lệch" phải trả về RỖNG.
+        """Chứng từ chưa ghi sổ là dòng LỆCH, không phải dòng sạch.
 
-        Đây là vế duy nhất phân biệt được `:mismatch_only` nối đúng với nối sai:
-        một tham số bị bỏ quên vẫn cho ra cùng bộ dòng khi không có dòng nào lệch,
-        nên bài kiểm phải so với vế KHÔNG lọc.
+        Cả ba vế tiền đọc `gl_postings`, nên một tờ đã phát hành trên chứng từ còn
+        nháp cho ra `0 − 0 − 0 = 0` và tờ giấy báo "khớp" — đúng ca mà SRS 07 §5 #4
+        tồn tại để bắt, và vòng đời cho phép trạng thái ấy (FR-EIV-011). Đây cũng
+        là ca duy nhất của bộ gieo sinh ra một dòng lệch thật: không có nó thì
+        nhánh lọc "chỉ dòng lệch" chưa từng chạy và cột chênh chưa từng khác 0.
         """
         everything = preview("doi-chieu-hoa-don-voi-doanh-thu")
         mismatches = preview("doi-chieu-hoa-don-voi-doanh-thu", mismatch_only=True)
         assert everything.rows
-        assert mismatches.rows == []
+        assert len(mismatches.rows) == 1
+        row = mismatches.rows[0]
+        assert row["posting_state"] == "CHƯA ghi sổ"
+        assert money(row, "invoice_amount") == 0
+        assert len(mismatches.rows) < len(everything.rows)
+
+    def test_a_superseded_invoice_leaves_the_reconciliation(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Tờ đã BỊ THAY THẾ đứng ngoài, nếu không doanh thu cộng đôi.
+
+        `_supersede` dùng lại **chính** `source_voucher_id`, nên tờ cũ và tờ thay
+        thế nó đọc cùng một bộ phát sinh: mỗi dòng tự nó nói chênh 0 — tờ giấy
+        xanh trót lọt — trong khi cột doanh thu ở dòng TỔNG cộng gấp đôi. Hỏng
+        theo kiểu tệ nhất: không dòng nào đỏ, và con số tổng thì sai.
+
+        Tờ đã ĐIỀU CHỈNH thì ở lại: hai `kind` điều chỉnh mang phần chênh trên một
+        chứng từ KHÁC, nên tờ gốc vẫn đối chiếu được với chứng từ của chính nó.
+        """
+        report = preview("doi-chieu-hoa-don-voi-doanh-thu")
+        # Mỗi chứng từ gốc xuất hiện ĐÚNG MỘT LẦN — đó là thứ phép cộng đôi phá,
+        # và nó là khẳng định duy nhất không phụ thuộc nhãn hiển thị.
+        vouchers = [row["source_voucher_no"] for row in report.rows]
+        assert len(vouchers) == len(set(vouchers))
+        # Vế dương: tờ THAY THẾ (tờ đang có hiệu lực) phải CÓ MẶT, nếu không phép
+        # loại ở trên có thể loại nhầm cả hai tờ mà bài kiểm vẫn xanh.
+        assert any(row["invoice_no"] == "00000006" for row in report.rows), report.texts()
 
 
 class TestTheNumberRangeSheet:
@@ -450,17 +592,49 @@ class TestTheNumberRangeSheet:
         người dùng đi xin cấp thêm dải trong khi dải cũ chưa hết, hoặc tưởng mình
         còn số để dùng.
         """
-        row = self._row_of(preview("bang-ke-dai-so-hoa-don"), SERIAL)
-        assert int(row["used_count"]) == 3
-        assert int(row["remaining_count"]) == RANGE_QUANTITY - 3
+        report = preview("bang-ke-dai-so-hoa-don")
+        first = self._row_of(report, SERIAL, RANGE_FROM)
+        # Sáu số đã cấp trên ký hiệu này, tất cả nằm trong dải thứ nhất.
+        assert int(first["used_count"]) == 6
+        assert int(first["remaining_count"]) == RANGE_QUANTITY - 6
 
     def test_cancelled_is_a_slice_of_used_not_a_column_beside_it(
         self, preview: Preview, books: dict[str, UUID]
     ) -> None:
         """Cộng `đã dùng + đã hủy` là đếm hai lần chính những tờ ấy."""
-        row = self._row_of(preview("bang-ke-dai-so-hoa-don"), SERIAL)
+        row = self._row_of(preview("bang-ke-dai-so-hoa-don"), SERIAL, RANGE_FROM)
         assert int(row["cancelled_count"]) == 1
         assert int(row["cancelled_count"]) < int(row["used_count"])
+
+    def test_each_registration_counts_only_the_numbers_inside_its_own_range(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Hai hồ sơ trên cùng một ký hiệu KHÔNG cùng báo một con số.
+
+        Một ký hiệu được thông báo phát hành nhiều lần (không có `UNIQUE` trên cặp
+        (ký hiệu, chi nhánh) — xem `registration_service.effective_for`). Bản đầu
+        của lát này đếm mọi hóa đơn của cặp ấy cho MỌI hồ sơ, nên hồ sơ `101..200`
+        in `đã dùng 5 / còn 95` trong khi nó chưa tiêu số nào — và người đọc thấy
+        một dải sắp hết ở chỗ dải vừa mới xin.
+        """
+        report = preview("bang-ke-dai-so-hoa-don")
+        second = self._row_of(report, SERIAL, SECOND_RANGE_FROM)
+        assert int(second["used_count"]) == 0
+        assert int(second["cancelled_count"]) == 0
+        assert int(second["remaining_count"]) == SECOND_RANGE_QUANTITY
+
+    def test_the_cut_off_date_narrows_what_counts_as_used(
+        self, preview: Preview, books: dict[str, UUID]
+    ) -> None:
+        """Mốc chốt áp cho ngày hóa đơn: đọc tới 10/10 chỉ thấy số cấp tới đó.
+
+        Không có vế này thì bỏ hẳn phép cắt ngày vẫn xanh, và bảng kê dải số nói
+        về "hôm nay" kể cả khi người dùng hỏi về cuối tháng trước.
+        """
+        early = preview("bang-ke-dai-so-hoa-don", to_date=OCT_10.isoformat())
+        row = self._row_of(early, SERIAL, RANGE_FROM)
+        assert int(row["used_count"]) == 2
+        assert int(row["cancelled_count"]) == 0
 
     def test_a_registration_without_a_declared_range_leaves_remaining_empty(
         self, preview: Preview, books: dict[str, UUID]
@@ -470,14 +644,24 @@ class TestTheNumberRangeSheet:
         In 0 cho câu đầu là dựng một cảnh báo giả, và người dùng đi xin cấp dải
         cho một hồ sơ vốn không cần dải.
         """
-        row = self._row_of(preview("bang-ke-dai-so-hoa-don"), SECOND_SERIAL)
+        row = self._row_of(preview("bang-ke-dai-so-hoa-don"), SECOND_SERIAL, None)
         assert row["quantity"].strip() == ""
         assert row["remaining_count"].strip() == ""
         # Vế dương: số đã tiêu vẫn đếm được dù hồ sơ không khai dải.
         assert int(row["used_count"]) == 1
 
     @staticmethod
-    def _row_of(report: PreviewResult, serial: str) -> dict[str, str]:
-        rows = [row for row in report.rows if row["form_code"] == serial]
-        assert len(rows) == 1, f"không có đúng một dòng cho ký hiệu {serial}"
+    def _row_of(report: PreviewResult, serial: str, range_from: int | None) -> dict[str, str]:
+        """Một dòng hồ sơ, nhận dạng bằng (ký hiệu, đầu dải).
+
+        Ký hiệu một mình KHÔNG đủ: một ký hiệu có nhiều hồ sơ, và đó chính là
+        hình dạng dữ liệu mà lỗi đếm của bản đầu ẩn trong.
+        """
+        wanted = "" if range_from is None else str(range_from)
+        rows = [
+            row
+            for row in report.rows
+            if row["form_code"] == serial and row["range_from"].strip() == wanted
+        ]
+        assert len(rows) == 1, f"không có đúng một dòng cho {serial} từ số {wanted!r}"
         return rows[0]

@@ -49,12 +49,20 @@
 -- **Hóa đơn ĐẦU VÀO không có mặt**, và không phải vì một phép lọc: chúng ở bảng
 -- riêng `inbound_einvoices` (lát 7F-2b), không bao giờ vào `einvoices`.
 --
--- **`:issued_only` và `:status` là hai câu hỏi khác nhau, không phải một.** "Đã
--- phát hành" không phải một trạng thái mà là một **ngưỡng**: số hóa đơn đã tiêu kể
--- từ `DANG_PHAT_HANH` (xem `EInvoiceStatus`), và nó không nhả ra nữa — kể cả
--- `PHAT_HANH_LOI` giữ số, kể cả `DA_HUY` (BR-INV-04 cấm tái sử dụng số). Một tham
--- số bằng-đúng không diễn đạt được ngưỡng ấy, mà liệt kê tay năm giá trị vào
--- `fixed_params` thì lát sau thêm một trạng thái là bảng kê im lặng bỏ sót nó.
+-- **`:issued_only` hỏi "tờ này ĐÃ CÓ SỐ chưa", không hỏi trạng thái.** Một tờ hóa
+-- đơn tồn tại với tư cách chứng từ kể từ lúc nó mang số, và số ấy không nhả ra
+-- nữa — kể cả `PHAT_HANH_LOI` giữ số, kể cả `DA_HUY` (BR-INV-04).
+--
+-- Bản đầu của lát 7G-3 viết ngưỡng ấy thành `status >= 1`, và vòng review bắt
+-- được: với ký hiệu khai `provider_code` (nhà cung cấp cấp số — 7E-2), tờ
+-- `DANG_PHAT_HANH` **chưa có số**, số về ở lượt xác nhận. Ngưỡng theo trạng thái
+-- vì thế kéo một dòng số-rỗng vào "bảng kê hóa đơn đã phát hành" — và bài kiểm của
+-- chính lát này khẳng định điều đó không xảy ra, tức bộ kiểm đang phát biểu một
+-- bất biến mà mã không giữ. `invoice_no IS NOT NULL` đúng cho **cả hai** đường
+-- đánh số, và nó là chính câu hỏi người đọc bảng kê đang hỏi.
+--
+-- Liệt kê tay vài trạng thái vào `fixed_params` thay cho một phép hỏi thì lát sau
+-- thêm một trạng thái là bảng kê im lặng bỏ sót nó — cùng lý do.
 --
 -- Tham số: :from_date, :to_date (khoảng ngày hóa đơn — xem trên), :ledger,
 -- :branch_ids, :issued_only, :status, :invoice_form_id, :customer_id.
@@ -116,7 +124,7 @@ LEFT JOIN LATERAL (
 WHERE COALESCE(e.invoice_date, v.document_date) >= :from_date
   AND COALESCE(e.invoice_date, v.document_date) <= :to_date
   AND (CAST(:branch_ids AS INTEGER[]) IS NULL OR e.branch_id = ANY(:branch_ids))
-  AND (CAST(:issued_only AS BOOLEAN) IS NOT TRUE OR e.status >= 1)
+  AND (CAST(:issued_only AS BOOLEAN) IS NOT TRUE OR e.invoice_no IS NOT NULL)
   AND (CAST(:status AS INTEGER) IS NULL OR e.status = :status)
   AND (CAST(:invoice_form_id AS INTEGER) IS NULL OR e.invoice_form_id = :invoice_form_id)
   AND (CAST(:customer_id AS INTEGER) IS NULL OR si.customer_id = :customer_id)

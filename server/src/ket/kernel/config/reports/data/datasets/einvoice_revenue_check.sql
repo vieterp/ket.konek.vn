@@ -23,9 +23,26 @@
 -- `cash`/`bank` đã có từ 6A; mở nó cho doanh thu là việc của phase 9, khi bảng kê
 -- thuế đầu ra cần đúng phép phân loại ấy. Ghi rõ ở đây để lát ấy nhặt.
 --
--- **Chỉ hóa đơn đã tiêu số** (`status >= 1`) có mặt: hóa đơn `CHUA_PHAT_HANH` chưa
--- là một tờ giấy pháp lý nào, và đối chiếu nó với sổ là đối chiếu một thứ chưa tồn
--- tại.
+-- **Chỉ hóa đơn đã tiêu số** có mặt: tờ chưa cấp số chưa là một chứng từ nào, và
+-- đối chiếu nó với sổ là đối chiếu một thứ chưa tồn tại.
+--
+-- **Tờ ĐÃ BỊ THAY THẾ (`DA_THAY_THE`) đứng ngoài, và đó là một lỗi cộng đôi mà
+-- vòng review bắt được.** `_supersede` dùng lại **chính** `source_voucher_id` cho
+-- tờ thay thế, nên hai tờ đọc cùng một bộ `gl_postings`: mỗi dòng tự nó nói chênh
+-- 0 — tức tờ giấy xanh trót lọt — trong khi cột doanh thu ở dòng TỔNG cộng gấp
+-- đôi. Hỏng theo kiểu tệ nhất: không dòng nào đỏ, và con số tổng thì sai.
+--
+-- Tờ ĐÃ ĐIỀU CHỈNH (`DA_DIEU_CHINH`) thì **ở lại**, và ranh giới ấy không tùy
+-- tiện: hai `kind` điều chỉnh (7F-2a) mang phần chênh trên một chứng từ KHÁC, nên
+-- tờ gốc vẫn đối chiếu được với chứng từ của chính nó. Loại cả hai là bỏ mất một
+-- dòng đối chiếu hợp lệ.
+--
+-- **Chứng từ CHƯA GHI SỔ là một dòng LỆCH, không phải một dòng sạch.** Cả ba vế
+-- tiền đều đọc `gl_postings`, nên một tờ hóa đơn đã phát hành trên chứng từ còn
+-- nháp cho ra `0 − 0 − 0 = 0` và tờ giấy báo "khớp" — đúng ca mà SRS 07 §5 #4
+-- tồn tại để bắt, và `guards.py` ghi rõ trạng thái ấy hợp lệ về mặt vòng đời
+-- (FR-EIV-011). Cột `posting_state` nói ra tình trạng, và `:mismatch_only` nhận
+-- những dòng ấy kể cả khi chênh bằng 0.
 --
 -- Tham số: :from_date, :to_date (khoảng ngày hóa đơn), :ledger, :branch_ids,
 -- :mismatch_only.
@@ -43,7 +60,6 @@ SELECT e.branch_id,
            WHEN 2 THEN 'Phát hành lỗi'
            WHEN 3 THEN 'Đã phát hành'
            WHEN 4 THEN 'Đã gửi người mua'
-           WHEN 5 THEN 'Đã thay thế'
            WHEN 6 THEN 'Đã điều chỉnh'
            WHEN 7 THEN 'Đã hủy'
            ELSE 'Trạng thái ' || e.status::text
@@ -53,7 +69,8 @@ SELECT e.branch_id,
        COALESCE(vat.amount, 0)              AS vat_amount,
        COALESCE(payable.amount, 0)
            - COALESCE(revenue.amount, 0)
-           - COALESCE(vat.amount, 0)        AS variance
+           - COALESCE(vat.amount, 0)        AS variance,
+       CASE WHEN v.status = 2 THEN 'Đã ghi sổ' ELSE 'CHƯA ghi sổ' END AS posting_state
 FROM einvoices e
 JOIN vouchers v ON v.id = e.source_voucher_id
 LEFT JOIN sales_invoices si ON si.id = e.source_voucher_id
@@ -82,7 +99,9 @@ LEFT JOIN LATERAL (
       AND gp.ledger = :ledger
       AND coa.code LIKE '3331%'
 ) AS vat ON TRUE
-WHERE e.status >= 1
+WHERE e.invoice_no IS NOT NULL
+  -- Xem docstring: tờ đã bị thay thế đọc chung chứng từ với tờ thay thế nó.
+  AND e.status <> 5
   AND COALESCE(e.invoice_date, v.document_date) >= :from_date
   AND COALESCE(e.invoice_date, v.document_date) <= :to_date
   AND (CAST(:branch_ids AS INTEGER[]) IS NULL OR e.branch_id = ANY(:branch_ids))
@@ -91,4 +110,7 @@ WHERE e.status >= 1
       OR COALESCE(payable.amount, 0)
          - COALESCE(revenue.amount, 0)
          - COALESCE(vat.amount, 0) <> 0
+      -- Chứng từ chưa ghi sổ: chênh bằng 0 vì cả hai vế đều rỗng, không vì
+      -- chúng khớp nhau.
+      OR v.status <> 2
   )
