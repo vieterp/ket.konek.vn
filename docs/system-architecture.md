@@ -489,13 +489,15 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | Hóa đơn điện tử | EIV + INV | Một màn HĐĐT; nội bộ gọi outbox/trạng thái từ 2 module. API gộp hoặc BFF. |
 | Sổ sách & Thuế | GLE + TAX + RPT | Sổ cái drill-down, khóa sổ là danh mục kiểm tra, tờ khai gộp. BFF `statements/financial-package` + `period-close/checklist` gọi cả 3. |
 
-**Quy tắc RT-21:** **một BFF endpoint tồn tại KHI VÀ CHỈ KHI một màn hình đọc ≥2 module**. Nếu chỉ đọc 1 module → router của module đó phục vụ trực tiếp. **Ba BFF dựng được từ phase 5–6:**
+**Quy tắc RT-21:** **một BFF endpoint tồn tại KHI VÀ CHỈ KHI một màn hình đọc ≥2 module**. Nếu chỉ đọc 1 module → router của module đó phục vụ trực tiếp. **BFF dựng được từ phase 5–6:**
 - `GET /cashflow/overview` (quỹ + ngân hàng)
 - `GET /assets/list` (TSCĐ + CCDC)
 - `GET /statements/financial-package` + `GET /period-close/checklist` (GL + TAX + báo cáo)
 
-**BFF hoãn sang phase 7:**
-- `GET /partners/{id}/overview` — thẻ công nợ đọc `ar_ap_ledger` của module `receivables`, chỉ có ở phase 7. Dựng ở phase 3 thì BFF này chỉ đọc **một** module (danh mục), tức chưa đủ điều kiện RT-21 — và phần công nợ sẽ là một trường rỗng mà UI phải đoán cách hiển thị (quyết định H56)
+**BFF của phase 7 (lát 7G-4):**
+- `GET /partners/{id}/overview` — hồ sơ đối tác (danh mục) + thẻ công nợ (dataset `ar_ap_open_items` của `receivables`). Hoãn từ phase 3 (H56) vì lúc ấy chỉ đọc **một** module; nay đủ hai. Quyền theo từng nửa: `sales.invoice.view` ↔ phải thu, `purchase.invoice.view` ↔ phải trả, thiếu thì nửa ấy `null`
+- `GET /purchase/pending-issues` + `GET /sales/pending-issues` — tab "việc còn thiếu" (U1): chứng từ + thân hóa đơn của module, `einvoices` (tờ còn sống), dataset công nợ (quá hạn). Cùng một shape hai chiều
+- Cả ba đọc số công nợ qua `api/open_items.py` — chạy **chính dataset của báo cáo tuổi nợ** qua executor của report engine (`execute_dataset_ordered`, không layout), không chép SQL và **không** dùng `partner_open_debt()` (`SECURITY DEFINER`, ngoài RLS — chỉ đúng cho guard)
 
 **BFF là read-only**; ghi luôn gọi API module riêng.
 

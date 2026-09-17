@@ -210,6 +210,17 @@ items AS (
 SELECT it.direction,
        it.ledger,
        it.branch_id,
+       -- Bốn khóa máy (lát 7G-4) cho cửa đọc KHÔNG phải báo cáo — thẻ công nợ
+       -- và tab "việc còn thiếu" đọc chính dataset này qua `api/open_items.py`
+       -- thay vì chép khối UNION lần thứ ba. `document_id` để mở đúng chứng
+       -- từ (NULL với nợ mang sang), `(partner_kind, partner_id)` để lọc đúng
+       -- người mà không đi qua tên, `target_kind` để thẻ công nợ loại khoản
+       -- ứng trước (5/6) khỏi phép trừ ngưỡng nợ — cùng luật với
+       -- `partner_open_debt()` của guard. Không layout nào in chúng.
+       it.document_id,
+       it.partner_kind,
+       it.partner_id,
+       it.target_kind,
        p.code                       AS partner_code,
        p.name                       AS partner_name,
        -- Nhóm khách hàng / nhóm nhà cung cấp (SRS 06 §5.2 #9): cây của

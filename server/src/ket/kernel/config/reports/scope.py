@@ -18,6 +18,7 @@ Ba tầng chống trộn dữ liệu vào SQL, không tầng nào là nối chu�
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Final
 
 from ket.kernel.config.reports.models import ReportDataset
@@ -46,6 +47,20 @@ def compose_scoped_query(dataset: ReportDataset, layout_spec: LayoutSpec) -> str
     Cộng đa chi nhánh theo **dòng phát sinh** (BR-RPT-05): mỗi dòng thuộc đúng
     một chi nhánh nên không có đường cộng trùng nút cha–con.
     """
+    return compose_ordered_query(dataset, sort=layout_spec.sort)
+
+
+def compose_ordered_query(dataset: ReportDataset, *, sort: Sequence[str]) -> str:
+    """Cùng câu bọc phạm vi, nhận khóa sắp xếp trần thay vì trọn một layout.
+
+    Tách ra (lát 7G-4) cho các cửa đọc dataset KHÔNG phải một báo cáo — BFF thẻ
+    công nợ và tab "việc còn thiếu" đọc `ar_ap_open_items` để lấy số còn nợ
+    theo chứng từ. Chúng không có layout (không cột hiển thị, không nhóm, không
+    tổng), và dựng một `LayoutSpec` giả chỉ để mượn `sort` là dạy người đọc sau
+    rằng layout là thứ engine cần — trong khi thứ engine cần chỉ là `ORDER BY`.
+    Lớp bọc `branch_id`/`ledger` và regex identifier vẫn áp nguyên: cửa đọc mới
+    không được yếu hơn cửa báo cáo.
+    """
     conditions: list[str] = []
     if dataset.supports_branch:
         conditions.append(
@@ -56,7 +71,7 @@ def compose_scoped_query(dataset: ReportDataset, layout_spec: LayoutSpec) -> str
     where_clause = f" WHERE {' AND '.join(conditions)}" if conditions else ""
 
     order_columns: list[str] = []
-    for key in layout_spec.sort:
+    for key in sort:
         if not _IDENTIFIER_RE.match(key):
             raise ReportDatasetInvalidError(
                 "Khóa sắp xếp của layout không phải identifier hợp lệ", sort_key=key

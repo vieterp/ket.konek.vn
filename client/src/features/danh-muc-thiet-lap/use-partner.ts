@@ -1,10 +1,13 @@
 /**
  * Dữ liệu màn hình đối tác.
  *
- * Đọc **thẳng** router của module (`/master/partners/{id}` + `…/bank-accounts`)
- * chứ không BFF: thẻ công nợ cần `ar_ap_ledger` của module `receivables`
- * (phase 7), nên BFF `partners/{id}/overview` hoãn tới đó (H56) — dựng bây giờ
- * là một BFF đọc một module, trái RT-21.
+ * Lượt đọc đầu tiên đi qua BFF `partners/{id}/overview` (nợ H56, trả ở lát
+ * 7G-4): hồ sơ + thẻ công nợ là một màn hình đọc hai module (danh mục +
+ * công nợ), đúng điều kiện RT-21. Khóa truy vấn nằm dưới tiền tố
+ * `['catalog', datasetCode, 'partners']` để mọi lượt ghi danh mục (sửa qua
+ * drawer, gộp bản ghi) làm mới cả thẻ — BFF chỉ đọc, ghi vẫn đi router module.
+ * Tài khoản ngân hàng vẫn đọc thẳng `…/bank-accounts`: đó là bảng con có đường
+ * ghi riêng, không phải phần của thẻ.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -13,18 +16,20 @@ import type { Schemas } from '@api-types'
 
 import { useSession } from '@/lib/session'
 
-export type Partner = Schemas['PartnersResponse']
+export type PartnerOverview = Schemas['PartnerOverviewResponse']
+export type Partner = PartnerOverview['partner']
+export type PartnerDebt = PartnerOverview['debt']
 export type PartnerBankAccount = Schemas['PartnerBankAccountResponse']
 export type PartnerBankAccountBody = Schemas['PartnerBankAccountCreateRequest']
 
-export function usePartner(id: number | null) {
+export function usePartnerOverview(id: number | null) {
   const { client, datasetCode } = useSession()
 
   return useQuery({
-    queryKey: ['catalog', datasetCode, 'partners', 'record', id],
+    queryKey: ['catalog', datasetCode, 'partners', 'overview', id],
     enabled: datasetCode !== null && id !== null,
     queryFn: () =>
-      client.get<Partner>(`/api/v1/master/partners/${String(id)}`, { datasetCode }),
+      client.get<PartnerOverview>(`/api/v1/partners/${String(id)}/overview`, { datasetCode }),
   })
 }
 
