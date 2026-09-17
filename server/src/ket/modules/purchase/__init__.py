@@ -24,12 +24,16 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ket.kernel.config.printing.subjects import REGISTRY as PRINT_SUBJECT_REGISTRY
+from ket.kernel.config.printing.subjects import PrintSubject
 from ket.kernel.security.permissions import (
     REGISTRY as PERMISSION_REGISTRY,
 )
 from ket.kernel.security.permissions import (
     VOUCHER_ACTIONS,
+    Action,
     DocumentType,
+    permission_code,
 )
 from ket.modules.purchase.models import PURCHASE_DOCUMENT_TYPE
 from ket.posting.contracts import (
@@ -44,6 +48,22 @@ INVOICE_PERMISSION_CODE = "invoice"
 PERMISSION_REGISTRY.register(
     DocumentType(
         module=PURCHASE_PERMISSION_MODULE, code=INVOICE_PERMISSION_CODE, actions=VOUCHER_ACTIONS
+    )
+)
+
+
+PAYABLE_STATEMENT_PRINT_CODE = "BBDC-TRA"
+"""Mã bản in biên bản đối chiếu & xác nhận công nợ PHẢI TRẢ (SRS 05 §5 #10) —
+đi đường mẫu in, tính tại chỗ từ dataset công nợ (7G-5); quyền in là quyền xem
+hóa đơn mua."""
+
+PRINT_SUBJECT_REGISTRY.register(
+    PrintSubject(
+        code=PAYABLE_STATEMENT_PRINT_CODE,
+        title="Biên bản đối chiếu và xác nhận công nợ phải trả",
+        view_permission=permission_code(
+            PURCHASE_PERMISSION_MODULE, INVOICE_PERMISSION_CODE, Action.VIEW
+        ),
     )
 )
 

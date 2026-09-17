@@ -25,12 +25,16 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ket.kernel.config.printing.subjects import REGISTRY as PRINT_SUBJECT_REGISTRY
+from ket.kernel.config.printing.subjects import PrintSubject
 from ket.kernel.security.permissions import (
     REGISTRY as PERMISSION_REGISTRY,
 )
 from ket.kernel.security.permissions import (
     VOUCHER_ACTIONS,
+    Action,
     DocumentType,
+    permission_code,
 )
 from ket.modules.sales.models import SALES_DOCUMENT_TYPE
 from ket.posting.contracts import (
@@ -47,6 +51,29 @@ PERMISSION_REGISTRY.register(
         module=SALES_PERMISSION_MODULE, code=INVOICE_PERMISSION_CODE, actions=VOUCHER_ACTIONS
     )
 )
+
+
+RECEIVABLE_STATEMENT_PRINT_CODE = "BBDC-THU"
+"""Mã bản in biên bản đối chiếu & xác nhận công nợ PHẢI THU (SRS 06 §5.2 #13)."""
+DEBT_NOTICE_PRINT_CODE = "TBCN"
+"""Mã bản in thông báo công nợ gửi khách hàng (SRS 06 §5.2 #12)."""
+
+# Hai văn bản gửi đối tác đi ĐƯỜNG MẪU IN (quyết định 7G-1), tính tại chỗ từ
+# dataset công nợ (7G-5, không lưu dòng nào). Đăng ký ở đây vì quyền in là quyền
+# xem hóa đơn bán — ai đọc được công nợ phải thu thì in được thư gửi khách.
+for _code, _title in (
+    (RECEIVABLE_STATEMENT_PRINT_CODE, "Biên bản đối chiếu và xác nhận công nợ phải thu"),
+    (DEBT_NOTICE_PRINT_CODE, "Thông báo công nợ"),
+):
+    PRINT_SUBJECT_REGISTRY.register(
+        PrintSubject(
+            code=_code,
+            title=_title,
+            view_permission=permission_code(
+                SALES_PERMISSION_MODULE, INVOICE_PERMISSION_CODE, Action.VIEW
+            ),
+        )
+    )
 
 
 def _build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest:

@@ -54,6 +54,10 @@ mặc định `ASC` của PostgreSQL, đúng ý: khoản không có hạn không
 class OpenItem:
     """Một khoản còn treo, đúng những cột hai BFF cần."""
 
+    item_id: UUID
+    """Khóa của KHOẢN nợ (dòng `ar_ap_ledger` hoặc dòng `opening_balance_invoices`)
+    — ổn định giữa hai mốc đọc trong cùng niên độ; dòng chuyển sang niên độ mới
+    mang khóa MỚI, và đó chính là điều `period_summary` dựa vào."""
     document_id: UUID | None
     """`None` với nợ mang sang từ số dư ban đầu — không có chứng từ để mở."""
     target_kind: int
@@ -72,8 +76,14 @@ class OpenItem:
     partner_code: str | None
     partner_name: str | None
     currency_code: str
+    amount_fc: Decimal
+    settled_fc: Decimal
     remaining_fc: Decimal
-    """Phần còn nợ theo NGUYÊN TỆ — trục đối trừ, và là con số in cạnh mã tiền."""
+    """Ba số theo NGUYÊN TỆ — trục đối trừ, và là con số in cạnh mã tiền."""
+    amount: Decimal
+    settled: Decimal
+    """Giá trị gốc và phần đã đối trừ TẠI `as_of` (VND theo tỷ giá ghi nhận nợ) —
+    biên bản đối chiếu theo kỳ (7G-5) cần cả hai để tính phát sinh giảm."""
     remaining: Decimal
     """Phần còn nợ quy đổi theo tỷ giá GHI NHẬN nợ — trục cộng chung nhiều tiền."""
     days_overdue: int | None
@@ -87,8 +97,13 @@ def open_items(
     partner_kind: PartnerKind | None = None,
     partner_id: int | None = None,
     due_state: DueState | None = None,
+    open_only: bool = True,
 ) -> Iterator[OpenItem]:
     """Khoản còn treo của một chiều tại `as_of`, trong phạm vi RLS người gọi.
+
+    `open_only=False` trả CẢ khoản đã tất toán tại `as_of` — biên bản đối chiếu
+    theo kỳ cần chúng để cộng "phát sinh giảm trong kỳ" (một hóa đơn thu đủ
+    trong kỳ không còn treo ở cuối kỳ nhưng lượt thu ấy là phát sinh của kỳ).
 
     `partner_kind` đi kèm `partner_id` chứ không suy từ `direction`: nhân viên
     (kind 2) đứng ở một không gian id khác đối tác, và dataset chỉ khớp đúng
@@ -108,11 +123,12 @@ def open_items(
         "direction": direction,
         "partner_id": partner_id,
         "partner_kind": int(partner_kind) if partner_kind is not None else None,
-        "open_only": True,
+        "open_only": open_only,
         "due_state": due_state,
     }
     for row in execute_dataset_ordered(session, dataset=dataset, sort=_SORT, binds=binds):
         yield OpenItem(
+            item_id=_as_uuid(row["item_id"]),
             document_id=_uuid_or_none(row["document_id"]),
             target_kind=int(str(row["target_kind"])),
             source_label=str(row["source_label"]),
@@ -124,7 +140,11 @@ def open_items(
             partner_code=_str_or_none(row["partner_code"]),
             partner_name=_str_or_none(row["partner_name"]),
             currency_code=str(row["currency_code"]),
+            amount_fc=Decimal(str(row["amount_fc"])),
+            settled_fc=Decimal(str(row["settled_fc"])),
             remaining_fc=Decimal(str(row["remaining_fc"])),
+            amount=Decimal(str(row["amount"])),
+            settled=Decimal(str(row["settled"])),
             remaining=Decimal(str(row["remaining"])),
             days_overdue=int(str(row["days_overdue"])) if row["days_overdue"] is not None else None,
         )
@@ -187,10 +207,66 @@ def summarize(items: Sequence[OpenItem]) -> OpenItemsSummary:
     )
 
 
-def _uuid_or_none(value: object) -> UUID | None:
-    if value is None:
-        return None
+@dataclass(frozen=True, slots=True)
+class PeriodSummary:
+    """Bốn con số của biên bản đối chiếu theo kỳ (VND), giữ bất biến
+    `opening + increase - decrease == closing`."""
+
+    opening: Decimal
+    """Còn nợ tại ngày liền trước kỳ."""
+    increase: Decimal
+    """Giá trị các khoản có `document_date` trong kỳ."""
+    decrease: Decimal
+    """Phần đối trừ ghi sổ trong kỳ — kể cả đối trừ của khoản phát sinh trước kỳ."""
+    closing: Decimal
+    """Còn nợ tại ngày cuối kỳ."""
+
+
+def period_summary(
+    *, before: Sequence[OpenItem], at: Sequence[OpenItem], from_date: date, to_date: date
+) -> PeriodSummary:
+    """Ghép hai lượt đọc dataset (`open_only=False`) thành bốn số của kỳ.
+
+    `before` đọc tại `from_date − 1`, `at` đọc tại `to_date`, và phép ghép đi
+    **theo từng khoản** (`item_id`), không theo hai tổng: với mỗi khoản của `at`,
+    phần đã đối trừ tại mốc trước tra từ `before` (không có thì 0). Khoản không
+    có ở `before` mà ngày chứng từ trong kỳ là phát sinh TĂNG; mọi khoản còn lại
+    vào ĐẦU KỲ với giá trị trừ phần đã trả trước kỳ; GIẢM là phần đối trừ nhích
+    thêm giữa hai mốc; CUỐI là còn nợ tại `to_date`. Đẳng thức đầu + tăng − giảm
+    = cuối vì thế đúng **bằng cấu trúc** với từng khoản, không phải bằng một phép
+    cộng riêng.
+
+    Vì sao không trừ hai tổng (bản đầu, review 7G-5 H-1): dataset chọn niên độ
+    số dư ban đầu theo `to_date`, nên biên bản cả năm đọc `before` ở niên độ cũ
+    (giá trị gốc, đã trả năm trước) và `at` ở niên độ mới (dòng chuyển sang mang
+    khóa MỚI, giá trị = phần còn lại lúc chuyển, đã trả = chỉ năm nay) — hiệu hai
+    tổng đã trả khi ấy trừ luôn phần trả năm trước và in một "phát sinh giảm"
+    ÂM lên tờ giấy hai bên ký. Ghép theo khoản thì dòng chuyển sang không có ở
+    `before`, vào đầu kỳ đúng bằng phần còn lại lúc chuyển. Cùng lối, dòng số dư
+    ban đầu có ngày hóa đơn rơi trong kỳ (review M-1) không bị đếm hai lần: nó
+    có ở `before` nên thuộc đầu kỳ, không thuộc tăng.
+    """
+    settled_before = {item.item_id: item.settled for item in before}
+    opening = increase = decrease = closing = Decimal(0)
+    for item in at:
+        previously = settled_before.get(item.item_id)
+        is_new = previously is None
+        in_period = item.document_date is not None and from_date <= item.document_date <= to_date
+        if is_new and in_period:
+            increase += item.amount
+        else:
+            opening += item.amount - (previously or Decimal(0))
+        decrease += item.settled - (previously or Decimal(0))
+        closing += item.remaining
+    return PeriodSummary(opening=opening, increase=increase, decrease=decrease, closing=closing)
+
+
+def _as_uuid(value: object) -> UUID:
     return value if isinstance(value, UUID) else UUID(str(value))
+
+
+def _uuid_or_none(value: object) -> UUID | None:
+    return None if value is None else _as_uuid(value)
 
 
 def _date_or_none(value: object) -> date | None:

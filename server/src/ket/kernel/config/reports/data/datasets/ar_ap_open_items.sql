@@ -114,6 +114,7 @@ items AS (
            l.branch_id,
            l.ledger,
            l.account_id,
+           l.id                         AS item_id,
            l.document_id,
            l.document_no,
            l.document_date,
@@ -153,6 +154,7 @@ items AS (
            b.branch_id,
            b.ledger,
            b.account_id,
+           i.id                         AS item_id,
            NULL::uuid                   AS document_id,
            i.invoice_no                 AS document_no,
            i.invoice_date               AS document_date,
@@ -210,13 +212,16 @@ items AS (
 SELECT it.direction,
        it.ledger,
        it.branch_id,
-       -- Bốn khóa máy (lát 7G-4) cho cửa đọc KHÔNG phải báo cáo — thẻ công nợ
-       -- và tab "việc còn thiếu" đọc chính dataset này qua `api/open_items.py`
-       -- thay vì chép khối UNION lần thứ ba. `document_id` để mở đúng chứng
-       -- từ (NULL với nợ mang sang), `(partner_kind, partner_id)` để lọc đúng
-       -- người mà không đi qua tên, `target_kind` để thẻ công nợ loại khoản
-       -- ứng trước (5/6) khỏi phép trừ ngưỡng nợ — cùng luật với
+       -- Năm khóa máy (lát 7G-4/7G-5) cho cửa đọc KHÔNG phải báo cáo — thẻ
+       -- công nợ, tab "việc còn thiếu" và biên bản đối chiếu đọc chính dataset
+       -- này qua `api/open_items.py` thay vì chép khối UNION lần thứ ba.
+       -- `item_id` là khóa của KHOẢN (dòng sổ phụ hoặc dòng số dư đầu kỳ) để
+       -- biên bản theo kỳ ghép hai mốc đọc theo từng khoản; `document_id` để
+       -- mở đúng chứng từ (NULL với nợ mang sang); `(partner_kind, partner_id)`
+       -- để lọc đúng người mà không đi qua tên; `target_kind` để thẻ công nợ
+       -- loại khoản ứng trước (5/6) khỏi phép trừ ngưỡng nợ — cùng luật với
        -- `partner_open_debt()` của guard. Không layout nào in chúng.
+       it.item_id,
        it.document_id,
        it.partner_kind,
        it.partner_id,

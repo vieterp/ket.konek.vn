@@ -499,6 +499,8 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 - `GET /purchase/pending-issues` + `GET /sales/pending-issues` — tab "việc còn thiếu" (U1): chứng từ + thân hóa đơn của module, `einvoices` (tờ còn sống), dataset công nợ (quá hạn). Cùng một shape hai chiều
 - Cả ba đọc số công nợ qua `api/open_items.py` — chạy **chính dataset của báo cáo tuổi nợ** qua executor của report engine (`execute_dataset_ordered`, không layout), không chép SQL và **không** dùng `partner_open_debt()` (`SECURITY DEFINER`, ngoài RLS — chỉ đúng cho guard)
 
+- `POST /partners/{id}/documents/{doi-chieu-phai-thu|doi-chieu-phai-tra}/print` (kỳ từ–đến) và `POST /partners/{id}/documents/thong-bao-cong-no/print` (lát 7G-5) — ba văn bản gửi đối tác **in từ sổ qua mẫu Jinja** (quyết định 7G-1), **tính tại chỗ, không lưu** (quyết định user 2026-09-17): cùng `api/open_items.py`, hai lượt đọc dataset (đầu kỳ − 1 và cuối kỳ) ghép thành đầu + tăng − giảm = cuối bằng cấu trúc. Ba `PrintSubject` (`BBDC-THU`, `TBCN` ở `sales`; `BBDC-TRA` ở `purchase`) mang quyền `invoice.view` của phân hệ; không ghi `print_log`
+
 **BFF là read-only**; ghi luôn gọi API module riêng.
 
 ---

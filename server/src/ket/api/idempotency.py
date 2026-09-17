@@ -79,6 +79,10 @@ IDEMPOTENCY_EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         # khóa ngoại tới `vouchers`). Là POST chỉ vì đứng cùng họ với nút In
         # chứng từ và trả về tệp nhị phân.
         "/api/v1/cash-book/count-sheets/{sheet_id}/print",
+        # Lát 7G-5: ba văn bản gửi đối tác in từ sổ — tính tại chỗ, không lưu,
+        # không `print_log`. POST chỉ vì trả tệp, cùng lý do biên bản kiểm kê.
+        "/api/v1/partners/{partner_id}/documents/{kind}/print",
+        "/api/v1/partners/{partner_id}/documents/thong-bao-cong-no/print",
         # Nút một-bước gán logo (lát 5E, FR-RPT-010): gửi lại cùng tệp ghi lại
         # cùng content_hash và cùng hai giá trị settings — bản thân thao tác
         # idempotent theo nội dung, không có bản ghi nào bị nhân đôi (kho blob

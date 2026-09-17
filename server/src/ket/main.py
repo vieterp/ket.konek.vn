@@ -74,6 +74,7 @@ from ket.api.routers.jobs import router as jobs_router
 from ket.api.routers.ledger import router as ledger_router
 from ket.api.routers.master_data import router as master_data_router
 from ket.api.routers.opening_balances import router as opening_balances_router
+from ket.api.routers.partner_documents import router as partner_documents_router
 from ket.api.routers.partner_overview import router as partner_overview_router
 from ket.api.routers.partners import router as partner_bank_accounts_router
 from ket.api.routers.period_lock import router as period_lock_router
@@ -343,6 +344,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # và thẻ công nợ đối tác (danh mục + dataset công nợ, nợ H56 phase 3).
     app.include_router(trade_pending_issues_router)
     app.include_router(partner_overview_router)
+    # Lát 7G-5 — ba văn bản gửi đối tác in từ sổ (biên bản đối chiếu hai
+    # chiều + thông báo công nợ), cùng chỗ đứng RT-21 với thẻ công nợ.
+    app.include_router(partner_documents_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

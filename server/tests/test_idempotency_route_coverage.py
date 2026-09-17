@@ -108,6 +108,10 @@ def test_the_exemption_list_is_exactly_what_was_reviewed() -> None:
             # Lát 6E-2: in biên bản kiểm kê quỹ — không ghi gì cả, kể cả
             # `print_log` (biên bản không phải chứng từ). POST chỉ vì trả tệp.
             "/api/v1/cash-book/count-sheets/{sheet_id}/print",
+            # Lát 7G-5: ba văn bản gửi đối tác in từ sổ — tính tại chỗ, không lưu,
+            # không `print_log`. POST chỉ vì trả tệp, cùng lý do biên bản kiểm kê.
+            "/api/v1/partners/{partner_id}/documents/{kind}/print",
+            "/api/v1/partners/{partner_id}/documents/thong-bao-cong-no/print",
             # Lát 5E: nút một-bước gán logo — gửi lại cùng tệp ghi lại cùng
             # hash và cùng hai giá trị settings; kho blob content-addressed
             # khử trùng theo nội dung nên không có gì bị nhân đôi.

@@ -22211,7 +22211,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.42.0"
+    "version": "0.43.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -40696,6 +40696,174 @@
         "summary": "List Opening Invoices",
         "tags": [
           "opening-balances"
+        ]
+      }
+    },
+    "/api/v1/partners/{partner_id}/documents/thong-bao-cong-no/print": {
+      "post": {
+        "description": "Thông báo công nợ phải thu tại `as_of` (mặc định hôm nay): tổng còn nợ,\nphần quá hạn, từng khoản kèm hạn và số ngày quá hạn, TK nhận tiền.",
+        "operationId": "print_debt_notice_api_v1_partners__partner_id__documents_thong_bao_cong_no_print_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "partner_id",
+            "required": true,
+            "schema": {
+              "title": "Partner Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "template_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 50,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Template Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {}
+            },
+            "description": "PDF văn bản gửi đối tác"
+          },
+          "404": {
+            "description": "Không có đối tác / mẫu in"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Print Debt Notice",
+        "tags": [
+          "partners"
+        ]
+      }
+    },
+    "/api/v1/partners/{partner_id}/documents/{kind}/print": {
+      "post": {
+        "description": "Biên bản đối chiếu công nợ theo kỳ `[from_date, to_date]`.\n\nBốn số của kỳ đến từ HAI lượt đọc dataset (`open_only=False`) — tại ngày\nliền trước kỳ và tại cuối kỳ — ghép THEO TỪNG KHOẢN bằng `period_summary`,\nnên đẳng thức đầu + tăng − giảm = cuối đúng bằng cấu trúc, kể cả khi kỳ\nvắt qua lượt chuyển số dư sang niên độ mới. Bảng chi tiết là khoản còn treo\ntại cuối kỳ.\n\n\"In lại cùng (đối tác, kỳ) ra cùng số\" đúng khi mọi chứng từ có ngày trong\nkỳ đã ghi sổ: khoản vào biên bản theo NGÀY CHỨNG TỪ còn đối trừ theo NGÀY\nGHI SỔ (luật dataset từ 7A), nên một hóa đơn ghi sổ muộn sẽ đổi tờ đã in.",
+        "operationId": "print_partner_statement_api_v1_partners__partner_id__documents__kind__print_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "partner_id",
+            "required": true,
+            "schema": {
+              "title": "Partner Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "doi-chieu-phai-thu",
+                "doi-chieu-phai-tra"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "From Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "To Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "template_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 50,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Template Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {}
+            },
+            "description": "PDF văn bản gửi đối tác"
+          },
+          "404": {
+            "description": "Không có đối tác / mẫu in"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Print Partner Statement",
+        "tags": [
+          "partners"
         ]
       }
     },

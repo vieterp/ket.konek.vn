@@ -1,0 +1,105 @@
+{#- Biên bản đối chiếu và xác nhận công nợ phải thu (SRS 06 §5.2 #13).
+
+    Văn bản gửi đối tác, KHÔNG phải chứng từ và KHÔNG lưu dòng nào (7G-5): mọi
+    con số tính tại mốc chốt từ dataset công nợ (`api/open_items.py`), cùng
+    nguồn với báo cáo tuổi nợ, nên in lại cùng (đối tác, kỳ) ra cùng số. Thông
+    tin bên B (đối tác) nằm ở `fields`, bốn số của kỳ và bảng khoản còn treo ở
+    `tables`, số cuối kỳ bằng chữ ở `amount_in_words`. Người đại diện hai bên
+    in chấm chấm để điền tay: phần mềm không lưu người ký của đối tác, và in
+    một cái tên đoán được còn tệ hơn ô trống.
+-#}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+</head>
+<body class="page-portrait">
+  <div class="voucher-header">
+    <div class="voucher-unit">
+      {% if logo_url %}<img class="unit-logo" src="{{ logo_url }}" alt="">{% endif %}
+      <div class="unit-name">{{ unit.name }}</div>
+      {% if unit.address %}<div>Địa chỉ: {{ unit.address }}</div>{% endif %}
+      {% if unit.tax_code %}<div>MST: {{ unit.tax_code }}</div>{% endif %}
+    </div>
+    <div class="form-code">
+      <div class="code">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+      <div class="note">Độc lập - Tự do - Hạnh phúc</div>
+    </div>
+  </div>
+
+  <h1 class="report-title">{{ title }}</h1>
+  <div class="voucher-date">{{ description }}</div>
+
+  <div class="voucher-fields">
+    <p><strong>Bên A (Bên bán):</strong></p>
+    <p>Đơn vị: <span class="field-value">{{ unit.name }}</span></p>
+    {% if unit.address %}<p>Địa chỉ: <span class="field-value">{{ unit.address }}</span></p>{% endif %}
+    {% if unit.tax_code %}<p>Mã số thuế: <span class="field-value">{{ unit.tax_code }}</span></p>{% endif %}
+    <p>Đại diện: <span class="field-value">&nbsp;</span> Chức vụ: <span class="field-value">&nbsp;</span></p>
+    <p><strong>Bên B (Bên mua):</strong></p>
+    {% for entry in fields %}
+    <p>{{ entry.label }}: <span class="field-value">{{ entry.value }}</span></p>
+    {% endfor %}
+    <p>Đại diện: <span class="field-value">&nbsp;</span> Chức vụ: <span class="field-value">&nbsp;</span></p>
+    <p>Hai bên cùng đối chiếu công nợ phải thu của Bên A đối với Bên B trong kỳ nêu trên, kết quả như sau:</p>
+  </div>
+
+  {% for table in tables %}
+  {% if table.caption %}<p class="voucher-fields"><strong>{{ table.caption }}</strong></p>{% endif %}
+  <table class="report-table">
+    <colgroup>
+      {% for column in table.columns %}
+      <col{% if column.width %} style="width: {{ column.width }}"{% endif %}>
+      {% endfor %}
+    </colgroup>
+    <thead>
+      <tr>
+        {% for column in table.columns %}
+        <th class="cell-{{ column.align }}">{{ column.label }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in table.rows %}
+      <tr>
+        {% for cell in row %}
+        <td class="cell-{{ table.columns[loop.index0].align }}">{{ cell }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+      {% if table.total_row %}
+      <tr class="grand-total">
+        {% for cell in table.total_row %}
+        <td class="cell-{{ table.columns[loop.index0].align }}">{{ cell }}</td>
+        {% endfor %}
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+  {% endfor %}
+
+  <div class="voucher-fields">
+    <p>Số dư cuối kỳ (Viết bằng chữ): <span class="amount-words">{{ amount_in_words }}</span></p>
+    <p>Bên B xác nhận số nợ phải trả cho Bên A tại ngày cuối kỳ là số dư cuối kỳ nêu trên và cam kết thanh toán theo hạn đã thỏa thuận.</p>
+    {% for entry in notes %}
+    <p>- {{ entry.label }}: <span class="field-value">{{ entry.value }}</span></p>
+    {% endfor %}
+    <p>Biên bản này được lập thành 02 bản có giá trị như nhau, mỗi bên giữ 01 bản.</p>
+  </div>
+
+  <div class="signature-date">{{ signature_date_line }}</div>
+  <div class="signature-block">
+    <div class="signature">
+      <div class="role">ĐẠI DIỆN BÊN A</div>
+      <div class="note">(Ký, ghi rõ họ tên, đóng dấu)</div>
+      <div class="gap"></div>
+    </div>
+    <div class="signature">
+      <div class="role">ĐẠI DIỆN BÊN B</div>
+      <div class="note">(Ký, ghi rõ họ tên, đóng dấu)</div>
+      <div class="gap"></div>
+    </div>
+  </div>
+</body>
+</html>
