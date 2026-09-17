@@ -40,75 +40,25 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from alembic import context, op
-
-from ket.kernel.config.printing.seed import ensure_builtin_print_templates
-from ket.kernel.config.reports.seed import (
-    drop_retired_builtin_metadata,
-    refresh_builtin_reports,
-)
-from ket.kernel.datasets.provisioning import ALEMBIC_SCHEMA_ATTRIBUTE
-
 revision: str = "0041"
 down_revision: str | None = "0040"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-_RETIRED_DATASET = "ar_ap_aging"
-_RETIRED_PARAM_SET = "ar_ap_aging_params"
-
-
-def _target_schema() -> str:
-    schema = context.config.attributes.get(ALEMBIC_SCHEMA_ATTRIBUTE)
-    if not isinstance(schema, str):
-        raise RuntimeError(
-            f"Không xác định được schema đích: `{ALEMBIC_SCHEMA_ATTRIBUTE}` chưa được "
-            "`migrations/env.py` ghi vào Config.attributes"
-        )
-    return schema
-
 
 def upgrade() -> None:
-    # Thứ tự bắt buộc: làm mới TRƯỚC, dọn SAU. Bước làm mới gieo lại ba định
-    # nghĩa tuổi nợ trỏ sang `ar_ap_open_items`; dọn trước thì chính chúng còn
-    # đang trỏ vào dòng sắp xóa và khóa ngoại `RESTRICT` chặn lại.
-    _refresh_builtin_data()
-    _drop_retired_metadata()
+    """Không còn việc gì ở revision này — **có chủ đích**.
 
+    Lát 7G-2b đặt ở đây hai bước: làm mới metadata builtin, rồi dọn hai dòng đã
+    rời manifest. Lát 7G-3 dời bước làm mới lên head (`0042`) theo doctrine 5B
+    M-1, và lượt dọn **phải đi theo**: guard "không định nghĩa nào trỏ tới" chỉ
+    đúng sau khi bước làm mới đã gieo lại definition, nên tách hai bước ra hai
+    revision là dọn hụt trên mọi bản cài nâng cấp — và hụt im lặng.
 
-def _refresh_builtin_data() -> None:
-    """Làm mới metadata báo cáo + mẫu in builtin — lát này đổi nguồn ba báo cáo
-    tuổi nợ và gieo chín định nghĩa công nợ phải thu.
-
-    Chỉ chạy online: bước đọc-rồi-ghi không diễn đạt được thành SQL tĩnh của
-    `upgrade --sql`. Vị trí của bước này phải luôn ở **head** của chuỗi, và chỉ
-    có **một** lượt gọi trong cả chuỗi — xem docstring đầu tệp.
+    Revision giữ chỗ thay vì bị xóa: bản cài nào đã chạy `0041` thì đã dọn xong
+    rồi, và một mã revision biến mất khỏi chuỗi là một bản cài không nâng cấp
+    tiếp được.
     """
-    if context.is_offline_mode():
-        return
-    schema = _target_schema()
-    connection = op.get_bind()
-    refresh_builtin_reports(connection, schema)
-    ensure_builtin_print_templates(connection, schema)
-
-
-def _drop_retired_metadata() -> None:
-    """Dọn dataset + bộ tham số đã rời manifest, khi không còn ai trỏ tới.
-
-    Phép canh và phép xóa nằm ở `drop_retired_builtin_metadata` để có bài kiểm
-    chạm tới được: lượt xóa của một migration chỉ chạy trên bản cài NÂNG CẤP, còn
-    schema dựng mới trong test đi thẳng tới head nên nó không bao giờ có dòng để
-    xóa — một lượt xóa không bài kiểm nào chạy qua là một lượt xóa không ai biết
-    nó có chạy không.
-    """
-    if context.is_offline_mode():
-        return
-    drop_retired_builtin_metadata(
-        op.get_bind(),
-        _target_schema(),
-        dataset_codes=(_RETIRED_DATASET,),
-        param_set_codes=(_RETIRED_PARAM_SET,),
-    )
 
 
 def downgrade() -> None:
