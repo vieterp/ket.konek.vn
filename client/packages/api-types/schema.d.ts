@@ -1020,7 +1020,13 @@ export interface paths {
         };
         /**
          * List Einvoices
-         * @description Một trang hóa đơn, lọc theo trạng thái (FR-EIV-015/025).
+         * @description Một trang hóa đơn dạng lưới U3, lọc theo trạng thái / tab (FR-EIV-015/025).
+         *
+         *     Hàng lưới mang khách, tổng tiền, ký hiệu chữ (7H-3) — màn hình đọc một
+         *     router module chứ không BFF (RT-21), cùng khuôn `GET /sales/invoices`.
+         *     `source_voucher_id` là đường `?source_voucher_id=` từ lưới bán: hộp phát
+         *     hành hỏi "chứng từ này đã có tờ nào chưa" trước khi lập nháp. Mới nhất
+         *     trước: tờ chưa cấp số (`issued_at` trống) xếp cuối cùng khuôn cũ.
          */
         get: operations["list_einvoices_api_v1_einvoices_get"];
         put?: never;
@@ -11156,6 +11162,76 @@ export interface components {
             invoice_date: string;
         };
         /**
+         * EInvoiceListItem
+         * @description Hàng lưới U3 (7H-3): tờ hóa đơn + phần chứng từ gốc mà lưới cần đọc.
+         *
+         *     Tờ hóa đơn cố ý không mang cột tiền (BR-EIV-07 theo cấu trúc, 7D), nên
+         *     tên khách, tổng tiền và đồng tiền đọc **từ chứng từ bán nó trỏ vào** — ở
+         *     tầng `api`, nơi được import cả hai module (C3 cấm `einvoice` nhìn `sales`).
+         *     `serial`/`form_no` là ký hiệu và mẫu số chữ của `invoice_forms`; hai số
+         *     `supersedes_no`/`superseded_by_no` nói tờ này thay/điều chỉnh tờ nào và
+         *     tờ nào thay/điều chỉnh nó — cột gộp "Đã thay thế bởi 0004126" của design.
+         */
+        EInvoiceListItem: {
+            /** Adjusts Invoice Id */
+            adjusts_invoice_id: string | null;
+            /** Branch Id */
+            branch_id: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Customer Code */
+            customer_code: string | null;
+            /** Customer Id */
+            customer_id: number;
+            /** Customer Name */
+            customer_name: string | null;
+            /** Form No */
+            form_no: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invoice Date */
+            invoice_date: string | null;
+            /** Invoice Form Id */
+            invoice_form_id: number;
+            /** Invoice No */
+            invoice_no?: string | null;
+            /** Issued At */
+            issued_at: string | null;
+            /** Lookup Code */
+            lookup_code: string | null;
+            /** Replaces Invoice Id */
+            replaces_invoice_id: string | null;
+            /** Sent At */
+            sent_at: string | null;
+            /** Sent To */
+            sent_to: string | null;
+            /** Serial */
+            serial: string;
+            /**
+             * Source Voucher Id
+             * Format: uuid
+             */
+            source_voucher_id: string;
+            status: components["schemas"]["EInvoiceStatus"];
+            /** Số tờ đã thay thế / điều chỉnh tờ này */
+            superseded_by_no?: string | null;
+            /** Số tờ mà tờ này thay thế / điều chỉnh */
+            supersedes_no?: string | null;
+            /** Tax Authority Code */
+            tax_authority_code: string | null;
+            /** Tax Authority Message */
+            tax_authority_message: string | null;
+            /** Tax Authority Status */
+            tax_authority_status: number | null;
+            /** Total Fc */
+            total_fc: string;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /**
          * EInvoiceListOut
          * @description Một trang hóa đơn + số đếm theo trạng thái cho bộ lọc U3/FR-EIV-015.
          *
@@ -11172,7 +11248,7 @@ export interface components {
                 [key: string]: number;
             };
             /** Items */
-            items: components["schemas"]["EInvoiceOut"][];
+            items: components["schemas"]["EInvoiceListItem"][];
             /** Page */
             page: number;
             /** Page Size */
@@ -15775,6 +15851,11 @@ export interface components {
          *     vào hóa đơn gốc, không có khoản nợ riêng).
          */
         SalesInvoiceListItem: {
+            /**
+             * Chứng từ được điều chỉnh
+             * @description Chỉ hai loại điều chỉnh (5/6) mang giá trị. Wizard sai sót của HĐĐT (7H-3) lọc theo cột này để tìm chứng từ mang phần chênh của tờ gốc.
+             */
+            adjusts_voucher_id?: string | null;
             /** Branch Id */
             branch_id: number;
             /** Currency Code */
@@ -18681,6 +18762,9 @@ export interface operations {
         parameters: {
             query?: {
                 status?: components["schemas"]["EInvoiceStatus"][] | null;
+                tab?: ("cho-phat-hanh" | "can-xu-ly" | "da-thay-the-dieu-chinh" | "khach-chua-nhan") | null;
+                source_voucher_id?: string | null;
+                q?: string | null;
                 page?: number;
                 page_size?: number;
             };
@@ -29792,6 +29876,7 @@ export interface operations {
                 customer_id?: number | null;
                 kind?: number | null;
                 einvoice?: "missing" | null;
+                adjusts_voucher_id?: string | null;
                 overdue?: boolean;
                 from_date?: string | null;
                 to_date?: string | null;

@@ -35,6 +35,8 @@ export interface SalesInvoiceListQuery {
   readonly overdue?: boolean
   readonly customerId?: number
   readonly kind?: number
+  /** Chứng từ điều chỉnh (kind 5/6) CỦA một chứng từ gốc — wizard sai sót HĐĐT. */
+  readonly adjustsVoucherId?: string
 }
 
 function listUrl(query: SalesInvoiceListQuery): string {
@@ -55,6 +57,9 @@ function listUrl(query: SalesInvoiceListQuery): string {
   }
   if (query.kind !== undefined) {
     params.set('kind', String(query.kind))
+  }
+  if (query.adjustsVoucherId !== undefined) {
+    params.set('adjusts_voucher_id', query.adjustsVoucherId)
   }
   return `/api/v1/sales/invoices?${params.toString()}`
 }

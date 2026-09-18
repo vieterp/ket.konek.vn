@@ -380,6 +380,14 @@ class SalesInvoiceListItem(BaseModel):
     remaining_fc: Decimal | None
     due_date: date | None
     days_overdue: int | None
+    adjusts_voucher_id: UUID | None = Field(
+        default=None,
+        title="Chứng từ được điều chỉnh",
+        description=(
+            "Chỉ hai loại điều chỉnh (5/6) mang giá trị. Wizard sai sót của HĐĐT "
+            "(7H-3) lọc theo cột này để tìm chứng từ mang phần chênh của tờ gốc."
+        ),
+    )
     """Số ngày quá hạn tại `as_of`; `None` khi không có hạn hoặc chưa tới hạn."""
 
 

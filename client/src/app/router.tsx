@@ -44,6 +44,7 @@ import {
 } from '@/features/danh-muc-thiet-lap'
 import { KitchenSinkPage } from '@/features/kitchen-sink/kitchen-sink-page'
 import { SalesInvoiceForm, SalesListPage } from '@/features/ban-hang'
+import { EInvoiceListPage, ErrorWizard } from '@/features/hoa-don-dien-tu'
 import { PurchaseInvoiceForm, PurchaseListPage } from '@/features/mua-hang'
 import {
   JournalVoucherForm,
@@ -164,6 +165,22 @@ const banHangRoutes: RouteObject[] = [
   },
 ]
 
+/**
+ * Nhóm Hóa đơn điện tử, lát 7H-3: lưới phát hành và tab đầu vào là hai đường
+ * dẫn của cùng một trang; wizard sai sót theo `:id`. `dau-vao` khai TRƯỚC
+ * `:id/xu-ly` để không bị đọc như một id.
+ */
+const hoaDonDienTuRoutes: RouteObject[] = [
+  {
+    path: 'hoa-don-dien-tu',
+    children: [
+      { index: true, element: <EInvoiceListPage mode="outbound" /> },
+      { path: 'dau-vao', element: <EInvoiceListPage mode="inbound" /> },
+      { path: ':id/xu-ly', element: <ErrorWizard /> },
+    ],
+  },
+]
+
 /** Rỗng trong MỌI bản dựng — xem ghi chú đầu tệp. */
 export const devOnlyRoutes: RouteObject[] = __DEV_TOOLS__
   ? [
@@ -188,7 +205,8 @@ const router = createBrowserRouter([
             item.path !== '/so-sach-thue' &&
             item.path !== '/tien-vao-tien-ra' &&
             item.path !== '/mua-hang' &&
-            item.path !== '/ban-hang',
+            item.path !== '/ban-hang' &&
+            item.path !== '/hoa-don-dien-tu',
         )
         .map((item) => ({
           path: item.path.slice(1),
@@ -199,6 +217,7 @@ const router = createBrowserRouter([
       ...tienVaoTienRaRoutes,
       ...muaHangRoutes,
       ...banHangRoutes,
+      ...hoaDonDienTuRoutes,
       // Đường dẫn lạ (người dùng gõ tay, dấu trang cũ sau khi đổi IA) rơi về
       // trang tổng quan thay vì một trang trắng không lối ra.
       ...(home === undefined ? [] : [{ path: '*', element: <PlaceholderPage item={home} /> }]),

@@ -6891,6 +6891,255 @@
         "title": "EInvoiceIssueIn",
         "type": "object"
       },
+      "EInvoiceListItem": {
+        "description": "Hàng lưới U3 (7H-3): tờ hóa đơn + phần chứng từ gốc mà lưới cần đọc.\n\nTờ hóa đơn cố ý không mang cột tiền (BR-EIV-07 theo cấu trúc, 7D), nên\ntên khách, tổng tiền và đồng tiền đọc **từ chứng từ bán nó trỏ vào** — ở\ntầng `api`, nơi được import cả hai module (C3 cấm `einvoice` nhìn `sales`).\n`serial`/`form_no` là ký hiệu và mẫu số chữ của `invoice_forms`; hai số\n`supersedes_no`/`superseded_by_no` nói tờ này thay/điều chỉnh tờ nào và\ntờ nào thay/điều chỉnh nó — cột gộp \"Đã thay thế bởi 0004126\" của design.",
+        "properties": {
+          "adjusts_invoice_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjusts Invoice Id"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "customer_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Code"
+          },
+          "customer_id": {
+            "title": "Customer Id",
+            "type": "integer"
+          },
+          "customer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Name"
+          },
+          "form_no": {
+            "title": "Form No",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invoice_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Date"
+          },
+          "invoice_form_id": {
+            "title": "Invoice Form Id",
+            "type": "integer"
+          },
+          "invoice_no": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice No"
+          },
+          "issued_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued At"
+          },
+          "lookup_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lookup Code"
+          },
+          "replaces_invoice_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaces Invoice Id"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "sent_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent To"
+          },
+          "serial": {
+            "title": "Serial",
+            "type": "string"
+          },
+          "source_voucher_id": {
+            "format": "uuid",
+            "title": "Source Voucher Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EInvoiceStatus"
+          },
+          "superseded_by_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Số tờ đã thay thế / điều chỉnh tờ này"
+          },
+          "supersedes_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Số tờ mà tờ này thay thế / điều chỉnh"
+          },
+          "tax_authority_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Authority Code"
+          },
+          "tax_authority_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Authority Message"
+          },
+          "tax_authority_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Authority Status"
+          },
+          "total_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Fc",
+            "type": "string"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "branch_id",
+          "source_voucher_id",
+          "invoice_form_id",
+          "invoice_date",
+          "status",
+          "tax_authority_status",
+          "tax_authority_code",
+          "tax_authority_message",
+          "lookup_code",
+          "replaces_invoice_id",
+          "adjusts_invoice_id",
+          "issued_at",
+          "sent_at",
+          "sent_to",
+          "voucher_no",
+          "customer_id",
+          "customer_code",
+          "customer_name",
+          "currency_code",
+          "total_fc",
+          "form_no",
+          "serial"
+        ],
+        "title": "EInvoiceListItem",
+        "type": "object"
+      },
       "EInvoiceListOut": {
         "description": "Một trang hóa đơn + số đếm theo trạng thái cho bộ lọc U3/FR-EIV-015.\n\nSố đếm đi kèm danh sách chứ không là một endpoint riêng: màn hình vẽ các\nthẻ lọc (\"Chưa phát hành 12 · Phát hành lỗi 2\") cùng lúc với lưới, và hai\nlượt gọi cho một màn hình là hai ảnh chụp có thể lệch nhau.\n\n`counts_by_status` đếm **toàn bộ** phạm vi người gọi, không riêng trang\nđang xem — thẻ lọc nói \"còn bao nhiêu việc\", không nói \"trang này có gì\".",
         "properties": {
@@ -6903,7 +7152,7 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/EInvoiceOut"
+              "$ref": "#/components/schemas/EInvoiceListItem"
             },
             "title": "Items",
             "type": "array"
@@ -19641,6 +19890,19 @@
       "SalesInvoiceListItem": {
         "description": "Một dòng lưới chứng từ bán hàng (bộ xương màn 01 dùng lại, lát 7H-2a).\n\nHeader + phần thân đủ để lưới nói được \"còn thiếu gì\": tên khách hàng, hóa\nđơn, tổng tiền, **còn phải thu hiện nay** đọc từ dòng sổ phụ `ar_ap_ledger`\ncủa chính chứng từ. Hóa đơn là HAI nguồn: bốn mảnh **gõ tay** trên thân\n(`invoice_*`, FR-SAL-004 — hóa đơn giấy / nhập tay, không bao giờ được HĐĐT\nghi ngược) và tờ HĐĐT **còn sống** treo lên chứng từ (`has_live_einvoice`\n+ `einvoice_serial/no` — số có thể chưa về khi tờ đang truyền;\n`einvoice.models.LIVE_STATUSES`). `remaining_fc` là `None` khi chứng từ\nchưa có dòng sổ phụ — chưa ghi sổ, hoặc thuộc `REVERSING_KINDS` (đối trừ\nvào hóa đơn gốc, không có khoản nợ riêng).",
         "properties": {
+          "adjusts_voucher_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Chỉ hai loại điều chỉnh (5/6) mang giá trị. Wizard sai sót của HĐĐT (7H-3) lọc theo cột này để tìm chứng từ mang phần chênh của tờ gốc.",
+            "title": "Chứng từ được điều chỉnh"
+          },
           "branch_id": {
             "title": "Branch Id",
             "type": "integer"
@@ -25365,7 +25627,7 @@
     },
     "/api/v1/einvoices": {
       "get": {
-        "description": "Một trang hóa đơn, lọc theo trạng thái (FR-EIV-015/025).",
+        "description": "Một trang hóa đơn dạng lưới U3, lọc theo trạng thái / tab (FR-EIV-015/025).\n\nHàng lưới mang khách, tổng tiền, ký hiệu chữ (7H-3) — màn hình đọc một\nrouter module chứ không BFF (RT-21), cùng khuôn `GET /sales/invoices`.\n`source_voucher_id` là đường `?source_voucher_id=` từ lưới bán: hộp phát\nhành hỏi \"chứng từ này đã có tờ nào chưa\" trước khi lập nháp. Mới nhất\ntrước: tờ chưa cấp số (`issued_at` trống) xếp cuối cùng khuôn cũ.",
         "operationId": "list_einvoices_api_v1_einvoices_get",
         "parameters": [
           {
@@ -25385,6 +25647,62 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "cho-phat-hanh",
+                    "can-xu-ly",
+                    "da-thay-the-dieu-chinh",
+                    "khach-chua-nhan"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tab"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_voucher_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Voucher Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
             }
           },
           {
@@ -42612,6 +42930,23 @@
                 }
               ],
               "title": "Einvoice"
+            }
+          },
+          {
+            "in": "query",
+            "name": "adjusts_voucher_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Adjusts Voucher Id"
             }
           },
           {
