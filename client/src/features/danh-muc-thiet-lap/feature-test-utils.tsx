@@ -20,7 +20,9 @@ import { SessionGate } from '@/app/session-gate'
 import { APP_VERSION } from '@/lib/app-version'
 
 import { CatalogListPage } from './catalog-list-page'
+import { ItemPage } from './item-page'
 import { PartnerPage } from './partner-page'
+import { PriceListPage } from './price-list-page'
 import { SettingsPage } from './settings-page'
 
 export interface RouteReply {
@@ -130,6 +132,8 @@ export function renderFeatureAt(path: string): void {
                 <Route index element={<Navigate to="danh-muc/doi-tac" replace />} />
                 <Route path="danh-muc/:segment" element={<CatalogListPage />} />
                 <Route path="doi-tac/:id" element={<PartnerPage />} />
+                <Route path="vat-tu-hang-hoa/:id" element={<ItemPage />} />
+                <Route path="bang-gia/:id" element={<PriceListPage />} />
                 <Route path="thiet-lap" element={<SettingsPage />} />
               </Route>
             </Route>

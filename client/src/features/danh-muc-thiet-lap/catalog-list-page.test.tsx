@@ -184,4 +184,29 @@ describe('màn hình danh mục', () => {
       await screen.findByRole('heading', { name: 'Đối tác' }),
     ).toBeInTheDocument()
   })
+
+  it('mã hàng và bảng giá trên lưới là liên kết mở trang chi tiết (7H-2b)', async () => {
+    mockServer({
+      ...baseRoutes(),
+      '/master/items': {
+        status: 200,
+        body: { items: [catalogRow({ id: 40, code: 'HH01', name: 'Nước suối', nature: 'goods' })], total: 1 },
+      },
+      '/master/items/40': {
+        status: 200,
+        body: catalogRow({ id: 40, code: 'HH01', name: 'Nước suối', nature: 'goods', base_unit_id: null }),
+      },
+      '/master/items/40/prices': { status: 200, body: { items: [] } },
+      '/master/items/40/discount-tiers': { status: 200, body: { items: [] } },
+      '/master/items/40/units': { status: 200, body: { items: [] } },
+      '/master/units_of_measure': EMPTY_PAGE,
+      '/master/warehouses': EMPTY_PAGE,
+    })
+    const user = userEvent.setup()
+    renderFeatureAt('/danh-muc-thiet-lap/danh-muc/vat-tu-hang-hoa')
+
+    await user.click(await screen.findByRole('button', { name: 'HH01' }))
+    expect(await screen.findByRole('heading', { name: 'HH01 — Nước suối' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Mức giá' })).toBeInTheDocument()
+  })
 })

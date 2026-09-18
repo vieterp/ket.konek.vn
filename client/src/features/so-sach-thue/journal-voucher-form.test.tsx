@@ -209,6 +209,7 @@ describe('form chứng từ nghiệp vụ khác', () => {
       posted_by: null,
       cashflow_activity: null,
       entry_kind: 0,
+      settlements: [],
       lines: [
         {
           id: 'bbbbbbbb-0000-0000-0000-000000000002',
@@ -307,6 +308,7 @@ describe('form chứng từ nghiệp vụ khác', () => {
       posted_by: null,
       cashflow_activity: null,
       entry_kind: 1,
+      settlements: [],
       lines: [
         {
           id: 'bbbbbbbb-0000-0000-0000-000000000001',

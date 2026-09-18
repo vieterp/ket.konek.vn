@@ -9,7 +9,8 @@ một hình dạng.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
+from decimal import Decimal
 from typing import Annotated, Final
 from uuid import UUID
 
@@ -25,10 +26,13 @@ from ket.api.dependencies import (
 from ket.api.idempotency import idempotency_key_dependency
 from ket.kernel.config.catalog import SAVE_ALSO_POSTS_KEY
 from ket.kernel.config.settings_service import value_of
+from ket.kernel.contracts import PartnerKind
+from ket.kernel.currency.models import CURRENCY_CODE_LENGTH
 from ket.kernel.errors import BranchNotInScopeError
 from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
+from ket.modules.cash_book.schemas import OpenInvoiceOut, OpenInvoicesResponse
 from ket.modules.general_ledger.journal import (
     JOURNAL_PERMISSION_CODE,
     JOURNAL_PERMISSION_MODULE,
@@ -42,7 +46,9 @@ from ket.modules.general_ledger.journal.schemas import (
     JournalVoucherUpdate,
 )
 from ket.modules.general_ledger.journal.service import JournalVoucherService
+from ket.posting.debt_lines import DebtSide, classify, is_advance
 from ket.posting.documents.models import Voucher
+from ket.posting.settlements import open_invoices
 
 router = APIRouter(prefix="/api/v1/gl/journal-vouchers", tags=["general-ledger"])
 
@@ -129,6 +135,72 @@ def create_journal_voucher(
     )
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     return created_body
+
+
+@router.get("/open-invoices", response_model=OpenInvoicesResponse)
+def list_journal_open_invoices(
+    authorized: JournalReader,
+    factory: SessionFactory,
+    partner_kind: Annotated[int, Query(ge=0, le=2)],
+    partner_id: Annotated[int, Query()],
+    account_id: Annotated[int, Query()],
+    on_debit: Annotated[bool, Query()],
+    currency_code: Annotated[
+        str, Query(min_length=CURRENCY_CODE_LENGTH, max_length=CURRENCY_CODE_LENGTH)
+    ],
+    branch_id: Annotated[int, Query()],
+    as_of: Annotated[date, Query()],
+) -> OpenInvoicesResponse:
+    """Khoản công nợ mà MỘT DÒNG định khoản có thể đối trừ (khối đối trừ 7H-2b).
+
+    Khác ba router trước (`cash-book`/`bank`/`purchase`/`sales`): ở đó chiều đối
+    trừ suy từ loại chứng từ, còn dòng GLE mang chiều riêng theo BÊN của nó
+    (7C-3/7C-4). Endpoint này vì thế không nhận `side` mà nhận đúng ba thứ dòng
+    có — TK, đối tác, bên — rồi chạy **chính `posting.debt_lines.classify`**:
+    TK không theo dõi đúng loại đối tác thì dòng không phải dòng công nợ và
+    danh sách rỗng (ô người dùng gõ chưa xong là chuyện thường, không phải lỗi);
+    có thì bên THUẬN tất toán khoản ứng trước, bên NGƯỢC tất toán khoản nợ.
+
+    Kết quả lọc thêm theo loại đích (`is_advance`), TK của đích và **tiền tệ**
+    của dòng để tập trả về **bằng đúng** tập mà `price_settlements` sẽ nhận lúc
+    cất — không có dòng nào chọn được rồi 422 (review 7H-2b M-1: ba router
+    trước bỏ trục tiền tệ và để 422 nói hộ; ở đây lời hứa là tập đúng).
+    """
+    _require_branch_in_scope(authorized, branch_id)
+    side = DebtSide(
+        line_no=1,
+        account_id=account_id,
+        partner_kind=PartnerKind(partner_kind),
+        partner_id=partner_id,
+        on_debit=on_debit,
+        # Số tiền chỉ để qua phép lọc `amount_fc > 0` của `classify`; danh sách
+        # còn nợ không phụ thuộc số tiền dòng.
+        amount_fc=Decimal(1),
+        currency_code=currency_code,
+        exchange_rate=Decimal(1),
+    )
+    with unit_of_work(factory, authorized.scope) as session:
+        debt_lines = classify(session, [side])
+        if not debt_lines:
+            return OpenInvoicesResponse(items=())
+        debt = debt_lines[0]
+        invoices = open_invoices(
+            session,
+            side="receivable" if debt.money_in else "payable",
+            partner_kind=debt.partner_kind,
+            partner_id=debt.partner_id,
+            branch_id=branch_id,
+            as_of=as_of,
+        )
+        return OpenInvoicesResponse(
+            items=tuple(
+                OpenInvoiceOut.from_invoice(invoice)
+                for invoice in invoices
+                if is_advance(invoice.target_kind) is debt.settles_advance
+                and invoice.account_id == account_id
+                and invoice.currency_code == currency_code
+            )
+        )
 
 
 @router.get("/{voucher_id}", response_model=JournalVoucherOut)

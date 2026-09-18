@@ -27,12 +27,21 @@ import { ApiError, useSession } from '@/lib/session'
 
 import { DIMENSION_COLUMNS } from './dimension-config'
 import { FeatureNav } from './feature-nav'
+import {
+  debtLinesOf,
+  debtPartnerKindOf,
+  lineNoOf,
+  ROW_KEY_SEPARATOR,
+  rowSettlementKey,
+  SETTLEMENT_CONTEXT_COLUMNS,
+} from './journal-debt-lines'
 import { JournalVoucherActionsFooter } from './journal-voucher-actions-footer'
 import { JournalVoucherHeaderFields } from './journal-voucher-header-fields'
 import { buildRowFromLine } from './journal-line-hydrate'
 import { buildLineColumns } from './journal-line-columns'
 import { resolveLines } from './journal-line-resolve'
-import { applyLineChanges, emptyLineRow, type LineRow } from './journal-line-types'
+import { applyLineChanges, emptyLineRow, isLineRowEmpty, type LineRow } from './journal-line-types'
+import { JournalSettlementBlock } from './journal-settlement-block'
 import { JournalViolationsAlert } from './journal-violations-alert'
 import { extractViolations, type Violation } from './journal-violations'
 import { todayIso } from './local-date'
@@ -140,6 +149,9 @@ function VoucherFormBody({
   )
   const [entryKind, setEntryKind] = useState(() => String(voucher?.entry_kind ?? 0))
   const [rows, setRows] = useState<LineRow[]>(() => [emptyLineRow()])
+  // Số đối trừ người dùng gõ, khóa `${rowId}|${target_kind}:${target_id}` —
+  // đối trừ của GLE thuộc về DÒNG (7C-3), nên khóa mang id dòng lưới.
+  const [settlementAmounts, setSettlementAmounts] = useState<Readonly<Record<string, string>>>({})
   const [error, setError] = useState<string | null>(null)
   const [violations, setViolations] = useState<readonly Violation[]>([])
   // Lệnh vừa bị từ chối — để nút "Vẫn ghi sổ?" (FR-SYS-062) biết gửi lại đúng
@@ -176,6 +188,18 @@ function VoucherFormBody({
             buildRowFromLine(line, accountLookup.maps, dimensionLookups.options),
           ),
     )
+    // `buildRowFromLine` giữ `LineRow.id = JournalLineOut.id`, nên khóa theo
+    // `journal_line_id` của dòng đối trừ trỏ đúng dòng lưới vừa dựng.
+    if (voucher.settlements.length > 0) {
+      setSettlementAmounts(
+        Object.fromEntries(
+          voucher.settlements.map((row) => [
+            rowSettlementKey(row.journal_line_id, row.target_kind, row.target_id),
+            row.amount_fc,
+          ]),
+        ),
+      )
+    }
   }
 
   const createMutation = useCreateJournalVoucher()
@@ -213,12 +237,90 @@ function VoucherFormBody({
   }
 
   function handleCommit(changes: readonly DataGridChange[]): void {
-    setRows((current) => applyLineChanges(current, changes, DIMENSION_KEYS))
+    const next = applyLineChanges(rows, changes, DIMENSION_KEYS)
+    setRows(next)
+    const partnerCodesToResolve: string[] = []
+    // Dòng đổi TK / đối tác / bên thì mọi số đối trừ đã gõ cho dòng ấy thuộc về
+    // một ngữ cảnh không còn: đích cũ không hiện trên khối nữa, không có ô để
+    // xóa, mà vẫn gửi lên là 422 không lối ra (review 7H-2b H-1). Bỏ khóa của
+    // dòng ngay tại đây — cùng khuôn 7H-2a M-5 (đổi mã hàng xóa cụm giá).
+    const purgedRowIds = new Set<string>()
     for (const change of changes) {
       if (change.columnKey === 'account') {
         accountLookup.resolve(change.value)
       }
+      const row = next[change.rowIndex]
+      if (row !== undefined && SETTLEMENT_CONTEXT_COLUMNS.has(change.columnKey)) {
+        purgedRowIds.add(row.id)
+      }
+      if (change.columnKey === 'partner') {
+        const typed = change.value.trim().toLowerCase()
+        const account = accountLookup.maps.byCode.get((row?.accountCode ?? '').trim().toLowerCase())
+        // Chỉ tra khi dòng có thể chạm công nợ: TK chưa tra được (tra sau) hoặc
+        // TK theo dõi khách/NCC — TK nhân viên, TK thường không cần lượt gọi.
+        const mayTouchDebt = account === undefined || debtPartnerKindOf(account.detail_tracking) !== undefined
+        const known = dimensionLookups.options.partners?.some(
+          (option) => option.code.toLowerCase() === typed,
+        )
+        if (typed !== '' && known !== true && mayTouchDebt) {
+          partnerCodesToResolve.push(change.value.trim())
+        }
+      }
     }
+    if (purgedRowIds.size > 0) {
+      setSettlementAmounts((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(
+            ([key]) => !purgedRowIds.has(key.slice(0, key.indexOf(ROW_KEY_SEPARATOR))),
+          ),
+        ),
+      )
+    }
+    // Mã đối tượng ngoài trang seed được tra NGAY lúc gõ (không chờ tới lúc
+    // Cất như các chiều khác): khối đối trừ chỉ hiện khi mã tra được, và
+    // người dùng cần thấy nó trước khi cất chứ không phải sau.
+    if (partnerCodesToResolve.length > 0) {
+      void dimensionLookups.resolveMissingCodes(
+        partnerCodesToResolve.map((code) => ({ slug: 'partners', code })),
+      )
+    }
+  }
+
+  const debtLines = debtLinesOf(rows, accountLookup.maps, dimensionLookups.options.partners)
+
+  /**
+   * Dòng đối trừ gửi lên: chỉ các khóa còn trỏ vào một dòng công nợ ĐANG có
+   * trên lưới (dòng bị xóa/đổi TK/đổi đối tác thì khóa của nó thành mồ côi và
+   * bị bỏ), `line_no` theo thang server (dòng không trắng, từ 1).
+   */
+  function buildSettlements(): { line_no: number; target_kind: number; target_id: string; amount_fc: string }[] {
+    const liveRowIds = new Set(debtLines.map((line) => line.rowId))
+    const built: { line_no: number; target_kind: number; target_id: string; amount_fc: string }[] = []
+    for (const [key, value] of Object.entries(settlementAmounts)) {
+      if (value.trim() === '') {
+        continue
+      }
+      const separator = key.indexOf(ROW_KEY_SEPARATOR)
+      const rowId = key.slice(0, separator)
+      if (!liveRowIds.has(rowId)) {
+        continue
+      }
+      const lineNo = lineNoOf(rows, rowId, isLineRowEmpty)
+      if (lineNo === null) {
+        continue
+      }
+      const [kind, targetId] = key.slice(separator + 1).split(':')
+      if (kind === undefined || targetId === undefined) {
+        continue
+      }
+      built.push({
+        line_no: lineNo,
+        target_kind: Number.parseInt(kind, 10),
+        target_id: targetId,
+        amount_fc: value.trim(),
+      })
+    }
+    return built
   }
 
   const requiredDimensions = new Set<string>()
@@ -287,6 +389,7 @@ function VoucherFormBody({
       // đặt lại cờ về "nghiệp vụ" mỗi lần người dùng sửa (review 4F, H4).
       entry_kind: Number.parseInt(entryKind, 10) || 0,
       lines: resolved.lines,
+      settlements: buildSettlements(),
     }
     if (cashflowActivity.trim() !== '') {
       const parsed = Number.parseInt(cashflowActivity, 10)
@@ -392,6 +495,18 @@ function VoucherFormBody({
         caption={t('gl.line.caption')}
         cellLabel={(header, rowNumber) => t('gl.line.cellLabel', { header, row: String(rowNumber) })}
         onCommit={handleCommit}
+      />
+
+      <JournalSettlementBlock
+        lines={debtLines}
+        branchId={voucher !== null ? voucher.branch_id : (access.data?.acting_branch_id ?? null)}
+        asOf={postingDate}
+        currencyCode={currencyCode.trim() === '' ? 'VND' : currencyCode.trim()}
+        amounts={settlementAmounts}
+        onAmountChange={(key, value) => {
+          setSettlementAmounts((current) => ({ ...current, [key]: value }))
+        }}
+        disabled={readOnly || busy}
       />
 
       <JournalVoucherActionsFooter
