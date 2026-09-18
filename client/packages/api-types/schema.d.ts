@@ -7970,7 +7970,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Sales Invoices
+         * @description Lưới chứng từ bán hàng (bộ xương màn 01 dùng lại): mới nhất trước, kèm dòng tổng.
+         *
+         *     Màn hình đọc một module nên gọi router module chứ không BFF (RT-21); lưới
+         *     chứng từ dùng chung `/vouchers` không mang khách hàng, hóa đơn hay số còn
+         *     nợ — ba cột mà tab "việc còn thiếu" cần để nói ra việc tiếp theo. RLS lọc
+         *     chi nhánh trước khi mã này chạy.
+         */
+        get: operations["list_sales_invoices_api_v1_sales_invoices_get"];
         put?: never;
         /**
          * Create Sales Invoice
@@ -15719,10 +15728,116 @@ export interface components {
             warehouse_id: number | null;
         };
         /**
+         * SalesInvoiceListItem
+         * @description Một dòng lưới chứng từ bán hàng (bộ xương màn 01 dùng lại, lát 7H-2a).
+         *
+         *     Header + phần thân đủ để lưới nói được "còn thiếu gì": tên khách hàng, hóa
+         *     đơn, tổng tiền, **còn phải thu hiện nay** đọc từ dòng sổ phụ `ar_ap_ledger`
+         *     của chính chứng từ. Hóa đơn là HAI nguồn: bốn mảnh **gõ tay** trên thân
+         *     (`invoice_*`, FR-SAL-004 — hóa đơn giấy / nhập tay, không bao giờ được HĐĐT
+         *     ghi ngược) và tờ HĐĐT **còn sống** treo lên chứng từ (`has_live_einvoice`
+         *     + `einvoice_serial/no` — số có thể chưa về khi tờ đang truyền;
+         *     `einvoice.models.LIVE_STATUSES`). `remaining_fc` là `None` khi chứng từ
+         *     chưa có dòng sổ phụ — chưa ghi sổ, hoặc thuộc `REVERSING_KINDS` (đối trừ
+         *     vào hóa đơn gốc, không có khoản nợ riêng).
+         */
+        SalesInvoiceListItem: {
+            /** Branch Id */
+            branch_id: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Customer Code */
+            customer_code: string | null;
+            /** Customer Id */
+            customer_id: number;
+            /** Customer Name */
+            customer_name: string | null;
+            /** Days Overdue */
+            days_overdue: number | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Due Date */
+            due_date: string | null;
+            /** Einvoice No */
+            einvoice_no: string | null;
+            /** Einvoice Serial */
+            einvoice_serial: string | null;
+            /** Has Live Einvoice */
+            has_live_einvoice: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invoice Date */
+            invoice_date: string | null;
+            /** Invoice Form */
+            invoice_form: string | null;
+            /** Invoice No */
+            invoice_no: string | null;
+            /** Invoice Serial */
+            invoice_serial: string | null;
+            /** Kind */
+            kind: number;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Remaining Fc */
+            remaining_fc: string | null;
+            /** Status */
+            status: number;
+            /** Total Fc */
+            total_fc: string;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /** SalesInvoiceListResponse */
+        SalesInvoiceListResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Items */
+            items: components["schemas"]["SalesInvoiceListItem"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+            /** Totals */
+            totals: components["schemas"]["SalesInvoiceListTotals"][];
+        };
+        /**
+         * SalesInvoiceListTotals
+         * @description Dòng tổng của lưới — tính trên TOÀN tập lọc, không riêng trang đang xem.
+         *
+         *     Một dòng MỖI tiền tệ (cùng luật 7H-1 M-2). `total_fc` là doanh thu RÒNG —
+         *     ba loại `REVERSING_KINDS` mang dấu âm; `remaining_fc` chỉ cộng khoản còn nợ.
+         */
+        SalesInvoiceListTotals: {
+            /** Count */
+            count: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Remaining Fc */
+            remaining_fc: string;
+            /** Total Fc */
+            total_fc: string;
+        };
+        /**
          * SalesInvoiceOut
          * @description Header chứng từ + thân hóa đơn — client cần cả hai để vẽ lại form.
          */
         SalesInvoiceOut: {
+            /** Adjusts Voucher Id */
+            adjusts_voucher_id?: string | null;
             /** Branch Id */
             branch_id: number;
             /** Cashflow Activity */
@@ -29587,6 +29702,47 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_sales_invoices_api_v1_sales_invoices_get: {
+        parameters: {
+            query?: {
+                period_id?: number | null;
+                status?: number | null;
+                customer_id?: number | null;
+                kind?: number | null;
+                einvoice?: "missing" | null;
+                overdue?: boolean;
+                from_date?: string | null;
+                to_date?: string | null;
+                as_of?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesInvoiceListResponse"];
+                };
             };
             /** @description Lỗi (RFC 7807) */
             default: {

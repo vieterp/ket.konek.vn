@@ -317,6 +317,9 @@ class SalesInvoiceOut(BaseModel):
     row_version: int
 
     kind: int = 0
+    adjusts_voucher_id: UUID | None = None
+    """Vọng lại để form sửa chứng từ điều chỉnh PUT trọn bộ được (bắt buộc ở
+    hai loại 5/6) và để màn hình chỉ ra chứng từ được điều chỉnh (7H-2a)."""
     operation_code: str = ""
     customer_id: int = 0
     salesperson_id: int | None = None
@@ -339,3 +342,65 @@ class SalesInvoiceOut(BaseModel):
 
     lines: tuple[SalesInvoiceLineOut, ...] = ()
     settlements: tuple[SalesSettlementOut, ...] = ()
+
+
+class SalesInvoiceListItem(BaseModel):
+    """Một dòng lưới chứng từ bán hàng (bộ xương màn 01 dùng lại, lát 7H-2a).
+
+    Header + phần thân đủ để lưới nói được "còn thiếu gì": tên khách hàng, hóa
+    đơn, tổng tiền, **còn phải thu hiện nay** đọc từ dòng sổ phụ `ar_ap_ledger`
+    của chính chứng từ. Hóa đơn là HAI nguồn: bốn mảnh **gõ tay** trên thân
+    (`invoice_*`, FR-SAL-004 — hóa đơn giấy / nhập tay, không bao giờ được HĐĐT
+    ghi ngược) và tờ HĐĐT **còn sống** treo lên chứng từ (`has_live_einvoice`
+    + `einvoice_serial/no` — số có thể chưa về khi tờ đang truyền;
+    `einvoice.models.LIVE_STATUSES`). `remaining_fc` là `None` khi chứng từ
+    chưa có dòng sổ phụ — chưa ghi sổ, hoặc thuộc `REVERSING_KINDS` (đối trừ
+    vào hóa đơn gốc, không có khoản nợ riêng).
+    """
+
+    id: UUID
+    voucher_no: str
+    branch_id: int
+    document_date: date
+    posting_date: date
+    status: int
+    currency_code: str
+    kind: int
+    customer_id: int
+    customer_code: str | None
+    customer_name: str | None
+    invoice_form: str | None
+    invoice_serial: str | None
+    invoice_no: str | None
+    invoice_date: date | None
+    has_live_einvoice: bool
+    einvoice_serial: str | None
+    einvoice_no: str | None
+    total_fc: Decimal
+    remaining_fc: Decimal | None
+    due_date: date | None
+    days_overdue: int | None
+    """Số ngày quá hạn tại `as_of`; `None` khi không có hạn hoặc chưa tới hạn."""
+
+
+class SalesInvoiceListTotals(BaseModel):
+    """Dòng tổng của lưới — tính trên TOÀN tập lọc, không riêng trang đang xem.
+
+    Một dòng MỖI tiền tệ (cùng luật 7H-1 M-2). `total_fc` là doanh thu RÒNG —
+    ba loại `REVERSING_KINDS` mang dấu âm; `remaining_fc` chỉ cộng khoản còn nợ.
+    """
+
+    currency_code: str
+    count: int
+    total_fc: Decimal
+    remaining_fc: Decimal
+
+
+class SalesInvoiceListResponse(BaseModel):
+    items: tuple[SalesInvoiceListItem, ...]
+    """Số chứng từ của TOÀN tập lọc — mẫu số của phân trang."""
+    total: int
+    totals: tuple[SalesInvoiceListTotals, ...]
+    page: int
+    page_size: int
+    as_of: date

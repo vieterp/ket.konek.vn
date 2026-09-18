@@ -35,9 +35,10 @@ export function useVoucherActions() {
     // Hook dùng chung cho cả chứng từ GLE lẫn phiếu quỹ/ngân hàng — ghi sổ /
     // bỏ ghi sổ đổi số dư thẻ và lưới của màn "Tiền vào tiền ra".
     void queryClient.invalidateQueries({ queryKey: ['cashflow', datasetCode] })
-    // Lưới + tab "việc còn thiếu" của màn mua hàng (lát 7H-1) đọc trạng thái
-    // và số còn nợ — cả hai đổi khi ghi sổ.
+    // Lưới + tab "việc còn thiếu" của màn mua hàng (7H-1) và bán hàng (7H-2a)
+    // đọc trạng thái và số còn nợ — cả hai đổi khi ghi sổ.
     void queryClient.invalidateQueries({ queryKey: ['purchase', datasetCode] })
+    void queryClient.invalidateQueries({ queryKey: ['sales', datasetCode] })
   }
 
   const post = useMutation({

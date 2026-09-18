@@ -36,6 +36,7 @@ import { SessionGate } from '@/app/session-gate'
 import { DataGridBenchPage } from '@/features/bench/data-grid-bench-page'
 import { CatalogListPage, OpeningBalancePage, PartnerPage, SettingsPage } from '@/features/danh-muc-thiet-lap'
 import { KitchenSinkPage } from '@/features/kitchen-sink/kitchen-sink-page'
+import { SalesInvoiceForm, SalesListPage } from '@/features/ban-hang'
 import { PurchaseInvoiceForm, PurchaseListPage } from '@/features/mua-hang'
 import {
   JournalVoucherForm,
@@ -138,6 +139,22 @@ const muaHangRoutes: RouteObject[] = [
   },
 ]
 
+/**
+ * Nhóm Bán hàng, lát 7H-2a: cùng bộ xương nhóm 01 — lưới chứng từ bán (tab
+ * việc còn thiếu) và form hóa đơn bán. `chung-tu/moi` khai TRƯỚC `chung-tu/:id`.
+ */
+const banHangRoutes: RouteObject[] = [
+  {
+    path: 'ban-hang',
+    children: [
+      { index: true, element: <Navigate to="chung-tu" replace /> },
+      { path: 'chung-tu', element: <SalesListPage /> },
+      { path: 'chung-tu/moi', element: <SalesInvoiceForm /> },
+      { path: 'chung-tu/:id', element: <SalesInvoiceForm /> },
+    ],
+  },
+]
+
 /** Rỗng trong MỌI bản dựng — xem ghi chú đầu tệp. */
 export const devOnlyRoutes: RouteObject[] = __DEV_TOOLS__
   ? [
@@ -161,7 +178,8 @@ const router = createBrowserRouter([
             item.path !== '/danh-muc-thiet-lap' &&
             item.path !== '/so-sach-thue' &&
             item.path !== '/tien-vao-tien-ra' &&
-            item.path !== '/mua-hang',
+            item.path !== '/mua-hang' &&
+            item.path !== '/ban-hang',
         )
         .map((item) => ({
           path: item.path.slice(1),
@@ -171,6 +189,7 @@ const router = createBrowserRouter([
       ...soSachThueRoutes,
       ...tienVaoTienRaRoutes,
       ...muaHangRoutes,
+      ...banHangRoutes,
       // Đường dẫn lạ (người dùng gõ tay, dấu trang cũ sau khi đổi IA) rơi về
       // trang tổng quan thay vì một trang trắng không lối ra.
       ...(home === undefined ? [] : [{ path: '*', element: <PlaceholderPage item={home} /> }]),
