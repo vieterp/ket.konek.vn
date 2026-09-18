@@ -34,7 +34,14 @@ import { NAVIGATION } from '@/app/navigation'
 import { PlaceholderPage } from '@/app/placeholder-page'
 import { SessionGate } from '@/app/session-gate'
 import { DataGridBenchPage } from '@/features/bench/data-grid-bench-page'
-import { CatalogListPage, OpeningBalancePage, PartnerPage, SettingsPage } from '@/features/danh-muc-thiet-lap'
+import {
+  CatalogListPage,
+  ItemPage,
+  OpeningBalancePage,
+  PartnerPage,
+  PriceListPage,
+  SettingsPage,
+} from '@/features/danh-muc-thiet-lap'
 import { KitchenSinkPage } from '@/features/kitchen-sink/kitchen-sink-page'
 import { SalesInvoiceForm, SalesListPage } from '@/features/ban-hang'
 import { PurchaseInvoiceForm, PurchaseListPage } from '@/features/mua-hang'
@@ -69,6 +76,8 @@ const danhMucThietLapRoutes: RouteObject[] = [
       { index: true, element: <Navigate to="danh-muc/doi-tac" replace /> },
       { path: 'danh-muc/:segment', element: <CatalogListPage /> },
       { path: 'doi-tac/:id', element: <PartnerPage /> },
+      { path: 'vat-tu-hang-hoa/:id', element: <ItemPage /> },
+      { path: 'bang-gia/:id', element: <PriceListPage /> },
       { path: 'so-du-ban-dau', element: <OpeningBalancePage /> },
       { path: 'thiet-lap', element: <SettingsPage /> },
     ],

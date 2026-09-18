@@ -34,6 +34,17 @@ import { useDownloadTemplate, useExportCatalog } from './use-import'
 
 const ALL_FLAG = ''
 
+/**
+ * Danh mục có trang chi tiết riêng (mã trên lưới thành liên kết): đối tác (3D,
+ * thẻ công nợ), mã hàng và bảng giá (7H-2b, màn khai giá). Đoạn đường dẫn là
+ * `urlSegment` của chính danh mục ấy.
+ */
+const DETAIL_PAGE_SEGMENT: Readonly<Partial<Record<string, string>>> = {
+  partners: 'doi-tac',
+  items: 'vat-tu-hang-hoa',
+  price_lists: 'bang-gia',
+}
+
 export function CatalogListPage(): ReactElement {
   const { segment } = useParams()
   const catalog = catalogByUrlSegment(segment ?? '')
@@ -102,12 +113,12 @@ function CatalogContent({ def }: { readonly def: CatalogDef }): ReactElement {
             <FolderClosed size={14} aria-hidden />
             {row.code}
           </button>
-        ) : def.slug === 'partners' ? (
+        ) : DETAIL_PAGE_SEGMENT[def.slug] !== undefined ? (
           <button
             type="button"
             className="text-secondary hover:underline"
             onClick={() => {
-              void navigate(`/danh-muc-thiet-lap/doi-tac/${String(row.id)}`)
+              void navigate(`/danh-muc-thiet-lap/${DETAIL_PAGE_SEGMENT[def.slug] ?? ''}/${String(row.id)}`)
             }}
           >
             {row.code}

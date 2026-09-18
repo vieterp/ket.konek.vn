@@ -18,6 +18,7 @@ import {
   DIMENSION_COLUMNS,
   DIMENSION_LINE_FIELD,
   PARTNER_KIND_BY_DIMENSION,
+  trackedDimensionOf,
 } from './dimension-config'
 import type { LineRow } from './journal-line-types'
 import { isLineRowEmpty } from './journal-line-types'
@@ -84,7 +85,7 @@ export function resolveLines(
 
     let rowFailed = false
     for (const column of DIMENSION_COLUMNS) {
-      const dimension = account.detail_tracking?.find((value) => column.values.includes(value))
+      const dimension = trackedDimensionOf(account.detail_tracking, column)
       if (dimension === undefined) {
         // TK dòng này không đòi chiều nhóm cột này — bỏ qua, kể cả nếu người
         // dùng lỡ gõ gì đó vào ô (không gửi lên, không chặn).

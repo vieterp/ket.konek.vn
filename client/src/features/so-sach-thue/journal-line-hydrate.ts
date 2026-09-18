@@ -9,7 +9,7 @@
 
 import type { AccountMaps } from './use-account-lookup'
 import type { DimensionLookups } from './use-dimension-lookups'
-import { DIMENSION_CATALOG_SLUG, DIMENSION_COLUMNS } from './dimension-config'
+import { DIMENSION_CATALOG_SLUG, DIMENSION_COLUMNS, trackedDimensionOf } from './dimension-config'
 import type { LineRow } from './journal-line-types'
 import type { JournalVoucherOut } from './use-journal-voucher'
 
@@ -44,7 +44,7 @@ export function buildRowFromLine(
   const account = accounts.byId.get(line.account_id)
   const dims: Record<string, string> = {}
   for (const column of DIMENSION_COLUMNS) {
-    const dimension = account?.detail_tracking?.find((value) => column.values.includes(value))
+    const dimension = trackedDimensionOf(account?.detail_tracking, column)
     if (dimension === undefined) {
       continue
     }

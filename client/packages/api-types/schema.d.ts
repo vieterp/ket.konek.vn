@@ -1637,6 +1637,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/gl/journal-vouchers/open-invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Journal Open Invoices
+         * @description Khoản công nợ mà MỘT DÒNG định khoản có thể đối trừ (khối đối trừ 7H-2b).
+         *
+         *     Khác ba router trước (`cash-book`/`bank`/`purchase`/`sales`): ở đó chiều đối
+         *     trừ suy từ loại chứng từ, còn dòng GLE mang chiều riêng theo BÊN của nó
+         *     (7C-3/7C-4). Endpoint này vì thế không nhận `side` mà nhận đúng ba thứ dòng
+         *     có — TK, đối tác, bên — rồi chạy **chính `posting.debt_lines.classify`**:
+         *     TK không theo dõi đúng loại đối tác thì dòng không phải dòng công nợ và
+         *     danh sách rỗng (ô người dùng gõ chưa xong là chuyện thường, không phải lỗi);
+         *     có thì bên THUẬN tất toán khoản ứng trước, bên NGƯỢC tất toán khoản nợ.
+         *
+         *     Kết quả lọc thêm theo loại đích (`is_advance`), TK của đích và **tiền tệ**
+         *     của dòng để tập trả về **bằng đúng** tập mà `price_settlements` sẽ nhận lúc
+         *     cất — không có dòng nào chọn được rồi 422 (review 7H-2b M-1: ba router
+         *     trước bỏ trục tiền tệ và để 422 nói hộ; ở đây lời hứa là tập đúng).
+         */
+        get: operations["list_journal_open_invoices_api_v1_gl_journal_vouchers_open_invoices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gl/journal-vouchers/{voucher_id}": {
         parameters: {
             query?: never;
@@ -19665,6 +19698,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JournalVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_journal_open_invoices_api_v1_gl_journal_vouchers_open_invoices_get: {
+        parameters: {
+            query: {
+                partner_kind: number;
+                partner_id: number;
+                account_id: number;
+                on_debit: boolean;
+                currency_code: string;
+                branch_id: number;
+                as_of: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenInvoicesResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

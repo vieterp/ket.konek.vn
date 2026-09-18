@@ -22744,7 +22744,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.45.0"
+    "version": "0.46.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -26814,6 +26814,108 @@
           }
         },
         "summary": "Create Journal Voucher",
+        "tags": [
+          "general-ledger"
+        ]
+      }
+    },
+    "/api/v1/gl/journal-vouchers/open-invoices": {
+      "get": {
+        "description": "Khoản công nợ mà MỘT DÒNG định khoản có thể đối trừ (khối đối trừ 7H-2b).\n\nKhác ba router trước (`cash-book`/`bank`/`purchase`/`sales`): ở đó chiều đối\ntrừ suy từ loại chứng từ, còn dòng GLE mang chiều riêng theo BÊN của nó\n(7C-3/7C-4). Endpoint này vì thế không nhận `side` mà nhận đúng ba thứ dòng\ncó — TK, đối tác, bên — rồi chạy **chính `posting.debt_lines.classify`**:\nTK không theo dõi đúng loại đối tác thì dòng không phải dòng công nợ và\ndanh sách rỗng (ô người dùng gõ chưa xong là chuyện thường, không phải lỗi);\ncó thì bên THUẬN tất toán khoản ứng trước, bên NGƯỢC tất toán khoản nợ.\n\nKết quả lọc thêm theo loại đích (`is_advance`), TK của đích và **tiền tệ**\ncủa dòng để tập trả về **bằng đúng** tập mà `price_settlements` sẽ nhận lúc\ncất — không có dòng nào chọn được rồi 422 (review 7H-2b M-1: ba router\ntrước bỏ trục tiền tệ và để 422 nói hộ; ở đây lời hứa là tập đúng).",
+        "operationId": "list_journal_open_invoices_api_v1_gl_journal_vouchers_open_invoices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "partner_kind",
+            "required": true,
+            "schema": {
+              "maximum": 2,
+              "minimum": 0,
+              "title": "Partner Kind",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "partner_id",
+            "required": true,
+            "schema": {
+              "title": "Partner Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "on_debit",
+            "required": true,
+            "schema": {
+              "title": "On Debit",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency_code",
+            "required": true,
+            "schema": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": true,
+            "schema": {
+              "title": "Branch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "As Of",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenInvoicesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Journal Open Invoices",
         "tags": [
           "general-ledger"
         ]

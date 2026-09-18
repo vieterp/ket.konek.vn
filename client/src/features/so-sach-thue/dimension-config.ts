@@ -52,6 +52,19 @@ export const DIMENSION_LINE_FIELD: Readonly<Partial<Record<string, string>>> = {
   bank_account: 'bank_account_id',
 }
 
+/**
+ * Chiều mà một TK khai cho một cột gộp — cùng MỘT phép chọn cho lượt rà lúc
+ * Cất, lượt dựng lại form sửa và khối đối trừ (review 7H-2b L-2): TK khai
+ * `["employee", "customer"]` phải cho cùng một câu trả lời ở cả ba nơi, nếu
+ * không khối đối trừ hiện ra cho một dòng mà lượt Cất gửi `partner_kind` nhân viên.
+ */
+export function trackedDimensionOf(
+  detailTracking: readonly string[] | null | undefined,
+  column: DimensionColumn,
+): string | undefined {
+  return detailTracking?.find((value) => column.values.includes(value))
+}
+
 export interface DimensionColumn {
   /** Khóa cột trên lưới — cũng là khóa trong `LineRow.dims`. */
   readonly key: string
