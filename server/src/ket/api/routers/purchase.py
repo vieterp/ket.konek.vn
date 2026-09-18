@@ -12,11 +12,13 @@ hai chỗ để chúng lệch nhau.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from typing import Annotated, Final
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
+from sqlalchemy import Select, and_, case, func, select
 from sqlalchemy.orm import Session
 
 from ket.api.dependencies import (
@@ -31,7 +33,9 @@ from ket.kernel.config.settings_service import value_of
 from ket.kernel.contracts import PartnerKind
 from ket.kernel.errors import BranchNotInScopeError
 from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
+from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.persistence.unit_of_work import unit_of_work
+from ket.kernel.protocols import SettlementTargetKind
 from ket.kernel.security.permissions import Action, permission_code
 
 # Picker hóa đơn còn nợ dùng chung hình dạng với phiếu thu/chi (`bank.py` cũng
@@ -42,6 +46,7 @@ from ket.modules.purchase import INVOICE_PERMISSION_CODE, PURCHASE_PERMISSION_MO
 from ket.modules.purchase.models import (
     LandedCost,
     PurchaseInvoice,
+    PurchaseInvoiceKind,
     PurchaseInvoiceLine,
     PurchaseSettlement,
 )
@@ -49,13 +54,22 @@ from ket.modules.purchase.schemas import (
     LandedCostOut,
     PurchaseInvoiceIn,
     PurchaseInvoiceLineOut,
+    PurchaseInvoiceListItem,
+    PurchaseInvoiceListResponse,
+    PurchaseInvoiceListTotals,
     PurchaseInvoiceOut,
     PurchaseInvoiceUpdate,
     PurchaseSettlementOut,
 )
 from ket.modules.purchase.service import PurchaseInvoiceService
 from ket.modules.purchase.settlement_service import open_invoices
-from ket.posting.documents.models import Voucher
+
+# Lưới chứng từ đọc "còn phải trả hiện nay" từ dòng sổ phụ của chính chứng từ.
+# Tầng api nhìn được cả `purchase` lẫn `receivables` (C3 chỉ cấm module nhìn
+# nhau); `settled` là scalar CHẠY nên đúng con số "hiện nay" mà lưới hỏi — khác
+# báo cáo theo mốc chốt của 7G-1, nơi phải cắt lượt trả theo ngày ghi sổ.
+from ket.modules.receivables.models import ArApLedgerEntry
+from ket.posting.documents.models import Voucher, VoucherStatus
 
 router = APIRouter(prefix="/api/v1/purchase", tags=["purchase"])
 
@@ -70,6 +84,9 @@ InvoiceEditor = Annotated[AuthorizedRequest, Depends(require_permission(INVOICE_
 
 CREATE_ROUTE: Final[str] = "POST /api/v1/purchase/invoices"
 CreateKey = Annotated[str, Depends(idempotency_key_dependency(CREATE_ROUTE))]
+
+LIST_MAX_PAGE_SIZE: Final[int] = 200
+_ZERO: Final[Decimal] = Decimal(0)
 
 _PAYABLE_SIDE: Final[str] = "payable"
 
@@ -192,6 +209,205 @@ def list_open_payables(
         return OpenInvoicesResponse(
             items=tuple(OpenInvoiceOut.from_invoice(invoice) for invoice in invoices)
         )
+
+
+def _invoice_list_query(
+    *,
+    as_of: date,
+    period_id: int | None,
+    voucher_status: int | None,
+    vendor_id: int | None,
+    kind: int | None,
+    vendor_invoice_status: int | None,
+    overdue: bool,
+    from_date: date | None,
+    to_date: date | None,
+) -> Select[tuple[Voucher, PurchaseInvoice, str, str, Decimal, date | None]]:
+    """Một câu SELECT cho cả trang lẫn dòng tổng — hai phép đọc không được lệch bộ lọc.
+
+    Kiểu suy ra của SQLAlchemy không biết `outerjoin` làm ba cột NCC/còn nợ
+    thành nullable — `_list_item` nhận `| None` và xử tại chỗ.
+    """
+    remaining = (ArApLedgerEntry.amount_fc - ArApLedgerEntry.settled_fc).label("remaining_fc")
+    query = (
+        select(
+            Voucher,
+            PurchaseInvoice,
+            Partner.code,
+            Partner.name,
+            remaining,
+            ArApLedgerEntry.due_date,
+        )
+        .join(PurchaseInvoice, PurchaseInvoice.id == Voucher.id)
+        .outerjoin(Partner, Partner.id == PurchaseInvoice.vendor_id)
+        # Một hóa đơn có thể mang NHIỀU dòng sổ phụ: mỗi khoản chi phí mua do
+        # NCC khác thu là một khoản phải trả riêng cùng `document_id`
+        # (`PurchaseInvoiceService._subledger_entries`). Lưới nói về công nợ
+        # với NCC TRÊN hóa đơn, nên ghim đúng dòng (NCC, TK phải trả) của hóa
+        # đơn — không thì mỗi khoản chi phí nhân đôi dòng lưới và dòng tổng.
+        # Nợ với NCC vận chuyển sống ở báo cáo tuổi nợ / thẻ đối tác.
+        .outerjoin(
+            ArApLedgerEntry,
+            and_(
+                ArApLedgerEntry.document_id == Voucher.id,
+                ArApLedgerEntry.partner_id == PurchaseInvoice.vendor_id,
+                ArApLedgerEntry.account_id == PurchaseInvoice.payable_account_id,
+                ArApLedgerEntry.target_kind == SettlementTargetKind.PURCHASE_INVOICE.value,
+                ArApLedgerEntry.partner_kind == PartnerKind.VENDOR.value,
+                ArApLedgerEntry.ledger == 0,
+            ),
+        )
+    )
+    if period_id is not None:
+        query = query.where(Voucher.period_id == period_id)
+    if voucher_status is not None:
+        query = query.where(Voucher.status == voucher_status)
+    if vendor_id is not None:
+        query = query.where(PurchaseInvoice.vendor_id == vendor_id)
+    if kind is not None:
+        query = query.where(PurchaseInvoice.kind == kind)
+    if vendor_invoice_status is not None:
+        query = query.where(PurchaseInvoice.vendor_invoice_status == vendor_invoice_status)
+    if from_date is not None:
+        query = query.where(Voucher.posting_date >= from_date)
+    if to_date is not None:
+        query = query.where(Voucher.posting_date <= to_date)
+    if overdue:
+        # "Quá hạn" = còn nợ và hạn đã qua tại `as_of` — cùng định nghĩa với nhóm
+        # `qua-han` của BFF `pending-issues`, nên bấm tab ấy rồi lọc lưới ra
+        # đúng những chứng từ tab vừa đếm.
+        query = query.where(
+            ArApLedgerEntry.due_date < as_of,
+            ArApLedgerEntry.amount_fc > ArApLedgerEntry.settled_fc,
+        )
+    return query
+
+
+@router.get("/invoices", response_model=PurchaseInvoiceListResponse)
+def list_purchase_invoices(
+    authorized: InvoiceReader,
+    factory: SessionFactory,
+    period_id: Annotated[int | None, Query()] = None,
+    voucher_status: Annotated[int | None, Query(alias="status")] = None,
+    vendor_id: Annotated[int | None, Query()] = None,
+    kind: Annotated[int | None, Query()] = None,
+    vendor_invoice_status: Annotated[int | None, Query()] = None,
+    overdue: Annotated[bool, Query()] = False,
+    from_date: Annotated[date | None, Query()] = None,
+    to_date: Annotated[date | None, Query()] = None,
+    as_of: Annotated[date | None, Query()] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=LIST_MAX_PAGE_SIZE)] = 50,
+) -> PurchaseInvoiceListResponse:
+    """Lưới chứng từ mua hàng (màn 01 design): mới nhất trước, kèm dòng tổng.
+
+    Màn hình đọc một module nên gọi router module chứ không BFF (RT-21); lưới
+    chứng từ dùng chung `/vouchers` không mang NCC, hóa đơn NCC hay số còn nợ
+    — ba cột mà tab "việc còn thiếu" cần để nói ra việc tiếp theo. RLS lọc
+    chi nhánh trước khi mã này chạy.
+    """
+    effective_as_of = as_of if as_of is not None else datetime.now(UTC).astimezone().date()
+    query = _invoice_list_query(
+        as_of=effective_as_of,
+        period_id=period_id,
+        voucher_status=voucher_status,
+        vendor_id=vendor_id,
+        kind=kind,
+        vendor_invoice_status=vendor_invoice_status,
+        overdue=overdue,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    with unit_of_work(factory, authorized.scope) as session:
+        filtered = query.subquery()
+        # Tờ trả lại hàng trừ vào tổng mua (giá trị mua ròng); nhóm theo tiền tệ
+        # vì nguyên tệ khác nhau không cộng được (user chốt 2026-09-18).
+        signed_total = case(
+            (filtered.c.kind == PurchaseInvoiceKind.RETURN, -filtered.c.total_fc),
+            else_=filtered.c.total_fc,
+        )
+        totals_rows = session.execute(
+            select(
+                filtered.c.currency_code,
+                func.count(),
+                func.coalesce(func.sum(signed_total), _ZERO),
+                func.coalesce(func.sum(filtered.c.remaining_fc), _ZERO),
+            )
+            .group_by(filtered.c.currency_code)
+            .order_by(filtered.c.currency_code)
+        ).all()
+        rows = session.execute(
+            query.order_by(Voucher.posting_date.desc(), Voucher.voucher_no.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
+        items = tuple(
+            _list_item(
+                voucher, body, vendor_code, vendor_name, remaining, due_date, effective_as_of
+            )
+            for voucher, body, vendor_code, vendor_name, remaining, due_date in rows
+        )
+        totals = tuple(
+            PurchaseInvoiceListTotals(
+                currency_code=str(currency),
+                count=int(count),
+                total_fc=Decimal(total_fc),
+                remaining_fc=Decimal(remaining_fc),
+            )
+            for currency, count, total_fc, remaining_fc in totals_rows
+        )
+        return PurchaseInvoiceListResponse(
+            items=items,
+            total=sum(row.count for row in totals),
+            totals=totals,
+            page=page,
+            page_size=page_size,
+            as_of=effective_as_of,
+        )
+
+
+def _list_item(
+    voucher: Voucher,
+    body: PurchaseInvoice,
+    vendor_code: str | None,
+    vendor_name: str | None,
+    remaining: Decimal | None,
+    ledger_due_date: date | None,
+    as_of: date,
+) -> PurchaseInvoiceListItem:
+    # Hạn trả trên dòng sổ phụ là hạn có hiệu lực (điều khoản NCC điền khi thân
+    # không khai); chứng từ chưa ghi sổ chỉ có hạn khai trên thân.
+    due_date = ledger_due_date if ledger_due_date is not None else body.due_date
+    days_overdue: int | None = None
+    if (
+        remaining is not None
+        and remaining > _ZERO
+        and due_date is not None
+        and due_date < as_of
+        and voucher.status == VoucherStatus.DA_GHI_SO
+    ):
+        days_overdue = (as_of - due_date).days
+    return PurchaseInvoiceListItem(
+        id=voucher.id,
+        voucher_no=voucher.voucher_no,
+        branch_id=voucher.branch_id,
+        document_date=voucher.document_date,
+        posting_date=voucher.posting_date,
+        status=voucher.status,
+        currency_code=voucher.currency_code,
+        kind=body.kind,
+        vendor_id=body.vendor_id,
+        vendor_code=vendor_code,
+        vendor_name=vendor_name,
+        vendor_invoice_status=body.vendor_invoice_status,
+        vendor_invoice_form=body.vendor_invoice_form,
+        vendor_invoice_serial=body.vendor_invoice_serial,
+        vendor_invoice_no=body.vendor_invoice_no,
+        total_fc=body.total_fc,
+        remaining_fc=remaining,
+        due_date=due_date,
+        days_overdue=days_overdue,
+    )
 
 
 @router.get("/invoices/{voucher_id}", response_model=PurchaseInvoiceOut)

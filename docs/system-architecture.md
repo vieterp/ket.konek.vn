@@ -484,7 +484,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | Tiền vào tiền ra | QUY + BNK | Một màn, thẻ trên cùng: Quỹ + từng TK ngân hàng; lưới đổi theo. Backend vẫn 2 module. BFF `cashflow/overview` gọi cả 2. |
 | Tài sản | TSCĐ + CCDC | Một danh sách, cột "Cách phân bổ" phân biệt. Backend vẫn 2 module. BFF `assets/list` gọi cả 2. |
 | Danh mục đối tác | SYS (MasterData) | Một danh mục dùng chung mua+bán; thẻ công nợ hiện ngay. BFF `partners/{id}/overview` gọi module `receivables` subledger. |
-| Mua hàng | PUR | 1-1 với module. Router của `purchase` phục vụ trực tiếp. |
+| Mua hàng | PUR | 1-1 với module. Router của `purchase` phục vụ trực tiếp — lát 7H-1 thêm `GET /purchase/invoices` (lưới có NCC/hóa đơn NCC/còn phải trả/dòng tổng theo tiền tệ) ở đó thay vì BFF; chỉ tab "việc còn thiếu" đi BFF vì đọc ba module. |
 | Bán hàng | SAL | 1-1 với module. Router của `sales` phục vụ trực tiếp. |
 | Hóa đơn điện tử | EIV + INV | Một màn HĐĐT; nội bộ gọi outbox/trạng thái từ 2 module. API gộp hoặc BFF. |
 | Sổ sách & Thuế | GLE + TAX + RPT | Sổ cái drill-down, khóa sổ là danh mục kiểm tra, tờ khai gộp. BFF `statements/financial-package` + `period-close/checklist` gọi cả 3. |

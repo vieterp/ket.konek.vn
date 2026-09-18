@@ -3,7 +3,10 @@
  *
  * Hai router cùng hợp đồng (`/cash-book/open-invoices` và `/bank/open-invoices`)
  * nhưng cổng quyền khác nhau (theo loại phiếu sẽ lập) — form nào gọi đường của
- * module đó qua `basePath`.
+ * module đó qua `basePath`. Router `/purchase/open-invoices` (lát 7B, picker
+ * hóa đơn gốc cho chứng từ trả lại hàng) trả CÙNG hình dạng nhưng khóa cứng
+ * chiều phải trả + loại NCC nên chỉ nhận `vendor_id/branch_id/as_of` — hook
+ * dựng query theo `basePath` thay vì bắt chỗ gọi nhớ hai bộ tham số.
  */
 
 import { useQuery } from '@tanstack/react-query'
@@ -16,7 +19,7 @@ export type OpenInvoice = Schemas['OpenInvoiceOut']
 export type SettlementSide = 'receivable' | 'payable'
 
 export interface OpenInvoicesQuery {
-  readonly basePath: '/api/v1/cash-book' | '/api/v1/bank'
+  readonly basePath: '/api/v1/cash-book' | '/api/v1/bank' | '/api/v1/purchase'
   readonly side: SettlementSide
   readonly partnerKind: number
   readonly partnerId: number
@@ -24,14 +27,21 @@ export interface OpenInvoicesQuery {
   readonly asOf: string
 }
 
+function openInvoicesUrl(query: OpenInvoicesQuery): string {
+  const tail = `branch_id=${String(query.branchId)}&as_of=${query.asOf}`
+  if (query.basePath === '/api/v1/purchase') {
+    return `${query.basePath}/open-invoices?vendor_id=${String(query.partnerId)}&${tail}`
+  }
+  return (
+    `${query.basePath}/open-invoices?side=${query.side}&partner_kind=${String(query.partnerKind)}` +
+    `&partner_id=${String(query.partnerId)}&${tail}`
+  )
+}
+
 export function useOpenInvoices(query: OpenInvoicesQuery | null) {
   const { client, datasetCode } = useSession()
 
-  const url =
-    query === null
-      ? ''
-      : `${query.basePath}/open-invoices?side=${query.side}&partner_kind=${String(query.partnerKind)}` +
-        `&partner_id=${String(query.partnerId)}&branch_id=${String(query.branchId)}&as_of=${query.asOf}`
+  const url = query === null ? '' : openInvoicesUrl(query)
 
   return useQuery({
     queryKey: ['open-invoices', datasetCode, url],

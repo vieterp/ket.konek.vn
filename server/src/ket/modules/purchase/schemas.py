@@ -318,3 +318,60 @@ class PurchaseInvoiceOut(BaseModel):
     lines: tuple[PurchaseInvoiceLineOut, ...] = ()
     landed_costs: tuple[LandedCostOut, ...] = ()
     settlements: tuple[PurchaseSettlementOut, ...] = ()
+
+
+class PurchaseInvoiceListItem(BaseModel):
+    """Một dòng lưới chứng từ mua hàng (màn 01 design, lát 7H-1).
+
+    Header + phần thân đủ để lưới nói được "còn thiếu gì": tên NCC (danh mục),
+    hóa đơn NCC (ba mảnh + trạng thái), tổng tiền, và **còn phải trả hiện nay**
+    đọc từ dòng sổ phụ `ar_ap_ledger` của chính chứng từ. `remaining_fc` là
+    `None` khi chứng từ chưa có dòng sổ phụ — chưa ghi sổ, hoặc trả lại hàng
+    (đối trừ vào hóa đơn gốc, không có khoản nợ riêng).
+    """
+
+    id: UUID
+    voucher_no: str
+    branch_id: int
+    document_date: date
+    posting_date: date
+    status: int
+    currency_code: str
+    kind: int
+    vendor_id: int
+    vendor_code: str | None
+    vendor_name: str | None
+    vendor_invoice_status: int
+    vendor_invoice_form: str | None
+    vendor_invoice_serial: str | None
+    vendor_invoice_no: str | None
+    total_fc: Decimal
+    remaining_fc: Decimal | None
+    due_date: date | None
+    days_overdue: int | None
+    """Số ngày quá hạn tại `as_of`; `None` khi không có hạn hoặc chưa tới hạn."""
+
+
+class PurchaseInvoiceListTotals(BaseModel):
+    """Dòng tổng của lưới — tính trên TOÀN tập lọc, không riêng trang đang xem.
+
+    Một dòng MỖI tiền tệ (user chốt 2026-09-18, review 7H-1 M-2): số nguyên tệ
+    khác đồng không cộng được với nhau, và bộ sổ chỉ VND vẫn ra đúng một dòng
+    như design. `total_fc` là giá trị mua RÒNG — tờ trả lại hàng (kind 4) mang
+    dấu âm; `remaining_fc` chỉ cộng khoản còn nợ (tờ trả lại không có).
+    """
+
+    currency_code: str
+    count: int
+    total_fc: Decimal
+    remaining_fc: Decimal
+
+
+class PurchaseInvoiceListResponse(BaseModel):
+    items: tuple[PurchaseInvoiceListItem, ...]
+    """Số chứng từ của TOÀN tập lọc — mẫu số của phân trang."""
+    total: int
+    totals: tuple[PurchaseInvoiceListTotals, ...]
+    page: int
+    page_size: int
+    as_of: date

@@ -4,7 +4,8 @@
  *
  * Chọn nghiệp vụ (FR-SYS-025) → điền sẵn cặp Nợ/Có vào dòng đầu (vẫn sửa
  * được); chọn đối tác → khối đối trừ công nợ liệt kê chứng từ còn nợ
- * (`docs/srs/03` §4). Cảnh báo FR-SYS-062 (ví dụ chi quá tồn quỹ) quay về dạng
+ * (`docs/srs/03` §4). `?partner_id=` điền sẵn đối tác — đường "Lập phiếu chi"
+ * từ lưới chứng từ mua hàng (lát 7H-1) mở form với đúng NCC đang nợ. Cảnh báo FR-SYS-062 (ví dụ chi quá tồn quỹ) quay về dạng
  * 422 toàn-cảnh-báo → băng "Vẫn ghi sổ?" gửi lại kèm `acknowledge_warnings`.
  *
  * Cùng khung xương `so-sach-thue/journal-voucher-form.tsx`: định tuyến theo
@@ -86,11 +87,18 @@ function NewVoucherPage(): ReactElement {
   const { t } = useI18n()
   const [searchParams] = useSearchParams()
   const kind = searchParams.get('kind') === '1' ? 1 : KIND_RECEIPT
+  const rawPartnerId = Number.parseInt(searchParams.get('partner_id') ?? '', 10)
+  const initialPartnerId = Number.isNaN(rawPartnerId) ? null : rawPartnerId
   const title =
     kind === KIND_RECEIPT ? t('cashflow.form.titleCreateReceipt') : t('cashflow.form.titleCreatePayment')
   return (
     <FormShell title={title}>
-      <VoucherFormBody key={`new-${String(kind)}`} voucher={null} kind={kind} />
+      <VoucherFormBody
+        key={`new-${String(kind)}`}
+        voucher={null}
+        kind={kind}
+        initialPartnerId={initialPartnerId}
+      />
     </FormShell>
   )
 }
@@ -129,9 +137,12 @@ const DIMENSION_KEYS = DIMENSION_COLUMNS.map((column) => column.key)
 function VoucherFormBody({
   voucher,
   kind,
+  initialPartnerId = null,
 }: {
   readonly voucher: CashVoucherOut | null
   readonly kind: number
+  /** Đối tác điền sẵn cho form MỚI (`?partner_id=`); loại đối tác theo mặc định của loại phiếu. */
+  readonly initialPartnerId?: number | null
 }): ReactElement {
   const { t } = useI18n()
   const navigate = useNavigate()
@@ -187,8 +198,17 @@ function VoucherFormBody({
     partnerSlug,
     voucher !== null && voucher.partner_id !== null && voucher.partner_id !== undefined
       ? [voucher.partner_id]
-      : [],
+      : initialPartnerId === null
+        ? []
+        : [initialPartnerId],
   )
+  // Đối tác điền sẵn trên form MỚI — cùng luật "điều chỉnh state trong thân
+  // render một lần khi lượt tra xong" với form SỬA bên dưới.
+  const [partnerPrefilled, setPartnerPrefilled] = useState(initialPartnerId === null)
+  if (voucher === null && !partnerPrefilled && !partnerLookup.isLoading && initialPartnerId !== null) {
+    setPartnerPrefilled(true)
+    setPartner(partnerLookup.byId.get(initialPartnerId) ?? null)
+  }
 
   const requiredAccountIds = [
     ...(voucher?.lines.flatMap((line) =>
