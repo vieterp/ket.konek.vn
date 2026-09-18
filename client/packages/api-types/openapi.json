@@ -17246,6 +17246,248 @@
         "title": "PurchaseInvoiceLineOut",
         "type": "object"
       },
+      "PurchaseInvoiceListItem": {
+        "description": "Một dòng lưới chứng từ mua hàng (màn 01 design, lát 7H-1).\n\nHeader + phần thân đủ để lưới nói được \"còn thiếu gì\": tên NCC (danh mục),\nhóa đơn NCC (ba mảnh + trạng thái), tổng tiền, và **còn phải trả hiện nay**\nđọc từ dòng sổ phụ `ar_ap_ledger` của chính chứng từ. `remaining_fc` là\n`None` khi chứng từ chưa có dòng sổ phụ — chưa ghi sổ, hoặc trả lại hàng\n(đối trừ vào hóa đơn gốc, không có khoản nợ riêng).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "days_overdue": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Overdue"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "integer"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "remaining_fc": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Fc"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "total_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Fc",
+            "type": "string"
+          },
+          "vendor_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Code"
+          },
+          "vendor_id": {
+            "title": "Vendor Id",
+            "type": "integer"
+          },
+          "vendor_invoice_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice Form"
+          },
+          "vendor_invoice_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice No"
+          },
+          "vendor_invoice_serial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Invoice Serial"
+          },
+          "vendor_invoice_status": {
+            "title": "Vendor Invoice Status",
+            "type": "integer"
+          },
+          "vendor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Name"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "voucher_no",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "status",
+          "currency_code",
+          "kind",
+          "vendor_id",
+          "vendor_code",
+          "vendor_name",
+          "vendor_invoice_status",
+          "vendor_invoice_form",
+          "vendor_invoice_serial",
+          "vendor_invoice_no",
+          "total_fc",
+          "remaining_fc",
+          "due_date",
+          "days_overdue"
+        ],
+        "title": "PurchaseInvoiceListItem",
+        "type": "object"
+      },
+      "PurchaseInvoiceListResponse": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PurchaseInvoiceListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "totals": {
+            "items": {
+              "$ref": "#/components/schemas/PurchaseInvoiceListTotals"
+            },
+            "title": "Totals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "totals",
+          "page",
+          "page_size",
+          "as_of"
+        ],
+        "title": "PurchaseInvoiceListResponse",
+        "type": "object"
+      },
+      "PurchaseInvoiceListTotals": {
+        "description": "Dòng tổng của lưới — tính trên TOÀN tập lọc, không riêng trang đang xem.\n\nMột dòng MỖI tiền tệ (user chốt 2026-09-18, review 7H-1 M-2): số nguyên tệ\nkhác đồng không cộng được với nhau, và bộ sổ chỉ VND vẫn ra đúng một dòng\nnhư design. `total_fc` là giá trị mua RÒNG — tờ trả lại hàng (kind 4) mang\ndấu âm; `remaining_fc` chỉ cộng khoản còn nợ (tờ trả lại không có).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "remaining_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Remaining Fc",
+            "type": "string"
+          },
+          "total_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Fc",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency_code",
+          "count",
+          "total_fc",
+          "remaining_fc"
+        ],
+        "title": "PurchaseInvoiceListTotals",
+        "type": "object"
+      },
       "PurchaseInvoiceOut": {
         "description": "Header chứng từ + thân hóa đơn — client cần cả hai để vẽ lại form.",
         "properties": {
@@ -41159,6 +41401,202 @@
       }
     },
     "/api/v1/purchase/invoices": {
+      "get": {
+        "description": "Lưới chứng từ mua hàng (màn 01 design): mới nhất trước, kèm dòng tổng.\n\nMàn hình đọc một module nên gọi router module chứ không BFF (RT-21); lưới\nchứng từ dùng chung `/vouchers` không mang NCC, hóa đơn NCC hay số còn nợ\n— ba cột mà tab \"việc còn thiếu\" cần để nói ra việc tiếp theo. RLS lọc\nchi nhánh trước khi mã này chạy.",
+        "operationId": "list_purchase_invoices_api_v1_purchase_invoices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vendor_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vendor Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vendor_invoice_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vendor Invoice Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "overdue",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Overdue",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseInvoiceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Purchase Invoices",
+        "tags": [
+          "purchase"
+        ]
+      },
       "post": {
         "description": "Cất hóa đơn mua; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.\n\n`acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm đó (FR-SYS-062\nmức \"Cảnh báo\" — ví dụ nhà cung cấp vượt ngưỡng nợ); mức \"Chặn\" không mở được.",
         "operationId": "create_purchase_invoice_api_v1_purchase_invoices_post",

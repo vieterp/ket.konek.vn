@@ -7752,7 +7752,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Purchase Invoices
+         * @description Lưới chứng từ mua hàng (màn 01 design): mới nhất trước, kèm dòng tổng.
+         *
+         *     Màn hình đọc một module nên gọi router module chứ không BFF (RT-21); lưới
+         *     chứng từ dùng chung `/vouchers` không mang NCC, hóa đơn NCC hay số còn nợ
+         *     — ba cột mà tab "việc còn thiếu" cần để nói ra việc tiếp theo. RLS lọc
+         *     chi nhánh trước khi mã này chạy.
+         */
+        get: operations["list_purchase_invoices_api_v1_purchase_invoices_get"];
         put?: never;
         /**
          * Create Purchase Invoice
@@ -14857,6 +14866,102 @@ export interface components {
             vat_rate: string | null;
             /** Warehouse Id */
             warehouse_id: number | null;
+        };
+        /**
+         * PurchaseInvoiceListItem
+         * @description Một dòng lưới chứng từ mua hàng (màn 01 design, lát 7H-1).
+         *
+         *     Header + phần thân đủ để lưới nói được "còn thiếu gì": tên NCC (danh mục),
+         *     hóa đơn NCC (ba mảnh + trạng thái), tổng tiền, và **còn phải trả hiện nay**
+         *     đọc từ dòng sổ phụ `ar_ap_ledger` của chính chứng từ. `remaining_fc` là
+         *     `None` khi chứng từ chưa có dòng sổ phụ — chưa ghi sổ, hoặc trả lại hàng
+         *     (đối trừ vào hóa đơn gốc, không có khoản nợ riêng).
+         */
+        PurchaseInvoiceListItem: {
+            /** Branch Id */
+            branch_id: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Days Overdue */
+            days_overdue: number | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Due Date */
+            due_date: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: number;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Remaining Fc */
+            remaining_fc: string | null;
+            /** Status */
+            status: number;
+            /** Total Fc */
+            total_fc: string;
+            /** Vendor Code */
+            vendor_code: string | null;
+            /** Vendor Id */
+            vendor_id: number;
+            /** Vendor Invoice Form */
+            vendor_invoice_form: string | null;
+            /** Vendor Invoice No */
+            vendor_invoice_no: string | null;
+            /** Vendor Invoice Serial */
+            vendor_invoice_serial: string | null;
+            /** Vendor Invoice Status */
+            vendor_invoice_status: number;
+            /** Vendor Name */
+            vendor_name: string | null;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /** PurchaseInvoiceListResponse */
+        PurchaseInvoiceListResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Items */
+            items: components["schemas"]["PurchaseInvoiceListItem"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+            /** Totals */
+            totals: components["schemas"]["PurchaseInvoiceListTotals"][];
+        };
+        /**
+         * PurchaseInvoiceListTotals
+         * @description Dòng tổng của lưới — tính trên TOÀN tập lọc, không riêng trang đang xem.
+         *
+         *     Một dòng MỖI tiền tệ (user chốt 2026-09-18, review 7H-1 M-2): số nguyên tệ
+         *     khác đồng không cộng được với nhau, và bộ sổ chỉ VND vẫn ra đúng một dòng
+         *     như design. `total_fc` là giá trị mua RÒNG — tờ trả lại hàng (kind 4) mang
+         *     dấu âm; `remaining_fc` chỉ cộng khoản còn nợ (tờ trả lại không có).
+         */
+        PurchaseInvoiceListTotals: {
+            /** Count */
+            count: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Remaining Fc */
+            remaining_fc: string;
+            /** Total Fc */
+            total_fc: string;
         };
         /**
          * PurchaseInvoiceOut
@@ -29072,6 +29177,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrintTemplateListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_purchase_invoices_api_v1_purchase_invoices_get: {
+        parameters: {
+            query?: {
+                period_id?: number | null;
+                status?: number | null;
+                vendor_id?: number | null;
+                kind?: number | null;
+                vendor_invoice_status?: number | null;
+                overdue?: boolean;
+                from_date?: string | null;
+                to_date?: string | null;
+                as_of?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchaseInvoiceListResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

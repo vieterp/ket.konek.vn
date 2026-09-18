@@ -569,6 +569,23 @@ describe('form phiếu chi — sửa và đối trừ', () => {
     ],
   }
 
+  it('`?partner_id=` điền sẵn NCC trên phiếu chi mới — đường "Lập phiếu chi" từ lưới mua hàng (7H-1)', async () => {
+    mockServer({
+      ...formRoutes(),
+      '/master/partners': {
+        status: 200,
+        body: { items: [catalogRow(501, 'NCC01', 'CT TNHH Thép Việt Nhật')], total: 1 },
+      },
+      '/cash-book/open-invoices': { status: 200, body: { items: [] } },
+    })
+
+    renderFeatureAt('/tien-vao-tien-ra/giao-dich/phieu/moi?kind=1&partner_id=501')
+
+    expect(await screen.findByText('NCC01 — CT TNHH Thép Việt Nhật')).toBeInTheDocument()
+    // Đối tác đã có → khối đối trừ mở ra hỏi hóa đơn còn nợ của đúng NCC ấy.
+    expect(await screen.findByText('Đối trừ công nợ')).toBeInTheDocument()
+  })
+
   it('sửa phiếu có đối tác NHÂN VIÊN và nghiệp vụ hết hiệu lực: đối tác vẫn hiện và PUT giữ nguyên', async () => {
     const fetchMock = mockServer({
       ...formRoutes(),
