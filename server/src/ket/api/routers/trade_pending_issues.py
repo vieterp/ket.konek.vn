@@ -55,13 +55,13 @@ from ket.kernel.contracts import PartnerKind
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
-from ket.modules.einvoice.models import EInvoice, EInvoiceStatus
+from ket.modules.einvoice.models import LIVE_STATUSES, EInvoice
 from ket.modules.purchase import INVOICE_PERMISSION_CODE as PURCHASE_INVOICE_CODE
 from ket.modules.purchase import PURCHASE_PERMISSION_MODULE
 from ket.modules.purchase.models import PurchaseInvoice, VendorInvoiceStatus
 from ket.modules.sales import INVOICE_PERMISSION_CODE as SALES_INVOICE_CODE
 from ket.modules.sales import SALES_PERMISSION_MODULE
-from ket.modules.sales.models import SalesInvoice, SalesInvoiceKind
+from ket.modules.sales.models import KINDS_NEEDING_EINVOICE, SalesInvoice
 from ket.posting.documents.models import Voucher, VoucherStatus
 
 router = APIRouter(tags=["pending-issues"])
@@ -88,36 +88,6 @@ SalesReader = Annotated[
 ]
 
 AsOf = Annotated[date | None, Query()]
-
-_LIVE_EINVOICE_STATUSES: Final[tuple[EInvoiceStatus, ...]] = (
-    EInvoiceStatus.DANG_PHAT_HANH,
-    EInvoiceStatus.DA_PHAT_HANH,
-    EInvoiceStatus.DA_GUI,
-    EInvoiceStatus.DA_DIEU_CHINH,
-)
-"""Tờ HĐĐT "còn sống" — chứng từ bán có một tờ như thế thì không còn thiếu hóa
-đơn.
-
-`DA_THAY_THE` **không** ở đây (review 7G-4 H-1): tờ thay thế treo lên **chính
-chứng từ gốc** (`error_flow._supersede` chép `source_voucher_id`, và chỉ mục
-riêng phần `uq_einvoices_live_source_voucher` chừa chỗ đúng cho hình dạng ấy),
-nên chứng từ có tờ cũ `DA_THAY_THE` + tờ mới còn nháp là chứng từ **chưa có hóa
-đơn hợp lệ** — đúng luật "tờ nháp không tính". Khi tờ mới phát hành, nó tự khớp
-`DA_PHAT_HANH`; tờ cũ vì thế không bao giờ đóng góp một ca đúng nào. `DA_DIEU_CHINH`
-thì khác: hóa đơn đã bị điều chỉnh vẫn là hóa đơn hợp lệ, tờ điều chỉnh chỉ bổ
-sung nó."""
-
-_SALES_KINDS_NEEDING_EINVOICE: Final[tuple[int, ...]] = (
-    SalesInvoiceKind.GOODS,
-    SalesInvoiceKind.SERVICE,
-    SalesInvoiceKind.AGENCY,
-    SalesInvoiceKind.ADJUSTMENT_INCREASE,
-    SalesInvoiceKind.ADJUSTMENT_DECREASE,
-)
-"""Loại chứng từ bán mà thiếu tờ HĐĐT là một VIỆC. Trả lại (2) và giảm giá (3)
-đối trừ hóa đơn gốc; tờ hóa đơn cho chúng — nếu có — do người mua lập hoặc đi
-qua đường điều chỉnh (7F), nên tab này không đòi. Giả định của lát 7G-4, ghi
-để 7H hoặc kế toán đối chiếu lại."""
 
 
 @router.get("/api/v1/purchase/pending-issues", response_model=TradePendingIssuesResponse)
@@ -172,7 +142,7 @@ def _pending_issues(
         else:
             live_einvoice = exists().where(
                 EInvoice.source_voucher_id == Voucher.id,
-                EInvoice.status.in_(_LIVE_EINVOICE_STATUSES),
+                EInvoice.status.in_(LIVE_STATUSES),
             )
             missing = _voucher_group(
                 session,
@@ -181,7 +151,7 @@ def _pending_issues(
                 code="chua-co-hoa-don",
                 next_action="issue-einvoice",
                 condition=(Voucher.status == int(VoucherStatus.DA_GHI_SO))
-                & SalesInvoice.kind.in_(_SALES_KINDS_NEEDING_EINVOICE)
+                & SalesInvoice.kind.in_(KINDS_NEEDING_EINVOICE)
                 & ~live_einvoice,
             )
         if missing is not None:

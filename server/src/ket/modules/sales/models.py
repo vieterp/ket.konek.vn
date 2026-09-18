@@ -149,6 +149,20 @@ vào nợ của chính hóa đơn gốc, và treo thêm một dòng sổ phụ �
 này: nó sinh một khoản nợ mới đứng riêng, đúng như một hóa đơn bán thường."""
 
 
+KINDS_NEEDING_EINVOICE = (
+    SalesInvoiceKind.GOODS,
+    SalesInvoiceKind.SERVICE,
+    SalesInvoiceKind.AGENCY,
+    SalesInvoiceKind.ADJUSTMENT_INCREASE,
+    SalesInvoiceKind.ADJUSTMENT_DECREASE,
+)
+"""Loại chứng từ bán mà thiếu tờ HĐĐT là một VIỆC. Trả lại (2) và giảm giá (3)
+đối trừ hóa đơn gốc; tờ hóa đơn cho chúng — nếu có — do người mua lập hoặc đi
+qua đường điều chỉnh (7F), nên tab "việc còn thiếu" không đòi. Giả định của lát
+7G-4, ghi để kế toán đối chiếu lại. Lưới chứng từ bán (`einvoice=missing`) và
+BFF `pending-issues` cùng đọc tên này."""
+
+
 class SalesInvoice(DatasetBase, Audited):
     """Thân hóa đơn bán — một-một với header `vouchers`.
 

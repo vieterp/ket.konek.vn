@@ -19638,9 +19638,300 @@
         "title": "SalesInvoiceLineOut",
         "type": "object"
       },
+      "SalesInvoiceListItem": {
+        "description": "Một dòng lưới chứng từ bán hàng (bộ xương màn 01 dùng lại, lát 7H-2a).\n\nHeader + phần thân đủ để lưới nói được \"còn thiếu gì\": tên khách hàng, hóa\nđơn, tổng tiền, **còn phải thu hiện nay** đọc từ dòng sổ phụ `ar_ap_ledger`\ncủa chính chứng từ. Hóa đơn là HAI nguồn: bốn mảnh **gõ tay** trên thân\n(`invoice_*`, FR-SAL-004 — hóa đơn giấy / nhập tay, không bao giờ được HĐĐT\nghi ngược) và tờ HĐĐT **còn sống** treo lên chứng từ (`has_live_einvoice`\n+ `einvoice_serial/no` — số có thể chưa về khi tờ đang truyền;\n`einvoice.models.LIVE_STATUSES`). `remaining_fc` là `None` khi chứng từ\nchưa có dòng sổ phụ — chưa ghi sổ, hoặc thuộc `REVERSING_KINDS` (đối trừ\nvào hóa đơn gốc, không có khoản nợ riêng).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "customer_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Code"
+          },
+          "customer_id": {
+            "title": "Customer Id",
+            "type": "integer"
+          },
+          "customer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Name"
+          },
+          "days_overdue": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Overdue"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "einvoice_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Einvoice No"
+          },
+          "einvoice_serial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Einvoice Serial"
+          },
+          "has_live_einvoice": {
+            "title": "Has Live Einvoice",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invoice_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Date"
+          },
+          "invoice_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Form"
+          },
+          "invoice_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice No"
+          },
+          "invoice_serial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Serial"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "integer"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "remaining_fc": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Fc"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "total_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Fc",
+            "type": "string"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "voucher_no",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "status",
+          "currency_code",
+          "kind",
+          "customer_id",
+          "customer_code",
+          "customer_name",
+          "invoice_form",
+          "invoice_serial",
+          "invoice_no",
+          "invoice_date",
+          "has_live_einvoice",
+          "einvoice_serial",
+          "einvoice_no",
+          "total_fc",
+          "remaining_fc",
+          "due_date",
+          "days_overdue"
+        ],
+        "title": "SalesInvoiceListItem",
+        "type": "object"
+      },
+      "SalesInvoiceListResponse": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SalesInvoiceListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "totals": {
+            "items": {
+              "$ref": "#/components/schemas/SalesInvoiceListTotals"
+            },
+            "title": "Totals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "totals",
+          "page",
+          "page_size",
+          "as_of"
+        ],
+        "title": "SalesInvoiceListResponse",
+        "type": "object"
+      },
+      "SalesInvoiceListTotals": {
+        "description": "Dòng tổng của lưới — tính trên TOÀN tập lọc, không riêng trang đang xem.\n\nMột dòng MỖI tiền tệ (cùng luật 7H-1 M-2). `total_fc` là doanh thu RÒNG —\nba loại `REVERSING_KINDS` mang dấu âm; `remaining_fc` chỉ cộng khoản còn nợ.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "remaining_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Remaining Fc",
+            "type": "string"
+          },
+          "total_fc": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Fc",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency_code",
+          "count",
+          "total_fc",
+          "remaining_fc"
+        ],
+        "title": "SalesInvoiceListTotals",
+        "type": "object"
+      },
       "SalesInvoiceOut": {
         "description": "Header chứng từ + thân hóa đơn — client cần cả hai để vẽ lại form.",
         "properties": {
+          "adjusts_voucher_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjusts Voucher Id"
+          },
           "branch_id": {
             "title": "Branch Id",
             "type": "integer"
@@ -22453,7 +22744,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.44.0"
+    "version": "0.45.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -42136,6 +42427,203 @@
       }
     },
     "/api/v1/sales/invoices": {
+      "get": {
+        "description": "Lưới chứng từ bán hàng (bộ xương màn 01 dùng lại): mới nhất trước, kèm dòng tổng.\n\nMàn hình đọc một module nên gọi router module chứ không BFF (RT-21); lưới\nchứng từ dùng chung `/vouchers` không mang khách hàng, hóa đơn hay số còn\nnợ — ba cột mà tab \"việc còn thiếu\" cần để nói ra việc tiếp theo. RLS lọc\nchi nhánh trước khi mã này chạy.",
+        "operationId": "list_sales_invoices_api_v1_sales_invoices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "customer_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Customer Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "einvoice",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "missing",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Einvoice"
+            }
+          },
+          {
+            "in": "query",
+            "name": "overdue",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Overdue",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesInvoiceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Sales Invoices",
+        "tags": [
+          "sales"
+        ]
+      },
       "post": {
         "description": "Cất hóa đơn bán; tùy chọn FR-SYS-061 bật thì ghi sổ luôn cùng transaction.\n\n`acknowledge_warnings` chỉ có tác dụng trên lượt ghi sổ đi kèm đó (FR-SYS-062\nmức \"Cảnh báo\" — ví dụ khách hàng vượt ngưỡng nợ, FR-SAL-034); mức \"Chặn\"\nkhông mở được.",
         "operationId": "create_sales_invoice_api_v1_sales_invoices_post",

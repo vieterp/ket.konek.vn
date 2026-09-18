@@ -171,6 +171,26 @@ rời nhau là ba chỗ để nó lệch khi vòng đời mọc thêm trạng th
 """
 
 
+LIVE_STATUSES: tuple[EInvoiceStatus, ...] = (
+    EInvoiceStatus.DANG_PHAT_HANH,
+    EInvoiceStatus.DA_PHAT_HANH,
+    EInvoiceStatus.DA_GUI,
+    EInvoiceStatus.DA_DIEU_CHINH,
+)
+"""Tờ HĐĐT "còn sống" — chứng từ bán có một tờ như thế thì không còn thiếu hóa
+đơn. Tab "việc còn thiếu" (BFF `pending-issues`) và lưới chứng từ bán
+(`GET /sales/invoices?einvoice=missing`) cùng đọc một tên để hai chỗ không lệch
+định nghĩa (quyết định user 2026-09-17: nháp/lỗi/hủy KHÔNG tính là có).
+
+`DA_THAY_THE` **không** ở đây (review 7G-4 H-1): tờ thay thế treo lên **chính
+chứng từ gốc** (`error_flow._supersede` chép `source_voucher_id`, và chỉ mục
+riêng phần `uq_einvoices_live_source_voucher` chừa chỗ đúng cho hình dạng ấy),
+nên chứng từ có tờ cũ `DA_THAY_THE` + tờ mới còn nháp là chứng từ **chưa có hóa
+đơn hợp lệ** — đúng luật "tờ nháp không tính". Khi tờ mới phát hành, nó tự khớp
+`DA_PHAT_HANH`; tờ cũ vì thế không bao giờ đóng góp một ca đúng nào. `DA_DIEU_CHINH`
+thì khác: hóa đơn đã bị điều chỉnh vẫn là hóa đơn hợp lệ, tờ điều chỉnh chỉ bổ
+sung nó."""
+
 SUPERSEDED_STATUSES: frozenset[EInvoiceStatus] = frozenset(
     {EInvoiceStatus.DA_THAY_THE, EInvoiceStatus.DA_DIEU_CHINH, EInvoiceStatus.DA_HUY}
 )
