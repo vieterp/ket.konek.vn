@@ -17,12 +17,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Final
+from typing import Annotated, Final, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy import Select, func, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from ket.api.dependencies import (
     AppSettings,
@@ -43,6 +44,8 @@ from ket.kernel.errors import (
 from ket.kernel.formatting import format_date
 from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerprint_of
 from ket.kernel.jobs import queue
+from ket.kernel.master_data.models.invoice_form import InvoiceForm
+from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
 from ket.modules.einvoice import (
@@ -64,6 +67,7 @@ from ket.modules.einvoice.schemas import (
     EInvoiceConfirmIn,
     EInvoiceIn,
     EInvoiceIssueIn,
+    EInvoiceListItem,
     EInvoiceListOut,
     EInvoiceOut,
     EInvoiceRejectIn,
@@ -81,6 +85,8 @@ from ket.modules.einvoice.schemas import (
     ResolveErrorOut,
 )
 from ket.modules.einvoice.service import EInvoiceService
+from ket.modules.sales.models import SalesInvoice
+from ket.posting.documents.models import Voucher
 from ket.reporting.printing.template_service import (
     DocumentPrintContext,
     render_document_pdf,
@@ -560,26 +566,159 @@ def delete_einvoice(
         EInvoiceService(session).delete(einvoice_id)
 
 
+EInvoiceListTab = Literal["cho-phat-hanh", "can-xu-ly", "da-thay-the-dieu-chinh", "khach-chua-nhan"]
+"""Bốn tab của lưới U3 (design nhóm 02, 7H-3) — định nghĩa ở server để tab và
+thẻ đếm nói cùng một tập, và mỗi tab là MỘT tập trạng thái để `counts_by_status`
+đếm được nó. "Cần xử lý" = `PHAT_HANH_LOI`: `reject` là cạnh duy nhất ghi
+`tax_authority_status = 3` và nó luôn lật trạng thái sang 2 cùng lúc, nên lọc
+thêm theo cột CQT chỉ kéo nhầm tờ đã phát hành lại (trạng thái 1, cột CQT chưa
+được xóa) vào tab mà thẻ đếm không thấy."""
+
+
+def _list_query(
+    *,
+    statuses: list[EInvoiceStatus] | None,
+    tab: EInvoiceListTab | None,
+    source_voucher_id: UUID | None,
+    q: str | None,
+) -> Select[
+    tuple[EInvoice, Voucher, SalesInvoice, str, str, str | None, str, str | None, str | None]
+]:
+    """Một câu SELECT cho lưới U3: tờ hóa đơn + chứng từ gốc + khách + ký hiệu.
+
+    `sales` là loại chứng từ duy nhất `invoiceable` (`modules/sales/__init__`),
+    nên join thẳng `SalesInvoice` là đủ — một loại thứ hai xuất hóa đơn sau này
+    (kho xuất bán, phase 8) sẽ phải mở rộng chỗ này, và bài test `_list_item`
+    thiếu hàng sẽ nói ra. Hai bí danh `EInvoice` cho hai chiều thay thế / điều
+    chỉnh: tờ này trỏ về tờ nào (`supersedes`), và tờ nào trỏ về tờ này
+    (`superseded_by` — cột "Đã thay thế bởi 0004126" của design).
+    """
+    supersedes = aliased(EInvoice)
+    superseded_by = aliased(EInvoice)
+    query = (
+        select(
+            EInvoice,
+            Voucher,
+            SalesInvoice,
+            Partner.code,
+            Partner.name,
+            InvoiceForm.form_no,
+            InvoiceForm.code,
+            supersedes.invoice_no,
+            superseded_by.invoice_no,
+        )
+        .join(Voucher, Voucher.id == EInvoice.source_voucher_id)
+        .join(SalesInvoice, SalesInvoice.id == Voucher.id)
+        .join(Partner, Partner.id == SalesInvoice.customer_id)
+        .join(InvoiceForm, InvoiceForm.id == EInvoice.invoice_form_id)
+        .outerjoin(
+            supersedes,
+            supersedes.id
+            == func.coalesce(EInvoice.replaces_invoice_id, EInvoice.adjusts_invoice_id),
+        )
+        .outerjoin(
+            superseded_by,
+            or_(
+                superseded_by.replaces_invoice_id == EInvoice.id,
+                superseded_by.adjusts_invoice_id == EInvoice.id,
+            ),
+        )
+    )
+    if statuses:
+        query = query.where(EInvoice.status.in_(list(statuses)))
+    if tab == "cho-phat-hanh":
+        query = query.where(EInvoice.status == int(EInvoiceStatus.CHUA_PHAT_HANH))
+    elif tab == "can-xu-ly":
+        query = query.where(EInvoice.status == int(EInvoiceStatus.PHAT_HANH_LOI))
+    elif tab == "da-thay-the-dieu-chinh":
+        query = query.where(
+            EInvoice.status.in_(
+                [int(EInvoiceStatus.DA_THAY_THE), int(EInvoiceStatus.DA_DIEU_CHINH)]
+            )
+        )
+    elif tab == "khach-chua-nhan":
+        # Đã cấp mã mà chưa ghi nhận gửi cho khách — cạnh `DA_GUI` chưa đi qua.
+        query = query.where(EInvoice.status == int(EInvoiceStatus.DA_PHAT_HANH))
+    if source_voucher_id is not None:
+        query = query.where(EInvoice.source_voucher_id == source_voucher_id)
+    if q is not None and q.strip() != "":
+        # `autoescape`: `%`/`_` người dùng gõ là ký tự, không phải ký tự đại
+        # diện — cùng quy ước `/accounts` và tra cứu danh mục.
+        needle = q.strip()
+        query = query.where(
+            or_(
+                EInvoice.invoice_no.icontains(needle, autoescape=True),
+                Voucher.voucher_no.icontains(needle, autoescape=True),
+                Partner.name.icontains(needle, autoescape=True),
+                Partner.code.icontains(needle, autoescape=True),
+            )
+        )
+    return query
+
+
+def _list_item(
+    invoice: EInvoice,
+    voucher: Voucher,
+    body: SalesInvoice,
+    customer_code: str,
+    customer_name: str,
+    form_no: str | None,
+    serial: str,
+    supersedes_no: str | None,
+    superseded_by_no: str | None,
+) -> EInvoiceListItem:
+    # `form_no` nullable ở ORM vì nút nhóm không có mẫu số; tờ hóa đơn chỉ trỏ
+    # tới lá (`_require_usable_form`), nên ở đây nó luôn có.
+    return EInvoiceListItem(
+        **EInvoiceOut.model_validate(invoice).model_dump(),
+        voucher_no=voucher.voucher_no,
+        customer_id=body.customer_id,
+        customer_code=customer_code,
+        customer_name=customer_name,
+        currency_code=voucher.currency_code,
+        total_fc=body.total_fc,
+        form_no=form_no or "",
+        serial=serial,
+        supersedes_no=supersedes_no,
+        superseded_by_no=superseded_by_no,
+    )
+
+
 @router.get("", response_model=EInvoiceListOut)
 def list_einvoices(
     authorized: InvoiceReader,
     factory: SessionFactory,
     status_filter: Annotated[list[EInvoiceStatus] | None, Query(alias="status")] = None,
+    tab: Annotated[EInvoiceListTab | None, Query()] = None,
+    source_voucher_id: Annotated[UUID | None, Query()] = None,
+    q: Annotated[str | None, Query(max_length=200)] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = 50,
 ) -> EInvoiceListOut:
-    """Một trang hóa đơn, lọc theo trạng thái (FR-EIV-015/025)."""
+    """Một trang hóa đơn dạng lưới U3, lọc theo trạng thái / tab (FR-EIV-015/025).
+
+    Hàng lưới mang khách, tổng tiền, ký hiệu chữ (7H-3) — màn hình đọc một
+    router module chứ không BFF (RT-21), cùng khuôn `GET /sales/invoices`.
+    `source_voucher_id` là đường `?source_voucher_id=` từ lưới bán: hộp phát
+    hành hỏi "chứng từ này đã có tờ nào chưa" trước khi lập nháp. Mới nhất
+    trước: tờ chưa cấp số (`issued_at` trống) xếp cuối cùng khuôn cũ.
+    """
     with unit_of_work(factory, authorized.scope) as session:
-        service = EInvoiceService(session)
-        items, total = service.list_by_status(
-            statuses=status_filter, page=page, page_size=page_size
+        query = _list_query(
+            statuses=status_filter, tab=tab, source_voucher_id=source_voucher_id, q=q
         )
+        total = session.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows = session.execute(
+            query.order_by(EInvoice.issued_at.desc().nullslast(), EInvoice.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
         return EInvoiceListOut(
-            items=tuple(EInvoiceOut.model_validate(row) for row in items),
-            total=total,
+            items=tuple(_list_item(*row) for row in rows),
+            total=int(total),
             page=page,
             page_size=page_size,
-            counts_by_status=service.count_by_status(),
+            counts_by_status=EInvoiceService(session).count_by_status(),
         )
 
 

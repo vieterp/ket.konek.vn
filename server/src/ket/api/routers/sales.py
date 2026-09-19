@@ -275,6 +275,7 @@ def _invoice_list_query(
     customer_id: int | None,
     kind: int | None,
     einvoice: EInvoiceFilter | None,
+    adjusts_voucher_id: UUID | None,
     overdue: bool,
     from_date: date | None,
     to_date: date | None,
@@ -325,6 +326,10 @@ def _invoice_list_query(
         query = query.where(SalesInvoice.customer_id == customer_id)
     if kind is not None:
         query = query.where(SalesInvoice.kind == kind)
+    if adjusts_voucher_id is not None:
+        # Chứng từ mang phần chênh của MỘT chứng từ gốc — wizard sai sót HĐĐT
+        # (7H-3) đọc đúng tập mà `resolve-error` sẽ nhận, không lọc lại ở client.
+        query = query.where(SalesInvoice.adjusts_voucher_id == adjusts_voucher_id)
     if from_date is not None:
         query = query.where(Voucher.posting_date >= from_date)
     if to_date is not None:
@@ -354,6 +359,7 @@ def list_sales_invoices(
     customer_id: Annotated[int | None, Query()] = None,
     kind: Annotated[int | None, Query()] = None,
     einvoice: Annotated[EInvoiceFilter | None, Query()] = None,
+    adjusts_voucher_id: Annotated[UUID | None, Query()] = None,
     overdue: Annotated[bool, Query()] = False,
     from_date: Annotated[date | None, Query()] = None,
     to_date: Annotated[date | None, Query()] = None,
@@ -376,6 +382,7 @@ def list_sales_invoices(
         customer_id=customer_id,
         kind=kind,
         einvoice=einvoice,
+        adjusts_voucher_id=adjusts_voucher_id,
         overdue=overdue,
         from_date=from_date,
         to_date=to_date,
@@ -494,6 +501,7 @@ def _list_item(
         remaining_fc=remaining,
         due_date=due_date,
         days_overdue=days_overdue,
+        adjusts_voucher_id=body.adjusts_voucher_id,
     )
 
 

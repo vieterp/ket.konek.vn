@@ -700,3 +700,11 @@ def test_adjustment_voucher_echoes_its_original(
     assert detail.json()["adjusts_voucher_id"] == str(books["issued"])
     plain = client.get(f"/api/v1/sales/invoices/{books['issued']}", headers=reader)
     assert plain.json()["adjusts_voucher_id"] is None
+
+    # Lưới (7H-3): hàng vọng lại cột ấy, và lọc `adjusts_voucher_id=` trả đúng
+    # tập chứng từ mang phần chênh của MỘT chứng từ gốc — wizard sai sót đọc
+    # đúng tập mà `resolve-error` sẽ nhận.
+    rows = _by_id(_fetch(client, reader, adjusts_voucher_id=str(books["issued"])))
+    assert set(rows) == {str(adjustment.id)}
+    assert rows[str(adjustment.id)]["adjusts_voucher_id"] == str(books["issued"])
+    assert _by_id(_fetch(client, reader, adjusts_voucher_id=str(books["bare"]))) == {}

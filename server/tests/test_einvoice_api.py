@@ -462,6 +462,150 @@ def test_the_listing_pages_and_counts_the_whole_scope(
     assert body["counts_by_status"][str(int(EInvoiceStatus.CHUA_PHAT_HANH))] == body["total"]
 
 
+def test_the_grid_row_carries_the_source_voucher_and_the_serial(
+    app_client: TestClient,
+    issuer_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Lưới U3 (7H-3): tờ hóa đơn không mang tiền, nên hàng lưới đọc khách,
+    tổng và đồng tiền từ chứng từ bán; ký hiệu/mẫu số chữ từ `invoice_forms`.
+    `source_voucher_id` là cửa hộp phát hành hỏi "chứng từ này đã có tờ chưa"."""
+    voucher_id = _new_voucher_id(session_factory, dataset_alpha, context, accounts)
+    assert _create_invoice(app_client, issuer_headers, voucher_id)[0] == 201
+
+    response = app_client.get(
+        "/api/v1/einvoices", params={"source_voucher_id": voucher_id}, headers=issuer_headers
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["total"] == 1
+    row = body["items"][0]
+    assert row["source_voucher_id"] == voucher_id
+    assert row["customer_id"] == CUSTOMER_ID
+    assert row["customer_name"]
+    assert row["currency_code"] == "VND"
+    assert Decimal(row["total_fc"]) == Decimal(330_000)
+    assert row["serial"] == SERIAL
+    assert row["form_no"]
+    assert row["voucher_no"]
+    assert row["supersedes_no"] is None
+    assert row["superseded_by_no"] is None
+
+    # Tìm theo số chứng từ gốc — ô tìm của lưới.
+    found = app_client.get(
+        "/api/v1/einvoices", params={"q": row["voucher_no"]}, headers=issuer_headers
+    )
+    assert found.status_code == 200
+    assert [item["id"] for item in found.json()["items"]] == [row["id"]]
+    # `%`/`_` là ký tự người dùng gõ, không phải ký tự đại diện (autoescape).
+    wildcard = app_client.get("/api/v1/einvoices", params={"q": "%"}, headers=issuer_headers)
+    assert wildcard.status_code == 200
+    assert wildcard.json()["total"] == 0
+
+
+def test_the_tabs_partition_by_status_and_a_replacement_names_both_sides(
+    app_client: TestClient,
+    issuer_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Bốn tab định nghĩa ở server để tab và thẻ đếm nói cùng một tập; tờ bị
+    thay thế nói "bởi số nào", tờ thay thế nói "thay cho số nào"."""
+    voucher_id = _new_voucher_id(session_factory, dataset_alpha, context, accounts)
+    _, created = _create_invoice(app_client, issuer_headers, voucher_id)
+    invoice_id = created["id"]
+
+    pending = app_client.get(
+        "/api/v1/einvoices", params={"tab": "cho-phat-hanh"}, headers=issuer_headers
+    ).json()
+    assert invoice_id in {row["id"] for row in pending["items"]}
+
+    issued = app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/issue",
+        json={"invoice_date": MAY_08},
+        headers={**issuer_headers, IDEMPOTENCY_HEADER: str(uuid4())},
+    )
+    assert issued.status_code == 200, issued.text
+    rejected = app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/reject",
+        json={"message": "Sai MST người mua"},
+        headers=issuer_headers,
+    )
+    assert rejected.status_code == 200, rejected.text
+    needs_work = app_client.get(
+        "/api/v1/einvoices", params={"tab": "can-xu-ly"}, headers=issuer_headers
+    ).json()
+    assert invoice_id in {row["id"] for row in needs_work["items"]}
+    # Tab và thẻ đếm cùng một tập: số dòng của tab bằng `counts_by_status[2]`.
+    assert (
+        needs_work["total"]
+        == needs_work["counts_by_status"][str(int(EInvoiceStatus.PHAT_HANH_LOI))]
+    )
+    assert invoice_id not in {
+        row["id"]
+        for row in app_client.get(
+            "/api/v1/einvoices", params={"tab": "cho-phat-hanh"}, headers=issuer_headers
+        ).json()["items"]
+    }
+
+    # Tờ thứ hai (chứng từ khác — dòng outbox của tờ đầu còn mở, phát hành lại
+    # ở đây là 409 theo đúng luật hàng đợi): phát hành → xác nhận → "khách chưa
+    # nhận" cho tới khi ghi nhận gửi.
+    voucher_id = _new_voucher_id(session_factory, dataset_alpha, context, accounts)
+    _, created = _create_invoice(app_client, issuer_headers, voucher_id)
+    invoice_id = created["id"]
+    issued = app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/issue",
+        json={"invoice_date": MAY_08},
+        headers={**issuer_headers, IDEMPOTENCY_HEADER: str(uuid4())},
+    )
+    assert issued.status_code == 200, issued.text
+    confirmed = app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/confirm",
+        json={"tax_authority_code": "M1-26-TAB", "lookup_code": None},
+        headers=issuer_headers,
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    old_no = confirmed.json()["invoice_no"]
+    unsent = app_client.get(
+        "/api/v1/einvoices", params={"tab": "khach-chua-nhan"}, headers=issuer_headers
+    ).json()
+    assert invoice_id in {row["id"] for row in unsent["items"]}
+
+    # Thay thế (sai thông tin, khách chưa kê khai) → hai tờ nói về nhau.
+    resolved = app_client.post(
+        f"/api/v1/einvoices/{invoice_id}/actions/resolve-error",
+        json={
+            "error_kind": 0,
+            "buyer_declared": False,
+            "notice_no": "04SS-TAB",
+            "notice_date": MAY_08,
+        },
+        headers=issuer_headers,
+    )
+    assert resolved.status_code == 200, resolved.text
+    replacement_id = resolved.json()["replacement"]["id"]
+    superseded = app_client.get(
+        "/api/v1/einvoices", params={"tab": "da-thay-the-dieu-chinh"}, headers=issuer_headers
+    ).json()
+    old_row = next(row for row in superseded["items"] if row["id"] == invoice_id)
+    assert old_row["status"] == int(EInvoiceStatus.DA_THAY_THE)
+    # Tờ thay thế chưa cấp số → cột "bởi" trống cho tới khi nó phát hành.
+    assert old_row["superseded_by_no"] is None
+    new_row = app_client.get(
+        "/api/v1/einvoices",
+        params={"source_voucher_id": voucher_id, "tab": "cho-phat-hanh"},
+        headers=issuer_headers,
+    ).json()["items"][0]
+    assert new_row["id"] == replacement_id
+    assert new_row["supersedes_no"] == old_no
+
+
 def test_there_is_no_route_that_edits_an_invoice() -> None:
     """BR-EIV-01 ở tầng bề mặt API: **không có** đường sửa nào để mà thử.
 

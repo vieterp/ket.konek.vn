@@ -223,6 +223,31 @@ class MarkSentIn(BaseModel):
     thì nó thành `422` kèm câu nói rõ thiếu gì."""
 
 
+class EInvoiceListItem(EInvoiceOut):
+    """Hàng lưới U3 (7H-3): tờ hóa đơn + phần chứng từ gốc mà lưới cần đọc.
+
+    Tờ hóa đơn cố ý không mang cột tiền (BR-EIV-07 theo cấu trúc, 7D), nên
+    tên khách, tổng tiền và đồng tiền đọc **từ chứng từ bán nó trỏ vào** — ở
+    tầng `api`, nơi được import cả hai module (C3 cấm `einvoice` nhìn `sales`).
+    `serial`/`form_no` là ký hiệu và mẫu số chữ của `invoice_forms`; hai số
+    `supersedes_no`/`superseded_by_no` nói tờ này thay/điều chỉnh tờ nào và
+    tờ nào thay/điều chỉnh nó — cột gộp "Đã thay thế bởi 0004126" của design.
+    """
+
+    voucher_no: str
+    customer_id: int
+    customer_code: str | None
+    customer_name: str | None
+    currency_code: str
+    total_fc: Decimal
+    form_no: str
+    serial: str
+    supersedes_no: str | None = Field(default=None, title="Số tờ mà tờ này thay thế / điều chỉnh")
+    superseded_by_no: str | None = Field(
+        default=None, title="Số tờ đã thay thế / điều chỉnh tờ này"
+    )
+
+
 class EInvoiceListOut(BaseModel):
     """Một trang hóa đơn + số đếm theo trạng thái cho bộ lọc U3/FR-EIV-015.
 
@@ -234,7 +259,7 @@ class EInvoiceListOut(BaseModel):
     đang xem — thẻ lọc nói "còn bao nhiêu việc", không nói "trang này có gì".
     """
 
-    items: tuple[EInvoiceOut, ...]
+    items: tuple[EInvoiceListItem, ...]
     total: int
     page: int
     page_size: int
