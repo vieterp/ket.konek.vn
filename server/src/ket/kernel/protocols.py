@@ -544,6 +544,13 @@ class InventoryMovementLine(BaseModel):
     source_line_id: UUID | None = None
     """Dòng chứng từ nguồn sinh ra dòng phiếu — để phiếu kho chỉ ngược về hóa
     đơn và báo cáo mua/bán đối chiếu từng dòng."""
+    source_movement_id: int | None = None
+    """Lần nhập đích danh mà dòng **xuất** này lấy hàng (thêm ở 8C-2, ADR-027;
+    SRS 09 §3 phương pháp 4): người lập hóa đơn bán chọn lần nhập trên dòng
+    (`sales_invoice_lines.source_movement_id`), module kho kiểm như phiếu xuất
+    gõ tay (movement nhập đã có giá, cùng chi nhánh/kho/mã hàng/lô) khi sinh
+    phiếu. Chỉ có nghĩa ở chiều **xuất**; năm đích danh mà dòng không chỉ →
+    phiếu sinh chờ giá như 8B, không lỗi."""
     cost_from_line_id: UUID | None = None
     """Dòng chứng từ **bán gốc** mà dòng nhập này trả về (thêm ở 8C-1, ADR-026;
     FR-STK-004 "lấy từ giá xuất kho"): module kho tra phiếu xuất sinh từ dòng ấy

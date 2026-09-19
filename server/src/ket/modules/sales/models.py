@@ -44,6 +44,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -399,6 +400,13 @@ class SalesInvoiceLine(DatasetBase, Audited):
     """Cặp TK giá vốn / TK kho và đơn giá vốn (SRS 06 §3.1). Lát này chỉ nhận
     và lưu; bút toán Nợ 632 / Có 156 do phase 8 sinh khi tính xong giá xuất
     kho — xem `sales_invoices.cogs_posted`."""
+
+    source_movement_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    """Lần nhập đích danh dòng này xuất từ (SRS 09 §3 phương pháp 4, lát 8C-2) —
+    id `inventory_movements`, **không FK** vì sổ kho thuộc module khác (cùng
+    lối `warehouse_id`); module kho kiểm khi sinh phiếu xuất
+    (`InventoryMovementLine.source_movement_id`, ADR-027). Không bắt buộc: năm
+    đích danh mà dòng không chỉ → phiếu xuất sinh chờ giá."""
 
     returned_line_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("sales_invoice_lines.id", ondelete="RESTRICT"), nullable=True

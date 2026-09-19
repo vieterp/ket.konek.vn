@@ -21,6 +21,7 @@ import { CatalogEditDrawer } from './catalog-edit-drawer'
 import { catalogBySlug } from './catalog-registry'
 import { extraValue } from './catalog-types'
 import { FeatureNav } from './feature-nav'
+import { ItemBomCard } from './item-bom-card'
 import { ItemDiscountTiersCard } from './item-discount-tiers-card'
 import { ItemPriceLevelsCard } from './item-price-levels-card'
 import { useCatalogRecord } from './use-catalog'
@@ -78,6 +79,8 @@ export function ItemPage(): ReactElement {
   const natureField = ITEMS_DEF?.extraFields.find((field) => field.key === 'nature')
   const natureValue = item === undefined ? null : extraValue(item, 'nature')
   const natureOption = natureField?.options?.find((option) => option.value === natureValue)
+  // Định mức chỉ có nghĩa với thứ qua kho (server từ chối dịch vụ) — ẩn thẻ thay vì hiện lỗi.
+  const stocked = natureValue === 'goods' || natureValue === 'finished_goods'
   const taxInclusive = item === undefined ? null : extraValue(item, 'price_is_tax_inclusive')
 
   return (
@@ -146,6 +149,7 @@ export function ItemPage(): ReactElement {
                 <>
                   <ItemPriceLevelsCard itemId={item.id} baseUnitId={baseUnitId} />
                   <ItemDiscountTiersCard itemId={item.id} />
+                  {stocked && <ItemBomCard itemId={item.id} />}
                 </>
               )}
             </div>

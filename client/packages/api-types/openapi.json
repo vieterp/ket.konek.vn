@@ -9416,7 +9416,7 @@
             "title": "Exchange Rate"
           },
           "kind": {
-            "maximum": 2.0,
+            "maximum": 4.0,
             "minimum": 0.0,
             "title": "Kind",
             "type": "integer"
@@ -9494,6 +9494,22 @@
         "additionalProperties": false,
         "description": "Một dòng vật tư: mã hàng, kho, số lượng theo ĐVT gõ, giá vốn tùy chọn.",
         "properties": {
+          "allocation_ratio": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Ratio"
+          },
           "amount_fc": {
             "anyOf": [
               {
@@ -9584,6 +9600,11 @@
             },
             "title": "Extended",
             "type": "array"
+          },
+          "is_product": {
+            "default": false,
+            "title": "Is Product",
+            "type": "boolean"
           },
           "item_id": {
             "title": "Item Id",
@@ -9722,6 +9743,18 @@
       },
       "InventoryVoucherLineOut": {
         "properties": {
+          "allocation_ratio": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Ratio"
+          },
           "amount_fc": {
             "anyOf": [
               {
@@ -9823,6 +9856,11 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "is_product": {
+            "default": false,
+            "title": "Is Product",
+            "type": "boolean"
           },
           "item_id": {
             "title": "Item Id",
@@ -10250,7 +10288,7 @@
             "title": "Exchange Rate"
           },
           "kind": {
-            "maximum": 2.0,
+            "maximum": 4.0,
             "minimum": 0.0,
             "title": "Kind",
             "type": "integer"
@@ -10844,6 +10882,215 @@
           "status"
         ],
         "title": "InvoiceRegistrationOut",
+        "type": "object"
+      },
+      "ItemBomExplodeResponse": {
+        "description": "Định mức nổ cho `quantity` đơn vị chính thành phẩm — một cấp.",
+        "properties": {
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ItemBomExplodedLine"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "quantity",
+          "lines"
+        ],
+        "title": "ItemBomExplodeResponse",
+        "type": "object"
+      },
+      "ItemBomExplodedLine": {
+        "description": "Một dòng linh kiện gợi ý cho phiếu lắp ráp / tháo dỡ.",
+        "properties": {
+          "allocation_ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Allocation Ratio",
+            "type": "string"
+          },
+          "component_item_id": {
+            "title": "Component Item Id",
+            "type": "integer"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "unit_id": {
+            "title": "Unit Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "component_item_id",
+          "unit_id",
+          "quantity",
+          "allocation_ratio"
+        ],
+        "title": "ItemBomExplodedLine",
+        "type": "object"
+      },
+      "ItemBomLineCreateRequest": {
+        "additionalProperties": false,
+        "description": "Thêm một linh kiện: số lượng theo **đơn vị chính** của linh kiện cho\n**một** đơn vị chính thành phẩm.",
+        "properties": {
+          "allocation_ratio": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Allocation Ratio"
+          },
+          "component_item_id": {
+            "title": "Component Item Id",
+            "type": "integer"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          }
+        },
+        "required": [
+          "component_item_id",
+          "quantity"
+        ],
+        "title": "ItemBomLineCreateRequest",
+        "type": "object"
+      },
+      "ItemBomLineListResponse": {
+        "description": "Toàn bộ định mức của một mã hàng — không phân trang, xem router.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemBomLineResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ItemBomLineListResponse",
+        "type": "object"
+      },
+      "ItemBomLineResponse": {
+        "description": "Một dòng định mức NVL của mã hàng (FR-SYS-044).",
+        "properties": {
+          "allocation_ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Allocation Ratio",
+            "type": "string"
+          },
+          "component_item_id": {
+            "title": "Component Item Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "component_item_id",
+          "quantity",
+          "allocation_ratio",
+          "row_version"
+        ],
+        "title": "ItemBomLineResponse",
+        "type": "object"
+      },
+      "ItemBomLineUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Sửa một dòng — gửi **trọn** giá trị mới, có kiểm phiên bản.",
+        "properties": {
+          "allocation_ratio": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Allocation Ratio"
+          },
+          "component_item_id": {
+            "title": "Component Item Id",
+            "type": "integer"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "row_version": {
+            "minimum": 1.0,
+            "title": "Row Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "component_item_id",
+          "quantity",
+          "row_version"
+        ],
+        "title": "ItemBomLineUpdateRequest",
         "type": "object"
       },
       "ItemDiscountTierCreateRequest": {
@@ -20697,6 +20944,18 @@
             ],
             "title": "Returned Line Id"
           },
+          "source_movement_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Movement Id"
+          },
           "unit_cost_fc": {
             "anyOf": [
               {
@@ -21006,6 +21265,17 @@
               }
             ],
             "title": "Returned Line Id"
+          },
+          "source_movement_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Movement Id"
           },
           "unit_cost_fc": {
             "anyOf": [
@@ -23146,6 +23416,7 @@
               "chua-co-hoa-don",
               "chua-nhap-kho",
               "chua-xuat-kho",
+              "chua-tinh-gia",
               "qua-han"
             ],
             "title": "Code",
@@ -23162,6 +23433,7 @@
               "issue-einvoice",
               "stock-in",
               "stock-out",
+              "run-costing",
               "pay",
               "collect"
             ],
@@ -23663,6 +23935,59 @@
           "closing_credit"
         ],
         "title": "TrialBalanceRowResponse",
+        "type": "object"
+      },
+      "UncostedVouchersResponse": {
+        "description": "FR-STK-008: chứng từ kho còn dòng sổ kho **chưa tính giá** (chờ hoặc cần\ntính lại) của chi nhánh đang thao tác — danh sách cắt ở giới hạn, `count` là\ntổng thật; `movements` của mỗi chứng từ = số dòng chưa giá.",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "date_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date From"
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date To"
+          },
+          "vouchers": {
+            "items": {
+              "$ref": "#/components/schemas/AffectedVoucher"
+            },
+            "title": "Vouchers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "branch_id",
+          "date_from",
+          "date_to",
+          "count",
+          "vouchers"
+        ],
+        "title": "UncostedVouchersResponse",
         "type": "object"
       },
       "UnitsOfMeasureCreateRequest": {
@@ -28653,6 +28978,154 @@
         ]
       }
     },
+    "/api/v1/inventory/assemblies": {
+      "post": {
+        "operationId": "create_inventory_assemblies_api_v1_inventory_assemblies_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "acknowledge_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledge Warnings",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryVoucherIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Cất phiếu lắp ráp",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/assemblies/{voucher_id}": {
+      "get": {
+        "operationId": "get_inventory_assemblies_api_v1_inventory_assemblies__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đọc phiếu lắp ráp",
+        "tags": [
+          "inventory"
+        ]
+      },
+      "put": {
+        "description": "Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).",
+        "operationId": "update_inventory_assemblies_api_v1_inventory_assemblies__voucher_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryVoucherUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Sửa phiếu lắp ráp",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
     "/api/v1/inventory/costing/affected": {
       "get": {
         "description": "FR-STK-003: xem trước chứng từ bị tính lại giá xuất kho — và kỳ đã khóa\nbị chạm (RT-11) — cho chi nhánh **đang thao tác**, đúng phạm vi mà job\n`inventory.costing.recalc` sẽ chạy (xem `routers/jobs.py`). `from_date` =\nxem trước lượt ép tính lại từ ngày đó.",
@@ -28699,6 +29172,222 @@
           }
         },
         "summary": "Read Costing Affected",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/costing/uncosted": {
+      "get": {
+        "description": "FR-STK-008: chứng từ kho còn dòng chưa tính giá của chi nhánh **đang\nthao tác** — sau một lượt job xanh danh sách phải rỗng (trừ khóa chưa có\nlần nhập có giá).",
+        "operationId": "read_costing_uncosted_api_v1_inventory_costing_uncosted_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UncostedVouchersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Read Costing Uncosted",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/disassemblies": {
+      "post": {
+        "operationId": "create_inventory_disassemblies_api_v1_inventory_disassemblies_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "acknowledge_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledge Warnings",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryVoucherIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Cất phiếu tháo dỡ",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/disassemblies/{voucher_id}": {
+      "get": {
+        "operationId": "get_inventory_disassemblies_api_v1_inventory_disassemblies__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đọc phiếu tháo dỡ",
+        "tags": [
+          "inventory"
+        ]
+      },
+      "put": {
+        "description": "Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).",
+        "operationId": "update_inventory_disassemblies_api_v1_inventory_disassemblies__voucher_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryVoucherUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Sửa phiếu tháo dỡ",
         "tags": [
           "inventory"
         ]
@@ -35741,6 +36430,267 @@
         "summary": "Vật tư hàng hóa — tải tệp mẫu nhập liệu",
         "tags": [
           "master-data-import"
+        ]
+      }
+    },
+    "/api/v1/master/items/{item_id}/bom": {
+      "get": {
+        "description": "Định mức của một mã hàng, theo thứ tự khai. Không phân trang — vài dòng.",
+        "operationId": "list_item_bom_api_v1_master_items__item_id__bom_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemBomLineListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — định mức NVL",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "post": {
+        "description": "Thêm một linh kiện vào định mức — thực hiện đúng một lần (FR-NFR-004).",
+        "operationId": "add_item_bom_line_api_v1_master_items__item_id__bom_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemBomLineCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemBomLineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — thêm dòng định mức",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/items/{item_id}/bom/explode": {
+      "get": {
+        "description": "Dòng linh kiện gợi ý cho `quantity` đơn vị **chính** thành phẩm, số lượng\ntheo đơn vị chính của từng linh kiện.",
+        "operationId": "explode_item_bom_api_v1_master_items__item_id__bom_explode_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quantity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                  "type": "string"
+                }
+              ],
+              "default": "1",
+              "title": "Quantity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemBomExplodeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — nổ định mức cho một số lượng thành phẩm",
+        "tags": [
+          "master-data"
+        ]
+      }
+    },
+    "/api/v1/master/items/{item_id}/bom/{row_id}": {
+      "delete": {
+        "description": "Xóa một dòng khỏi định mức.",
+        "operationId": "delete_item_bom_line_api_v1_master_items__item_id__bom__row_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "row_id",
+            "required": true,
+            "schema": {
+              "title": "Row Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — xóa dòng định mức",
+        "tags": [
+          "master-data"
+        ]
+      },
+      "put": {
+        "description": "Sửa linh kiện, số lượng hoặc tỷ lệ của một dòng.",
+        "operationId": "update_item_bom_line_api_v1_master_items__item_id__bom__row_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "row_id",
+            "required": true,
+            "schema": {
+              "title": "Row Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemBomLineUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemBomLineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Vật tư hàng hóa — sửa dòng định mức",
+        "tags": [
+          "master-data"
         ]
       }
     },
