@@ -453,6 +453,7 @@ module còn lại:
 | `posting.contracts.OPENING_DETAIL_PORTS` / `OpeningDetailPort` / `OpeningStockLayer` — cổng chi tiết của số dư ban đầu do module giữ (`lot_id_for`/`clear`/`materialize`/`annotate_carried`) + `InventoryMovementLine.cost_from_line_id` (dòng bán gốc của hàng trả lại) — ADR-026 | 8C-1 | Nhóm 6–9 (CCDC/TSCĐ/trả trước) 8E đăng ký cổng của chúng; hàng mua trả lại nếu cần giá lần nhập |
 | `inventory_movements` **không thuộc phiếu** (`voucher_id`/`line_id` NULL, `opening_layer_id`) — lớp tồn đầu kỳ là movement nhập đã có giá ngày = đầu năm − 1 | 8C-1 | Mọi lượt đọc sổ kho join `vouchers` phải LEFT JOIN; 8D/8F |
 | `fiscal_years.inventory_costing_by_warehouse` + hai câu bình quân "không theo kho" (`wavg_*_branch.sql`, khóa `(chi nhánh, mã hàng, lô)`, chỉ mục `ix_inventory_movements_branch_item_order`) | 8C-1 | — (FIFO/đích danh luôn theo kho) |
+| `InventoryMovementLine.source_movement_id` — lần nhập đích danh chọn ở dòng chứng từ nguồn (ADR-027, kernel mở lần sáu, cộng thêm) + `models.line_issues_stock(kind, is_product)` một chỗ quyết chiều movement cho phiếu hai chiều (lắp ráp/tháo dỡ) | 8C-2 | Phase 9 lệnh sản xuất (xuất NVL / nhập thành phẩm là cùng khuôn LR), UI lưới bán 8G |
 
 ---
 
@@ -542,7 +543,8 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | `account_balances` | Snapshot số dư (khóa compact: period, ledger, branch, account, currency) | 4 | `posting` |
 | `posting_dimension_values` | Chiều phân tích mở rộng | 3, 4 | `kernel` |
 | `ar_ap_ledger` | Công nợ subledger (đối tác + TK + số tiền nợ) | 7 | `receivables` |
-| `inventory_vouchers`, `inventory_voucher_lines` | Thân phiếu NK/XK/CK (một-một với `vouchers`, cột thủ kho `keeper_*` sẵn cho 8D) + dòng vật tư (số lượng theo ĐVT gõ và quy về đơn vị chính, giá vốn nếu biết, cặp TK bút toán kèm dòng) | 8A | `inventory` |
+| `inventory_vouchers`, `inventory_voucher_lines` | Thân phiếu NK/XK/CK/LR/TD (một-một với `vouchers`, cột thủ kho `keeper_*` sẵn cho 8D) + dòng vật tư (số lượng theo ĐVT gõ và quy về đơn vị chính, giá vốn nếu biết, cặp TK bút toán kèm dòng; 8C-2: `is_product` — dòng thành phẩm của lắp ráp/tháo dỡ, ≤ 1 mỗi phiếu — và `allocation_ratio` chia giá trị khi tháo dỡ) | 8A, 8C-2 | `inventory` |
+| `item_bom_lines` | Định mức NVL của mã hàng (FR-SYS-044): linh kiện + số lượng cho một đơn vị chính thành phẩm + tỷ lệ phân bổ; một cấp, dịch vụ chặn vòng; khuôn bảng con `item_units` (không RLS) | 8C-2 | `kernel/master_data` |
 | `inventory_movements` | **Sổ kho** — append-only như `gl_postings`; khóa `(chi nhánh, kho, vật tư, lô)`, `sequence_in_day` duy nhất theo ngày (BR-STK-04), `cost_state` 0/1/2, RLS chi nhánh, trigger kỳ khóa (BR-STK-05); FK thật tới `items`/`warehouses`/`lots` để gộp danh mục dời theo | 8A | `inventory` |
 | `lots`, `serials` | Lô / serial (LD-09: cột có mặt ở mọi bảng tồn từ migration đầu; UI serial v1.1) | 8A | `inventory` |
 | `inventory_recalc_queue` | Dấu bẩn tính lại giá xuất theo khóa + `from_date` (MIN giữ lại) — 8A ghi, 8B đọc, khóa sổ chặn khi còn dấu | 8A | `inventory` |

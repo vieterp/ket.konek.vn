@@ -1701,6 +1701,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/inventory/assemblies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cất phiếu lắp ráp */
+        post: operations["create_inventory_assemblies_api_v1_inventory_assemblies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/assemblies/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Đọc phiếu lắp ráp */
+        get: operations["get_inventory_assemblies_api_v1_inventory_assemblies__voucher_id__get"];
+        /**
+         * Sửa phiếu lắp ráp
+         * @description Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).
+         */
+        put: operations["update_inventory_assemblies_api_v1_inventory_assemblies__voucher_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inventory/costing/affected": {
         parameters: {
             query?: never;
@@ -1717,6 +1755,66 @@ export interface paths {
          */
         get: operations["read_costing_affected_api_v1_inventory_costing_affected_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/costing/uncosted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Costing Uncosted
+         * @description FR-STK-008: chứng từ kho còn dòng chưa tính giá của chi nhánh **đang
+         *     thao tác** — sau một lượt job xanh danh sách phải rỗng (trừ khóa chưa có
+         *     lần nhập có giá).
+         */
+        get: operations["read_costing_uncosted_api_v1_inventory_costing_uncosted_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/disassemblies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cất phiếu tháo dỡ */
+        post: operations["create_inventory_disassemblies_api_v1_inventory_disassemblies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/disassemblies/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Đọc phiếu tháo dỡ */
+        get: operations["get_inventory_disassemblies_api_v1_inventory_disassemblies__voucher_id__get"];
+        /**
+         * Sửa phiếu tháo dỡ
+         * @description Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).
+         */
+        put: operations["update_inventory_disassemblies_api_v1_inventory_disassemblies__voucher_id__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -4634,6 +4732,75 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{item_id}/bom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vật tư hàng hóa — định mức NVL
+         * @description Định mức của một mã hàng, theo thứ tự khai. Không phân trang — vài dòng.
+         */
+        get: operations["list_item_bom_api_v1_master_items__item_id__bom_get"];
+        put?: never;
+        /**
+         * Vật tư hàng hóa — thêm dòng định mức
+         * @description Thêm một linh kiện vào định mức — thực hiện đúng một lần (FR-NFR-004).
+         */
+        post: operations["add_item_bom_line_api_v1_master_items__item_id__bom_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{item_id}/bom/explode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vật tư hàng hóa — nổ định mức cho một số lượng thành phẩm
+         * @description Dòng linh kiện gợi ý cho `quantity` đơn vị **chính** thành phẩm, số lượng
+         *     theo đơn vị chính của từng linh kiện.
+         */
+        get: operations["explode_item_bom_api_v1_master_items__item_id__bom_explode_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/master/items/{item_id}/bom/{row_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Vật tư hàng hóa — sửa dòng định mức
+         * @description Sửa linh kiện, số lượng hoặc tỷ lệ của một dòng.
+         */
+        put: operations["update_item_bom_line_api_v1_master_items__item_id__bom__row_id__put"];
+        post?: never;
+        /**
+         * Vật tư hàng hóa — xóa dòng định mức
+         * @description Xóa một dòng khỏi định mức.
+         */
+        delete: operations["delete_item_bom_line_api_v1_master_items__item_id__bom__row_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -12296,6 +12463,8 @@ export interface components {
          * @description Một dòng vật tư: mã hàng, kho, số lượng theo ĐVT gõ, giá vốn tùy chọn.
          */
         InventoryVoucherLineIn: {
+            /** Allocation Ratio */
+            allocation_ratio?: number | string | null;
             /** Amount Fc */
             amount_fc?: number | string | null;
             /** Contract Id */
@@ -12315,6 +12484,11 @@ export interface components {
              * @default []
              */
             extended: components["schemas"]["ExtendedDimensionIn"][];
+            /**
+             * Is Product
+             * @default false
+             */
+            is_product: boolean;
             /** Item Id */
             item_id: number;
             /** Item Variant Id */
@@ -12341,6 +12515,8 @@ export interface components {
         };
         /** InventoryVoucherLineOut */
         InventoryVoucherLineOut: {
+            /** Allocation Ratio */
+            allocation_ratio?: string | null;
             /** Amount Fc */
             amount_fc: string | null;
             /** Base Quantity */
@@ -12366,6 +12542,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Is Product
+             * @default false
+             */
+            is_product: boolean;
             /** Item Id */
             item_id: number;
             /** Item Variant Id */
@@ -12685,6 +12866,91 @@ export interface components {
              */
             start_date: string;
             status: components["schemas"]["RegistrationStatus"];
+        };
+        /**
+         * ItemBomExplodeResponse
+         * @description Định mức nổ cho `quantity` đơn vị chính thành phẩm — một cấp.
+         */
+        ItemBomExplodeResponse: {
+            /** Item Id */
+            item_id: number;
+            /** Lines */
+            lines: components["schemas"]["ItemBomExplodedLine"][];
+            /** Quantity */
+            quantity: string;
+        };
+        /**
+         * ItemBomExplodedLine
+         * @description Một dòng linh kiện gợi ý cho phiếu lắp ráp / tháo dỡ.
+         */
+        ItemBomExplodedLine: {
+            /** Allocation Ratio */
+            allocation_ratio: string;
+            /** Component Item Id */
+            component_item_id: number;
+            /** Quantity */
+            quantity: string;
+            /** Unit Id */
+            unit_id: number;
+        };
+        /**
+         * ItemBomLineCreateRequest
+         * @description Thêm một linh kiện: số lượng theo **đơn vị chính** của linh kiện cho
+         *     **một** đơn vị chính thành phẩm.
+         */
+        ItemBomLineCreateRequest: {
+            /**
+             * Allocation Ratio
+             * @default 1
+             */
+            allocation_ratio: number | string;
+            /** Component Item Id */
+            component_item_id: number;
+            /** Quantity */
+            quantity: number | string;
+        };
+        /**
+         * ItemBomLineListResponse
+         * @description Toàn bộ định mức của một mã hàng — không phân trang, xem router.
+         */
+        ItemBomLineListResponse: {
+            /** Items */
+            items: components["schemas"]["ItemBomLineResponse"][];
+        };
+        /**
+         * ItemBomLineResponse
+         * @description Một dòng định mức NVL của mã hàng (FR-SYS-044).
+         */
+        ItemBomLineResponse: {
+            /** Allocation Ratio */
+            allocation_ratio: string;
+            /** Component Item Id */
+            component_item_id: number;
+            /** Id */
+            id: number;
+            /** Item Id */
+            item_id: number;
+            /** Quantity */
+            quantity: string;
+            /** Row Version */
+            row_version: number;
+        };
+        /**
+         * ItemBomLineUpdateRequest
+         * @description Sửa một dòng — gửi **trọn** giá trị mới, có kiểm phiên bản.
+         */
+        ItemBomLineUpdateRequest: {
+            /**
+             * Allocation Ratio
+             * @default 1
+             */
+            allocation_ratio: number | string;
+            /** Component Item Id */
+            component_item_id: number;
+            /** Quantity */
+            quantity: number | string;
+            /** Row Version */
+            row_version: number;
         };
         /**
          * ItemDiscountTierCreateRequest
@@ -16307,6 +16573,8 @@ export interface components {
             quantity?: number | string | null;
             /** Returned Line Id */
             returned_line_id?: string | null;
+            /** Source Movement Id */
+            source_movement_id?: number | null;
             /** Unit Cost Fc */
             unit_cost_fc?: number | string | null;
             /** Unit Id */
@@ -16374,6 +16642,8 @@ export interface components {
             quantity: string | null;
             /** Returned Line Id */
             returned_line_id: string | null;
+            /** Source Movement Id */
+            source_movement_id?: number | null;
             /** Unit Cost Fc */
             unit_cost_fc: string | null;
             /** Unit Id */
@@ -17174,14 +17444,14 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "chua-ghi-so" | "chua-co-hoa-don" | "chua-nhap-kho" | "chua-xuat-kho" | "qua-han";
+            code: "chua-ghi-so" | "chua-co-hoa-don" | "chua-nhap-kho" | "chua-xuat-kho" | "chua-tinh-gia" | "qua-han";
             /** Count */
             count: number;
             /**
              * Next Action
              * @enum {string}
              */
-            next_action: "post" | "attach-vendor-invoice" | "issue-einvoice" | "stock-in" | "stock-out" | "pay" | "collect";
+            next_action: "post" | "attach-vendor-invoice" | "issue-einvoice" | "stock-in" | "stock-out" | "run-costing" | "pay" | "collect";
             /** Sample */
             sample: components["schemas"]["TradePendingVoucher"][];
         };
@@ -17391,6 +17661,24 @@ export interface components {
             period_credit: string;
             /** Period Debit */
             period_debit: string;
+        };
+        /**
+         * UncostedVouchersResponse
+         * @description FR-STK-008: chứng từ kho còn dòng sổ kho **chưa tính giá** (chờ hoặc cần
+         *     tính lại) của chi nhánh đang thao tác — danh sách cắt ở giới hạn, `count` là
+         *     tổng thật; `movements` của mỗi chứng từ = số dòng chưa giá.
+         */
+        UncostedVouchersResponse: {
+            /** Branch Id */
+            branch_id: number;
+            /** Count */
+            count: number;
+            /** Date From */
+            date_from: string | null;
+            /** Date To */
+            date_to: string | null;
+            /** Vouchers */
+            vouchers: components["schemas"]["AffectedVoucher"][];
         };
         /**
          * UnitsOfMeasureCreateRequest
@@ -20482,6 +20770,107 @@ export interface operations {
             };
         };
     };
+    create_inventory_assemblies_api_v1_inventory_assemblies_post: {
+        parameters: {
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryVoucherIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_inventory_assemblies_api_v1_inventory_assemblies__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_inventory_assemblies_api_v1_inventory_assemblies__voucher_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryVoucherUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     read_costing_affected_api_v1_inventory_costing_affected_get: {
         parameters: {
             query?: {
@@ -20500,6 +20889,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CostingAffectedPreview"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_costing_uncosted_api_v1_inventory_costing_uncosted_get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UncostedVouchersResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_inventory_disassemblies_api_v1_inventory_disassemblies_post: {
+        parameters: {
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryVoucherIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_inventory_disassemblies_api_v1_inventory_disassemblies__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_inventory_disassemblies_api_v1_inventory_disassemblies__voucher_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryVoucherUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -25016,6 +25538,171 @@ export interface operations {
                 content: {
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_item_bom_api_v1_master_items__item_id__bom_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBomLineListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    add_item_bom_line_api_v1_master_items__item_id__bom_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemBomLineCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBomLineResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    explode_item_bom_api_v1_master_items__item_id__bom_explode_get: {
+        parameters: {
+            query?: {
+                quantity?: number | string;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBomExplodeResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_item_bom_line_api_v1_master_items__item_id__bom__row_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+                row_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemBomLineUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBomLineResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_item_bom_line_api_v1_master_items__item_id__bom__row_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+                row_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Lỗi (RFC 7807) */
             default: {

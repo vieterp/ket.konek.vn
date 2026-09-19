@@ -38,6 +38,7 @@ from ket.kernel.idempotency.service import IdempotentRef, execute_once, fingerpr
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
 from ket.modules.inventory import (
+    ASSEMBLY_PERMISSION_CODE,
     INVENTORY_PERMISSION_MODULE,
     ISSUE_PERMISSION_CODE,
     RECEIPT_PERMISSION_CODE,
@@ -45,6 +46,7 @@ from ket.modules.inventory import (
 )
 from ket.modules.inventory.costing import COSTING_VIEW
 from ket.modules.inventory.costing.affected import preview as costing_preview
+from ket.modules.inventory.costing.uncosted import uncosted_vouchers
 from ket.modules.inventory.models import (
     InventoryVoucher,
     InventoryVoucherKind,
@@ -60,6 +62,7 @@ from ket.modules.inventory.schemas import (
     ReorderDayIn,
     ReorderDayOut,
     StockResponse,
+    UncostedVouchersResponse,
 )
 from ket.modules.inventory.service import InventoryVoucherService
 from ket.modules.inventory.stock import stock_rows
@@ -73,6 +76,8 @@ PERMISSION_BY_KIND: Final[dict[int, str]] = {
     InventoryVoucherKind.RECEIPT: RECEIPT_PERMISSION_CODE,
     InventoryVoucherKind.ISSUE: ISSUE_PERMISSION_CODE,
     InventoryVoucherKind.TRANSFER: TRANSFER_PERMISSION_CODE,
+    InventoryVoucherKind.ASSEMBLY: ASSEMBLY_PERMISSION_CODE,
+    InventoryVoucherKind.DISASSEMBLY: ASSEMBLY_PERMISSION_CODE,
 }
 
 
@@ -239,6 +244,8 @@ for _path, _kind, _permission_name, _title in (
     ("receipts", InventoryVoucherKind.RECEIPT, RECEIPT_PERMISSION_CODE, "Phiếu nhập kho"),
     ("issues", InventoryVoucherKind.ISSUE, ISSUE_PERMISSION_CODE, "Phiếu xuất kho"),
     ("transfers", InventoryVoucherKind.TRANSFER, TRANSFER_PERMISSION_CODE, "Phiếu chuyển kho"),
+    ("assemblies", InventoryVoucherKind.ASSEMBLY, ASSEMBLY_PERMISSION_CODE, "Phiếu lắp ráp"),
+    ("disassemblies", InventoryVoucherKind.DISASSEMBLY, ASSEMBLY_PERMISSION_CODE, "Phiếu tháo dỡ"),
 ):
     _register_voucher_routes(path=_path, kind=_kind, permission_name=_permission_name, title=_title)
 
@@ -331,3 +338,22 @@ def read_costing_affected(
         )
     with unit_of_work(factory, authorized.scope) as session:
         return costing_preview(session, branch_id=branch_id, force_from=from_date)
+
+
+@router.get("/costing/uncosted", response_model=UncostedVouchersResponse)
+def read_costing_uncosted(
+    authorized: CostingViewer,
+    factory: SessionFactory,
+    date_from: Annotated[date | None, Query()] = None,
+    date_to: Annotated[date | None, Query()] = None,
+) -> UncostedVouchersResponse:
+    """FR-STK-008: chứng từ kho còn dòng chưa tính giá của chi nhánh **đang
+    thao tác** — sau một lượt job xanh danh sách phải rỗng (trừ khóa chưa có
+    lần nhập có giá)."""
+    branch_id = authorized.scope.acting_branch_id
+    if branch_id is None:
+        raise BranchNotInScopeError(
+            "Danh sách chứng từ chưa tính giá cần một chi nhánh đang thao tác", branch=None
+        )
+    with unit_of_work(factory, authorized.scope) as session:
+        return uncosted_vouchers(session, branch_id=branch_id, date_from=date_from, date_to=date_to)

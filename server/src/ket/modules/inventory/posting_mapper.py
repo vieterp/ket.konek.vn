@@ -6,7 +6,9 @@ Một dòng phiếu sinh **một cặp** Nợ/Có khi và chỉ khi nó có cặ
 * `amount_fc` trên dòng (phiếu nhập gõ tay, nhập từ hóa đơn mua): cặp theo
   nguyên tệ + tỷ giá của phiếu, như mọi chứng từ khác;
 * **movement đã tính giá** của dòng (phiếu xuất, vế **đi** của phiếu chuyển —
-  lát 8B): cặp bằng `amount` VND, `currency = VND, rate = 1`. Giá vốn là số sổ
+  lát 8B; dòng linh kiện của phiếu lắp ráp — vế đi; dòng linh kiện của phiếu
+  tháo dỡ — vế **đến**, giá chia từ thành phẩm, 8C-2): cặp bằng `amount` VND,
+  `currency = VND, rate = 1`. Giá vốn là số sổ
   cái, không có nguyên tệ ở sổ kho; phiếu xuất USD sinh từ hóa đơn bán vẫn cân
   vì `check_balanced` cân theo từng `(sổ, tiền tệ)`.
 
@@ -44,6 +46,7 @@ from ket.modules.inventory.models import (
     CostState,
     InventoryMovement,
     InventoryVoucher,
+    InventoryVoucherKind,
     InventoryVoucherLine,
     MovementDirection,
 )
@@ -127,12 +130,17 @@ def _costed_out_amounts(session: Session, voucher_ids: Sequence[UUID]) -> dict[U
     giá, không bút toán) và chiều nhập lấy giá từ lần xuất (hàng bán trả lại,
     FR-STK-004 8C-1 — Nợ 156 / Có 632 theo giá engine chép)."""
     rows = session.execute(
-        select(InventoryMovement.line_id, InventoryMovement.amount).where(
+        select(InventoryMovement.line_id, InventoryMovement.amount)
+        .join(InventoryVoucher, InventoryVoucher.id == InventoryMovement.voucher_id)
+        .where(
             InventoryMovement.voucher_id.in_(list(voucher_ids)),
             InventoryMovement.cost_state == CostState.COSTED,
             or_(
                 InventoryMovement.direction == MovementDirection.OUT,
                 InventoryMovement.source_movement_id.is_not(None),
+                # Tháo dỡ (8C-2): bút toán Nợ TK linh kiện / Có TK thành phẩm nằm
+                # trên dòng linh kiện — vế NHẬP, giá do engine chia từ vế xuất.
+                InventoryVoucher.kind == InventoryVoucherKind.DISASSEMBLY,
             ),
         )
     ).all()
@@ -146,7 +154,9 @@ def _pair_of(
     *,
     cost_currency: str,
 ) -> list[PostingLine]:
-    if line.debit_account_id is None or line.credit_account_id is None:
+    if line.debit_account_id is None or line.credit_account_id is None or line.is_product:
+        # Dòng thành phẩm LR/TD không định khoản (validator đã chặn cặp TK; canh
+        # lần hai vì vế của nó mang giá engine và sẽ lọt vào `costed_amounts`).
         return []
     if line.amount_fc is not None:
         amount, currency, rate = line.amount_fc, voucher.currency_code, voucher.exchange_rate

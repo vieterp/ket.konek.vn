@@ -15,7 +15,12 @@ from uuid import UUID
 from pydantic import BaseModel
 
 PendingIssueCode = Literal[
-    "chua-ghi-so", "chua-co-hoa-don", "chua-nhap-kho", "chua-xuat-kho", "qua-han"
+    "chua-ghi-so",
+    "chua-co-hoa-don",
+    "chua-nhap-kho",
+    "chua-xuat-kho",
+    "chua-tinh-gia",
+    "qua-han",
 ]
 """Mã nhóm, giống nhau hai chiều để client ánh xạ nhãn theo `(chiều, mã)`:
 `qua-han` là "quá hạn thanh toán" ở màn mua và "quá hạn thu tiền" ở màn bán.
@@ -24,10 +29,22 @@ Nhóm "chưa nhập kho" / "chưa xuất kho" (lát 8A): chứng từ đã ghi s
 hàng qua kho mà không phiếu kho nào sinh kèm — phiếu sinh tự động cho dòng có
 kho (`InventoryPosting`), nên nhóm này thực chất là "dòng hàng thiếu kho" (mua)
 và "chưa bật kiêm phiếu xuất kho" (bán). Trước 8A hai nhóm **cố ý vắng mặt**:
-một nhóm luôn đếm 0 là một lời hứa mà hệ thống chưa giữ được."""
+một nhóm luôn đếm 0 là một lời hứa mà hệ thống chưa giữ được.
+
+Nhóm "chưa tính giá" (chiều bán, lát 8C-2, FR-STK-008): hóa đơn đã ghi sổ có
+phiếu xuất sinh kèm mà giá vốn chưa ghi (`cogs_posted` false) — việc tiếp theo
+là chạy "Tính giá xuất kho"; danh sách đầy đủ theo phiếu kho ở
+`GET /inventory/costing/uncosted`."""
 
 NextAction = Literal[
-    "post", "attach-vendor-invoice", "issue-einvoice", "stock-in", "stock-out", "pay", "collect"
+    "post",
+    "attach-vendor-invoice",
+    "issue-einvoice",
+    "stock-in",
+    "stock-out",
+    "run-costing",
+    "pay",
+    "collect",
 ]
 """Mã máy cho ô "Việc tiếp theo" — nhãn tiếng Việt thuộc tầng i18n của client,
 cùng luật với `PendingIssueGroupResponse.next_action` của phase 4."""

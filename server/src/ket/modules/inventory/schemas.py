@@ -19,6 +19,8 @@ from ket.kernel.currency.models import CURRENCY_CODE_LENGTH, RATE_PRECISION
 from ket.kernel.money import RATE_SCALE_DEFAULT
 from ket.kernel.quantity import QUANTITY_PRECISION, QUANTITY_SCALE
 from ket.modules.inventory.models import (
+    ALLOCATION_RATIO_PRECISION,
+    ALLOCATION_RATIO_SCALE,
     DESCRIPTION_MAX_LENGTH,
     LOT_NO_MAX_LENGTH,
     UNIT_COST_PRECISION,
@@ -75,6 +77,18 @@ class InventoryVoucherLineIn(BaseModel):
     """Đích danh: id movement **nhập** mà dòng xuất này lấy hàng — bắt buộc khi
     năm tài chính tính giá `specific`, bị từ chối ở phiếu nhập."""
 
+    is_product: bool = False
+    """Dòng thành phẩm của phiếu lắp ráp / tháo dỡ (đúng một dòng mỗi phiếu);
+    luôn `false` trên NK/XK/CK."""
+    allocation_ratio: Decimal | None = Field(
+        default=None,
+        gt=_ZERO,
+        max_digits=ALLOCATION_RATIO_PRECISION,
+        decimal_places=ALLOCATION_RATIO_SCALE,
+    )
+    """Tỷ lệ phân bổ giá trị — bắt buộc trên dòng linh kiện của phiếu tháo dỡ,
+    vắng ở mọi dòng khác."""
+
     partner_id: int | None = None
     partner_kind: PartnerKind | None = None
     cost_object_id: int | None = None
@@ -92,7 +106,22 @@ class InventoryVoucherLineIn(BaseModel):
             raise ValueError("partner_id và partner_kind phải cùng có hoặc cùng vắng")
         if (self.debit_account_id is None) != (self.credit_account_id is None):
             raise ValueError("TK Nợ và TK Có của dòng phải cùng có hoặc cùng vắng")
+        if self.is_product and (
+            self.debit_account_id is not None
+            or self.unit_cost_fc is not None
+            or self.amount_fc is not None
+            or self.source_movement_id is not None
+            or self.allocation_ratio is not None
+        ):
+            raise ValueError(
+                "Dòng thành phẩm không định khoản, không gõ giá, không chỉ nguồn, không tỷ lệ — "
+                "giá thành phẩm do engine suy từ các dòng linh kiện"
+            )
         return self
+
+
+ASSEMBLY_KINDS = frozenset({InventoryVoucherKind.ASSEMBLY, InventoryVoucherKind.DISASSEMBLY})
+"""Hai loại phiếu có dòng thành phẩm + dòng linh kiện (lát 8C-2)."""
 
 
 class InventoryVoucherIn(BaseModel):
@@ -100,7 +129,7 @@ class InventoryVoucherIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: int = Field(ge=InventoryVoucherKind.RECEIPT, le=InventoryVoucherKind.TRANSFER)
+    kind: int = Field(ge=InventoryVoucherKind.RECEIPT, le=InventoryVoucherKind.DISASSEMBLY)
     operation_code: str = Field(min_length=1, max_length=OPERATION_CODE_INPUT_MAX)
     warehouse_id: int
     to_warehouse_id: int | None = None
@@ -135,6 +164,26 @@ class InventoryVoucherIn(BaseModel):
             line.warehouse_id not in (None, self.warehouse_id) for line in self.lines
         ):
             raise ValueError("Phiếu chuyển kho không nhận kho riêng theo dòng")
+        products = sum(1 for line in self.lines if line.is_product)
+        if self.kind in ASSEMBLY_KINDS:
+            if products != 1:
+                raise ValueError("Phiếu lắp ráp / tháo dỡ phải có đúng một dòng thành phẩm")
+            if len(self.lines) < 2:
+                raise ValueError("Phiếu lắp ráp / tháo dỡ phải có ít nhất một dòng linh kiện")
+            needs_ratio = self.kind == InventoryVoucherKind.DISASSEMBLY
+            for line in self.lines:
+                if line.is_product:
+                    continue
+                if needs_ratio and line.allocation_ratio is None:
+                    raise ValueError(
+                        "Dòng linh kiện của phiếu tháo dỡ phải có tỷ lệ phân bổ giá trị"
+                    )
+                if not needs_ratio and line.allocation_ratio is not None:
+                    raise ValueError("Chỉ phiếu tháo dỡ mới có tỷ lệ phân bổ trên dòng linh kiện")
+        elif products or any(line.allocation_ratio is not None for line in self.lines):
+            raise ValueError(
+                "Dòng thành phẩm / tỷ lệ phân bổ chỉ có trên phiếu lắp ráp hoặc tháo dỡ"
+            )
         return self
 
 
@@ -171,6 +220,8 @@ class InventoryVoucherLineOut(BaseModel):
     extended_dimensions: dict[str, int] | None
     source_line_id: UUID | None
     source_movement_id: int | None = None
+    is_product: bool = False
+    allocation_ratio: Decimal | None = None
     description: str | None
 
 
@@ -287,3 +338,15 @@ class CostingAffectedPreview(BaseModel):
     """Tối đa `AFFECTED_VOUCHER_LIMIT` chứng từ sớm nhất; `voucher_count` là tổng thật."""
     locked_periods: tuple[LockedPeriodTouched, ...]
     """Rỗng là điều kiện để job chạy; có dòng = phải mở khóa kỳ đó trước."""
+
+
+class UncostedVouchersResponse(BaseModel):
+    """FR-STK-008: chứng từ kho còn dòng sổ kho **chưa tính giá** (chờ hoặc cần
+    tính lại) của chi nhánh đang thao tác — danh sách cắt ở giới hạn, `count` là
+    tổng thật; `movements` của mỗi chứng từ = số dòng chưa giá."""
+
+    branch_id: int
+    date_from: date | None
+    date_to: date | None
+    count: int
+    vouchers: tuple[AffectedVoucher, ...]

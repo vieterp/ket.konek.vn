@@ -91,6 +91,9 @@ def planned_movement(session: Session, voucher_id: UUID) -> PlannedMovement | No
             debit_account_id=debit,
             credit_account_id=credit,
             source_line_id=line.id,
+            # Chiều xuất: lần nhập đích danh người bán chọn (8C-2, ADR-027);
+            # chiều nhập: dòng bán gốc để lấy giá lần xuất (8C-1, ADR-026).
+            source_movement_id=line.source_movement_id if is_issue else None,
             cost_from_line_id=None if is_issue else line.returned_line_id,
         )
         for line, item_id, warehouse_id, unit_id, quantity in candidates

@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from catalog_api_support import UserFactory, actor, ensure_role
@@ -28,20 +28,33 @@ from inventory_support import (
     SECOND_WAREHOUSE_ID,
     UNIT_BOX_ID,
     UNIT_PIECE_ID,
+    fresh_item,
+    in_movement,
     movements_of,
+    out_movement,
+    post_receipt,
+    run_engine,
     seed_inventory_package_data,
+    set_system_setting,
+    set_valuation_method,
 )
 from ket.api.dependencies import BRANCH_HEADER
 from ket.api.idempotency import IDEMPOTENCY_HEADER
+from ket.kernel.config.catalog import STOCK_NEGATIVE_WARNING_KEY
 from ket.kernel.datasets.provisioning import DatasetRef
+from ket.kernel.errors import PostingValidationError
+from ket.kernel.periods.models import InventoryValuationMethod
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
 from ket.main import create_app
+from ket.modules.inventory.models import CostState, InventoryMovement
+from ket.modules.inventory.service import SPECIFIC_SOURCE_MISMATCH_CODE
 from ket.modules.purchase.models import VendorInvoiceStatus
 from ket.modules.purchase.schemas import PurchaseInvoiceIn, PurchaseInvoiceLineIn
 from ket.modules.purchase.service import PurchaseInvoiceService
+from ket.modules.sales.models import SalesInvoice
 from ket.modules.sales.schemas import SalesInvoiceIn, SalesInvoiceLineIn
-from ket.modules.sales.service import SalesInvoiceService
+from ket.modules.sales.service import SPECIFIC_SOURCE_KIND_CODE, SalesInvoiceService
 from ket.settings import Settings
 from posting_support import PostingContext, posting_scope, seed_posting_context
 from purchase_support import ensure_vendor, seed_purchase_package_data
@@ -111,7 +124,10 @@ def keeper_role(session_factory: sessionmaker[Session], dataset_alpha: DatasetRe
         session_factory,
         dataset_alpha,
         KEEPER_ROLE,
-        _inventory_codes(("receipt", "issue", "transfer")),
+        [
+            *_inventory_codes(("receipt", "issue", "transfer", "assembly")),
+            permission_code("inventory", "costing", Action.VIEW),
+        ],
     )
 
 
@@ -465,3 +481,253 @@ def test_pending_issues_expose_missing_stock_vouchers(
     sales_groups = {group["code"]: group for group in sales_tab.json()["groups"]}
     assert sales_groups["chua-xuat-kho"]["next_action"] == "stock-out"
     assert sales_groups["chua-xuat-kho"]["count"] >= 1
+
+
+# ------------------------------------------------------------------ lát 8C-2
+
+
+def _assembly_body(
+    context: PostingContext, *, component_item_id: int, product_item_id: int
+) -> dict[str, Any]:
+    return {
+        "kind": 3,
+        "operation_code": "lap-rap",
+        "warehouse_id": MAIN_WAREHOUSE_ID,
+        "branch_id": context.branch_id,
+        "document_date": SEP_10.isoformat(),
+        "posting_date": SEP_10.isoformat(),
+        "currency_code": "VND",
+        "exchange_rate": "1",
+        "description": "lắp ráp qua HTTP",
+        "lines": [
+            {
+                "item_id": product_item_id,
+                "unit_id": UNIT_PIECE_ID,
+                "quantity": "1",
+                "is_product": True,
+            },
+            {"item_id": component_item_id, "unit_id": UNIT_PIECE_ID, "quantity": "2"},
+        ],
+    }
+
+
+def test_assembly_routes_need_the_assembly_permission_and_uncosted_lists_the_voucher(
+    client: TestClient,
+    keeper_headers: dict[str, str],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    test_password: str,
+    context: PostingContext,
+    accounts: dict[str, int],
+    receipt_only_role: str,
+) -> None:
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        set_system_setting(session, STOCK_NEGATIVE_WARNING_KEY, "none")
+        component = fresh_item(session, "API-C")
+        product = fresh_item(session, "API-P")
+    body = _assembly_body(context, component_item_id=component, product_item_id=product)
+
+    receipt_only = _headers(
+        client,
+        session_factory,
+        dataset_alpha,
+        user_factory,
+        test_password,
+        context,
+        receipt_only_role,
+        "chi_nhap_lr",
+    )
+    assert _post_json(client, receipt_only, "/api/v1/inventory/assemblies", body).status_code == 403
+
+    created = _post_json(client, keeper_headers, "/api/v1/inventory/assemblies", body)
+    assert created.status_code == 201, created.text
+    payload = created.json()
+    assert payload["kind"] == 3
+    assert payload["voucher_no"].startswith("LR26-")
+    assert [line["is_product"] for line in payload["lines"]] == [True, False]
+    # Đường dẫn phải khớp loại: thân lắp ráp gửi vào `/disassemblies` bị từ chối.
+    mismatch = _post_json(client, keeper_headers, "/api/v1/inventory/disassemblies", body)
+    assert mismatch.status_code == 422, mismatch.text
+
+    posted = _post_json(client, keeper_headers, f"/api/v1/vouchers/{payload['id']}/actions/post")
+    assert posted.status_code == 200, posted.text
+    uncosted = client.get(
+        "/api/v1/inventory/costing/uncosted",
+        params={"date_from": SEP_10.isoformat(), "date_to": SEP_10.isoformat()},
+        headers=keeper_headers,
+    )
+    assert uncosted.status_code == 200, uncosted.text
+    listed = {row["voucher_id"]: row for row in uncosted.json()["vouchers"]}
+    assert listed[payload["id"]]["document_type"] == "LR"
+    assert listed[payload["id"]]["movements"] == 2
+    assert uncosted.json()["count"] >= 1
+
+
+def _stock_sale(
+    context: PostingContext,
+    accounts: dict[str, int],
+    *,
+    item_id: int,
+    source_movement_id: int | None,
+    is_stock_issue: bool = True,
+) -> SalesInvoiceIn:
+    return SalesInvoiceIn(
+        kind=0,
+        operation_code="ban-hang-hoa",
+        customer_id=CUSTOMER_ID,
+        receivable_account_id=accounts["131"],
+        branch_id=context.branch_id,
+        document_date=SEP_12,
+        posting_date=SEP_12,
+        currency_code="VND",
+        exchange_rate=Decimal(1),
+        salesperson_id=SALESPERSON_ID,
+        invoice_no="0000997",
+        description="bán đích danh (8C-2)",
+        is_stock_issue=is_stock_issue,
+        lines=(
+            SalesInvoiceLineIn(
+                description="Hàng đích danh",
+                item_id=item_id,
+                unit_id=UNIT_PIECE_ID,
+                warehouse_id=MAIN_WAREHOUSE_ID,
+                quantity=Decimal(2),
+                unit_price_fc=Decimal(150_000),
+                amount_fc=Decimal(300_000),
+                vat_rate=Decimal(0),
+                vat_amount_fc=Decimal(0),
+                account_id=accounts["5111"],
+                cogs_account_id=accounts["632"],
+                inventory_account_id=accounts["156"],
+                source_movement_id=source_movement_id,
+            ),
+        ),
+    )
+
+
+def test_sales_line_names_the_specific_receipt_and_the_pending_tab_shows_uncosted_cogs(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    test_password: str,
+    context: PostingContext,
+    accounts: dict[str, int],
+    trade_role: str,
+) -> None:
+    """Đích danh trên dòng bán (ADR-027): nguồn đúng → XK sinh mang nguồn, engine
+    tính ngay giá lần nhập, `cogs_posted` lật; nguồn sai mã hàng → ghi sổ hóa đơn
+    422 `specific_source_mismatch`; không nguồn → chờ giá và hóa đơn vào nhóm
+    "chưa tính giá" của tab việc còn thiếu (FR-STK-008)."""
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    headers = _headers(
+        client,
+        session_factory,
+        dataset_alpha,
+        user_factory,
+        test_password,
+        context,
+        trade_role,
+        "mua_ban_8c2",
+    )
+    with unit_of_work(session_factory, scope) as session:
+        set_system_setting(session, STOCK_NEGATIVE_WARNING_KEY, "none")
+        set_valuation_method(session, context, InventoryValuationMethod.SPECIFIC.value)
+        try:
+            item, other = fresh_item(session, "SAL-SP"), fresh_item(session, "SAL-OTHER")
+            receipt = post_receipt(
+                session,
+                context,
+                accounts,
+                item_id=item,
+                posting_date=SEP_10,
+                quantity=Decimal(5),
+                unit_cost=Decimal(40_000),
+            )
+            other_receipt = post_receipt(
+                session,
+                context,
+                accounts,
+                item_id=other,
+                posting_date=SEP_10,
+                quantity=Decimal(5),
+                unit_cost=Decimal(1),
+            )
+            sales = SalesInvoiceService(session)
+
+            # Không kiêm phiếu xuất kho mà chỉ nguồn → hình thức sai ở sales.
+            with pytest.raises(PostingValidationError) as caught:
+                sales.create(
+                    _stock_sale(
+                        context,
+                        accounts,
+                        item_id=item,
+                        source_movement_id=in_movement(session, receipt).id,
+                        is_stock_issue=False,
+                    ),
+                    user_id=ACTOR_ID,
+                )
+            assert [v.code for v in caught.value.violations] == [SPECIFIC_SOURCE_KIND_CODE]
+
+            # Nguồn là lần nhập của mã hàng KHÁC → module kho từ chối lúc sinh phiếu.
+            wrong = sales.create(
+                _stock_sale(
+                    context,
+                    accounts,
+                    item_id=item,
+                    source_movement_id=in_movement(session, other_receipt).id,
+                ),
+                user_id=ACTOR_ID,
+            )
+            with pytest.raises(PostingValidationError) as caught:
+                sales.post(wrong.id, user_id=ACTOR_ID, acknowledged_warnings=True)
+            assert [v.code for v in caught.value.violations] == [SPECIFIC_SOURCE_MISMATCH_CODE]
+
+            # Không nguồn → ghi sổ được, phiếu xuất chờ giá.
+            waiting = sales.create(
+                _stock_sale(context, accounts, item_id=item, source_movement_id=None),
+                user_id=ACTOR_ID,
+            )
+            sales.post(waiting.id, user_id=ACTOR_ID, acknowledged_warnings=True)
+
+            # Nguồn đúng → phiếu xuất mang nguồn, engine tính giá lần nhập.
+            named = sales.create(
+                _stock_sale(
+                    context,
+                    accounts,
+                    item_id=item,
+                    source_movement_id=in_movement(session, receipt).id,
+                ),
+                user_id=ACTOR_ID,
+            )
+            sales.post(named.id, user_id=ACTOR_ID, acknowledged_warnings=True)
+            run_engine(session, context)
+            issue_id = session.scalar(
+                select(InventoryMovement.voucher_id).where(
+                    InventoryMovement.source_movement_id == in_movement(session, receipt).id
+                )
+            )
+            assert issue_id is not None
+            out = out_movement(session, issue_id)
+            assert out.cost_state == CostState.COSTED
+            assert out.amount == Decimal("80000.00")
+            named_body = session.get(SalesInvoice, named.id)
+            waiting_body = session.get(SalesInvoice, waiting.id)
+            assert named_body is not None and named_body.cogs_posted is True
+            assert waiting_body is not None and waiting_body.cogs_posted is False
+        finally:
+            set_valuation_method(
+                session, context, InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING.value
+            )
+
+    tab = client.get(
+        "/api/v1/sales/pending-issues", params={"as_of": SEP_30.isoformat()}, headers=headers
+    )
+    assert tab.status_code == 200, tab.text
+    groups = {group["code"]: group for group in tab.json()["groups"]}
+    assert groups["chua-tinh-gia"]["next_action"] == "run-costing"
+    listed = {row["voucher_id"] for row in groups["chua-tinh-gia"]["sample"]}
+    assert str(waiting.id) in listed
+    assert str(named.id) not in listed

@@ -1,4 +1,4 @@
-"""Dịch vụ phiếu kho NK/XK/CK (FR-STK-010..017) — cùng khuôn `CashVoucherService`.
+"""Dịch vụ phiếu kho NK/XK/CK/LR/TD (FR-STK-010..017) — cùng khuôn `CashVoucherService`.
 
 Mọi hàm nhận `Session` đang mở, không tự commit; Cất-đồng-thời-ghi-sổ
 (FR-SYS-061) là một transaction thật. Việc riêng của phân hệ kho:
@@ -17,6 +17,11 @@ Mọi hàm nhận `Session` đang mở, không tự commit; Cất-đồng-thời
   sổ — `guards.refuse_when_source_posted` (đăng ký `EDIT_GUARDS` +
   `REFERENCE_GUARDS`); đường đúng là bỏ ghi sổ chứng từ nguồn, hook của nguồn
   gỡ phiếu qua `InventoryPosting.remove_movement`.
+* **Lắp ráp / tháo dỡ** (FR-STK-005/016, lát 8C-2): một phiếu = một dòng thành
+  phẩm (`is_product`) + N dòng linh kiện; chiều movement của từng dòng theo
+  `models.line_issues_stock`; giá vế nhập do engine suy từ vế xuất
+  (`assembly_in_legs.sql` / `disassembly_in_legs.sql`), nên cả phiếu không
+  nhận giá và dòng thành phẩm không định khoản.
 
 Sổ kho (`inventory_movements`) dựng ở `sync_after_post` và gỡ ở
 `clear_after_unpost` — hai hook đăng ký vào `POSTING_DOCUMENT_REGISTRY`, nên
@@ -58,6 +63,8 @@ from ket.kernel.protocols import InventoryMovementKind, InventoryMovementLine
 from ket.modules.inventory.costing.engine import sync_source_flags
 from ket.modules.inventory.lots import lot_id_for
 from ket.modules.inventory.models import (
+    ASSEMBLY_DOCUMENT_TYPE,
+    DISASSEMBLY_DOCUMENT_TYPE,
     ISSUE_DOCUMENT_TYPE,
     RECEIPT_DOCUMENT_TYPE,
     TRANSFER_DOCUMENT_TYPE,
@@ -68,6 +75,7 @@ from ket.modules.inventory.models import (
     InventoryVoucherKind,
     InventoryVoucherLine,
     MovementDirection,
+    line_issues_stock,
 )
 from ket.modules.inventory.movements import lot_key_of, record_movements, remove_movements
 from ket.modules.inventory.posting_mapper import build_posting_request
@@ -83,6 +91,8 @@ DOCUMENT_TYPE_BY_KIND = {
     InventoryVoucherKind.RECEIPT: RECEIPT_DOCUMENT_TYPE,
     InventoryVoucherKind.ISSUE: ISSUE_DOCUMENT_TYPE,
     InventoryVoucherKind.TRANSFER: TRANSFER_DOCUMENT_TYPE,
+    InventoryVoucherKind.ASSEMBLY: ASSEMBLY_DOCUMENT_TYPE,
+    InventoryVoucherKind.DISASSEMBLY: DISASSEMBLY_DOCUMENT_TYPE,
 }
 KIND_BY_MOVEMENT_KIND = {
     InventoryMovementKind.RECEIPT: InventoryVoucherKind.RECEIPT,
@@ -99,8 +109,15 @@ NUMBERING_RULE_BY_KIND = {
     InventoryVoucherKind.TRANSFER: NumberingRule(
         document_type=TRANSFER_DOCUMENT_TYPE, prefix="CK{YY}-", reset_rule=ResetRule.YEARLY
     ),
+    InventoryVoucherKind.ASSEMBLY: NumberingRule(
+        document_type=ASSEMBLY_DOCUMENT_TYPE, prefix="LR{YY}-", reset_rule=ResetRule.YEARLY
+    ),
+    InventoryVoucherKind.DISASSEMBLY: NumberingRule(
+        document_type=DISASSEMBLY_DOCUMENT_TYPE, prefix="TD{YY}-", reset_rule=ResetRule.YEARLY
+    ),
 }
-"""`NK26-00001`/`XK26-00001`/`CK26-00001`, quay về 1 mỗi năm — cùng khuôn PT/PC."""
+"""`NK26-00001`/`XK26-00001`/`CK26-00001`/`LR26-00001`/`TD26-00001`, quay về 1
+mỗi năm — cùng khuôn PT/PC."""
 
 SOURCE_RECEIPT_OPERATION = "nhap-mua-hang"
 SOURCE_ISSUE_OPERATION = "xuat-tra-lai-hang-mua"
@@ -119,6 +136,8 @@ SPECIFIC_SOURCE_MISMATCH_CODE = "inventory.specific_source_mismatch"
 RETURN_SOURCE_MISMATCH_CODE = "inventory.return_source_mismatch"
 RECEIPT_COST_CONFLICTS_SOURCE_CODE = "inventory.receipt_cost_conflicts_source"
 RETURN_SOURCE_AFTER_RECEIPT_CODE = "inventory.return_source_after_receipt"
+ASSEMBLY_COMPONENT_IS_PRODUCT_CODE = "inventory.assembly_component_is_product"
+SOURCE_ON_RECEIPT_SIDE_CODE = "inventory.source_on_receipt_side"
 BODY_MISSING_CODE = "inventory.body_missing"
 
 _USAGE_TABLE_BY_PARTNER_KIND = {
@@ -198,8 +217,12 @@ class InventoryVoucherService:
                     amount_fc=line.amount_fc,
                     debit_account_id=line.debit_account_id,
                     credit_account_id=line.credit_account_id,
+                    # Chiều xuất: lần nhập đích danh dòng bán chỉ (8C-2, ADR-027);
+                    # chiều nhập: lần xuất mà dòng trả lại quay về (8C-1).
                     source_movement_id=(
-                        issue_movements.get(line.cost_from_line_id)
+                        line.source_movement_id
+                        if line.source_movement_id is not None
+                        else issue_movements.get(line.cost_from_line_id)
                         if line.cost_from_line_id is not None
                         else None
                     ),
@@ -464,14 +487,19 @@ class InventoryVoucherService:
         # đơn bán chưa có chỗ chọn lần nhập, engine để chúng chờ giá (ghi ở
         # phase file 8B, đường hoàn thiện thuộc 8C/8G).
         year = fiscal_year_covering(self._session, payload.posting_date)
-        requires_source = (
+        specific_year = (
             requires_cost
             and year is not None
             and year.inventory_valuation_method == InventoryValuationMethod.SPECIFIC
-            and payload.kind != InventoryVoucherKind.RECEIPT
         )
         sources = self._source_movements(payload)
+        product_item_id = next((line.item_id for line in payload.lines if line.is_product), None)
         for index, line in enumerate(payload.lines, start=1):
+            issues = line_issues_stock(payload.kind, is_product=line.is_product)
+            # Đích danh chỉ đòi ở dòng XUẤT (linh kiện lắp ráp, thành phẩm tháo
+            # dỡ); dòng nhập của LR/TD lấy giá từ vế kia, không có "lần nhập
+            # nguồn" để chỉ.
+            requires_source = specific_year and issues
             item = items.get(line.item_id)
             if item is None or item.nature not in INVENTORY_NATURES or item.is_group:
                 violations.append(
@@ -503,7 +531,35 @@ class InventoryVoucherService:
                 violations.append(
                     PostingViolation(
                         ISSUE_COST_NOT_ALLOWED_CODE,
-                        "Phiếu xuất / chuyển kho không nhận giá — giá xuất do engine tính",
+                        "Phiếu xuất / chuyển / lắp ráp / tháo dỡ không nhận giá — giá do engine tính",
+                        line_no=index,
+                    )
+                )
+                continue
+            if (
+                not line.is_product
+                and product_item_id is not None
+                and line.item_id == product_item_id
+            ):
+                violations.append(
+                    PostingViolation(
+                        ASSEMBLY_COMPONENT_IS_PRODUCT_CODE,
+                        "Linh kiện không thể là chính mã hàng thành phẩm của phiếu",
+                        line_no=index,
+                        item_id=line.item_id,
+                    )
+                )
+                continue
+            if (
+                not issues
+                and payload.kind != InventoryVoucherKind.RECEIPT
+                and line.source_movement_id is not None
+            ):
+                # Dòng nhập của LR/TD: giá do vế kia quyết, không có nguồn.
+                violations.append(
+                    PostingViolation(
+                        SOURCE_ON_RECEIPT_SIDE_CODE,
+                        "Dòng nhập của phiếu lắp ráp / tháo dỡ không chỉ lần nhập / lần xuất nguồn",
                         line_no=index,
                     )
                 )
@@ -723,6 +779,8 @@ class InventoryVoucherService:
                         source_line_ids[index - 1] if source_line_ids is not None else None
                     ),
                     source_movement_id=extra.source_movement_id,
+                    is_product=line.is_product,
+                    allocation_ratio=line.allocation_ratio,
                 )
             )
         self._session.flush()

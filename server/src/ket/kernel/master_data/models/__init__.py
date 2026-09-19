@@ -36,6 +36,7 @@ from ket.kernel.master_data.models.excise_tax_table import ExciseTaxTable
 from ket.kernel.master_data.models.expense_item import ExpenseItem
 from ket.kernel.master_data.models.invoice_form import InvoiceForm, InvoiceFormKind
 from ket.kernel.master_data.models.item import Item
+from ket.kernel.master_data.models.item_bom_line import ItemBomLine
 from ket.kernel.master_data.models.item_discount_tier import ItemDiscountTier
 from ket.kernel.master_data.models.item_price_level import ItemPriceLevel
 from ket.kernel.master_data.models.item_unit import ItemUnit
@@ -67,6 +68,7 @@ __all__ = [
     "InvoiceForm",
     "InvoiceFormKind",
     "Item",
+    "ItemBomLine",
     "ItemDiscountTier",
     "ItemPriceLevel",
     "ItemUnit",

@@ -13,7 +13,7 @@ vị quy đổi "thùng = 12 cái" (FR-STK-006), một thành phẩm, một dị
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import date
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -129,6 +129,8 @@ _RULES: tuple[tuple[str, str, str, str | None, str | None, bool, int | None, int
     ("XK", "xuat-tra-lai-hang-mua", "Xuất kho trả lại hàng mua", None, None, True, 1, 3),
     ("XK", "xuat-khac", "Xuất kho khác", None, None, False, None, 9),
     ("CK", "chuyen-kho-noi-bo", "Chuyển kho nội bộ", None, None, False, None, 1),
+    ("LR", "lap-rap", "Lắp ráp theo định mức", None, None, False, None, 1),
+    ("TD", "thao-do", "Tháo dỡ theo định mức", None, None, False, None, 1),
 )
 
 
@@ -543,3 +545,90 @@ def marks_of_branch(session: Session, branch_id: int) -> list[InventoryRecalcMar
         .scalars()
         .all()
     )
+
+
+# ------------------------------------------------------ lát 8C-2: lắp ráp / tháo dỡ
+
+
+def assembly_payload(
+    context: PostingContext,
+    *,
+    kind: int,
+    posting_date: date,
+    product_item_id: int,
+    product_quantity: Decimal,
+    components: Sequence[tuple[int, Decimal, Decimal | None]],
+    accounts: tuple[int, int] | None = None,
+    product_warehouse_id: int = MAIN_WAREHOUSE_ID,
+    warehouse_id: int = MAIN_WAREHOUSE_ID,
+) -> InventoryVoucherIn:
+    """Phiếu lắp ráp (`kind=3`) / tháo dỡ (`kind=4`): một dòng thành phẩm + N
+    dòng linh kiện `(item_id, quantity, allocation_ratio)`; `accounts` = cặp
+    (Nợ, Có) gắn lên MỌI dòng linh kiện (bút toán nằm ở đó, dòng thành phẩm
+    không định khoản)."""
+    is_assembly = kind == InventoryVoucherKind.ASSEMBLY
+    lines = [
+        InventoryVoucherLineIn(
+            item_id=product_item_id,
+            unit_id=UNIT_PIECE_ID,
+            quantity=product_quantity,
+            warehouse_id=product_warehouse_id,
+            is_product=True,
+        )
+    ]
+    for item_id, quantity, ratio in components:
+        lines.append(
+            InventoryVoucherLineIn(
+                item_id=item_id,
+                unit_id=UNIT_PIECE_ID,
+                quantity=quantity,
+                warehouse_id=warehouse_id,
+                allocation_ratio=ratio,
+                debit_account_id=accounts[0] if accounts else None,
+                credit_account_id=accounts[1] if accounts else None,
+            )
+        )
+    return InventoryVoucherIn(
+        kind=kind,
+        operation_code="lap-rap" if is_assembly else "thao-do",
+        warehouse_id=warehouse_id,
+        branch_id=context.branch_id,
+        document_date=posting_date,
+        posting_date=posting_date,
+        currency_code="VND",
+        exchange_rate=Decimal(1),
+        description="lắp ráp test" if is_assembly else "tháo dỡ test",
+        lines=tuple(lines),
+    )
+
+
+def post_assembly(
+    session: Session,
+    context: PostingContext,
+    *,
+    kind: int,
+    posting_date: date,
+    product_item_id: int,
+    product_quantity: Decimal,
+    components: Sequence[tuple[int, Decimal, Decimal | None]],
+    accounts: tuple[int, int] | None = None,
+    product_warehouse_id: int = MAIN_WAREHOUSE_ID,
+    warehouse_id: int = MAIN_WAREHOUSE_ID,
+) -> UUID:
+    service = InventoryVoucherService(session)
+    voucher = service.create(
+        assembly_payload(
+            context,
+            kind=kind,
+            posting_date=posting_date,
+            product_item_id=product_item_id,
+            product_quantity=product_quantity,
+            components=components,
+            accounts=accounts,
+            product_warehouse_id=product_warehouse_id,
+            warehouse_id=warehouse_id,
+        ),
+        user_id=SEED_ACTOR_ID,
+    )
+    service.post(voucher.id, user_id=SEED_ACTOR_ID, acknowledged_warnings=True)
+    return voucher.id

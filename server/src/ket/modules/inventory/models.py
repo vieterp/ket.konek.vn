@@ -74,9 +74,23 @@ tiền, nên precision của `AMOUNT`; scale 6 như tỷ giá (cùng lý do: nó
 RECEIPT_DOCUMENT_TYPE: Final[str] = "NK"
 ISSUE_DOCUMENT_TYPE: Final[str] = "XK"
 TRANSFER_DOCUMENT_TYPE: Final[str] = "CK"
+ASSEMBLY_DOCUMENT_TYPE: Final[str] = "LR"
+DISASSEMBLY_DOCUMENT_TYPE: Final[str] = "TD"
 INVENTORY_DOCUMENT_TYPES: Final[frozenset[str]] = frozenset(
-    {RECEIPT_DOCUMENT_TYPE, ISSUE_DOCUMENT_TYPE, TRANSFER_DOCUMENT_TYPE}
+    {
+        RECEIPT_DOCUMENT_TYPE,
+        ISSUE_DOCUMENT_TYPE,
+        TRANSFER_DOCUMENT_TYPE,
+        ASSEMBLY_DOCUMENT_TYPE,
+        DISASSEMBLY_DOCUMENT_TYPE,
+    }
 )
+
+ALLOCATION_RATIO_PRECISION: Final[int] = 18
+ALLOCATION_RATIO_SCALE: Final[int] = 6
+"""Tỷ lệ phân bổ giá trị khi tháo dỡ (SRS 09 §2.3) — con số tương đối, engine
+chia theo `r_i / Σr` nên đơn vị (phần trăm hay phần) không quan trọng; scale 6
+như tỷ giá vì nó bị NHÂN vào tiền."""
 
 
 class InventoryVoucherKind:
@@ -88,6 +102,30 @@ class InventoryVoucherKind:
     """Phiếu xuất kho (XK, mẫu 02-VT)."""
     TRANSFER = 2
     """Phiếu chuyển kho (CK): một phiếu, hai movement — đi và đến."""
+    ASSEMBLY = 3
+    """Phiếu lắp ráp (LR, FR-STK-016, lát 8C-2): N dòng linh kiện XUẤT theo định
+    mức + một dòng thành phẩm NHẬP (`is_product`); giá thành phẩm = Σ giá trị
+    linh kiện, engine chép mỗi vòng (`assembly_in_legs.sql`)."""
+    DISASSEMBLY = 4
+    """Phiếu tháo dỡ (TD): một dòng thành phẩm XUẤT + N dòng linh kiện NHẬP chia
+    giá trị theo `allocation_ratio` (`disassembly_in_legs.sql`)."""
+
+
+def line_issues_stock(kind: int, *, is_product: bool) -> bool:
+    """Dòng này XUẤT kho hay không, theo loại phiếu và vai dòng.
+
+    NK nhập; XK xuất; CK: mỗi dòng cả hai vế (hàm trả `True` — vế đi là vế mang
+    giá, người gọi cần vế đến thì hỏi riêng); LR: linh kiện xuất, thành phẩm
+    nhập; TD: thành phẩm xuất, linh kiện nhập. Một chỗ cho service (đích danh,
+    giá), guard (tồn âm) và sổ kho (`_legs`) cùng đọc.
+    """
+    if kind == InventoryVoucherKind.RECEIPT:
+        return False
+    if kind in (InventoryVoucherKind.ISSUE, InventoryVoucherKind.TRANSFER):
+        return True
+    if kind == InventoryVoucherKind.ASSEMBLY:
+        return not is_product
+    return is_product
 
 
 class KeeperStatus:
@@ -127,7 +165,7 @@ class InventoryVoucher(DatasetBase, Audited):
     __tablename__ = "inventory_vouchers"
     __table_args__ = (
         CheckConstraint(
-            f"kind BETWEEN {InventoryVoucherKind.RECEIPT} AND {InventoryVoucherKind.TRANSFER}",
+            f"kind BETWEEN {InventoryVoucherKind.RECEIPT} AND {InventoryVoucherKind.DISASSEMBLY}",
             name="kind_known",
         ),
         CheckConstraint("operation_code <> ''", name="operation_code_not_blank"),
@@ -166,6 +204,9 @@ class InventoryVoucher(DatasetBase, Audited):
         ),
         Index("ix_inventory_vouchers_keeper_status", "keeper_status"),
         Index("ix_inventory_vouchers_warehouse", "warehouse_id"),
+        # Hai câu vế lắp ráp / tháo dỡ của engine đi từ phiếu theo `kind` — chi
+        # nhánh không có LR/TD trả rỗng mà không quét sổ kho.
+        Index("ix_inventory_vouchers_kind", "kind"),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -219,7 +260,18 @@ class InventoryVoucherLine(DatasetBase, Audited):
         CheckConstraint(
             "(partner_id IS NULL) = (partner_kind IS NULL)", name="partner_pair_complete"
         ),
+        CheckConstraint(
+            "allocation_ratio IS NULL OR allocation_ratio > 0", name="allocation_ratio_positive"
+        ),
         Index("ix_inventory_voucher_lines_voucher", "voucher_id", "line_no"),
+        # Tối đa MỘT dòng thành phẩm mỗi phiếu lắp ráp/tháo dỡ — service kiểm
+        # "đúng một", DB canh nửa "không hai".
+        Index(
+            "uq_inventory_voucher_lines_product",
+            "voucher_id",
+            unique=True,
+            postgresql_where=text("is_product"),
+        ),
         Index("ix_inventory_voucher_lines_source_line", "source_line_id"),
         Index("ix_inventory_voucher_lines_source_movement", "source_movement_id"),
     )
@@ -289,6 +341,20 @@ class InventoryVoucherLine(DatasetBase, Audited):
     contract_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     expense_item_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     extended_dimensions: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
+
+    is_product: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    """Dòng THÀNH PHẨM của phiếu lắp ráp / tháo dỡ (lát 8C-2) — chiều movement
+    ngược với các dòng linh kiện còn lại của phiếu; không cặp TK (bút toán nằm
+    trên dòng linh kiện) và không giá (engine suy từ vế kia). Luôn `false` trên
+    NK/XK/CK."""
+    allocation_ratio: Mapped[Decimal | None] = mapped_column(
+        Numeric(ALLOCATION_RATIO_PRECISION, ALLOCATION_RATIO_SCALE), nullable=True
+    )
+    """Tỷ lệ phân bổ giá trị thành phẩm cho dòng linh kiện của phiếu THÁO DỠ —
+    chép từ định mức (`item_bom_lines.allocation_ratio`) lúc lập, sửa được;
+    chứng từ giữ con số của mình như `base_quantity` giữ `factor`."""
 
     source_line_id: Mapped[UUID | None] = mapped_column(nullable=True)
     """Dòng chứng từ nguồn (hóa đơn mua/bán) sinh ra dòng này — không FK vì

@@ -39,6 +39,7 @@ class ket.kernel.protocols.InventoryMovementLine
   field lot_no: str | None
   field quantity: Decimal
   field source_line_id: UUID | None
+  field source_movement_id: int | None
   field unit_id: int
   field unit_price_fc: Decimal | None
   field warehouse_id: int

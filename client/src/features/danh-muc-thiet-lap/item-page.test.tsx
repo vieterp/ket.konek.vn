@@ -1,6 +1,7 @@
 /**
  * Màn hình chi tiết mã hàng (7H-2b): thẻ thông tin, thẻ mức giá và thẻ bậc
  * chiết khấu đọc/ghi thẳng ba bảng con của `items`; nhóm không có thẻ giá.
+ * Thẻ định mức NVL (8C-2) chỉ hiện với hàng qua kho.
  */
 
 import { screen, waitFor, within } from '@testing-library/react'
@@ -37,6 +38,8 @@ const PRICE_LEVELS = [
   { id: 2, item_id: 40, unit_id: 8, direction: 1, level: 1, price: '110000.000000', label: null, row_version: 3 },
 ]
 const TIERS = [{ id: 5, item_id: 40, min_quantity: '100.000', discount_percent: '2.50', row_version: 1 }]
+const SCREW = catalogRow({ id: 41, code: 'VIT', name: 'Vít M4', nature: 'goods', base_unit_id: 7 })
+const BOM = [{ id: 3, item_id: 40, component_item_id: 41, quantity: '4.000000', allocation_ratio: '1.000000', row_version: 1 }]
 
 function routes(overrides: FakeRoutes = {}): FakeRoutes {
   return {
@@ -44,6 +47,8 @@ function routes(overrides: FakeRoutes = {}): FakeRoutes {
     '/master/items/40': { status: 200, body: ITEM },
     '/master/items/40/prices': { status: 200, body: { items: PRICE_LEVELS } },
     '/master/items/40/discount-tiers': { status: 200, body: { items: TIERS } },
+    '/master/items/40/bom': { status: 200, body: { items: BOM } },
+    '/master/items': { status: 200, body: { items: [ITEM, SCREW], total: 2 } },
     '/master/items/40/units': { status: 200, body: { items: [{ id: 1, item_id: 40, unit_id: 8, factor: '24', row_version: 1 }] } },
     '/master/units_of_measure': { status: 200, body: { items: [UNIT_CHAI, UNIT_THUNG], total: 2 } },
     '/master/warehouses': { status: 200, body: { items: [], total: 0 } },
@@ -80,6 +85,45 @@ describe('màn hình mã hàng', () => {
     const tiers = screen.getByRole('region', { name: 'Bậc chiết khấu theo số lượng' })
     expect(within(tiers).getByText('100.000')).toBeInTheDocument()
     expect(within(tiers).getByText('2.50')).toBeInTheDocument()
+    // Định mức NVL (8C-2): linh kiện tra tên theo id, số lượng và tỷ lệ.
+    const bom = screen.getByRole('region', { name: 'Định mức nguyên vật liệu' })
+    expect(await within(bom).findByText('VIT — Vít M4')).toBeInTheDocument()
+    expect(within(bom).getByText('4.000000')).toBeInTheDocument()
+  })
+
+  it('thêm dòng định mức: chọn linh kiện, POST đúng thân với tỷ lệ mặc định 1', async () => {
+    const fetchMock = mockServer(
+      routes({
+        '/master/items/40/bom': (init) =>
+          init?.method === 'POST' ? { status: 201, body: { ...BOM[0], id: 4 } } : { status: 200, body: { items: BOM } },
+      }),
+    )
+    const user = userEvent.setup()
+    renderFeatureAt('/danh-muc-thiet-lap/vat-tu-hang-hoa/40')
+
+    await user.click(await screen.findByRole('button', { name: 'Thêm linh kiện' }))
+    await user.type(screen.getByLabelText('Linh kiện *'), 'VIT')
+    await user.keyboard('{Enter}')
+    await user.type(screen.getByLabelText('Số lượng *'), '6')
+    await user.click(screen.getByRole('button', { name: 'Lưu' }))
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        (entry) => String(entry[0]).endsWith('/master/items/40/bom') && (entry[1] as RequestInit).method === 'POST',
+      )
+      expect(call).toBeDefined()
+      expect(parseJsonBody(call?.[1] as RequestInit)).toEqual({ component_item_id: 41, quantity: '6', allocation_ratio: '1' })
+    })
+  })
+
+  it('dịch vụ: không có thẻ định mức (server cũng từ chối)', async () => {
+    const fetchMock = mockServer(
+      routes({ '/master/items/40': { status: 200, body: { ...ITEM, nature: 'service', base_unit_id: null } } }),
+    )
+    renderFeatureAt('/danh-muc-thiet-lap/vat-tu-hang-hoa/40')
+
+    expect(await screen.findByRole('region', { name: 'Mức giá' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Định mức nguyên vật liệu' })).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some((entry) => String(entry[0]).endsWith('/master/items/40/bom'))).toBe(false)
   })
 
   it('thêm mức giá theo đơn vị quy đổi gửi POST kèm khóa chống trùng, unit_id là id đơn vị', async () => {

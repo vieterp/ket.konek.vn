@@ -56,6 +56,7 @@ from ket.modules.inventory.models import (
     InventoryVoucherKind,
     InventoryVoucherLine,
     MovementDirection,
+    line_issues_stock,
 )
 from ket.modules.inventory.schemas import ReorderDayIn
 from ket.posting.contracts import Voucher
@@ -380,17 +381,22 @@ def reorder_day(session: Session, payload: ReorderDayIn) -> tuple[int, date]:
 
 
 def _legs(body: InventoryVoucher, line: InventoryVoucherLine) -> tuple[tuple[int, int], ...]:
-    """`(chiều, kho)` cho từng movement mà một dòng sinh ra."""
-    if body.kind == InventoryVoucherKind.RECEIPT:
-        return ((MovementDirection.IN, line.warehouse_id),)
-    if body.kind == InventoryVoucherKind.ISSUE:
+    """`(chiều, kho)` cho từng movement mà một dòng sinh ra.
+
+    Chuyển kho: hai vế cùng dòng. Lắp ráp / tháo dỡ (8C-2): một vế theo vai dòng
+    (`line_issues_stock`), tại kho của dòng — linh kiện và thành phẩm có thể ở
+    kho khác nhau.
+    """
+    if body.kind == InventoryVoucherKind.TRANSFER:
+        if body.to_warehouse_id is None:  # pragma: no cover - CHECK transfer_has_destination
+            raise RuntimeError("Phiếu chuyển kho thiếu kho đến")
+        return (
+            (MovementDirection.OUT, body.warehouse_id),
+            (MovementDirection.IN, body.to_warehouse_id),
+        )
+    if line_issues_stock(body.kind, is_product=line.is_product):
         return ((MovementDirection.OUT, line.warehouse_id),)
-    if body.to_warehouse_id is None:  # pragma: no cover - CHECK transfer_has_destination
-        raise RuntimeError("Phiếu chuyển kho thiếu kho đến")
-    return (
-        (MovementDirection.OUT, body.warehouse_id),
-        (MovementDirection.IN, body.to_warehouse_id),
-    )
+    return ((MovementDirection.IN, line.warehouse_id),)
 
 
 def _movement_for(
@@ -405,8 +411,10 @@ def _movement_for(
     amount: Decimal | None = None
     cost_state = CostState.PENDING
     # Chuyển kho lấy giá từ lớp xuất (engine 8B) kể cả khi dòng có gõ giá —
-    # giá gõ trên phiếu chuyển không có nghĩa nghiệp vụ.
-    if line.unit_cost_fc is not None and body.kind != InventoryVoucherKind.TRANSFER:
+    # giá gõ trên phiếu chuyển không có nghĩa nghiệp vụ. Vế nhập của lắp ráp /
+    # tháo dỡ cũng vậy (service đã từ chối giá ở mọi kind ≠ NK; ở đây canh lần
+    # hai vì movement là bảng sự thật).
+    if line.unit_cost_fc is not None and body.kind == InventoryVoucherKind.RECEIPT:
         unit_cost = convert_currency(line.unit_cost_fc, voucher.exchange_rate, UNIT_COST_SCALE)
         amount = convert_currency(
             line.amount_fc if line.amount_fc is not None else Decimal(0),

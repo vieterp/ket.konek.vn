@@ -1,4 +1,4 @@
-"""Hình dạng request/response của hai bảng con vật tư hàng hóa (FR-SYS-041/046)."""
+"""Hình dạng request/response của các bảng con vật tư hàng hóa (FR-SYS-041/044/046)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,10 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ket.kernel.master_data.base import CODE_MAX_LENGTH, NAME_MAX_LENGTH
+from ket.kernel.master_data.models.item_bom_line import (
+    ALLOCATION_RATIO_PRECISION,
+    ALLOCATION_RATIO_SCALE,
+)
 from ket.kernel.master_data.models.item_discount_tier import (
     DISCOUNT_PERCENT_PRECISION,
     DISCOUNT_PERCENT_SCALE,
@@ -231,3 +235,61 @@ class ItemDiscountTierUpdateRequest(ItemDiscountTierCreateRequest):
     """Sửa một bậc — gửi **trọn** giá trị mới, có kiểm phiên bản."""
 
     row_version: int = Field(ge=1)
+
+
+class ItemBomLineResponse(BaseModel):
+    """Một dòng định mức NVL của mã hàng (FR-SYS-044)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    item_id: int
+    component_item_id: int
+    quantity: Decimal
+    allocation_ratio: Decimal
+    row_version: int
+
+
+class ItemBomLineListResponse(BaseModel):
+    """Toàn bộ định mức của một mã hàng — không phân trang, xem router."""
+
+    items: list[ItemBomLineResponse]
+
+
+class ItemBomLineCreateRequest(BaseModel):
+    """Thêm một linh kiện: số lượng theo **đơn vị chính** của linh kiện cho
+    **một** đơn vị chính thành phẩm."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    component_item_id: int
+    quantity: Decimal = MinQuantityField
+    allocation_ratio: Decimal = Field(
+        default=Decimal(1),
+        gt=0,
+        max_digits=ALLOCATION_RATIO_PRECISION,
+        decimal_places=ALLOCATION_RATIO_SCALE,
+    )
+
+
+class ItemBomLineUpdateRequest(ItemBomLineCreateRequest):
+    """Sửa một dòng — gửi **trọn** giá trị mới, có kiểm phiên bản."""
+
+    row_version: int = Field(ge=1)
+
+
+class ItemBomExplodedLine(BaseModel):
+    """Một dòng linh kiện gợi ý cho phiếu lắp ráp / tháo dỡ."""
+
+    component_item_id: int
+    unit_id: int
+    quantity: Decimal
+    allocation_ratio: Decimal
+
+
+class ItemBomExplodeResponse(BaseModel):
+    """Định mức nổ cho `quantity` đơn vị chính thành phẩm — một cấp."""
+
+    item_id: int
+    quantity: Decimal
+    lines: list[ItemBomExplodedLine]
