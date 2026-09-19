@@ -19,7 +19,8 @@ ký hóa (xem docstring `engine/models.py`).
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from collections.abc import Sequence
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -216,64 +217,113 @@ class PostingService:
         **không** máy trạng thái, **không** hook, **không** guard — guard là câu
         hỏi cho người ghi sổ, mà một lượt ghi lại giá vốn không có ai để hỏi.
         `posted_at`/`posted_by` giữ nguyên: chứng từ đã ghi sổ lúc ấy, bởi người
-        ấy; lượt này chỉ đổi số suy ra.
+        ấy; lượt này chỉ đổi số suy ra. Một chứng từ = `repost_many` một phần tử.
         """
-        voucher = self._require_voucher(request.voucher_id)
-        if voucher.status != VoucherStatus.DA_GHI_SO:
-            raise PostingValidationError(
-                "Chỉ chứng từ đang ghi sổ mới ghi lại dòng phát sinh được",
-                violations=[
-                    PostingViolation(
-                        REPOST_NOT_POSTED_CODE,
-                        "Ghi sổ chứng từ trước rồi mới tính lại giá vốn",
-                        voucher_id=str(voucher.id),
-                    )
-                ],
-            )
-        period, year = self._share_lock_period(voucher.period_id)
-        if period.locked_at is not None or year.is_closed:
-            raise PostingValidationError(
-                "Kỳ đã khóa sổ — không ghi lại dòng phát sinh được, phải mở lại kỳ trước",
-                violations=[
-                    PostingViolation(
-                        PERIOD_LOCKED_CODE, "Kỳ kế toán đã khóa sổ", period_id=period.id
-                    )
-                ],
-            )
+        (voucher,) = self.repost_many([request], user_id=user_id)
+        return voucher
+
+    def repost_many(self, requests: Sequence[PostingRequest], *, user_id: int) -> list[Voucher]:
+        """`repost` cho một LÔ chứng từ — cùng bộ kiểm từng chứng từ, nhưng đọc
+        chứng từ/kỳ/TK/gói một lượt, một câu DELETE, một câu INSERT hàng loạt,
+        dấu bẩn số dư một dòng mỗi `(sổ, kỳ)` (spike 8B: 10.000 phiếu xuất ghi
+        lại từng cái là ~14 câu SQL/chứng từ, 310 s trên CI — cả lượt tính giá
+        chỉ còn phần này là theo chứng từ). Thứ tự trả về theo `requests`; một
+        chứng từ không đủ điều kiện làm cả lô dừng với vi phạm của nó (cùng
+        transaction, không có "nửa lô đã ghi")."""
+        if not requests:
+            return []
+        ids = [request.voucher_id for request in requests]
+        by_id = {
+            voucher.id: voucher
+            for voucher in self._session.execute(
+                select(Voucher).where(Voucher.id.in_(ids))
+            ).scalars()
+        }
+        vouchers: list[Voucher] = []
+        for voucher_id in ids:
+            voucher = by_id.get(voucher_id)
+            if voucher is None:
+                raise VoucherNotFoundError("Không tìm thấy chứng từ", voucher_id=str(voucher_id))
+            if voucher.status != VoucherStatus.DA_GHI_SO:
+                raise PostingValidationError(
+                    "Chỉ chứng từ đang ghi sổ mới ghi lại dòng phát sinh được",
+                    violations=[
+                        PostingViolation(
+                            REPOST_NOT_POSTED_CODE,
+                            "Ghi sổ chứng từ trước rồi mới tính lại giá vốn",
+                            voucher_id=str(voucher.id),
+                        )
+                    ],
+                )
+            vouchers.append(voucher)
+
+        years: dict[int, FiscalYear] = {}
+        for period_id in sorted({voucher.period_id for voucher in vouchers}):
+            period, year = self._share_lock_period(period_id)
+            if period.locked_at is not None or year.is_closed:
+                raise PostingValidationError(
+                    "Kỳ đã khóa sổ — không ghi lại dòng phát sinh được, phải mở lại kỳ trước",
+                    violations=[
+                        PostingViolation(
+                            PERIOD_LOCKED_CODE, "Kỳ kế toán đã khóa sổ", period_id=period.id
+                        )
+                    ],
+                )
+            years[period_id] = year
+
         scale = self._money_scale(user_id)
-        lines = _prepare_lines(request, scale=scale)
-        accounts = accounts_by_id(self._session, [line.source.account_id for line in lines])
-        package = resolve_package(
-            self._session, scheme=year.accounting_scheme, on_date=voucher.posting_date
+        prepared = [_prepare_lines(request, scale=scale) for request in requests]
+        accounts = accounts_by_id(
+            self._session,
+            [line.source.account_id for lines in prepared for line in lines],
         )
-        violations = run_validators(
-            self._session, lines=lines, accounts=accounts, active_package_id=package.id
-        )
-        if violations:
-            raise PostingValidationError(
-                "Dòng phát sinh ghi lại chưa đủ điều kiện", violations=violations
+        packages: dict[tuple[str, date], int] = {}
+        for voucher, lines in zip(vouchers, prepared, strict=True):
+            key = (years[voucher.period_id].accounting_scheme, voucher.posting_date)
+            if key not in packages:
+                packages[key] = resolve_package(self._session, scheme=key[0], on_date=key[1]).id
+            violations = run_validators(
+                self._session, lines=lines, accounts=accounts, active_package_id=packages[key]
             )
+            if violations:
+                raise PostingValidationError(
+                    f"Dòng phát sinh ghi lại của {voucher.voucher_no} chưa đủ điều kiện",
+                    violations=violations,
+                )
 
         old_ledgers = set(
             self._session.execute(
-                select(GlPosting.ledger).where(GlPosting.voucher_id == voucher.id).distinct()
-            )
-            .scalars()
-            .all()
+                select(GlPosting.voucher_id, GlPosting.ledger)
+                .where(GlPosting.voucher_id.in_(ids))
+                .distinct()
+            ).all()
         )
-        self._session.execute(delete(GlPosting).where(GlPosting.voucher_id == voucher.id))
-        self._insert_postings(voucher, lines)
+        self._session.execute(delete(GlPosting).where(GlPosting.voucher_id.in_(ids)))
+        rows: list[dict[str, Any]] = []
+        flat_lines: list[PreparedLine] = []
+        for voucher, lines in zip(vouchers, prepared, strict=True):
+            rows.extend(_posting_rows(voucher, lines))
+            flat_lines.extend(lines)
+        self._insert_rows(rows, flat_lines)
         self._session.flush()
-        # Sổ cũ ∪ sổ mới: một sổ chỉ có dòng cũ (vừa bị xóa) cũng bẩn.
-        for ledger in sorted(old_ledgers | {line.ledger for line in lines}):
+
+        # Sổ cũ ∪ sổ mới, một dấu mỗi `(sổ, chi nhánh, kỳ)`: một sổ chỉ có dòng
+        # cũ (vừa bị xóa) cũng bẩn.
+        dirty: set[tuple[int, int, int]] = set()
+        for voucher, lines in zip(vouchers, prepared, strict=True):
+            ledgers = {line.ledger for line in lines} | {
+                ledger for (voucher_id, ledger) in old_ledgers if voucher_id == voucher.id
+            }
+            dirty.update((ledger, voucher.branch_id, voucher.period_id) for ledger in ledgers)
+        for ledger, branch_id, period_id in sorted(dirty):
             mark_dirty(
                 self._session,
                 ledger=ledger,
-                branch_id=voucher.branch_id,
-                from_period_id=voucher.period_id,
-                reason=f"repost {voucher.voucher_no}",
+                branch_id=branch_id,
+                from_period_id=period_id,
+                reason=f"repost {len(vouchers)} voucher(s)",
             )
-        return voucher
+        return vouchers
 
     def _require_voucher(self, voucher_id: UUID) -> Voucher:
         voucher = self._session.get(Voucher, voucher_id)
@@ -301,52 +351,19 @@ class PostingService:
         return scale
 
     def _insert_postings(self, voucher: Voucher, lines: list[PreparedLine]) -> None:
-        """INSERT hàng loạt — một câu cho dòng sổ, một câu cho chiều mở rộng.
+        """INSERT hàng loạt cho một chứng từ — xem `_insert_rows`."""
+        self._insert_rows(_posting_rows(voucher, lines), lines)
+
+    def _insert_rows(self, rows: list[dict[str, Any]], lines: list[PreparedLine]) -> None:
+        """INSERT hàng loạt — một câu cho dòng sổ, một câu cho chiều mở rộng;
+        `rows` và `lines` cùng thứ tự (một dòng sổ ↔ một `PreparedLine`).
 
         `RETURNING id` giữ đúng thứ tự dòng đưa vào (SQLAlchemy insertmanyvalues
         bảo đảm thứ tự khi có returning), nên ghép ngược `id` cho bảng chiều mở
-        rộng không cần truy vấn lại.
+        rộng không cần truy vấn lại — và chỉ đòi `RETURNING` khi có dòng nào
+        mang chiều mở rộng: câu INSERT nhiều dòng có RETURNING là câu psycopg
+        không cache được, phần đắt nhất của lượt ghi lại giá vốn hàng loạt.
         """
-        rows: list[dict[str, Any]] = []
-        for line in lines:
-            dims = line.source.dimensions
-            rows.append(
-                {
-                    "voucher_id": voucher.id,
-                    "line_no": line.line_no,
-                    "source_line_id": line.source.source_line_id,
-                    "ledger": line.ledger,
-                    "branch_id": voucher.branch_id,
-                    "posting_date": voucher.posting_date,
-                    "period_id": voucher.period_id,
-                    # Sao chép từ header (LD-17) — cùng nhóm denormalize với ba
-                    # cột ngay trên. Đây là đường ghi DUY NHẤT vào `gl_postings`
-                    # (luật phụ thuộc #3) nên hai bên không thể lệch nhau.
-                    "entry_kind": voucher.entry_kind,
-                    "account_id": line.source.account_id,
-                    "corresponding_account_id": line.source.corresponding_account_id,
-                    "currency_code": line.source.currency,
-                    "exchange_rate": line.source.rate,
-                    "debit_fc": line.source.debit_fc,
-                    "credit_fc": line.source.credit_fc,
-                    "debit": line.debit,
-                    "credit": line.credit,
-                    "partner_id": dims.partner_id,
-                    "partner_kind": (
-                        dims.partner_kind.value if dims.partner_kind is not None else None
-                    ),
-                    "cost_object_id": dims.cost_object_id,
-                    "project_id": dims.project_id,
-                    "order_id": dims.order_id,
-                    "contract_id": dims.contract_id,
-                    "expense_item_id": dims.expense_item_id,
-                    "item_id": dims.item_id,
-                    "warehouse_id": dims.warehouse_id,
-                    "bank_account_id": dims.bank_account_id,
-                    "description": line.source.description,
-                }
-            )
-
         # Chứng từ KHÔNG có dòng GL là hợp lệ từ lát 8A: phiếu xuất kho ghi sổ
         # trước khi có giá vốn (engine tính giá 8B repost sau), phiếu nhập từ hóa
         # đơn mua (bút toán đã ở hóa đơn), chuyển kho nội bộ. `executemany` với
@@ -354,10 +371,12 @@ class PostingService:
         # (mọi cột NULL/0) và đổ ở RLS/NOT NULL, nên phải rẽ nhánh tường minh.
         if not rows:
             return
+        if not any(line.source.dimensions.extended for line in lines):
+            self._session.execute(insert(GlPosting), rows)
+            return
         inserted_ids = (
             self._session.execute(insert(GlPosting).returning(GlPosting.id), rows).scalars().all()
         )
-
         dimension_rows: list[dict[str, Any]] = []
         for posting_id, line in zip(inserted_ids, lines, strict=True):
             for value in line.source.dimensions.extended:
@@ -370,6 +389,49 @@ class PostingService:
                 )
         if dimension_rows:
             self._session.execute(insert(PostingDimensionValue), dimension_rows)
+
+
+def _posting_rows(voucher: Voucher, lines: list[PreparedLine]) -> list[dict[str, Any]]:
+    """Dòng `gl_postings` của một chứng từ — sao chép header (LD-17) cùng nhóm
+    denormalize; đây là đường ghi DUY NHẤT vào bảng (luật phụ thuộc #3) nên hai
+    bên không thể lệch nhau."""
+    rows: list[dict[str, Any]] = []
+    for line in lines:
+        dims = line.source.dimensions
+        rows.append(
+            {
+                "voucher_id": voucher.id,
+                "line_no": line.line_no,
+                "source_line_id": line.source.source_line_id,
+                "ledger": line.ledger,
+                "branch_id": voucher.branch_id,
+                "posting_date": voucher.posting_date,
+                "period_id": voucher.period_id,
+                "entry_kind": voucher.entry_kind,
+                "account_id": line.source.account_id,
+                "corresponding_account_id": line.source.corresponding_account_id,
+                "currency_code": line.source.currency,
+                "exchange_rate": line.source.rate,
+                "debit_fc": line.source.debit_fc,
+                "credit_fc": line.source.credit_fc,
+                "debit": line.debit,
+                "credit": line.credit,
+                "partner_id": dims.partner_id,
+                "partner_kind": (
+                    dims.partner_kind.value if dims.partner_kind is not None else None
+                ),
+                "cost_object_id": dims.cost_object_id,
+                "project_id": dims.project_id,
+                "order_id": dims.order_id,
+                "contract_id": dims.contract_id,
+                "expense_item_id": dims.expense_item_id,
+                "item_id": dims.item_id,
+                "warehouse_id": dims.warehouse_id,
+                "bank_account_id": dims.bank_account_id,
+                "description": line.source.description,
+            }
+        )
+    return rows
 
 
 def _prepare_lines(request: PostingRequest, *, scale: int) -> list[PreparedLine]:

@@ -210,6 +210,7 @@ class ket.posting.contracts.PostingRequest
 class ket.posting.contracts.PostingService
   post(self, request: 'PostingRequest', *, user_id: 'int', acknowledged_warnings: 'bool' = False) -> 'Voucher'
   repost(self, request: 'PostingRequest', *, user_id: 'int') -> 'Voucher'
+  repost_many(self, requests: 'Sequence[PostingRequest]', *, user_id: 'int') -> 'list[Voucher]'
   unpost(self, voucher_id: 'UUID', *, user_id: 'int') -> 'Voucher'
 class ket.posting.contracts.REFERENCE_GUARDS: instance of
   check(self, session: 'Session', voucher_id: 'UUID') -> 'None'

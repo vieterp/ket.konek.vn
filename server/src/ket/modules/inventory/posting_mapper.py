@@ -30,6 +30,8 @@ theo dõi là vô hại còn thiếu thì validator chặn.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -53,44 +55,78 @@ from ket.posting.contracts import (
     Voucher,
 )
 
-__all__ = ["build_posting_request", "line_dimensions"]
+__all__ = ["build_posting_request", "build_posting_requests", "line_dimensions"]
 
 
 def build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest:
     """Callable đăng ký vào `POSTING_DOCUMENT_REGISTRY` cho cả NK/XK/CK."""
-    voucher = session.get(Voucher, voucher_id)
-    body = session.get(InventoryVoucher, voucher_id)
-    if voucher is None or body is None:  # pragma: no cover - FK một-một bảo đảm
-        raise RuntimeError(f"Phiếu kho {voucher_id} thiếu header hoặc thân")
-    lines = (
-        session.execute(
-            select(InventoryVoucherLine)
-            .where(InventoryVoucherLine.voucher_id == voucher_id)
-            .order_by(InventoryVoucherLine.line_no)
-        )
-        .scalars()
-        .all()
-    )
-    costed_amounts = _costed_out_amounts(session, voucher_id)
-    year = fiscal_year_covering(session, voucher.posting_date)
-    if year is None:  # pragma: no cover - chứng từ đã có kỳ thì có năm
-        raise RuntimeError(f"Ngày ghi sổ {voucher.posting_date} không thuộc năm tài chính nào")
-    posting_lines: list[PostingLine] = []
-    for line in lines:
-        posting_lines.extend(
-            _pair_of(voucher, line, costed_amounts.get(line.id), cost_currency=year.base_currency)
-        )
-    return PostingRequest(
-        voucher_id=voucher_id, financial_lines=tuple(posting_lines), management_lines=None
-    )
+    return build_posting_requests(session, [voucher_id])[voucher_id]
 
 
-def _costed_out_amounts(session: Session, voucher_id: UUID) -> dict[UUID, Decimal]:
+def build_posting_requests(
+    session: Session, voucher_ids: Sequence[UUID]
+) -> dict[UUID, PostingRequest]:
+    """Cùng mapper cho một LÔ phiếu — bốn câu đọc cho cả lô thay vì bốn câu
+    mỗi phiếu (engine tính giá ghi lại giá vốn hàng nghìn phiếu một lượt)."""
+    if not voucher_ids:
+        return {}
+    ids = list(voucher_ids)
+    vouchers = {
+        voucher.id: voucher
+        for voucher in session.execute(select(Voucher).where(Voucher.id.in_(ids))).scalars()
+    }
+    bodies = {
+        body.id: body
+        for body in session.execute(
+            select(InventoryVoucher).where(InventoryVoucher.id.in_(ids))
+        ).scalars()
+    }
+    lines_by_voucher: dict[UUID, list[InventoryVoucherLine]] = {
+        voucher_id: [] for voucher_id in ids
+    }
+    for line in session.execute(
+        select(InventoryVoucherLine)
+        .where(InventoryVoucherLine.voucher_id.in_(ids))
+        .order_by(InventoryVoucherLine.voucher_id, InventoryVoucherLine.line_no)
+    ).scalars():
+        lines_by_voucher[line.voucher_id].append(line)
+    costed_amounts = _costed_out_amounts(session, ids)
+    currencies: dict[date, str] = {}
+    requests: dict[UUID, PostingRequest] = {}
+    for voucher_id in ids:
+        voucher = vouchers.get(voucher_id)
+        body = bodies.get(voucher_id)
+        if voucher is None or body is None:  # pragma: no cover - FK một-một bảo đảm
+            raise RuntimeError(f"Phiếu kho {voucher_id} thiếu header hoặc thân")
+        if voucher.posting_date not in currencies:
+            year = fiscal_year_covering(session, voucher.posting_date)
+            if year is None:  # pragma: no cover - chứng từ đã có kỳ thì có năm
+                raise RuntimeError(
+                    f"Ngày ghi sổ {voucher.posting_date} không thuộc năm tài chính nào"
+                )
+            currencies[voucher.posting_date] = year.base_currency
+        posting_lines: list[PostingLine] = []
+        for line in lines_by_voucher[voucher_id]:
+            posting_lines.extend(
+                _pair_of(
+                    voucher,
+                    line,
+                    costed_amounts.get(line.id),
+                    cost_currency=currencies[voucher.posting_date],
+                )
+            )
+        requests[voucher_id] = PostingRequest(
+            voucher_id=voucher_id, financial_lines=tuple(posting_lines), management_lines=None
+        )
+    return requests
+
+
+def _costed_out_amounts(session: Session, voucher_ids: Sequence[UUID]) -> dict[UUID, Decimal]:
     """`amount` VND của movement **xuất** đã tính giá, theo dòng phiếu. Vế đi
     của phiếu chuyển là vế mang giá vốn (vế đến nhận cùng giá, không bút toán)."""
     rows = session.execute(
         select(InventoryMovement.line_id, InventoryMovement.amount).where(
-            InventoryMovement.voucher_id == voucher_id,
+            InventoryMovement.voucher_id.in_(list(voucher_ids)),
             InventoryMovement.direction == MovementDirection.OUT,
             InventoryMovement.cost_state == CostState.COSTED,
         )

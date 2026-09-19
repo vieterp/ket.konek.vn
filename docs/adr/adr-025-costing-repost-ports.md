@@ -42,7 +42,12 @@ tiên của `ket.posting.contracts` và lần thứ tư của `kernel.protocols`
    cho sổ cũ ∪ sổ mới. **Không** máy trạng thái, **không** hook, **không** guard
    (guard là câu hỏi cho người ghi sổ; một lượt ghi lại giá vốn không có ai để
    hỏi), `posted_at`/`posted_by` giữ nguyên. Chứng từ chưa ghi sổ → từ chối
-   (`posting.repost_requires_posted`).
+   (`posting.repost_requires_posted`). Dạng lô **`repost_many(requests, *,
+   user_id) -> list[Voucher]`** cùng ngữ nghĩa từng chứng từ nhưng đọc chứng
+   từ/kỳ/TK/gói một lượt, một câu DELETE, một câu INSERT, một dấu bẩn mỗi `(sổ,
+   chi nhánh, kỳ)`; `repost` là `repost_many` một phần tử. Lý do có ngay trong
+   lát: 10.000 phiếu xuất ghi lại từng cái là ~14 câu SQL/chứng từ — 155 s máy
+   dev, **310 s trên CI** (trượt mốc 5 phút của spike); theo lô còn một phần nhỏ.
 2. **Mapper là một**: `inventory.posting_mapper.build_posting_request` dùng cho
    cả lượt `post` đầu lẫn mọi lượt `repost` — dòng có cặp TK lấy số tiền từ
    `amount_fc` (nhập) hoặc từ movement **đã tính giá** (xuất, vế đi chuyển kho),
@@ -67,9 +72,10 @@ biết bảng của module bán. `repost` cũng là đường cho mọi bút to�
 sổ về sau (khấu hao chạy lại 8E, phân bổ 9).
 
 **Mất:** `repost` là DELETE + INSERT trọn chứng từ, kể cả khi chỉ một dòng đổi —
-đơn giản và đúng bất biến, nhưng với hàng chục nghìn chứng từ mỗi lượt tính lại là
-phần tốn nhất của job (spike 8B đo). Nếu trượt mốc, bước tiếp là `repost_many`
-set-based trong cùng ADR, không phải mở đường UPDATE.
+đơn giản và đúng bất biến; với hàng chục nghìn chứng từ mỗi lượt tính lại vẫn là
+phần tốn nhất của job, nên có `repost_many` ngay từ đầu. Vẫn kiểm từng chứng từ
+bằng Python (không phải INSERT … SELECT bỏ validator): bộ kiểm là thứ giữ cho đường
+này đúng bất biến, và nó đủ nhanh khi TK/gói chỉ đọc một lượt.
 
 **Rủi ro còn lại:** ảnh chụp chỉ canh chữ ký — `repost` bỏ hook có chủ đích, và
 ai gọi nó cho một loại chứng từ có hook `after_post` mang tác dụng phụ (sổ phụ

@@ -53,7 +53,7 @@ from ket.modules.inventory.models import (
     MovementDirection,
     StockLayer,
 )
-from ket.modules.inventory.posting_mapper import build_posting_request
+from ket.modules.inventory.posting_mapper import build_posting_requests
 from ket.posting.contracts import PostingService, Voucher
 
 MAX_PASSES: Final[int] = 20
@@ -357,6 +357,10 @@ def _execute_returning(session: Session, sql: str, params: dict[str, Any]) -> li
     return list(result.all()) if isinstance(result, CursorResult) and result.returns_rows else []
 
 
+REPOST_BATCH: Final[int] = 500
+"""Số chứng từ mỗi lô `repost_many` — cũng là ranh giới hủy và báo tiến độ."""
+
+
 def _repost(
     session: Session,
     voucher_ids: set[UUID],
@@ -365,7 +369,9 @@ def _repost(
     report: Progress,
     cancelled: CancelCheck,
 ) -> int:
-    """Ghi lại bút toán giá vốn cho chứng từ XK/CK có dòng đổi giá."""
+    """Ghi lại bút toán giá vốn cho chứng từ XK/CK có dòng đổi giá — theo LÔ:
+    mapper đọc cả lô, `PostingService.repost_many` kiểm từng chứng từ nhưng ghi
+    một lượt; cờ `cogs_posted` của nguồn đồng bộ theo một câu đếm dòng chờ."""
     if not voucher_ids:
         return 0
     vouchers = (
@@ -382,33 +388,44 @@ def _repost(
     )
     posting = PostingService(session)
     total = len(vouchers)
-    for done, voucher in enumerate(vouchers, start=1):
+    done = 0
+    for start in range(0, total, REPOST_BATCH):
         if cancelled():
-            raise CostingCancelled(f"Người dùng hủy sau {done - 1}/{total} chứng từ ghi lại")
-        posting.repost(build_posting_request(session, voucher.id), user_id=user_id)
-        if voucher.source_document_id is not None:
-            # Cả hai chiều (review 8B M-4): gỡ lớp nhập duy nhất kéo dòng xuất về
-            # chờ giá và lượt repost vừa xóa bút toán 632 — cờ phải hạ theo.
-            posted = not _has_pending_out(session, voucher.id)
-            for source in PROVIDERS.inventory_line_sources():
-                source.sync_cost_posted(session, voucher.source_document_id, posted=posted)
-        if done % 100 == 0 or done == total:
-            report(100 * done // max(total, 1), f"Ghi lại giá vốn {done}/{total} chứng từ")
+            raise CostingCancelled(f"Người dùng hủy sau {done}/{total} chứng từ ghi lại")
+        batch = vouchers[start : start + REPOST_BATCH]
+        ids = [voucher.id for voucher in batch]
+        requests = build_posting_requests(session, ids)
+        posting.repost_many([requests[voucher_id] for voucher_id in ids], user_id=user_id)
+        _sync_source_flags(session, batch)
+        done += len(batch)
+        report(100 * done // total, f"Ghi lại giá vốn {done}/{total} chứng từ")
     return total
 
 
-def _has_pending_out(session: Session, voucher_id: UUID) -> bool:
-    return bool(
-        session.scalar(
-            select(func.count())
-            .select_from(InventoryMovement)
+def _sync_source_flags(session: Session, vouchers: Sequence[Voucher]) -> None:
+    """Cả hai chiều (review 8B M-4): gỡ lớp nhập duy nhất kéo dòng xuất về chờ
+    giá và lượt repost vừa xóa bút toán 632 — cờ phải hạ theo."""
+    generated = {
+        voucher.id: voucher.source_document_id
+        for voucher in vouchers
+        if voucher.source_document_id is not None
+    }
+    if not generated:
+        return
+    pending = set(
+        session.execute(
+            select(InventoryMovement.voucher_id)
             .where(
-                InventoryMovement.voucher_id == voucher_id,
+                InventoryMovement.voucher_id.in_(list(generated)),
                 InventoryMovement.direction == MovementDirection.OUT,
                 InventoryMovement.cost_state != CostState.COSTED,
             )
-        )
+            .distinct()
+        ).scalars()
     )
+    for voucher_id, source_id in generated.items():
+        for source in PROVIDERS.inventory_line_sources():
+            source.sync_cost_posted(session, source_id, posted=voucher_id not in pending)
 
 
 def _money_scale(session: Session, user_id: int) -> int:
