@@ -262,7 +262,7 @@ Kết nối không mật khẩu (`trust`/`peer` cục bộ). Ghi đè bằng
 
 ---
 
-## 5. Bộ test (**server: 882 không-DB + 1.327 DB (2.209 total); client: 268**) 
+## 5. Bộ test (**server: 983 không-DB + 1.643 DB (2.626 total); client: 379** — cập nhật 8A) 
 
 | Tệp | Chứng minh điều gì |
 | --- | --- |
