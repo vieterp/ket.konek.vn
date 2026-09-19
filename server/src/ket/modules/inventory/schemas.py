@@ -71,6 +71,10 @@ class InventoryVoucherLineIn(BaseModel):
     debit_account_id: int | None = None
     credit_account_id: int | None = None
 
+    source_movement_id: int | None = Field(default=None, ge=1)
+    """Đích danh: id movement **nhập** mà dòng xuất này lấy hàng — bắt buộc khi
+    năm tài chính tính giá `specific`, bị từ chối ở phiếu nhập."""
+
     partner_id: int | None = None
     partner_kind: PartnerKind | None = None
     cost_object_id: int | None = None
@@ -166,6 +170,7 @@ class InventoryVoucherLineOut(BaseModel):
     expense_item_id: int | None
     extended_dimensions: dict[str, int] | None
     source_line_id: UUID | None
+    source_movement_id: int | None = None
     description: str | None
 
 
@@ -247,3 +252,38 @@ class StockRow(BaseModel):
 class StockResponse(BaseModel):
     as_of: date
     items: tuple[StockRow, ...]
+
+
+class AffectedVoucher(BaseModel):
+    """Một chứng từ sẽ bị tính lại giá xuất (FR-STK-003) — đủ để client mở nó."""
+
+    voucher_id: UUID
+    voucher_no: str
+    document_type: str
+    posting_date: date
+    movements: int
+    """Số dòng sổ kho của chứng từ nằm trong horizon."""
+
+
+class LockedPeriodTouched(BaseModel):
+    """Kỳ đã khóa mà horizon tính lại chạm tới (RT-11) — job sẽ từ chối."""
+
+    period_id: int
+    period_no: int
+    movements: int
+
+
+class CostingAffectedPreview(BaseModel):
+    """Xem trước trước khi bấm "Tính giá xuất kho" (FR-STK-003, RT-11)."""
+
+    branch_id: int
+    valuation_method: str | None
+    """Phương pháp của năm chứa `earliest_from_date`; `None` khi không có gì để tính."""
+    earliest_from_date: date | None
+    keys: int
+    movements: int
+    voucher_count: int
+    vouchers: tuple[AffectedVoucher, ...]
+    """Tối đa `AFFECTED_VOUCHER_LIMIT` chứng từ sớm nhất; `voucher_count` là tổng thật."""
+    locked_periods: tuple[LockedPeriodTouched, ...]
+    """Rỗng là điều kiện để job chạy; có dòng = phải mở khóa kỳ đó trước."""

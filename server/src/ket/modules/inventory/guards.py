@@ -38,6 +38,7 @@ from ket.kernel.config.catalog import (
 from ket.kernel.config.settings_service import value_of
 from ket.kernel.errors import (
     DefaultAccountNotConfiguredError,
+    InventoryLayerReferencedError,
     InventoryVoucherDerivedError,
     PostingViolation,
 )
@@ -47,6 +48,7 @@ from ket.kernel.periods.service import fiscal_year_covering
 from ket.kernel.protocols import PROVIDERS, InventoryMovementKind, PlannedMovement
 from ket.modules.inventory.models import (
     INVENTORY_DOCUMENT_TYPES,
+    InventoryMovement,
     InventoryVoucher,
     InventoryVoucherKind,
     InventoryVoucherLine,
@@ -313,6 +315,35 @@ def refuse_when_source_posted(session: Session, voucher_id: UUID) -> None:
         voucher_no=voucher.voucher_no,
         source_voucher_no=source.voucher_no,
         source_voucher_id=str(source.id),
+    )
+
+
+def refuse_when_named_as_specific_source(session: Session, voucher_id: UUID) -> None:
+    """Phiếu nhập có movement được dòng xuất đích danh trỏ tới không bỏ ghi sổ
+    được (lát 8B) — đăng ký `REFERENCE_GUARDS`. Khóa ngoại `RESTRICT` trên
+    `inventory_voucher_lines.source_movement_id` là hàng rào cuối; guard này
+    nói được phải sửa phiếu nào."""
+    referencing = (
+        session.execute(
+            select(Voucher.voucher_no)
+            .join(InventoryVoucherLine, InventoryVoucherLine.voucher_id == Voucher.id)
+            .join(
+                InventoryMovement, InventoryMovement.id == InventoryVoucherLine.source_movement_id
+            )
+            .where(InventoryMovement.voucher_id == voucher_id)
+            .distinct()
+            .order_by(Voucher.voucher_no)
+        )
+        .scalars()
+        .all()
+    )
+    if not referencing:
+        return
+    raise InventoryLayerReferencedError(
+        "Lần nhập này đã được phiếu xuất đích danh chỉ tới — sửa hoặc bỏ ghi sổ các "
+        "phiếu xuất đó trước",
+        referenced_by=",".join(referencing[:10]),
+        count=len(referencing),
     )
 
 

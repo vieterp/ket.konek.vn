@@ -1293,6 +1293,11 @@ class PostingViolation:
             body["details"] = self.details
         return body
 
+    def __repr__(self) -> str:
+        # Đọc được trong traceback/`--showlocals` — một danh sách `<object at 0x…>`
+        # không nói vi phạm nào đã chặn chứng từ.
+        return f"PostingViolation({self.as_json()!r})"
+
 
 class PostingValidationError(DomainError):
     """Chứng từ không đủ điều kiện ghi sổ — mang **toàn bộ** vi phạm.
@@ -1791,6 +1796,49 @@ class InventoryVoucherDerivedError(DomainError):
     """
 
     error_code: ClassVar[str] = "inventory.voucher_derived_from_source"
+
+
+class InventoryLayerReferencedError(DomainError):
+    """Lần nhập đã bị một dòng xuất đích danh trỏ tới (`source_movement_id`) thì
+    không bỏ ghi sổ được — rút lớp dưới chân một chứng từ khác (lát 8B). Đường
+    đúng: bỏ ghi sổ / sửa phiếu xuất ấy trước; `details` chỉ số chứng từ."""
+
+    error_code: ClassVar[str] = "inventory.layer_referenced_by_specific_issue"
+
+
+class CostingTouchesLockedPeriodError(DomainError):
+    """Horizon tính lại giá xuất kho chạm kỳ đã khóa (RT-11, phương án A — lát 8B).
+
+    Về cấu trúc không tới được: khóa sổ tuần tự + mục kiểm `inventory_costed`
+    đòi 0 dấu bẩn và 0 dòng chưa tính trước khi khóa, và dấu bẩn ghi sau đó
+    được kẹp vào kỳ mở sớm nhất (`movements.mark_recalc`). Vẫn kiểm tường minh
+    và từ chối TRƯỚC khi ghi — trigger kỳ khóa trên `inventory_movements` là
+    chốt cuối, nhưng nó đổ giữa chừng với thông điệp của DB, còn ở đây nói được
+    kỳ nào và phải mở khóa gì.
+    """
+
+    error_code: ClassVar[str] = "inventory.costing_touches_locked_period"
+
+
+class InventoryCostingInProgressError(DomainError):
+    """Job tính giá xuất kho của chi nhánh đang chạy — gỡ hay sắp xếp lại
+    movement lúc này là chờ nhau chéo tới deadlock (lát 8B, review H-2). 409:
+    thử lại sau khi job xong."""
+
+    error_code: ClassVar[str] = "inventory.costing_in_progress"
+    http_status: ClassVar[int] = 409
+
+
+class CostingNotConvergingError(DomainError):
+    """Vòng chuyển kho chéo khóa không hội tụ sau số vòng trần (lát 8B).
+
+    Mỗi vòng, vế đến của phiếu chuyển nhận giá vế đi của vòng trước; chuỗi
+    chuyển kho hữu hạn thì hội tụ sau ≤ độ dài chuỗi + 1 vòng. Vượt trần là dữ
+    liệu có vòng lặp giá (A→B→A cùng ngày lặp) — job hỏng với danh sách khóa
+    còn đổi để người dùng tách ngày, thay vì chạy vô hạn.
+    """
+
+    error_code: ClassVar[str] = "inventory.costing_not_converging"
 
 
 class InvoiceFormBranchConflictError(DomainError):

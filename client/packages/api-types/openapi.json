@@ -148,6 +148,42 @@
         "title": "AccountResponse",
         "type": "object"
       },
+      "AffectedVoucher": {
+        "description": "Một chứng từ sẽ bị tính lại giá xuất (FR-STK-003) — đủ để client mở nó.",
+        "properties": {
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "movements": {
+            "title": "Movements",
+            "type": "integer"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "voucher_id": {
+            "format": "uuid",
+            "title": "Voucher Id",
+            "type": "string"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "voucher_id",
+          "voucher_no",
+          "document_type",
+          "posting_date",
+          "movements"
+        ],
+        "title": "AffectedVoucher",
+        "type": "object"
+      },
       "AmountSignRule": {
         "description": "Cách hiểu **dấu** của một cột số tiền gộp.\n\nChỉ có nghĩa khi hồ sơ dùng **một** cột số tiền. Sao kê hai cột (nợ/có) tự\nnó đã nói chiều tiền, nên `sign_rule` phải để trống ở đó — có `CHECK` canh.",
         "enum": [
@@ -5959,6 +5995,76 @@
         "title": "CostObjectsUpdateRequest",
         "type": "object"
       },
+      "CostingAffectedPreview": {
+        "description": "Xem trước trước khi bấm \"Tính giá xuất kho\" (FR-STK-003, RT-11).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "earliest_from_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earliest From Date"
+          },
+          "keys": {
+            "title": "Keys",
+            "type": "integer"
+          },
+          "locked_periods": {
+            "items": {
+              "$ref": "#/components/schemas/LockedPeriodTouched"
+            },
+            "title": "Locked Periods",
+            "type": "array"
+          },
+          "movements": {
+            "title": "Movements",
+            "type": "integer"
+          },
+          "valuation_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valuation Method"
+          },
+          "voucher_count": {
+            "title": "Voucher Count",
+            "type": "integer"
+          },
+          "vouchers": {
+            "items": {
+              "$ref": "#/components/schemas/AffectedVoucher"
+            },
+            "title": "Vouchers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "branch_id",
+          "valuation_method",
+          "earliest_from_date",
+          "keys",
+          "movements",
+          "voucher_count",
+          "vouchers",
+          "locked_periods"
+        ],
+        "title": "CostingAffectedPreview",
+        "type": "object"
+      },
       "CountSheetIn": {
         "additionalProperties": false,
         "description": "Biên bản kiểm kê quỹ (FR-QUY-030): số đếm thật + chi tiết mệnh giá tùy chọn.",
@@ -9562,6 +9668,18 @@
             ],
             "title": "Quantity"
           },
+          "source_movement_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Movement Id"
+          },
           "unit_cost_fc": {
             "anyOf": [
               {
@@ -9807,6 +9925,17 @@
               }
             ],
             "title": "Source Line Id"
+          },
+          "source_movement_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Movement Id"
           },
           "unit_cost_fc": {
             "anyOf": [
@@ -13226,6 +13355,30 @@
           "sample"
         ],
         "title": "LockWarningResponse",
+        "type": "object"
+      },
+      "LockedPeriodTouched": {
+        "description": "Kỳ đã khóa mà horizon tính lại chạm tới (RT-11) — job sẽ từ chối.",
+        "properties": {
+          "movements": {
+            "title": "Movements",
+            "type": "integer"
+          },
+          "period_id": {
+            "title": "Period Id",
+            "type": "integer"
+          },
+          "period_no": {
+            "title": "Period No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "period_id",
+          "period_no",
+          "movements"
+        ],
+        "title": "LockedPeriodTouched",
         "type": "object"
       },
       "LoginRequest": {
@@ -28472,6 +28625,57 @@
         "summary": "Update Journal Voucher",
         "tags": [
           "general-ledger"
+        ]
+      }
+    },
+    "/api/v1/inventory/costing/affected": {
+      "get": {
+        "description": "FR-STK-003: xem trước chứng từ bị tính lại giá xuất kho — và kỳ đã khóa\nbị chạm (RT-11) — cho chi nhánh **đang thao tác**, đúng phạm vi mà job\n`inventory.costing.recalc` sẽ chạy (xem `routers/jobs.py`). `from_date` =\nxem trước lượt ép tính lại từ ngày đó.",
+        "operationId": "read_costing_affected_api_v1_inventory_costing_affected_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostingAffectedPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Read Costing Affected",
+        "tags": [
+          "inventory"
         ]
       }
     },

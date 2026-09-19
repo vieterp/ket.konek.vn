@@ -47,6 +47,7 @@ from ket.posting.engine.requests import PostingLine, PostingRequest
 from ket.posting.engine.validators import run_validators
 
 PERIOD_LOCKED_CODE = "period.locked"
+REPOST_NOT_POSTED_CODE = "posting.repost_requires_posted"
 
 
 def period_share_lock_statement(period_id: int) -> Select[tuple[AccountingPeriod]]:
@@ -197,6 +198,80 @@ class PostingService:
                 branch_id=voucher.branch_id,
                 from_period_id=voucher.period_id,
                 reason=f"unpost {voucher.voucher_no}",
+            )
+        return voucher
+
+    def repost(self, request: PostingRequest, *, user_id: int) -> Voucher:
+        """Ghi lại dòng phát sinh của chứng từ **đang ghi sổ** (ADR-025, lát 8B).
+
+        Đường cho bút toán suy ra sau khi ghi sổ — giá vốn hàng xuất kho do
+        engine tính giá quyết định (SRS 09 §3), có khi nhiều ngày sau khi phiếu
+        xuất đã `DA_GHI_SO` với 0 dòng GL, và tính lại là chuyện thường (chèn
+        chứng từ lùi ngày). Hai đường khác đều sai: `unpost` + `post` chạy hook
+        `after_unpost` xóa chính movement vừa tính; UPDATE thẳng `gl_postings`
+        phá bất biến phase 4 (dòng sổ cái chỉ được chèn và xóa).
+
+        Vì thế: DELETE dòng cũ + INSERT dòng mới, **cùng bộ kiểm** với `post`
+        (cân, chiều phân tích, TK thuộc gói), kỳ phải mở (FOR SHARE như `post`),
+        **không** máy trạng thái, **không** hook, **không** guard — guard là câu
+        hỏi cho người ghi sổ, mà một lượt ghi lại giá vốn không có ai để hỏi.
+        `posted_at`/`posted_by` giữ nguyên: chứng từ đã ghi sổ lúc ấy, bởi người
+        ấy; lượt này chỉ đổi số suy ra.
+        """
+        voucher = self._require_voucher(request.voucher_id)
+        if voucher.status != VoucherStatus.DA_GHI_SO:
+            raise PostingValidationError(
+                "Chỉ chứng từ đang ghi sổ mới ghi lại dòng phát sinh được",
+                violations=[
+                    PostingViolation(
+                        REPOST_NOT_POSTED_CODE,
+                        "Ghi sổ chứng từ trước rồi mới tính lại giá vốn",
+                        voucher_id=str(voucher.id),
+                    )
+                ],
+            )
+        period, year = self._share_lock_period(voucher.period_id)
+        if period.locked_at is not None or year.is_closed:
+            raise PostingValidationError(
+                "Kỳ đã khóa sổ — không ghi lại dòng phát sinh được, phải mở lại kỳ trước",
+                violations=[
+                    PostingViolation(
+                        PERIOD_LOCKED_CODE, "Kỳ kế toán đã khóa sổ", period_id=period.id
+                    )
+                ],
+            )
+        scale = self._money_scale(user_id)
+        lines = _prepare_lines(request, scale=scale)
+        accounts = accounts_by_id(self._session, [line.source.account_id for line in lines])
+        package = resolve_package(
+            self._session, scheme=year.accounting_scheme, on_date=voucher.posting_date
+        )
+        violations = run_validators(
+            self._session, lines=lines, accounts=accounts, active_package_id=package.id
+        )
+        if violations:
+            raise PostingValidationError(
+                "Dòng phát sinh ghi lại chưa đủ điều kiện", violations=violations
+            )
+
+        old_ledgers = set(
+            self._session.execute(
+                select(GlPosting.ledger).where(GlPosting.voucher_id == voucher.id).distinct()
+            )
+            .scalars()
+            .all()
+        )
+        self._session.execute(delete(GlPosting).where(GlPosting.voucher_id == voucher.id))
+        self._insert_postings(voucher, lines)
+        self._session.flush()
+        # Sổ cũ ∪ sổ mới: một sổ chỉ có dòng cũ (vừa bị xóa) cũng bẩn.
+        for ledger in sorted(old_ledgers | {line.ledger for line in lines}):
+            mark_dirty(
+                self._session,
+                ledger=ledger,
+                branch_id=voucher.branch_id,
+                from_period_id=voucher.period_id,
+                reason=f"repost {voucher.voucher_no}",
             )
         return voucher
 

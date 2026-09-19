@@ -6,6 +6,9 @@ Chỉ chứng từ bật `is_stock_issue` sinh phiếu: hóa đơn bán thườn
 `inventory_account_id` — "dữ liệu phase 8 đọc", 7C-2) và **không giá** (engine
 8B tính rồi repost, lật `cogs_posted`); hàng bán bị trả lại (kind 2) → phiếu
 **nhập** không giá (FR-STK-004, 8C). Giảm giá / điều chỉnh không chạm kho.
+Chiều báo ngược (8B): engine gọi `sync_cost_posted(posted=…)` sau mỗi lượt ghi
+lại giá vốn → `cogs_posted` theo trạng thái; bỏ ghi sổ hóa đơn hạ cờ
+(`service.clear_after_unpost`).
 
 Dòng thiếu kho không sinh — nhóm "chưa xuất kho" của BFF việc còn thiếu.
 """
@@ -108,6 +111,16 @@ class SalesInventoryLineSource:
 
     def planned_movement(self, session: Session, voucher_id: UUID) -> PlannedMovement | None:
         return planned_movement(session, voucher_id)
+
+    def sync_cost_posted(self, session: Session, voucher_id: UUID, *, posted: bool) -> None:
+        """Engine 8B vừa ghi lại giá vốn của phiếu xuất sinh từ hóa đơn này →
+        `cogs_posted` theo đúng trạng thái (BR-SAL-01); lật cả hai chiều vì gỡ
+        lớp nhập duy nhất kéo dòng xuất về chờ giá. Không phải hóa đơn bán →
+        không làm gì."""
+        body = session.get(SalesInvoice, voucher_id)
+        if body is not None and body.cogs_posted != posted:
+            body.cogs_posted = posted
+            session.flush()
 
 
 def _cogs_pair(line: SalesInvoiceLine, is_issue: bool) -> tuple[int | None, int | None]:

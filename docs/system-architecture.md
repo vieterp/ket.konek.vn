@@ -448,6 +448,8 @@ module còn lại:
 | `InventoryPosting.remove_movement` + `InventoryLineSource` (chiều đọc "chứng từ này sẽ sinh phiếu kho nào") + `PlannedMovement` — ADR-024 | 8A | Phase 9 (lệnh sản xuất sinh phiếu xuất NVL) đăng ký thêm nguồn |
 | `posting.contracts.LOCK_CHECKS` — mục kiểm khóa sổ do module đóng góp | 8A | Danh mục U11 phase 10a; CCDC/TSCĐ 8E |
 | Chứng từ **0 dòng sổ cái** là hợp lệ (`_insert_postings` rẽ nhánh rỗng) | 8A | Engine giá xuất 8B repost giá vốn; mọi lượt đọc "đã ghi sổ ⇒ có phát sinh" phải coi tập rỗng là hợp lệ |
+| `PostingService.repost` — ghi lại dòng phát sinh của chứng từ **đang ghi sổ** (DELETE + INSERT, cùng validator, không hook/guard) + `InventoryLineSource.sync_cost_posted(posted=…)` hai chiều — ADR-025 | 8B | Khấu hao chạy lại 8E, phân bổ 9, mọi bút toán suy ra sau ghi sổ |
+| Engine tính giá theo **vòng tới điểm bất động** (`RETURNING` rỗng) + `SET LOCAL enable_nestloop = off` cho câu join hai tập suy từ CTE | 8B | Lắp ráp nhiều vòng 8C dùng lại cỗ máy vòng |
 
 ---
 
@@ -541,7 +543,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | `inventory_movements` | **Sổ kho** — append-only như `gl_postings`; khóa `(chi nhánh, kho, vật tư, lô)`, `sequence_in_day` duy nhất theo ngày (BR-STK-04), `cost_state` 0/1/2, RLS chi nhánh, trigger kỳ khóa (BR-STK-05); FK thật tới `items`/`warehouses`/`lots` để gộp danh mục dời theo | 8A | `inventory` |
 | `lots`, `serials` | Lô / serial (LD-09: cột có mặt ở mọi bảng tồn từ migration đầu; UI serial v1.1) | 8A | `inventory` |
 | `inventory_recalc_queue` | Dấu bẩn tính lại giá xuất theo khóa + `from_date` (MIN giữ lại) — 8A ghi, 8B đọc, khóa sổ chặn khi còn dấu | 8A | `inventory` |
-| `inventory_balances`, `stock_layers` | Snapshot tồn theo kỳ + lớp tồn FIFO/đích danh — tạo rỗng ở 8A, engine 8B ghi | 8 | `inventory` |
+| `inventory_balances`, `stock_layers` | Snapshot tồn theo kỳ + lớp tồn FIFO/đích danh — hai bảng **dẫn xuất**, engine 8B dựng lại bằng DELETE + INSERT sau mỗi lượt (snapshot: mọi kỳ của năm đã tính; lớp: cả chi nhánh) | 8B | `inventory` |
 | `warehouse_book` | Sổ kho của thủ kho (SRS 17) — tạo rỗng ở 8A, 8D ghi | 8 | `inventory` |
 | `audit_log` | Nhật ký bất biến (người, hành động, giá trị trước–sau) | 2 | `ket_owner` |
 | `attachments` | Metadata tệp đính kèm (`entity_type`+`entity_id`, `content_hash`, `branch_id`, `detached_at`). Nội dung nằm ngoài DB | 2 | `kernel` |
