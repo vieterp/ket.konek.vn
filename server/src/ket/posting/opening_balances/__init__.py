@@ -1,4 +1,4 @@
-"""Số dư ban đầu nhóm 0–4 (SRS 02, RT-24) — schema từ 4A, logic từ 4C.
+"""Số dư ban đầu nhóm 0–5 (SRS 02, RT-24) — schema từ 4A, logic từ 4C, tồn kho 8C-1.
 
 Import gói này (qua `ket.model_registry`, như mọi đường cấp dataset) là đăng ký
 hai thứ, cùng khuôn với `posting/balances/__init__.py`:

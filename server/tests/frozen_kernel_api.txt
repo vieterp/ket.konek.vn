@@ -31,6 +31,7 @@ class ket.kernel.protocols.InventoryLineSource
 class ket.kernel.protocols.InventoryMovementKind
 class ket.kernel.protocols.InventoryMovementLine
   field amount_fc: Decimal | None
+  field cost_from_line_id: UUID | None
   field credit_account_id: int | None
   field debit_account_id: int | None
   field item_id: int
@@ -161,6 +162,27 @@ class ket.posting.contracts.LOCK_CHECKS: instance of
   run(self, session: 'Session', period: 'AccountingPeriod', year: 'FiscalYear') -> 'None'
 class ket.posting.contracts.Ledger
 ket.posting.contracts.LockCheck: _CallableGenericAlias
+class ket.posting.contracts.OPENING_DETAIL_PORTS: instance of
+  get(self, kind: 'int') -> 'OpeningDetailPort | None'
+  register(self, port: 'OpeningDetailPort') -> 'None'
+  require(self, kind: 'int') -> 'OpeningDetailPort'
+class ket.posting.contracts.OpeningDetailPort
+  annotate_carried(self, session: 'Session', *, source_year: 'FiscalYear', target_year: 'FiscalYear', branch_id: 'int') -> 'int'
+  clear(self, session: 'Session', *, fiscal_year: 'FiscalYear', branch_id: 'int') -> 'int'
+  property kind
+  lot_id_for(self, session: 'Session', *, item_id: 'int', lot_no: 'str') -> 'int'
+  materialize(self, session: 'Session', *, fiscal_year: 'FiscalYear', first_period: 'AccountingPeriod', branch_id: 'int', layers: 'Sequence[OpeningStockLayer]') -> 'int'
+class ket.posting.contracts.OpeningStockLayer
+  field amount: Decimal
+  field id: UUID
+  field item_id: int
+  field lot_id: int | None
+  field quantity: Decimal
+  field receipt_no: str | None
+  field received_on: date | None
+  field sort_order: int
+  field unit_cost: Decimal
+  field warehouse_id: int
 class ket.posting.contracts.POSTING_DOCUMENT_REGISTRY: instance of
   codes(self) -> 'tuple[str, ...]'
   get(self, code: 'str') -> 'PostingDocumentType'

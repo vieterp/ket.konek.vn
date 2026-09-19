@@ -10,8 +10,9 @@ Một lượt `run_costing` cho một chi nhánh (RLS của phiên gọi), trong
 2. `locked_periods_touched` — RT-11 phương án A: có kỳ khóa trong horizon là
    từ chối trước khi chạm bảng.
 3. Vòng (`_run_passes`): câu phương pháp của năm ghi dòng XUẤT; `transfer_in_
-   legs.sql` chép giá vế đi sang vế đến; cả hai chỉ ghi dòng đổi thật và trả
-   `RETURNING` — hai câu cùng rỗng là điểm bất động. Vượt `MAX_PASSES` là dữ
+   legs.sql` chép giá vế đi sang vế đến; `return_in_legs.sql` chép giá lần xuất
+   sang lần nhập hàng bán trả lại (FR-STK-004, 8C-1); cả ba chỉ ghi dòng đổi
+   thật và trả `RETURNING` — cùng rỗng là điểm bất động. Vượt `MAX_PASSES` là dữ
    liệu có vòng lặp giá → `CostingNotConvergingError`.
 4. `finalize.sql` — STALE có giá → COSTED; `mark_next_year.sql` — khóa còn
    movement ở năm sau nhận dấu bẩn đầu năm sau (số năm sau đã lệch tồn đầu).
@@ -34,7 +35,7 @@ from importlib import resources
 from typing import Any, Final
 from uuid import UUID
 
-from sqlalchemy import CursorResult, delete, func, select, text
+from sqlalchemy import CursorResult, delete, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from ket.kernel.config.catalog import MONEY_SCALE_KEY
@@ -43,9 +44,10 @@ from ket.kernel.errors import CostingNotConvergingError, CostingTouchesLockedPer
 from ket.kernel.periods.models import AccountingPeriod, FiscalYear, InventoryValuationMethod
 from ket.kernel.protocols import PROVIDERS
 from ket.modules.inventory.costing.affected import locked_periods_touched, years_to_process
-from ket.modules.inventory.costing.queue import clear_marks, pending_marks
+from ket.modules.inventory.costing.queue import CostingMark, clear_marks, pending_marks
 from ket.modules.inventory.models import (
     ISSUE_DOCUMENT_TYPE,
+    RECEIPT_DOCUMENT_TYPE,
     TRANSFER_DOCUMENT_TYPE,
     CostState,
     InventoryBalance,
@@ -72,17 +74,29 @@ METHOD_SQL: Final[dict[str, str]] = {
     InventoryValuationMethod.FIFO.value: _sql("fifo"),
     InventoryValuationMethod.SPECIFIC.value: _sql("specific"),
 }
+BRANCH_SCOPE_SQL: Final[dict[str, str]] = {
+    InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING.value: _sql("wavg_moving_branch"),
+    InventoryValuationMethod.WEIGHTED_AVERAGE_PERIOD.value: _sql("wavg_period_branch"),
+}
+"""Hai phương pháp bình quân có bản "không theo kho" (FR-STK-007, 8C-1): khóa
+tính giá gom mọi kho của (chi nhánh, mã hàng, lô). FIFO/đích danh luôn theo kho
+(SRS 09 §3) nên không có bản này — cờ của năm bị bỏ qua."""
 TRANSFER_IN_LEGS_SQL: Final[str] = _sql("transfer_in_legs")
+RETURN_IN_LEGS_SQL: Final[str] = _sql("return_in_legs")
 FINALIZE_SQL: Final[str] = _sql("finalize")
 MARK_NEXT_YEAR_SQL: Final[str] = _sql("mark_next_year")
+MARK_RETURN_NEXT_YEAR_SQL: Final[str] = _sql("mark_return_next_year")
 REBUILD_BALANCES_SQL: Final[str] = _sql("rebuild_balances")
 LAYER_SQL: Final[dict[str, str]] = {
     InventoryValuationMethod.FIFO.value: _sql("stock_layers_fifo"),
     InventoryValuationMethod.SPECIFIC.value: _sql("stock_layers_specific"),
 }
 _REPOSTED_DOCUMENT_TYPES: Final[frozenset[str]] = frozenset(
-    {ISSUE_DOCUMENT_TYPE, TRANSFER_DOCUMENT_TYPE}
+    {ISSUE_DOCUMENT_TYPE, TRANSFER_DOCUMENT_TYPE, RECEIPT_DOCUMENT_TYPE}
 )
+"""Loại chứng từ có bút toán suy từ giá engine: XK/CK (8B) và NK hàng bán trả lại
+lấy giá từ lần xuất (8C-1, Nợ 156/Có 632). NK gõ giá không bao giờ vào
+`RETURNING` nên không bị ghi lại oan."""
 _SET_BASED_METHODS: Final[frozenset[str]] = frozenset(
     {InventoryValuationMethod.FIFO.value, InventoryValuationMethod.SPECIFIC.value}
 )
@@ -131,6 +145,13 @@ class CostingCancelled(Exception):  # noqa: N818 — luồng điều khiển, jo
     """Người dùng hủy — ném ở ranh giới vòng / chứng từ để transaction rollback."""
 
 
+def method_sql_for(year: FiscalYear) -> str:
+    """Câu phương pháp của năm: bình quân "không theo kho" có bản riêng."""
+    if not year.costing_by_warehouse:
+        return BRANCH_SCOPE_SQL[year.inventory_valuation_method]
+    return METHOD_SQL[year.inventory_valuation_method]
+
+
 def recalc_branch(
     session: Session,
     *,
@@ -145,21 +166,15 @@ def recalc_branch(
     ngày ấy, dấu năm khác để nguyên cho lượt sau. Job chỉ bọc thêm advisory
     lock và dịch hủy sang `JobCancelled`; test gọi thẳng hàm này."""
     marks = pending_marks(session, branch_id=branch_id)
-    result = run_costing(
+    return run_costing(
         session,
         branch_id=branch_id,
         user_id=user_id,
         force_from=force_from,
         progress=progress,
         cancel_requested=cancel_requested,
+        marks_read=marks,
     )
-    covered = tuple(
-        mark
-        for mark in marks
-        if any(start <= mark.from_date <= end for start, end in result.year_ranges)
-    )
-    result.marks_cleared = clear_marks(session, covered)
-    return result
 
 
 def run_costing(
@@ -170,9 +185,19 @@ def run_costing(
     force_from: date | None = None,
     progress: Progress | None = None,
     cancel_requested: CancelCheck | None = None,
+    marks_read: tuple[CostingMark, ...] = (),
 ) -> CostingRunResult:
     """Tính giá xuất kho cho mọi việc còn chờ của một chi nhánh (xem docstring
-    module). `force_from` ép tính lại mọi khóa từ ngày đó (một năm)."""
+    module). `force_from` ép tính lại mọi khóa từ ngày đó (một năm).
+
+    `marks_read` (phiên bản dấu bẩn đã đọc trước lượt) được xóa **ngay sau khi
+    năm chứa chúng tính xong**, và hai câu `mark_*_next_year.sql` (chạy ngay trước
+    đó, vì chúng đọc chính các dấu ấy) nhận `:marks_version` = phiên bản muộn
+    nhất đã đọc: đụng dấu cùng khóa chưa ai làm mới thì **đổi** `from_date` sang
+    năm sau thay vì `LEAST` — bản 8B giữ ngày cũ + phiên bản mới, tức dấu không
+    bao giờ xóa được và mỗi lượt lại tính năm cũ rồi làm mới nó lần nữa. Dấu chen
+    ngang (phiên bản mới hơn) vẫn `LEAST` và sống sót lượt xóa, đúng như trước.
+    """
     report = progress or (lambda _percent, _message: None)
     cancelled = cancel_requested or (lambda: False)
     result = CostingRunResult(branch_id=branch_id)
@@ -192,8 +217,10 @@ def run_costing(
             "fiscal_year_id": year.id,
             "force_from": force_from,
             "scale": scale,
+            "by_warehouse": year.costing_by_warehouse,
+            "marks_version": max((mark.marked_at for mark in marks_read), default=None),
         }
-        method_sql = METHOD_SQL[year.inventory_valuation_method]
+        method_sql = method_sql_for(year)
         result.years.append(year.code)
         result.year_ranges.append((year.start_date, year.end_date))
         base = index * 100 // len(years)
@@ -215,9 +242,17 @@ def run_costing(
         result.movements_updated += updated
         changed_vouchers |= vouchers
         session.execute(text(FINALIZE_SQL), params)
-        # Khóa còn movement ở năm sau → dấu bẩn đầu năm sau (review 8B M-1),
-        # TRƯỚC khi lượt này xóa dấu đã đọc: phiên bản mới nên sống sót.
+        # Dấu đầu năm sau (review 8B M-1) đọc CTE `keys` — tức các dấu vừa tính —
+        # nên phải chạy TRƯỚC khi xóa chúng; đụng dấu cùng khóa đã đọc (phiên bản
+        # ≤ `:marks_version`) thì ĐỔI `from_date` sang năm sau thay vì `LEAST`
+        # (giữ ngày cũ + phiên bản mới = dấu sống mãi); dấu chen ngang mới hơn
+        # giữ `LEAST` và sống sót lượt xóa như trước.
         session.execute(text(MARK_NEXT_YEAR_SQL), params)
+        session.execute(text(MARK_RETURN_NEXT_YEAR_SQL), params)
+        covered = tuple(
+            mark for mark in marks_read if year.start_date <= mark.from_date <= year.end_date
+        )
+        result.marks_cleared += clear_marks(session, covered)
 
     result.vouchers_reposted = _repost(
         session,
@@ -334,6 +369,7 @@ def _run_passes(
         last_changed = [
             *_execute_returning(session, method_sql, params),
             *_execute_returning(session, TRANSFER_IN_LEGS_SQL, params),
+            *_execute_returning(session, RETURN_IN_LEGS_SQL, params),
         ]
         if not last_changed:
             return pass_no, len(movement_ids), vouchers
@@ -396,15 +432,17 @@ def _repost(
         ids = [voucher.id for voucher in batch]
         requests = build_posting_requests(session, ids)
         posting.repost_many([requests[voucher_id] for voucher_id in ids], user_id=user_id)
-        _sync_source_flags(session, batch)
+        sync_source_flags(session, batch)
         done += len(batch)
         report(100 * done // total, f"Ghi lại giá vốn {done}/{total} chứng từ")
     return total
 
 
-def _sync_source_flags(session: Session, vouchers: Sequence[Voucher]) -> None:
+def sync_source_flags(session: Session, vouchers: Sequence[Voucher]) -> None:
     """Cả hai chiều (review 8B M-4): gỡ lớp nhập duy nhất kéo dòng xuất về chờ
-    giá và lượt repost vừa xóa bút toán 632 — cờ phải hạ theo."""
+    giá và lượt repost vừa xóa bút toán 632 — cờ phải hạ theo. Dòng "chờ" là
+    dòng có giá do engine quyết: xuất, và nhập lấy giá từ lần xuất (hàng bán
+    trả lại, 8C-1). `inventory.service` gọi lại sau khi chép giá lúc ghi sổ."""
     generated = {
         voucher.id: voucher.source_document_id
         for voucher in vouchers
@@ -417,7 +455,10 @@ def _sync_source_flags(session: Session, vouchers: Sequence[Voucher]) -> None:
             select(InventoryMovement.voucher_id)
             .where(
                 InventoryMovement.voucher_id.in_(list(generated)),
-                InventoryMovement.direction == MovementDirection.OUT,
+                or_(
+                    InventoryMovement.direction == MovementDirection.OUT,
+                    InventoryMovement.source_movement_id.is_not(None),
+                ),
                 InventoryMovement.cost_state != CostState.COSTED,
             )
             .distinct()

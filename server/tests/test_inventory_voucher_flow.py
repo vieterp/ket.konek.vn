@@ -27,7 +27,7 @@ import threading
 from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import select
@@ -43,14 +43,17 @@ from inventory_support import (
     SERVICE_ITEM_ID,
     UNIT_BOX_ID,
     UNIT_PIECE_ID,
+    create_goods_item,
     issue_payload,
     movements_of,
     receipt_payload,
+    run_engine,
     seed_inventory_package_data,
     transfer_payload,
 )
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.errors import PostingValidationError
+from ket.kernel.master_data.models.item_unit import ItemUnit
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.modules.inventory.models import (
     CostState,
@@ -78,6 +81,7 @@ pytestmark = pytest.mark.db
 ACTOR_ID = 1
 MAR_5 = date(2026, 3, 5)
 MAR_10 = date(2026, 3, 10)
+MAR_12 = date(2026, 3, 12)
 MAR_20 = date(2026, 3, 20)
 
 
@@ -147,6 +151,7 @@ def _post_receipt(
     unit_id: int = UNIT_PIECE_ID,
     warehouse_id: int = MAIN_WAREHOUSE_ID,
     lot_no: str | None = None,
+    item_id: int = GOODS_ITEM_ID,
 ) -> UUID:
     service = InventoryVoucherService(session)
     voucher = service.create(
@@ -156,6 +161,7 @@ def _post_receipt(
             posting_date=posting_date,
             quantity=quantity,
             unit_cost=unit_cost,
+            item_id=item_id,
             unit_id=unit_id,
             warehouse_id=warehouse_id,
             lot_no=lot_no,
@@ -265,6 +271,52 @@ def test_posting_a_receipt_writes_base_quantity_movements_and_a_balanced_pair(
         ]
         assert postings[0].item_id == GOODS_ITEM_ID
         assert postings[0].warehouse_id == MAIN_WAREHOUSE_ID
+
+    run(work)
+
+
+def test_cost_of_goods_is_base_quantity_times_base_unit_cost(
+    run: Runner, context: PostingContext, accounts: dict[str, int]
+) -> None:
+    """FR-STK-006 (8C-1 đối chiếu): mã hàng mới có thùng = 12 cái; nhập 3 thùng @
+    240.000 → 20.000/cái; xuất 1 thùng + 5 cái = 17 cái → giá vốn 17 × 20.000 =
+    340.000, đơn giá vốn theo đơn vị chính; dòng phiếu giữ số theo đơn vị gõ."""
+
+    def work(session: Session) -> None:
+        item = create_goods_item(session, f"HH-8C-U-{uuid4().hex[:6].upper()}")
+        session.add(ItemUnit(item_id=item, unit_id=UNIT_BOX_ID, factor=BOX_FACTOR))
+        session.flush()
+        _post_receipt(
+            session,
+            context,
+            accounts,
+            posting_date=MAR_10,
+            quantity=Decimal(3),
+            unit_cost=Decimal(240_000),
+            unit_id=UNIT_BOX_ID,
+            item_id=item,
+        )
+        payload = issue_payload(
+            context, accounts, posting_date=MAR_12, quantity=Decimal(5), item_id=item
+        )
+        box_line = payload.lines[0].model_copy(
+            update={"unit_id": UNIT_BOX_ID, "quantity": Decimal(1)}
+        )
+        payload = payload.model_copy(update={"lines": (*payload.lines, box_line)})
+        service = InventoryVoucherService(session)
+        voucher = service.create(payload, user_id=ACTOR_ID)
+        service.post(voucher.id, user_id=ACTOR_ID, acknowledged_warnings=True)
+        run_engine(session, context)
+        moved = sorted(movements_of(session, voucher.id), key=lambda m: m.quantity)
+        assert [(m.quantity, m.unit_cost, m.amount) for m in moved] == [
+            (Decimal(5), Decimal("20000.000000"), Decimal("100000.00")),
+            (Decimal(12), Decimal("20000.000000"), Decimal("240000.00")),
+        ]
+        lines = sorted(service.get(voucher.id)[2], key=lambda line: line.line_no)
+        assert [(line.unit_id, line.quantity, line.base_quantity) for line in lines] == [
+            (UNIT_PIECE_ID, Decimal(5), Decimal(5)),
+            (UNIT_BOX_ID, Decimal(1), Decimal(12)),
+        ]
 
     run(work)
 

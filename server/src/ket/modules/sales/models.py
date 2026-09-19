@@ -315,6 +315,7 @@ class SalesInvoiceLine(DatasetBase, Audited):
             "vat_amount_fc = 0 OR vat_account_id IS NOT NULL", name="vat_account_required"
         ),
         Index("ix_sales_invoice_lines_voucher", "voucher_id", "line_no"),
+        Index("ix_sales_invoice_lines_returned_line", "returned_line_id"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -398,6 +399,18 @@ class SalesInvoiceLine(DatasetBase, Audited):
     """Cặp TK giá vốn / TK kho và đơn giá vốn (SRS 06 §3.1). Lát này chỉ nhận
     và lưu; bút toán Nợ 632 / Có 156 do phase 8 sinh khi tính xong giá xuất
     kho — xem `sales_invoices.cogs_posted`."""
+
+    returned_line_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("sales_invoice_lines.id", ondelete="RESTRICT"), nullable=True
+    )
+    """Dòng bán **gốc** mà dòng hàng-bán-trả-lại này trả về (FR-STK-004, 8C-1) —
+    chỉ trên chứng từ kind `RETURN`, và là chỗ duy nhất "lấy từ giá xuất kho"
+    biết lần xuất nào: phiếu nhập sinh từ dòng này trỏ movement xuất của phiếu
+    XK sinh từ dòng gốc, engine chép giá xuất ấy sang giá nhập mỗi lượt tính
+    (`InventoryMovementLine.cost_from_line_id`, ADR-026). Không bắt buộc: trả lại
+    không chỉ dòng gốc thì phiếu nhập chờ giá như 8B. `RESTRICT`: dòng gốc phải
+    sống chừng nào còn dòng trả lại trỏ tới — cùng lập luận `adjusts_voucher_id`.
+    Luật "cùng khách, cùng mã hàng, hóa đơn gốc đã ghi sổ" ở `service`."""
 
     price_list_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     price_source: Mapped[str | None] = mapped_column(String(PRICE_SOURCE_MAX_LENGTH), nullable=True)

@@ -93,6 +93,7 @@ function openingReport(overrides: Record<string, unknown>): Record<string, unkno
     warnings: [],
     rows_by_kind: { '0': 3 },
     invoice_rows: 0,
+    stock_layer_rows: 0,
     replaced_kinds: [0],
     total_debit: '3000000',
     total_credit: '3000000',

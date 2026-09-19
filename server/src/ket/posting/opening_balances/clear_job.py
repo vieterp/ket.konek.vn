@@ -33,6 +33,7 @@ from ket.posting.opening_balances.guards import (
 )
 from ket.posting.opening_balances.import_job import OPENING_WRITE
 from ket.posting.opening_balances.models import OpeningBalance, OpeningDetailKind
+from ket.posting.opening_balances.ports import OPENING_DETAIL_PORTS, PORTED_KINDS
 from ket.posting.opening_balances.service import ensure_groups_not_settled
 
 CLEAR_GROUP_CODE: Final[str] = "posting.opening_balances.clear_group"
@@ -47,12 +48,12 @@ class ClearGroupParams(BaseModel):
 
     @field_validator("detail_kind")
     @classmethod
-    def _kind_owned_by_phase_4(cls, value: int) -> int:
-        # Nhóm 5–9 (tồn kho, dở dang, CCDC, TSCĐ, CPTT) thuộc phase 8 cùng
-        # bảng chi tiết của chúng — xóa mà không đụng bảng chi tiết là để lại
-        # dữ liệu mồ côi, nên chặn từ tham số.
-        if value not in OpeningDetailKind.PHASE_4_KINDS:
-            raise ValueError(f"Nhóm số dư {value} chưa hỗ trợ xóa — chỉ nhóm 0–4")
+    def _kind_supported(cls, value: int) -> int:
+        # Nhóm 6–9 (dở dang, CCDC, TSCĐ, CPTT) thuộc 8E cùng bảng chi tiết của
+        # chúng — xóa mà không đụng bảng chi tiết là để lại dữ liệu mồ côi, nên
+        # chặn từ tham số. Tồn kho (5) mở ở 8C-1 qua `OPENING_DETAIL_PORTS`.
+        if value not in OpeningDetailKind.SUPPORTED_KINDS:
+            raise ValueError(f"Nhóm số dư {value} chưa hỗ trợ xóa — chỉ nhóm 0–5")
         return value
 
 
@@ -96,7 +97,13 @@ def run_clear_group(context: JobContext, params: ClearGroupParams) -> JobResult:
         session.execute(select(func.count()).select_from(OpeningBalance).where(*scope)).scalar_one()
     )
     if deleted_rows:
-        # `opening_balance_invoices` đi theo cha qua ON DELETE CASCADE.
+        # Chi tiết phía module (movement của lớp tồn đầu kỳ) gỡ TRƯỚC — FK
+        # `RESTRICT` về lớp; lớp và `opening_balance_invoices` đi theo cha qua
+        # ON DELETE CASCADE.
+        if params.detail_kind in PORTED_KINDS and params.ledger == Ledger.FINANCIAL:
+            OPENING_DETAIL_PORTS.require(params.detail_kind).clear(
+                session, fiscal_year=fiscal_year, branch_id=branch_id
+            )
         session.execute(delete(OpeningBalance).where(*scope))
         # Bàn giao 4B: mọi đường ghi `opening_balances` đánh dấu bẩn kỳ đầu năm.
         mark_dirty(

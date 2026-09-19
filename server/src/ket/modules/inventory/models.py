@@ -368,6 +368,15 @@ class InventoryMovement(DatasetBase):
             name="costed_has_unit_cost",
         ),
         CheckConstraint("(unit_cost IS NULL) = (amount IS NULL)", name="cost_pair_complete"),
+        # Một movement hoặc thuộc một dòng phiếu (cả `voucher_id` lẫn `line_id`),
+        # hoặc là một lớp tồn đầu kỳ (`opening_layer_id`, 8C-1) — không ở giữa.
+        CheckConstraint(
+            "(voucher_id IS NULL) = (line_id IS NULL)", name="voucher_line_pair_complete"
+        ),
+        CheckConstraint(
+            "(voucher_id IS NULL) = (opening_layer_id IS NOT NULL)",
+            name="opening_layer_xor_voucher",
+        ),
         # Thứ tự trong ngày là duy nhất theo khóa tồn kho — hai movement cùng
         # số thứ tự là hai phiếu không phân định được trước/sau (BR-STK-04).
         UniqueConstraint(
@@ -383,6 +392,20 @@ class InventoryMovement(DatasetBase):
         # đã dựng một unique index đúng cột đúng thứ tự (review 8A L-1).
         Index("ix_inventory_movements_voucher", "voucher_id"),
         Index("ix_inventory_movements_period", "period_id"),
+        Index("ix_inventory_movements_opening_layer", "opening_layer_id", unique=True),
+        # Thứ tự "không theo kho" (FR-STK-007, 8C-1): bước LATERAL của hai câu
+        # bình quân gom mọi kho của một mã hàng đi trên chỉ mục này; thứ tự trong
+        # ngày giữa các kho = số thứ tự rồi kho rồi id (xem `wavg_moving_branch.sql`).
+        Index(
+            "ix_inventory_movements_branch_item_order",
+            "branch_id",
+            "item_id",
+            "lot_key",
+            "posting_date",
+            "sequence_in_day",
+            "warehouse_id",
+            "id",
+        ),
         Index(
             "ix_inventory_movements_needs_cost",
             "cost_state",
@@ -393,12 +416,22 @@ class InventoryMovement(DatasetBase):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    voucher_id: Mapped[UUID] = mapped_column(
-        ForeignKey("vouchers.id", ondelete="RESTRICT"), nullable=False
+    voucher_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="RESTRICT"), nullable=True
     )
-    line_id: Mapped[UUID] = mapped_column(
-        ForeignKey("inventory_voucher_lines.id", ondelete="RESTRICT"), nullable=False
+    line_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("inventory_voucher_lines.id", ondelete="RESTRICT"), nullable=True
     )
+    """NULL cặp với `voucher_id` khi movement là lớp tồn đầu kỳ (8C-1) — mọi
+    movement khác thuộc đúng một dòng phiếu."""
+    opening_layer_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("opening_balance_stock_layers.id", ondelete="RESTRICT"), nullable=True
+    )
+    """Lớp tồn đầu kỳ (`posting.opening_balances`) mà movement này vật chất hóa
+    (8C-1): nhập, đã có giá, `posting_date` = ngày đầu năm − 1, `period_id` = kỳ
+    đầu năm (khóa kỳ 1 = khóa số dư ban đầu). Engine đọc nó như mọi lần nhập
+    trong lịch sử; thay-trọn / xóa nhóm 5 gỡ movement trước khi xóa lớp
+    (`RESTRICT`)."""
     branch_id: Mapped[int] = mapped_column(
         ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False
     )
@@ -450,7 +483,9 @@ class InventoryMovement(DatasetBase):
         SmallInteger, nullable=False, default=CostState.PENDING, server_default="0"
     )
     source_movement_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    """Đích danh: xuất từ lần nhập nào (8B)."""
+    """Movement mà giá của dòng này lấy theo: chiều **xuất** — lần nhập đích danh
+    (8B); chiều **nhập** — lần xuất mà hàng bán trả lại quay về (FR-STK-004,
+    8C-1: giá nhập = giá xuất của lần ấy, engine chép lại mỗi lượt tính)."""
 
     cost_object_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     project_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

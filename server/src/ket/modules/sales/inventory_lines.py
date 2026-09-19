@@ -5,7 +5,9 @@ Chỉ chứng từ bật `is_stock_issue` sinh phiếu: hóa đơn bán thườn
 **xuất** mang cặp TK giá vốn của từng dòng (`cogs_account_id` /
 `inventory_account_id` — "dữ liệu phase 8 đọc", 7C-2) và **không giá** (engine
 8B tính rồi repost, lật `cogs_posted`); hàng bán bị trả lại (kind 2) → phiếu
-**nhập** không giá (FR-STK-004, 8C). Giảm giá / điều chỉnh không chạm kho.
+**nhập** lấy giá của lần xuất gốc khi dòng chỉ `returned_line_id` (FR-STK-004,
+8C-1; cặp Nợ 156 / Có 632 đảo), không chỉ thì chờ giá. Giảm giá / điều chỉnh
+không chạm kho.
 Chiều báo ngược (8B): engine gọi `sync_cost_posted(posted=…)` sau mỗi lượt ghi
 lại giá vốn → `cogs_posted` theo trạng thái; bỏ ghi sổ hóa đơn hạ cờ
 (`service.clear_after_unpost`).
@@ -89,6 +91,7 @@ def planned_movement(session: Session, voucher_id: UUID) -> PlannedMovement | No
             debit_account_id=debit,
             credit_account_id=credit,
             source_line_id=line.id,
+            cost_from_line_id=None if is_issue else line.returned_line_id,
         )
         for line, item_id, warehouse_id, unit_id, quantity in candidates
         if item_id in stocked
@@ -124,9 +127,12 @@ class SalesInventoryLineSource:
 
 
 def _cogs_pair(line: SalesInvoiceLine, is_issue: bool) -> tuple[int | None, int | None]:
-    """Cặp giá vốn chỉ ở chiều xuất, và đi cả đôi hoặc không đi (ràng buộc
-    `account_pair_complete` của dòng phiếu): dòng chỉ khai một bên thì phiếu
-    để trống cả hai — engine 8B sẽ đòi khi tính giá. Nhập lại theo FR-STK-004."""
-    if not is_issue or line.cogs_account_id is None or line.inventory_account_id is None:
+    """Cặp giá vốn đi cả đôi hoặc không đi (ràng buộc `account_pair_complete`
+    của dòng phiếu): dòng chỉ khai một bên thì phiếu để trống cả hai — engine
+    8B sẽ đòi khi tính giá. Chiều xuất: Nợ 632 / Có 156; hàng bán trả lại
+    (8C-1, SRS 09 §2.1 #4): **đảo** — Nợ 156 / Có 632 theo giá lần xuất."""
+    if line.cogs_account_id is None or line.inventory_account_id is None:
         return None, None
-    return line.cogs_account_id, line.inventory_account_id
+    if is_issue:
+        return line.cogs_account_id, line.inventory_account_id
+    return line.inventory_account_id, line.cogs_account_id

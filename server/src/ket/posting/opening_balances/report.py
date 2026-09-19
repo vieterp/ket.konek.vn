@@ -65,6 +65,9 @@ class OpeningImportReport(BaseModel):
     invoice_rows: int = 0
     """Số dòng chi tiết hóa đơn/tạm ứng sẽ ghi (FR-OPB-003)."""
 
+    stock_layer_rows: int = 0
+    """Số lần nhập của sheet Tồn kho sẽ ghi thành lớp (nhóm 5, 8C-1)."""
+
     replaced_kinds: list[int] = Field(default_factory=list)
     """Nhóm sẽ bị **thay trọn** trong phạm vi (năm, sổ, chi nhánh). Sheet vắng
     mặt hoặc không có dòng nào thì nhóm đó không đụng tới — con số này là câu

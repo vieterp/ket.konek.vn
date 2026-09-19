@@ -16305,6 +16305,8 @@ export interface components {
             project_id?: number | null;
             /** Quantity */
             quantity?: number | string | null;
+            /** Returned Line Id */
+            returned_line_id?: string | null;
             /** Unit Cost Fc */
             unit_cost_fc?: number | string | null;
             /** Unit Id */
@@ -16370,6 +16372,8 @@ export interface components {
             project_id: number | null;
             /** Quantity */
             quantity: string | null;
+            /** Returned Line Id */
+            returned_line_id: string | null;
             /** Unit Cost Fc */
             unit_cost_fc: string | null;
             /** Unit Id */

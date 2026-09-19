@@ -24,7 +24,7 @@ from typing import IO, Final
 from ket.kernel.errors import ImportSheetMissingError
 from ket.kernel.excel.descriptors import CellKind, ColumnDescriptor, TemplateDescriptor
 from ket.kernel.excel.reader import ensure_structure, iter_rows
-from ket.kernel.money import RATE_SCALE_DEFAULT, ZERO, convert_currency
+from ket.kernel.money import RATE_SCALE_DEFAULT, ZERO, convert_currency, round_money
 from ket.posting.opening_balances.models import OpeningDetailKind
 from ket.posting.opening_balances.report import OpeningImportReport, OpeningRowError
 from ket.posting.opening_balances.template import SHEETS
@@ -78,6 +78,17 @@ class ParsedOpeningRow:
     credit_fc: Decimal
     debit: Decimal
     credit: Decimal
+    # Sheet Tồn kho (nhóm 5, 8C-1) — trống ở mọi sheet khác. `quantity`/`unit_price`
+    # theo đơn vị GÕ; quy về đơn vị chính là việc của `service` (cần tra
+    # `item_units`), `debit` = thành tiền.
+    warehouse_code: str | None = None
+    item_code: str | None = None
+    lot_no: str | None = None
+    unit_code: str | None = None
+    quantity: Decimal | None = None
+    unit_price: Decimal | None = None
+    received_on: date | None = None
+    receipt_no: str | None = None
 
     @property
     def is_natural_side(self) -> bool:
@@ -550,6 +561,137 @@ def _check_invoice_fields(
         )
 
 
+def _parse_stock_sheet(
+    source: IO[bytes],
+    descriptor: TemplateDescriptor,
+    *,
+    base_currency: str,
+    money_scale: int,
+    fiscal_year_start: date,
+    report: OpeningImportReport,
+    failed: set[tuple[str, int]],
+) -> list[ParsedOpeningRow]:
+    """Sheet Tồn kho (nhóm 5): một dòng = một lần nhập, tiền VND, không cột tiền tệ.
+
+    Hình dạng dòng khác hẳn năm sheet kia (không Nợ/Có, không nguyên tệ) nên đọc
+    riêng thay vì nhét thêm nhánh vào `_parse_sheet`; phần kiểm tra cứu (kho, mã
+    hàng, đơn vị, TK kho) ở `service.py`.
+    """
+    sheet = descriptor.sheet_name
+    quantity_column = _column(descriptor, "quantity")
+    unit_price_column = _column(descriptor, "unit_price")
+    amount_column = _column(descriptor, "amount")
+    received_on_column = _column(descriptor, "received_on")
+    rows: list[ParsedOpeningRow] = []
+    source.seek(0)
+    for row_no, values in iter_rows(source, descriptor):
+        report.total_rows += 1
+        _length_errors(values, descriptor, sheet=sheet, row=row_no, report=report, failed=failed)
+        for field, header, message in (
+            ("account_code", "Số hiệu tài khoản *", "Thiếu số hiệu tài khoản"),
+            ("warehouse_code", "Mã kho *", "Thiếu mã kho"),
+            ("item_code", "Mã hàng *", "Thiếu mã hàng"),
+        ):
+            if values.get(field) is None:
+                _row_error(
+                    report,
+                    failed,
+                    sheet=sheet,
+                    row=row_no,
+                    column=header,
+                    code="opening.required",
+                    message=message,
+                )
+        # Số lượng lưu 6 lẻ (`kernel.quantity`); đơn giá theo đơn vị gõ giữ đủ
+        # 6 lẻ để chia về đơn vị chính không mất số.
+        quantity = _decimal_of(
+            values, quantity_column, scale=6, sheet=sheet, row=row_no, report=report, failed=failed
+        )
+        unit_price = _decimal_of(
+            values,
+            unit_price_column,
+            scale=6,
+            sheet=sheet,
+            row=row_no,
+            report=report,
+            failed=failed,
+        )
+        if values.get(quantity_column.field) is None or quantity <= ZERO:
+            _row_error(
+                report,
+                failed,
+                sheet=sheet,
+                row=row_no,
+                column=quantity_column.display_header,
+                code="opening.quantity_required",
+                message="Số lượng phải lớn hơn 0",
+                value=values.get(quantity_column.field),
+            )
+        if values.get(unit_price_column.field) is None:
+            _row_error(
+                report,
+                failed,
+                sheet=sheet,
+                row=row_no,
+                column=unit_price_column.display_header,
+                code="opening.required",
+                message="Thiếu đơn giá",
+            )
+        amount = _decimal_of(
+            values,
+            amount_column,
+            scale=money_scale,
+            sheet=sheet,
+            row=row_no,
+            report=report,
+            failed=failed,
+        )
+        if values.get(amount_column.field) is None:
+            amount = round_money(quantity * unit_price, money_scale)
+        received_on = _date_of(
+            values, received_on_column, sheet=sheet, row=row_no, report=report, failed=failed
+        )
+        if received_on is not None and received_on >= fiscal_year_start:
+            _row_error(
+                report,
+                failed,
+                sheet=sheet,
+                row=row_no,
+                column=received_on_column.display_header,
+                code="opening.date_not_before_year",
+                message="Ngày nhập của tồn đầu kỳ phải trước ngày đầu năm tài chính",
+                value=values.get(received_on_column.field),
+            )
+        rows.append(
+            ParsedOpeningRow(
+                kind=OpeningDetailKind.STOCK,
+                sheet=sheet,
+                row=row_no,
+                account_code=values.get("account_code") or "",
+                partner_code=None,
+                bank_account_code=None,
+                currency_code=base_currency,
+                exchange_rate=Decimal(1),
+                invoice_no=None,
+                invoice_date=None,
+                due_date=None,
+                debit_fc=amount,
+                credit_fc=ZERO,
+                debit=amount,
+                credit=ZERO,
+                warehouse_code=values.get("warehouse_code"),
+                item_code=values.get("item_code"),
+                lot_no=values.get("lot_no"),
+                unit_code=values.get("unit_code"),
+                quantity=quantity,
+                unit_price=unit_price,
+                received_on=received_on,
+                receipt_no=values.get("receipt_no"),
+            )
+        )
+    return rows
+
+
 def _column(descriptor: TemplateDescriptor, field: str) -> ColumnDescriptor:
     column = descriptor.column(field)
     if column is None:  # pragma: no cover — mọi sheet đều khai đủ bốn cột số
@@ -581,6 +723,19 @@ def parse_workbook(
         except ImportSheetMissingError:
             continue
         seen_any_sheet = True
+        if kind == OpeningDetailKind.STOCK:
+            rows.extend(
+                _parse_stock_sheet(
+                    source,
+                    descriptor,
+                    base_currency=base_currency,
+                    money_scale=money_scale,
+                    fiscal_year_start=fiscal_year_start,
+                    report=report,
+                    failed=failed,
+                )
+            )
+            continue
         rows.extend(
             _parse_sheet(
                 source,

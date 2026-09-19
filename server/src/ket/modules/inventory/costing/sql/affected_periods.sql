@@ -6,7 +6,7 @@
 -- Dòng kỳ: period_id, period_no, period_locked, movements. Dòng tổng:
 -- period_id NULL, keys (đếm khóa khác nhau), movements, vouchers, earliest.
 --
--- Tham số: :branch_id, :year_start, :year_end, :force_from.
+-- Tham số: :branch_id, :year_start, :year_end, :force_from, :by_warehouse.
 -- CTE `keys` lặp nguyên văn từ `wavg_moving.sql`.
 WITH keys AS (
     SELECT branch_id, warehouse_id, item_id, lot_key, MIN(start_date) AS start_date
@@ -32,6 +32,18 @@ WITH keys AS (
           AND NOT is_custodial
     ) AS candidates
     GROUP BY branch_id, warehouse_id, item_id, lot_key
+),
+groups AS (
+    -- Khóa GIÁ: theo kho như thường; năm bình quân "không theo kho" (8C-1,
+    -- :by_warehouse = false) gom mọi kho của (chi nhánh, mã hàng, lô) — dấu ở
+    -- kho A kéo movement kho B vào horizon (review 8C-1 H-4/M-1).
+    SELECT branch_id,
+           CASE WHEN CAST(:by_warehouse AS BOOLEAN) THEN warehouse_id END AS warehouse_id,
+           item_id, lot_key, MIN(start_date) AS start_date
+    FROM keys
+    GROUP BY branch_id,
+             CASE WHEN CAST(:by_warehouse AS BOOLEAN) THEN warehouse_id END,
+             item_id, lot_key
 )
 SELECT p.id AS period_id,
        p.period_no,
@@ -41,9 +53,9 @@ SELECT p.id AS period_id,
        COUNT(DISTINCT m.voucher_id) AS vouchers,
        MIN(k.start_date) AS earliest
 FROM inventory_movements m
-JOIN keys k
+JOIN groups k
   ON k.branch_id = m.branch_id
- AND k.warehouse_id = m.warehouse_id
+ AND (k.warehouse_id IS NULL OR k.warehouse_id = m.warehouse_id)
  AND k.item_id = m.item_id
  AND k.lot_key = m.lot_key
 JOIN accounting_periods p ON p.id = m.period_id

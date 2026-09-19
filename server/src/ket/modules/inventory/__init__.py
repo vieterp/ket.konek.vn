@@ -17,7 +17,9 @@ khuôn `modules/cash_book`:
 * **bản cài `InventoryPosting`** (kernel Protocol) — cửa cho mua/bán sinh và gỡ
   phiếu kho;
 * **engine tính giá** (lát 8B) — quyền `inventory.costing.{view,create}` và job
-  `inventory.costing.recalc` (`costing/job.py`).
+  `inventory.costing.recalc` (`costing/job.py`);
+* **cổng nhóm 5 của số dư ban đầu** (lát 8C-1) — `OPENING_DETAIL_PORTS`: lớp
+  tồn đầu kỳ thành movement nhập đã có giá (`opening_port.py`).
 
 Module KHÔNG mở endpoint hành động riêng: ghi sổ / bỏ ghi sổ / xóa đi qua
 `/api/v1/vouchers/{id}/actions/*` dùng chung, nơi ba hook trên chạy.
@@ -163,6 +165,18 @@ def _register_merge_hooks() -> None:
 
 
 _register_merge_hooks()
+
+
+def _register_opening_port() -> None:
+    """Cổng nhóm 5 của số dư ban đầu (8C-1): lớp tồn đầu kỳ → movement — `posting`
+    gọi qua registry vì C4 cấm nó import module này."""
+    from ket.modules.inventory.opening_port import INVENTORY_OPENING_PORT
+    from ket.posting.contracts import OPENING_DETAIL_PORTS
+
+    OPENING_DETAIL_PORTS.register(INVENTORY_OPENING_PORT)
+
+
+_register_opening_port()
 
 
 def _register_costing_job() -> None:

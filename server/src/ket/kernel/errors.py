@@ -1335,6 +1335,32 @@ class OpeningPeriodLockedError(DomainError):
     error_code: ClassVar[str] = "opening.period_locked"
 
 
+class OpeningStockHistoryExistsError(DomainError):
+    """Nhập tay tồn đầu kỳ nhóm 5 cho một năm mà chi nhánh đã có sổ kho trước
+    ngày đầu năm (8C-1): tồn đầu năm này là **kết quả** của lịch sử ấy (engine đọc
+    cả lịch sử) — nhập thêm là đếm hai lần. Đường đúng: sửa chứng từ năm trước
+    rồi chạy chuyển số dư."""
+
+    error_code: ClassVar[str] = "opening.stock_history_exists"
+
+
+class InventoryMovementBeforeOpeningStockError(DomainError):
+    """Ghi sổ một movement có ngày **trước hoặc bằng** ngày lớp tồn đầu kỳ nhập tay
+    của chi nhánh (8C-1): engine đọc cả lịch sử nên số ấy sẽ cộng lên tồn đầu đã
+    khai — đếm hai lần, im lặng. Đường đúng: xóa nhóm 5 của năm đã nhập tay rồi
+    chuyển số dư từ năm trước."""
+
+    error_code: ClassVar[str] = "inventory.movement_before_opening_stock"
+
+
+class SalesLineReturnedError(DomainError):
+    """Hóa đơn bán có dòng đang bị chứng từ hàng bán trả lại trỏ tới
+    (`returned_line_id`, 8C-1) thì không sửa/xóa được — sửa hay xóa chứng từ trả
+    lại trước; `details` chỉ số chứng từ."""
+
+    error_code: ClassVar[str] = "sales.line_returned"
+
+
 class OpeningFiscalYearClosedError(DomainError):
     """Năm tài chính đã quyết toán (`fiscal_years.is_closed`) — chặn cả kỳ 13."""
 

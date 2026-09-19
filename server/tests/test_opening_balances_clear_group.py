@@ -7,7 +7,7 @@ job này là đường duy nhất đưa một nhóm về 0. Bất biến kiểm 
 * chi tiết hóa đơn đi theo cha (ON DELETE CASCADE);
 * xóa xong đánh dấu bẩn kỳ đầu năm (bàn giao 4B) + nhật ký kèm số dòng;
 * kỳ đầu năm đã khóa → từ chối (cùng rào với import/carry-forward);
-* nhóm 5–9 bị chặn từ tham số (bảng chi tiết của chúng thuộc phase 8);
+* nhóm 6–9 bị chặn từ tham số (bảng chi tiết của chúng thuộc 8E; tồn kho 5 mở ở 8C-1);
 * chạy lại lần hai xóa 0 dòng — idempotent.
 """
 
@@ -342,13 +342,19 @@ def test_locked_first_period_blocks_the_clear(
             period.locked_by = None
 
 
-def test_phase_8_kinds_are_rejected_at_the_parameter(context: PostingContext) -> None:
+def test_asset_kinds_are_rejected_at_the_parameter(context: PostingContext) -> None:
+    """Nhóm 6–9 chờ 8E; tồn kho (5) mở ở 8C-1 qua cổng chi tiết."""
     with pytest.raises(ValidationError):
         ClearGroupParams(
             fiscal_year_id=context.fiscal_year_id,
             ledger=Ledger.FINANCIAL.value,
-            detail_kind=OpeningDetailKind.STOCK,
+            detail_kind=OpeningDetailKind.TOOL,
         )
+    ClearGroupParams(
+        fiscal_year_id=context.fiscal_year_id,
+        ledger=Ledger.FINANCIAL.value,
+        detail_kind=OpeningDetailKind.STOCK,
+    )
 
 
 def test_clear_refuses_a_group_with_settled_invoices(

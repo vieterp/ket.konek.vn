@@ -1,4 +1,4 @@
-"""Tệp mẫu Excel của số dư ban đầu — năm sheet cho nhóm 0–4 (FR-OPB-002).
+"""Tệp mẫu Excel của số dư ban đầu — sáu sheet cho nhóm 0–5 (FR-OPB-002).
 
 Một workbook nhiều sheet chứ không năm tệp: kế toán chuyển từ phần mềm cũ nhập
 số dư **một lần cho cả năm**, và năm tệp là năm lần tải lên với năm lượt kiểm
@@ -12,6 +12,11 @@ mà danh mục ấy chỉ có từ 6A (`company_bank_accounts`, đặt ở kerne
 posting import được). Số dư 112 nhập ở sheet Số dư tài khoản từ trước lát này
 vẫn đọc được — nhưng lượt kiểm sẽ cảnh báo chuyển sang sheet ngân hàng, vì
 BR-BNK-01 chỉ đối chiếu được phần nằm trong nhóm 1.
+
+Sheet **tồn kho (kind 5)** vào ở lát 8C-1 (RT-24): mỗi dòng một **lần nhập**
+(FR-OPB-004 — FIFO/đích danh không tính được giá vốn nếu tồn đầu không khai
+theo từng lần nhập), số lượng theo đơn vị gõ và quy về đơn vị chính lúc kiểm,
+tiền là VND (sổ kho không có nguyên tệ) nên không có cột tiền tệ/tỷ giá.
 
 Tái dùng `ColumnDescriptor`/`TemplateDescriptor` của khung danh mục: `reader`
 kiểm cấu trúc và đọc dòng theo đúng descriptor này, nên "tệp mẫu tải về" và
@@ -214,12 +219,87 @@ EMPLOYEE_ADVANCE_SHEET: Final[TemplateDescriptor] = TemplateDescriptor(
     ),
 )
 
+STOCK_SHEET: Final[TemplateDescriptor] = TemplateDescriptor(
+    slug="opening-stock",
+    sheet_name="Tồn kho",
+    columns=(
+        ACCOUNT_CODE_COLUMN,
+        ColumnDescriptor(
+            field="warehouse_code",
+            header="Mã kho",
+            kind=CellKind.TEXT,
+            required=True,
+            max_length=50,
+            note="Mã trong danh mục kho.",
+        ),
+        ColumnDescriptor(
+            field="item_code",
+            header="Mã hàng",
+            kind=CellKind.TEXT,
+            required=True,
+            max_length=50,
+            note="Mã trong danh mục vật tư hàng hóa — hàng hóa hoặc thành phẩm, không phải nhóm.",
+        ),
+        ColumnDescriptor(
+            field="lot_no",
+            header="Số lô",
+            kind=CellKind.TEXT,
+            max_length=50,
+            note="Để trống nếu không theo dõi lô.",
+        ),
+        ColumnDescriptor(
+            field="unit_code",
+            header="Đơn vị tính",
+            kind=CellKind.TEXT,
+            max_length=50,
+            note="Mã đơn vị tính; để trống = đơn vị chính của mã hàng. Đơn vị phụ phải đã khai tỷ lệ quy đổi.",
+        ),
+        ColumnDescriptor(
+            field="quantity",
+            header="Số lượng",
+            kind=CellKind.DECIMAL,
+            required=True,
+            note="Theo đơn vị tính ở cột bên; lớn hơn 0.",
+        ),
+        ColumnDescriptor(
+            field="unit_price",
+            header="Đơn giá",
+            kind=CellKind.DECIMAL,
+            required=True,
+            note="Đơn giá vốn theo đơn vị tính ở cột bên, đồng tiền hạch toán.",
+        ),
+        ColumnDescriptor(
+            field="amount",
+            header="Thành tiền",
+            kind=CellKind.DECIMAL,
+            note="Để trống = số lượng × đơn giá; điền khi số thật lệch lẻ.",
+        ),
+        ColumnDescriptor(
+            field="received_on",
+            header="Ngày nhập",
+            kind=CellKind.TEXT,
+            note=(
+                "Ngày của lần nhập; bắt buộc khi năm tính giá FIFO hoặc đích danh. "
+                "Định dạng ngày/tháng/năm hoặc năm-tháng-ngày; phải trước ngày đầu năm."
+            ),
+        ),
+        ColumnDescriptor(
+            field="receipt_no",
+            header="Số phiếu nhập",
+            kind=CellKind.TEXT,
+            max_length=50,
+            note="Số phiếu của lần nhập ở phần mềm cũ, nếu có.",
+        ),
+    ),
+)
+
 SHEETS: Final[dict[int, TemplateDescriptor]] = {
     OpeningDetailKind.ACCOUNT: ACCOUNT_SHEET,
     OpeningDetailKind.BANK: BANK_SHEET,
     OpeningDetailKind.RECEIVABLE: RECEIVABLE_SHEET,
     OpeningDetailKind.PAYABLE: PAYABLE_SHEET,
     OpeningDetailKind.EMPLOYEE_ADVANCE: EMPLOYEE_ADVANCE_SHEET,
+    OpeningDetailKind.STOCK: STOCK_SHEET,
 }
 """Nhóm số dư → sheet của nó, theo đúng thứ tự nhóm trong SRS 02 §1.1."""
 
@@ -227,7 +307,7 @@ TEMPLATE_FILE_NAME: Final[str] = "mau-nhap-so-du-ban-dau.xlsx"
 
 
 def _write_instructions(workbook: Workbook) -> None:
-    """Sheet Hướng dẫn cho cả bốn nhóm — sinh từ chính các descriptor.
+    """Sheet Hướng dẫn cho mọi nhóm — sinh từ chính các descriptor.
 
     Không dùng `template.write_instructions_sheet` vì hàm đó nhận `CatalogSpec`;
     ở đây không có danh mục nào — nhưng nội dung sinh cùng một cách: từ
@@ -239,6 +319,12 @@ def _write_instructions(workbook: Workbook) -> None:
     sheet.append(["Mỗi nhóm số dư một sheet; sheet không dùng có thể xóa."])
     sheet.append(["Không đổi tên sheet, không đổi tên cột, không đổi thứ tự cột."])
     sheet.append(["Cột có dấu * là cột bắt buộc nhập. Mỗi dòng chỉ điền một bên Nợ hoặc Có."])
+    sheet.append(
+        [
+            "Tồn kho (TK 152/153/155/156/157) nhập ở sheet Tồn kho, mỗi dòng một lần nhập; "
+            "năm tính giá FIFO hoặc đích danh phải có Ngày nhập."
+        ]
+    )
     sheet.append(
         [
             "Số dư tiền gửi ngân hàng (TK 112) nhập ở sheet Số dư ngân hàng, chi tiết "
@@ -272,7 +358,7 @@ def _write_header(workbook: Workbook, descriptor: TemplateDescriptor) -> None:
 
 
 def build_opening_template() -> bytes:
-    """Workbook hoàn chỉnh: Hướng dẫn + bốn sheet dữ liệu, sẵn cho phản hồi HTTP."""
+    """Workbook hoàn chỉnh: Hướng dẫn + sáu sheet dữ liệu, sẵn cho phản hồi HTTP."""
     workbook = Workbook(write_only=False)
     default_sheet = workbook.active
     if default_sheet is not None:

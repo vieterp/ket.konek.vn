@@ -258,6 +258,7 @@ const DETAIL_KIND_LABEL_KEYS = [
   'opening.detailKind.2',
   'opening.detailKind.3',
   'opening.detailKind.4',
+  'opening.detailKind.5',
 ] as const
 
 function ReportView({

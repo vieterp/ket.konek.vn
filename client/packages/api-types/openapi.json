@@ -20685,6 +20685,18 @@
             ],
             "title": "Quantity"
           },
+          "returned_line_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returned Line Id"
+          },
           "unit_cost_fc": {
             "anyOf": [
               {
@@ -20983,6 +20995,18 @@
             ],
             "title": "Quantity"
           },
+          "returned_line_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returned Line Id"
+          },
           "unit_cost_fc": {
             "anyOf": [
               {
@@ -21089,6 +21113,7 @@
           "cogs_account_id",
           "inventory_account_id",
           "unit_cost_fc",
+          "returned_line_id",
           "price_list_id",
           "price_source",
           "cost_object_id",
@@ -24300,7 +24325,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.49.0"
+    "version": "0.50.0"
   },
   "openapi": "3.1.0",
   "paths": {

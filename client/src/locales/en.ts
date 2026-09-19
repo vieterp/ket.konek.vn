@@ -304,6 +304,7 @@ export const en: Record<TranslationKey, string> = {
   'opening.detailKind.2': 'Receivable',
   'opening.detailKind.3': 'Payable',
   'opening.detailKind.4': 'Employee advance',
+  'opening.detailKind.5': 'Inventory',
   'opening.column.account': 'Account',
   'opening.column.accountName': 'Account name',
   'opening.column.partner': 'Partner',

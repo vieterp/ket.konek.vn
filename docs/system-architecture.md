@@ -450,6 +450,9 @@ module còn lại:
 | Chứng từ **0 dòng sổ cái** là hợp lệ (`_insert_postings` rẽ nhánh rỗng) | 8A | Engine giá xuất 8B repost giá vốn; mọi lượt đọc "đã ghi sổ ⇒ có phát sinh" phải coi tập rỗng là hợp lệ |
 | `PostingService.repost` / `repost_many` — ghi lại dòng phát sinh của chứng từ **đang ghi sổ** (DELETE + INSERT, cùng validator, không hook/guard; dạng lô đọc TK/gói một lượt, một dấu bẩn mỗi kỳ) + `InventoryLineSource.sync_cost_posted(posted=…)` hai chiều — ADR-025 | 8B | Khấu hao chạy lại 8E, phân bổ 9, mọi bút toán suy ra sau ghi sổ |
 | Engine tính giá theo **vòng tới điểm bất động** (`RETURNING` rỗng) + `SET LOCAL enable_nestloop = off` cho câu join hai tập suy từ CTE | 8B | Lắp ráp nhiều vòng 8C dùng lại cỗ máy vòng |
+| `posting.contracts.OPENING_DETAIL_PORTS` / `OpeningDetailPort` / `OpeningStockLayer` — cổng chi tiết của số dư ban đầu do module giữ (`lot_id_for`/`clear`/`materialize`/`annotate_carried`) + `InventoryMovementLine.cost_from_line_id` (dòng bán gốc của hàng trả lại) — ADR-026 | 8C-1 | Nhóm 6–9 (CCDC/TSCĐ/trả trước) 8E đăng ký cổng của chúng; hàng mua trả lại nếu cần giá lần nhập |
+| `inventory_movements` **không thuộc phiếu** (`voucher_id`/`line_id` NULL, `opening_layer_id`) — lớp tồn đầu kỳ là movement nhập đã có giá ngày = đầu năm − 1 | 8C-1 | Mọi lượt đọc sổ kho join `vouchers` phải LEFT JOIN; 8D/8F |
+| `fiscal_years.inventory_costing_by_warehouse` + hai câu bình quân "không theo kho" (`wavg_*_branch.sql`, khóa `(chi nhánh, mã hàng, lô)`, chỉ mục `ix_inventory_movements_branch_item_order`) | 8C-1 | — (FIFO/đích danh luôn theo kho) |
 
 ---
 
@@ -544,6 +547,7 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | `lots`, `serials` | Lô / serial (LD-09: cột có mặt ở mọi bảng tồn từ migration đầu; UI serial v1.1) | 8A | `inventory` |
 | `inventory_recalc_queue` | Dấu bẩn tính lại giá xuất theo khóa + `from_date` (MIN giữ lại) — 8A ghi, 8B đọc, khóa sổ chặn khi còn dấu | 8A | `inventory` |
 | `inventory_balances`, `stock_layers` | Snapshot tồn theo kỳ + lớp tồn FIFO/đích danh — hai bảng **dẫn xuất**, engine 8B dựng lại bằng DELETE + INSERT sau mỗi lượt (snapshot: mọi kỳ của năm đã tính; lớp: cả chi nhánh) | 8B | `inventory` |
+| `opening_balance_stock_layers` | Từng lần nhập của tồn kho đầu kỳ (FR-OPB-004) — bảng con của `opening_balances` nhóm 5, `branch_id` + RLS; `inventory` vật chất hóa mỗi lớp thành một movement (`opening_layer_id`, FK RESTRICT từ phía movement) | 8C-1 | `posting` (schema), `inventory` (movement) |
 | `warehouse_book` | Sổ kho của thủ kho (SRS 17) — tạo rỗng ở 8A, 8D ghi | 8 | `inventory` |
 | `audit_log` | Nhật ký bất biến (người, hành động, giá trị trước–sau) | 2 | `ket_owner` |
 | `attachments` | Metadata tệp đính kèm (`entity_type`+`entity_id`, `content_hash`, `branch_id`, `detached_at`). Nội dung nằm ngoài DB | 2 | `kernel` |
