@@ -9,8 +9,10 @@ khuôn `modules/cash_book`:
   không phải năm phân hệ.
 * **loại chứng từ của posting** — `PUR` với `build_request` (posting_mapper)
   và ba hook vòng đời: ghi sổ xong ghi khoản phải trả vào sổ phụ công nợ (hoặc
-  giảm nợ hóa đơn gốc nếu là trả lại hàng), bỏ ghi sổ gỡ ra, xóa thì trả bộ
-  đếm tham chiếu danh mục.
+  giảm nợ hóa đơn gốc nếu là trả lại hàng) **và sinh phiếu kho** cho dòng qua
+  kho (8A), bỏ ghi sổ gỡ cả hai, xóa thì trả bộ đếm tham chiếu danh mục.
+* **nguồn dòng phiếu kho** — `InventoryLineSource` (8A): cùng bộ dòng mà hook
+  gửi cho `InventoryPosting`, để guard tồn kho kêu trên chính hóa đơn.
 
 Module này KHÔNG mở endpoint hành động riêng: ghi sổ / bỏ ghi sổ / xóa đi qua
 `/api/v1/vouchers/{id}/actions/*` dùng chung, chính là nơi ba hook trên chạy.
@@ -84,7 +86,7 @@ def _after_post(session: Session, voucher_id: UUID, user_id: int) -> None:
 def _after_unpost(session: Session, voucher_id: UUID, user_id: int) -> None:
     from ket.modules.purchase.service import PurchaseInvoiceService
 
-    PurchaseInvoiceService(session).clear_after_unpost(voucher_id)
+    PurchaseInvoiceService(session).clear_after_unpost(voucher_id, user_id=user_id)
 
 
 def _before_delete(session: Session, voucher_id: UUID, user_id: int) -> None:
@@ -107,3 +109,16 @@ POSTING_DOCUMENT_REGISTRY.register(
         print_details=None,
     )
 )
+
+
+def _register_inventory_line_source() -> None:
+    """Nguồn dòng phiếu kho (lát 8A, ADR-024) — guard tồn kho của module kho hỏi
+    "hóa đơn này sẽ nhập/xuất gì" trước khi ghi sổ; import cục bộ cùng lối
+    `_build_posting_request`."""
+    from ket.kernel.protocols import PROVIDERS
+    from ket.modules.purchase.inventory_lines import PurchaseInventoryLineSource
+
+    PROVIDERS.register_inventory_line_source(PurchaseInventoryLineSource())
+
+
+_register_inventory_line_source()

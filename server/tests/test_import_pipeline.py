@@ -403,6 +403,7 @@ def _item_row(
     parent: str | None = None,
     is_group: str | None = None,
     tax_inclusive: str | None = None,
+    min_stock: str | None = None,
 ) -> list[object]:
     """Một dòng của tệp mẫu vật tư hàng hóa, theo đúng **thứ tự cột**.
 
@@ -420,6 +421,7 @@ def _item_row(
         None,
         warehouse,
         None,
+        min_stock,  # "Tồn tối thiểu" (8A) đứng trước cột giá sau thuế
         tax_inclusive,
         nature,
         base_unit,

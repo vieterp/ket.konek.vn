@@ -8,12 +8,14 @@ class ket.kernel.protocols.CrossModuleProviders
   ar_ap_subledger(self) -> 'ArApSubledger | None'
   commitment_providers(self) -> 'tuple[CommitmentProvider, ...]'
   einvoice_sources(self) -> 'tuple[EInvoiceSource, ...]'
+  inventory_line_sources(self) -> 'tuple[InventoryLineSource, ...]'
   inventory_posting(self) -> 'InventoryPosting | None'
   payable_providers(self) -> 'tuple[PayableProvider, ...]'
   receivable_providers(self) -> 'tuple[ReceivableProvider, ...]'
   register_ar_ap_subledger(self, implementation: 'ArApSubledger') -> 'None'
   register_commitment(self, provider: 'CommitmentProvider') -> 'None'
   register_einvoice_source(self, source: 'EInvoiceSource') -> 'None'
+  register_inventory_line_source(self, source: 'InventoryLineSource') -> 'None'
   register_inventory_posting(self, implementation: 'InventoryPosting') -> 'None'
   register_payable(self, provider: 'PayableProvider') -> 'None'
   register_receivable(self, provider: 'ReceivableProvider') -> 'None'
@@ -23,17 +25,24 @@ class ket.kernel.protocols.CrossModuleProviders
   settlement_source(self, kind: 'SettlementTargetKind') -> 'SettlementTargetSource | None'
   treasurer_cash_book(self) -> 'TreasurerCashBook | None'
   treasurer_voucher_source(self) -> 'TreasurerVoucherSource | None'
+class ket.kernel.protocols.InventoryLineSource
+  planned_movement(self, session: 'Session', voucher_id: 'UUID') -> 'PlannedMovement | None'
 class ket.kernel.protocols.InventoryMovementKind
 class ket.kernel.protocols.InventoryMovementLine
+  field amount_fc: Decimal | None
+  field credit_account_id: int | None
+  field debit_account_id: int | None
   field item_id: int
   field item_variant_id: int | None
   field lot_no: str | None
   field quantity: Decimal
+  field source_line_id: UUID | None
   field unit_id: int
   field unit_price_fc: Decimal | None
   field warehouse_id: int
 class ket.kernel.protocols.InventoryPosting
-  create_movement(self, session: 'Session', *, kind: 'InventoryMovementKind', source_voucher_id: 'UUID', branch_id: 'int', posting_date: 'date', currency_code: 'str', exchange_rate: 'Decimal', lines: 'Sequence[InventoryMovementLine]', user_id: 'int') -> 'UUID'
+  create_movement(self, session: 'Session', *, kind: 'InventoryMovementKind', source_voucher_id: 'UUID', branch_id: 'int', posting_date: 'date', currency_code: 'str', exchange_rate: 'Decimal', lines: 'Sequence[InventoryMovementLine]', user_id: 'int', operation_code: 'str | None' = None, partner_id: 'int | None' = None, partner_kind: 'PartnerKind | None' = None, description: 'str | None' = None) -> 'UUID'
+  remove_movement(self, session: 'Session', *, source_voucher_id: 'UUID', user_id: 'int') -> 'None'
 class ket.kernel.protocols.OpenInvoice
   field account_id: int
   field amount_fc: Decimal
@@ -55,12 +64,14 @@ class ket.kernel.protocols.PROVIDERS: instance of
   ar_ap_subledger(self) -> 'ArApSubledger | None'
   commitment_providers(self) -> 'tuple[CommitmentProvider, ...]'
   einvoice_sources(self) -> 'tuple[EInvoiceSource, ...]'
+  inventory_line_sources(self) -> 'tuple[InventoryLineSource, ...]'
   inventory_posting(self) -> 'InventoryPosting | None'
   payable_providers(self) -> 'tuple[PayableProvider, ...]'
   receivable_providers(self) -> 'tuple[ReceivableProvider, ...]'
   register_ar_ap_subledger(self, implementation: 'ArApSubledger') -> 'None'
   register_commitment(self, provider: 'CommitmentProvider') -> 'None'
   register_einvoice_source(self, source: 'EInvoiceSource') -> 'None'
+  register_inventory_line_source(self, source: 'InventoryLineSource') -> 'None'
   register_inventory_posting(self, implementation: 'InventoryPosting') -> 'None'
   register_payable(self, provider: 'PayableProvider') -> 'None'
   register_receivable(self, provider: 'ReceivableProvider') -> 'None'
@@ -72,6 +83,13 @@ class ket.kernel.protocols.PROVIDERS: instance of
   treasurer_voucher_source(self) -> 'TreasurerVoucherSource | None'
 class ket.kernel.protocols.PayableProvider
   open_invoices(self, session: 'Session', *, partner_kind: 'PartnerKind', partner_id: 'int', branch_id: 'int', as_of: 'date') -> 'Sequence[OpenInvoice]'
+class ket.kernel.protocols.PlannedMovement
+  field description: str | None
+  field kind: InventoryMovementKind
+  field lines: tuple[InventoryMovementLine, ...]
+  field operation_code: str | None
+  field partner_id: int | None
+  field partner_kind: PartnerKind | None
 class ket.kernel.protocols.ReceivableProvider
   open_invoices(self, session: 'Session', *, partner_kind: 'PartnerKind', partner_id: 'int', branch_id: 'int', as_of: 'date') -> 'Sequence[OpenInvoice]'
 class ket.kernel.protocols.SettlementTargetKind
@@ -136,7 +154,12 @@ ket.posting.contracts.GUARD_WARNING_DETAIL: str
 class ket.posting.contracts.GuardFinding
   field blocking: bool
   field violation: PostingViolation
+class ket.posting.contracts.LOCK_CHECKS: instance of
+  checks(self) -> 'tuple[LockCheck, ...]'
+  register(self, check: 'LockCheck') -> 'None'
+  run(self, session: 'Session', period: 'AccountingPeriod', year: 'FiscalYear') -> 'None'
 class ket.posting.contracts.Ledger
+ket.posting.contracts.LockCheck: _CallableGenericAlias
 class ket.posting.contracts.POSTING_DOCUMENT_REGISTRY: instance of
   codes(self) -> 'tuple[str, ...]'
   get(self, code: 'str') -> 'PostingDocumentType'

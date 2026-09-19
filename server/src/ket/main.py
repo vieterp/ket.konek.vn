@@ -67,6 +67,7 @@ from ket.api.routers.exports import router as exports_router
 from ket.api.routers.fiscal_years import router as fiscal_years_router
 from ket.api.routers.gl_journal import router as gl_journal_router
 from ket.api.routers.imports import router as imports_router
+from ket.api.routers.inventory import router as inventory_router
 from ket.api.routers.items_prices import router as item_prices_router
 from ket.api.routers.items_units import router as item_units_router
 from ket.api.routers.items_variants import router as item_variants_router
@@ -330,6 +331,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # endpoint chứng từ dùng chung, sổ phụ công nợ qua `ArApSubledger`.
     app.include_router(purchase_router)
     app.include_router(sales_router)
+    # Lát 8A — phiếu kho NK/XK/CK + sổ kho (SRS 09); ghi sổ qua endpoint chứng
+    # từ dùng chung, phiếu sinh từ mua/bán qua `InventoryPosting`.
+    app.include_router(inventory_router)
     # Lát 7D — nền hóa đơn điện tử (SRS 07) + quản lý hóa đơn (SRS 08). Sau
     # `sales_router` vì hóa đơn trỏ về chứng từ bán và giữ nó đứng yên
     # (FR-EIV-035), không phải ngược lại.

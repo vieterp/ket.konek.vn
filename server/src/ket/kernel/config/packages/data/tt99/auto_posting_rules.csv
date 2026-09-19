@@ -65,3 +65,20 @@ SAL,tra-lai-hang-ban,Hàng bán bị trả lại,sales_deduction,ar_trade,1,0,5
 SAL,giam-gia-hang-ban,Giảm giá hàng bán,sales_deduction,ar_trade,1,0,6
 SAL,dieu-chinh-tang-hoa-don,Điều chỉnh tăng hóa đơn đã phát hành,ar_trade,revenue_goods,1,0,7
 SAL,dieu-chinh-giam-hoa-don,Điều chỉnh giảm hóa đơn đã phát hành,sales_deduction,ar_trade,1,0,8
+NK,nhap-hang-dang-di-duong,Nhập kho hàng mua đang đi đường,inventory_goods,goods_in_transit,0,,1
+NK,nhap-thanh-pham,Nhập kho thành phẩm sản xuất,finished_goods,work_in_progress,0,,2
+NK,nhap-lai-nvl-thua,Nhập kho nguyên vật liệu dùng không hết,raw_materials,production_materials,0,,3
+NK,nhap-hang-ban-tra-lai,Nhập kho hàng bán bị trả lại,inventory_goods,cogs,1,0,4
+NK,nhap-tu-chi-nhanh,Nhập kho hàng từ chi nhánh phụ thuộc chuyển đến,inventory_goods,internal_receivable,0,,5
+NK,nhap-lai-hang-gia-cong,Hàng gửi đi gia công nhập lại kho,finished_goods,work_in_progress,1,1,6
+NK,nhap-mua-hang,Nhập kho hàng mua (sinh từ hóa đơn mua),,,1,1,7
+NK,nhap-khac,Nhập kho khác (tự định khoản),,,0,,9
+XK,xuat-nvl-san-xuat,Xuất kho nguyên vật liệu cho sản xuất,production_materials,raw_materials,0,,1
+XK,xuat-nvl-xdcb,Xuất nguyên vật liệu cho đầu tư XDCB / sửa chữa lớn TSCĐ,construction_in_progress,raw_materials,0,,2
+XK,xuat-ban-hang,Xuất kho bán hàng,cogs,inventory_goods,1,0,3
+XK,xuat-bieu-tang-noi-bo,Xuất hàng biếu tặng / sử dụng nội bộ,admin_expense,inventory_goods,0,,4
+XK,xuat-cho-chi-nhanh,Xuất hàng cho chi nhánh hạch toán phụ thuộc,internal_receivable,inventory_goods,0,,5
+XK,xuat-tra-lai-hang-mua,Xuất kho trả lại hàng mua (sinh từ chứng từ trả lại),,,1,1,7
+XK,xuat-khac,Xuất kho khác (tự định khoản),,,0,,9
+CK,chuyen-kho-noi-bo,Chuyển vật tư giữa các kho nội bộ,,,0,,1
+CK,gui-ban-dai-ly,Chuyển hàng gửi bán đại lý,goods_on_consignment,inventory_goods,1,0,2

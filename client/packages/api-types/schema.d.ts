@@ -1701,6 +1701,162 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/inventory/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cất phiếu xuất kho */
+        post: operations["create_inventory_issues_api_v1_inventory_issues_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/issues/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Đọc phiếu xuất kho */
+        get: operations["get_inventory_issues_api_v1_inventory_issues__voucher_id__get"];
+        /**
+         * Sửa phiếu xuất kho
+         * @description Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).
+         */
+        put: operations["update_inventory_issues_api_v1_inventory_issues__voucher_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/movements/actions/reorder-day": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reorder Movements In Day
+         * @description FR-STK-017: sắp xếp lại thứ tự chứng từ của một khóa tồn kho trong ngày.
+         */
+        post: operations["reorder_movements_in_day_api_v1_inventory_movements_actions_reorder_day_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cất phiếu nhập kho */
+        post: operations["create_inventory_receipts_api_v1_inventory_receipts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/receipts/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Đọc phiếu nhập kho */
+        get: operations["get_inventory_receipts_api_v1_inventory_receipts__voucher_id__get"];
+        /**
+         * Sửa phiếu nhập kho
+         * @description Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).
+         */
+        put: operations["update_inventory_receipts_api_v1_inventory_receipts__voucher_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Stock
+         * @description Tồn theo `(chi nhánh, kho, vật tư, lô)` tại cuối ngày — số lượng đơn vị
+         *     chính; giá trị `null` cho tới khi khóa đã tính giá đủ (8B). Chi nhánh ngoài
+         *     phạm vi → 422; không truyền thì RLS trả mọi chi nhánh trong phạm vi.
+         */
+        get: operations["read_stock_api_v1_inventory_stock_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cất phiếu chuyển kho */
+        post: operations["create_inventory_transfers_api_v1_inventory_transfers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/transfers/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Đọc phiếu chuyển kho */
+        get: operations["get_inventory_transfers_api_v1_inventory_transfers__voucher_id__get"];
+        /**
+         * Sửa phiếu chuyển kho
+         * @description Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).
+         */
+        put: operations["update_inventory_transfers_api_v1_inventory_transfers__voucher_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs": {
         parameters: {
             query?: never;
@@ -12027,6 +12183,281 @@ export interface components {
             vendor_id?: number | null;
         };
         /**
+         * InventoryVoucherIn
+         * @description Thân phiếu kho cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).
+         */
+        InventoryVoucherIn: {
+            /** Branch Id */
+            branch_id: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Delivered By */
+            delivered_by?: string | null;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Kind */
+            kind: number;
+            /** Lines */
+            lines: components["schemas"]["InventoryVoucherLineIn"][];
+            /** Operation Code */
+            operation_code: string;
+            /** Partner Id */
+            partner_id?: number | null;
+            partner_kind?: components["schemas"]["PartnerKind"] | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** To Warehouse Id */
+            to_warehouse_id?: number | null;
+            /** Warehouse Id */
+            warehouse_id: number;
+        };
+        /**
+         * InventoryVoucherLineIn
+         * @description Một dòng vật tư: mã hàng, kho, số lượng theo ĐVT gõ, giá vốn tùy chọn.
+         */
+        InventoryVoucherLineIn: {
+            /** Amount Fc */
+            amount_fc?: number | string | null;
+            /** Contract Id */
+            contract_id?: number | null;
+            /** Cost Object Id */
+            cost_object_id?: number | null;
+            /** Credit Account Id */
+            credit_account_id?: number | null;
+            /** Debit Account Id */
+            debit_account_id?: number | null;
+            /** Description */
+            description?: string | null;
+            /** Expense Item Id */
+            expense_item_id?: number | null;
+            /**
+             * Extended
+             * @default []
+             */
+            extended: components["schemas"]["ExtendedDimensionIn"][];
+            /** Item Id */
+            item_id: number;
+            /** Item Variant Id */
+            item_variant_id?: number | null;
+            /** Lot No */
+            lot_no?: string | null;
+            /** Order Id */
+            order_id?: number | null;
+            /** Partner Id */
+            partner_id?: number | null;
+            partner_kind?: components["schemas"]["PartnerKind"] | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Quantity */
+            quantity: number | string;
+            /** Unit Cost Fc */
+            unit_cost_fc?: number | string | null;
+            /** Unit Id */
+            unit_id: number;
+            /** Warehouse Id */
+            warehouse_id?: number | null;
+        };
+        /** InventoryVoucherLineOut */
+        InventoryVoucherLineOut: {
+            /** Amount Fc */
+            amount_fc: string | null;
+            /** Base Quantity */
+            base_quantity: string;
+            /** Contract Id */
+            contract_id: number | null;
+            /** Cost Object Id */
+            cost_object_id: number | null;
+            /** Credit Account Id */
+            credit_account_id: number | null;
+            /** Debit Account Id */
+            debit_account_id: number | null;
+            /** Description */
+            description: string | null;
+            /** Expense Item Id */
+            expense_item_id: number | null;
+            /** Extended Dimensions */
+            extended_dimensions: {
+                [key: string]: number;
+            } | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Item Id */
+            item_id: number;
+            /** Item Variant Id */
+            item_variant_id: number | null;
+            /** Line No */
+            line_no: number;
+            /** Lot Id */
+            lot_id: number | null;
+            /** Order Id */
+            order_id: number | null;
+            /** Partner Id */
+            partner_id: number | null;
+            /** Partner Kind */
+            partner_kind: number | null;
+            /** Project Id */
+            project_id: number | null;
+            /** Quantity */
+            quantity: string;
+            /** Serial Id */
+            serial_id: number | null;
+            /** Source Line Id */
+            source_line_id: string | null;
+            /** Unit Cost Fc */
+            unit_cost_fc: string | null;
+            /** Unit Id */
+            unit_id: number;
+            /** Warehouse Id */
+            warehouse_id: number;
+        };
+        /**
+         * InventoryVoucherOut
+         * @description Header chứng từ + thân phiếu — client cần cả hai để vẽ lại form.
+         */
+        InventoryVoucherOut: {
+            /** Branch Id */
+            branch_id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Delivered By */
+            delivered_by?: string | null;
+            /** Description */
+            description: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /** Document Type */
+            document_type: string;
+            /** Entry Kind */
+            entry_kind: number;
+            /** Exchange Rate */
+            exchange_rate: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Keeper Status
+             * @default 0
+             */
+            keeper_status: number;
+            /**
+             * Kind
+             * @default 0
+             */
+            kind: number;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["InventoryVoucherLineOut"][];
+            /**
+             * Operation Code
+             * @default
+             */
+            operation_code: string;
+            /** Partner Id */
+            partner_id?: number | null;
+            /** Partner Kind */
+            partner_kind?: number | null;
+            /** Period Id */
+            period_id: number;
+            /** Posted At */
+            posted_at: string | null;
+            /** Posted By */
+            posted_by: number | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Row Version */
+            row_version: number;
+            /** Source Document Id */
+            source_document_id: string | null;
+            /** Status */
+            status: number;
+            /** To Warehouse Id */
+            to_warehouse_id?: number | null;
+            /** Voucher No */
+            voucher_no: string;
+            /**
+             * Warehouse Id
+             * @default 0
+             */
+            warehouse_id: number;
+        };
+        /**
+         * InventoryVoucherUpdate
+         * @description PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).
+         */
+        InventoryVoucherUpdate: {
+            /** Branch Id */
+            branch_id: number;
+            /** Currency Code */
+            currency_code: string;
+            /** Delivered By */
+            delivered_by?: string | null;
+            /** Description */
+            description?: string | null;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date: string;
+            /**
+             * Exchange Rate
+             * @default 1
+             */
+            exchange_rate: number | string;
+            /** Kind */
+            kind: number;
+            /** Lines */
+            lines: components["schemas"]["InventoryVoucherLineIn"][];
+            /** Operation Code */
+            operation_code: string;
+            /** Partner Id */
+            partner_id?: number | null;
+            partner_kind?: components["schemas"]["PartnerKind"] | null;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Row Version */
+            row_version: number;
+            /** To Warehouse Id */
+            to_warehouse_id?: number | null;
+            /** Warehouse Id */
+            warehouse_id: number;
+        };
+        /**
          * InvoiceFormKind
          * @description Hóa đơn của ký hiệu này thuộc hình thức nào.
          *
@@ -12434,6 +12865,8 @@ export interface components {
              * @default false
              */
             is_group: boolean;
+            /** Tồn tối thiểu */
+            min_stock_qty?: number | string | null;
             /** Name */
             name: string;
             /** Name En */
@@ -12478,6 +12911,8 @@ export interface components {
             is_group: boolean;
             /** Level */
             level: number;
+            /** Tồn tối thiểu */
+            min_stock_qty?: string | null;
             /** Name */
             name: string;
             /** Name En */
@@ -12508,6 +12943,8 @@ export interface components {
             description?: string | null;
             /** Is Active */
             is_active: boolean;
+            /** Tồn tối thiểu */
+            min_stock_qty?: number | string | null;
             /** Name */
             name: string;
             /** Name En */
@@ -15356,6 +15793,37 @@ export interface components {
          * @enum {integer}
          */
         Remedy: 0 | 1 | 2 | 3;
+        /**
+         * ReorderDayIn
+         * @description Sắp xếp lại thứ tự trong ngày cho một khóa tồn kho (FR-STK-017).
+         */
+        ReorderDayIn: {
+            /** Branch Id */
+            branch_id: number;
+            /** Item Id */
+            item_id: number;
+            /** Lot Id */
+            lot_id?: number | null;
+            /** Ordered Movement Ids */
+            ordered_movement_ids: number[];
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Warehouse Id */
+            warehouse_id: number;
+        };
+        /** ReorderDayOut */
+        ReorderDayOut: {
+            /**
+             * Marked From
+             * Format: date
+             */
+            marked_from: string;
+            /** Reordered */
+            reordered: number;
+        };
         /** ReportListResponse */
         ReportListResponse: {
             /** Reports */
@@ -16390,6 +16858,35 @@ export interface components {
             /** Value */
             value: string;
         };
+        /** StockResponse */
+        StockResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Items */
+            items: components["schemas"]["StockRow"][];
+        };
+        /**
+         * StockRow
+         * @description Một dòng tồn theo khóa `(kho, vật tư, lô)` tại `as_of` — số lượng đơn vị
+         *     chính; giá trị `None` cho tới khi 8B có engine tính giá.
+         */
+        StockRow: {
+            /** Branch Id */
+            branch_id: number;
+            /** Item Id */
+            item_id: number;
+            /** Lot Id */
+            lot_id: number | null;
+            /** On Hand */
+            on_hand: string;
+            /** Value */
+            value?: string | null;
+            /** Warehouse Id */
+            warehouse_id: number;
+        };
         /**
          * TimekeepingSymbolsCreateRequest
          * @description Ký hiệu chấm công — tạo mới.
@@ -16590,14 +17087,14 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "chua-ghi-so" | "chua-co-hoa-don" | "qua-han";
+            code: "chua-ghi-so" | "chua-co-hoa-don" | "chua-nhap-kho" | "chua-xuat-kho" | "qua-han";
             /** Count */
             count: number;
             /**
              * Next Action
              * @enum {string}
              */
-            next_action: "post" | "attach-vendor-invoice" | "issue-einvoice" | "pay" | "collect";
+            next_action: "post" | "attach-vendor-invoice" | "issue-einvoice" | "stock-in" | "stock-out" | "pay" | "collect";
             /** Sample */
             sample: components["schemas"]["TradePendingVoucher"][];
         };
@@ -19885,6 +20382,376 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JournalVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_inventory_issues_api_v1_inventory_issues_post: {
+        parameters: {
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryVoucherIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_inventory_issues_api_v1_inventory_issues__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_inventory_issues_api_v1_inventory_issues__voucher_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryVoucherUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    reorder_movements_in_day_api_v1_inventory_movements_actions_reorder_day_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderDayIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReorderDayOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_inventory_receipts_api_v1_inventory_receipts_post: {
+        parameters: {
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryVoucherIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_inventory_receipts_api_v1_inventory_receipts__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_inventory_receipts_api_v1_inventory_receipts__voucher_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryVoucherUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_stock_api_v1_inventory_stock_get: {
+        parameters: {
+            query: {
+                as_of: string;
+                branch_id?: number | null;
+                warehouse_id?: number | null;
+                item_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_inventory_transfers_api_v1_inventory_transfers_post: {
+        parameters: {
+            query?: {
+                acknowledge_warnings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryVoucherIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_inventory_transfers_api_v1_inventory_transfers__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_inventory_transfers_api_v1_inventory_transfers__voucher_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryVoucherUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVoucherOut"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

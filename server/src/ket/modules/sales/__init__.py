@@ -92,7 +92,7 @@ def _after_post(session: Session, voucher_id: UUID, user_id: int) -> None:
 def _after_unpost(session: Session, voucher_id: UUID, user_id: int) -> None:
     from ket.modules.sales.service import SalesInvoiceService
 
-    SalesInvoiceService(session).clear_after_unpost(voucher_id)
+    SalesInvoiceService(session).clear_after_unpost(voucher_id, user_id=user_id)
 
 
 def _before_delete(session: Session, voucher_id: UUID, user_id: int) -> None:
@@ -120,3 +120,16 @@ POSTING_DOCUMENT_REGISTRY.register(
         invoiceable=True,
     )
 )
+
+
+def _register_inventory_line_source() -> None:
+    """Nguồn dòng phiếu kho (lát 8A, ADR-024) — guard tồn kho của module kho hỏi
+    "chứng từ này sẽ xuất gì" trước khi ghi sổ, nên cảnh báo xuất quá tồn kêu
+    trên chính màn hóa đơn bán; import cục bộ cùng lối `_build_posting_request`."""
+    from ket.kernel.protocols import PROVIDERS
+    from ket.modules.sales.inventory_lines import SalesInventoryLineSource
+
+    PROVIDERS.register_inventory_line_source(SalesInventoryLineSource())
+
+
+_register_inventory_line_source()

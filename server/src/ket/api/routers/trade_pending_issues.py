@@ -40,7 +40,7 @@ from typing import Annotated, Any, Final, Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import ColumnElement, Select, exists, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from ket.api.dependencies import AuthorizedRequest, SessionFactory, require_permission
 from ket.api.open_items import Direction, OpenItem, open_items
@@ -52,16 +52,28 @@ from ket.api.routers.trade_pending_issues_schemas import (
     TradePendingVoucher,
 )
 from ket.kernel.contracts import PartnerKind
+from ket.kernel.master_data.models.item import INVENTORY_NATURES, Item
 from ket.kernel.master_data.models.partner import Partner
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.permissions import Action, permission_code
 from ket.modules.einvoice.models import LIVE_STATUSES, EInvoice
+from ket.modules.inventory.models import InventoryVoucher
 from ket.modules.purchase import INVOICE_PERMISSION_CODE as PURCHASE_INVOICE_CODE
 from ket.modules.purchase import PURCHASE_PERMISSION_MODULE
-from ket.modules.purchase.models import PurchaseInvoice, VendorInvoiceStatus
+from ket.modules.purchase.models import (
+    PurchaseInvoice,
+    PurchaseInvoiceKind,
+    PurchaseInvoiceLine,
+    VendorInvoiceStatus,
+)
 from ket.modules.sales import INVOICE_PERMISSION_CODE as SALES_INVOICE_CODE
 from ket.modules.sales import SALES_PERMISSION_MODULE
-from ket.modules.sales.models import KINDS_NEEDING_EINVOICE, SalesInvoice
+from ket.modules.sales.models import (
+    KINDS_NEEDING_EINVOICE,
+    SalesInvoice,
+    SalesInvoiceKind,
+    SalesInvoiceLine,
+)
 from ket.posting.documents.models import Voucher, VoucherStatus
 
 router = APIRouter(tags=["pending-issues"])
@@ -157,6 +169,17 @@ def _pending_issues(
         if missing is not None:
             groups.append(missing)
 
+        stock = _voucher_group(
+            session,
+            side=side,
+            as_of=effective_as_of,
+            code="chua-nhap-kho" if side == "purchase" else "chua-xuat-kho",
+            next_action="stock-in" if side == "purchase" else "stock-out",
+            condition=_missing_stock_voucher_condition(side),
+        )
+        if stock is not None:
+            groups.append(stock)
+
         overdue = _overdue_group(session, side=side, as_of=effective_as_of)
         if overdue is not None:
             groups.append(overdue)
@@ -205,6 +228,47 @@ def _voucher_group(
             )
             for row in rows
         ],
+    )
+
+
+def _missing_stock_voucher_condition(side: Side) -> ColumnElement[bool]:
+    """Đã ghi sổ, có dòng hàng qua kho (mã hàng `goods`/`finished_goods` kèm số
+    lượng), mà không phiếu kho nào mang `source_document_id` trỏ về — lát 8A.
+
+    Lọc phiếu sinh theo **thân `inventory_vouchers`**, không chỉ theo cột
+    `source_document_id` của header: phase sau có thể ghi cùng cột ấy cho
+    chứng từ loại khác (phiếu chi trả hóa đơn), và lúc đó "đã có gì đó trỏ về"
+    không còn nghĩa là "đã nhập kho".
+    """
+    generated_header = aliased(Voucher)
+    generated = exists().where(
+        generated_header.source_document_id == Voucher.id,
+        InventoryVoucher.id == generated_header.id,
+    )
+    if side == "purchase":
+        stocked_line = exists().where(
+            PurchaseInvoiceLine.voucher_id == Voucher.id,
+            PurchaseInvoiceLine.quantity.is_not(None),
+            PurchaseInvoiceLine.item_id == Item.id,
+            Item.nature.in_(sorted(nature.value for nature in INVENTORY_NATURES)),
+        )
+        return (
+            (Voucher.status == int(VoucherStatus.DA_GHI_SO))
+            & (PurchaseInvoice.kind == PurchaseInvoiceKind.GOODS)
+            & stocked_line
+            & ~generated
+        )
+    stocked_line = exists().where(
+        SalesInvoiceLine.voucher_id == Voucher.id,
+        SalesInvoiceLine.quantity.is_not(None),
+        SalesInvoiceLine.item_id == Item.id,
+        Item.nature.in_(sorted(nature.value for nature in INVENTORY_NATURES)),
+    )
+    return (
+        (Voucher.status == int(VoucherStatus.DA_GHI_SO))
+        & SalesInvoice.kind.in_((SalesInvoiceKind.GOODS, SalesInvoiceKind.AGENCY))
+        & stocked_line
+        & ~generated
     )
 
 

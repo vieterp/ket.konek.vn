@@ -14,15 +14,21 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-PendingIssueCode = Literal["chua-ghi-so", "chua-co-hoa-don", "qua-han"]
+PendingIssueCode = Literal[
+    "chua-ghi-so", "chua-co-hoa-don", "chua-nhap-kho", "chua-xuat-kho", "qua-han"
+]
 """Mã nhóm, giống nhau hai chiều để client ánh xạ nhãn theo `(chiều, mã)`:
 `qua-han` là "quá hạn thanh toán" ở màn mua và "quá hạn thu tiền" ở màn bán.
 
-Nhóm "chưa nhập kho" / "chưa xuất kho" **cố ý vắng mặt** cho tới phase 8:
-`InventoryPosting` hiện là bản cài no-op, và một nhóm luôn đếm 0 là một lời
-hứa ("hệ thống đang canh việc này") mà hệ thống chưa giữ được."""
+Nhóm "chưa nhập kho" / "chưa xuất kho" (lát 8A): chứng từ đã ghi sổ có dòng
+hàng qua kho mà không phiếu kho nào sinh kèm — phiếu sinh tự động cho dòng có
+kho (`InventoryPosting`), nên nhóm này thực chất là "dòng hàng thiếu kho" (mua)
+và "chưa bật kiêm phiếu xuất kho" (bán). Trước 8A hai nhóm **cố ý vắng mặt**:
+một nhóm luôn đếm 0 là một lời hứa mà hệ thống chưa giữ được."""
 
-NextAction = Literal["post", "attach-vendor-invoice", "issue-einvoice", "pay", "collect"]
+NextAction = Literal[
+    "post", "attach-vendor-invoice", "issue-einvoice", "stock-in", "stock-out", "pay", "collect"
+]
 """Mã máy cho ô "Việc tiếp theo" — nhãn tiếng Việt thuộc tầng i18n của client,
 cùng luật với `PendingIssueGroupResponse.next_action` của phase 4."""
 

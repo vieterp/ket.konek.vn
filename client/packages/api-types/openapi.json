@@ -9253,6 +9253,953 @@
         "title": "InboundPurchaseIn",
         "type": "object"
       },
+      "InventoryVoucherIn": {
+        "additionalProperties": false,
+        "description": "Thân phiếu kho cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "currency_code": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "delivered_by": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivered By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "exchange_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Exchange Rate"
+          },
+          "kind": {
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryVoucherLineIn"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartnerKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "to_warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Warehouse Id"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "operation_code",
+          "warehouse_id",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "currency_code",
+          "lines"
+        ],
+        "title": "InventoryVoucherIn",
+        "type": "object"
+      },
+      "InventoryVoucherLineIn": {
+        "additionalProperties": false,
+        "description": "Một dòng vật tư: mã hàng, kho, số lượng theo ĐVT gõ, giá vốn tùy chọn.",
+        "properties": {
+          "amount_fc": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Fc"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "cost_object_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Object Id"
+          },
+          "credit_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Account Id"
+          },
+          "debit_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debit Account Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expense_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expense Item Id"
+          },
+          "extended": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtendedDimensionIn"
+            },
+            "title": "Extended",
+            "type": "array"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "item_variant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Variant Id"
+          },
+          "lot_no": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot No"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartnerKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "unit_cost_fc": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost Fc"
+          },
+          "unit_id": {
+            "title": "Unit Id",
+            "type": "integer"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          }
+        },
+        "required": [
+          "item_id",
+          "unit_id",
+          "quantity"
+        ],
+        "title": "InventoryVoucherLineIn",
+        "type": "object"
+      },
+      "InventoryVoucherLineOut": {
+        "properties": {
+          "amount_fc": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Fc"
+          },
+          "base_quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Base Quantity",
+            "type": "string"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
+          },
+          "cost_object_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Object Id"
+          },
+          "credit_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Account Id"
+          },
+          "debit_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debit Account Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expense_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expense Item Id"
+          },
+          "extended_dimensions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extended Dimensions"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "item_variant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Variant Id"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Kind"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "serial_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serial Id"
+          },
+          "source_line_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Line Id"
+          },
+          "unit_cost_fc": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost Fc"
+          },
+          "unit_id": {
+            "title": "Unit Id",
+            "type": "integer"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "line_no",
+          "item_id",
+          "item_variant_id",
+          "warehouse_id",
+          "lot_id",
+          "serial_id",
+          "unit_id",
+          "quantity",
+          "base_quantity",
+          "unit_cost_fc",
+          "amount_fc",
+          "debit_account_id",
+          "credit_account_id",
+          "partner_id",
+          "partner_kind",
+          "cost_object_id",
+          "project_id",
+          "order_id",
+          "contract_id",
+          "expense_item_id",
+          "extended_dimensions",
+          "source_line_id",
+          "description"
+        ],
+        "title": "InventoryVoucherLineOut",
+        "type": "object"
+      },
+      "InventoryVoucherOut": {
+        "description": "Header chứng từ + thân phiếu — client cần cả hai để vẽ lại form.",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "integer"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "delivered_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivered By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "entry_kind": {
+            "title": "Entry Kind",
+            "type": "integer"
+          },
+          "exchange_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exchange Rate",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "keeper_status": {
+            "default": 0,
+            "title": "Keeper Status",
+            "type": "integer"
+          },
+          "kind": {
+            "default": 0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InventoryVoucherLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "default": "",
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Kind"
+          },
+          "period_id": {
+            "title": "Period Id",
+            "type": "integer"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "posted_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted By"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "source_document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Document Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "to_warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Warehouse Id"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          },
+          "warehouse_id": {
+            "default": 0,
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "document_type",
+          "voucher_no",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "period_id",
+          "currency_code",
+          "exchange_rate",
+          "description",
+          "status",
+          "entry_kind",
+          "source_document_id",
+          "created_at",
+          "created_by",
+          "posted_at",
+          "posted_by",
+          "row_version"
+        ],
+        "title": "InventoryVoucherOut",
+        "type": "object"
+      },
+      "InventoryVoucherUpdate": {
+        "additionalProperties": false,
+        "description": "PUT mang thêm `row_version` — khóa lạc quan (FR-NFR-005).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "currency_code": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "delivered_by": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivered By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": "string"
+          },
+          "exchange_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "default": "1",
+            "title": "Exchange Rate"
+          },
+          "kind": {
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Kind",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryVoucherLineIn"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "operation_code": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Operation Code",
+            "type": "string"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "partner_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartnerKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "row_version": {
+            "title": "Row Version",
+            "type": "integer"
+          },
+          "to_warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Warehouse Id"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "operation_code",
+          "warehouse_id",
+          "branch_id",
+          "document_date",
+          "posting_date",
+          "currency_code",
+          "lines",
+          "row_version"
+        ],
+        "title": "InventoryVoucherUpdate",
+        "type": "object"
+      },
       "InvoiceFormKind": {
         "description": "Hóa đơn của ký hiệu này thuộc hình thức nào.\n\n`IntEnum` với bộ giá trị đóng: pháp luật hiện hành cho đúng ba hình thức, và\nmột hình thức thứ tư sẽ đi kèm cả một bộ quy định mới chứ không chỉ một giá\ntrị mới — nên đây là chỗ đáng khai đóng, khác `kind` của chứng từ mua/bán.",
         "enum": [
@@ -10404,6 +11351,22 @@
             "title": "Is Group",
             "type": "boolean"
           },
+          "min_stock_qty": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tồn tối thiểu"
+          },
           "name": {
             "maxLength": 255,
             "minLength": 1,
@@ -10553,6 +11516,18 @@
             "title": "Level",
             "type": "integer"
           },
+          "min_stock_qty": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tồn tối thiểu"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -10667,6 +11642,22 @@
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
+          },
+          "min_stock_qty": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tồn tối thiểu"
           },
           "name": {
             "maxLength": 255,
@@ -18383,6 +19374,76 @@
         "title": "Remedy",
         "type": "integer"
       },
+      "ReorderDayIn": {
+        "additionalProperties": false,
+        "description": "Sắp xếp lại thứ tự trong ngày cho một khóa tồn kho (FR-STK-017).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "ordered_movement_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Ordered Movement Ids",
+            "type": "array"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "branch_id",
+          "warehouse_id",
+          "item_id",
+          "posting_date",
+          "ordered_movement_ids"
+        ],
+        "title": "ReorderDayIn",
+        "type": "object"
+      },
+      "ReorderDayOut": {
+        "properties": {
+          "marked_from": {
+            "format": "date",
+            "title": "Marked From",
+            "type": "string"
+          },
+          "reordered": {
+            "title": "Reordered",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reordered",
+          "marked_from"
+        ],
+        "title": "ReorderDayOut",
+        "type": "object"
+      },
       "ReportListResponse": {
         "properties": {
           "reports": {
@@ -21295,6 +22356,82 @@
         "title": "StatementRowValueResponse",
         "type": "object"
       },
+      "StockResponse": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StockRow"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "items"
+        ],
+        "title": "StockResponse",
+        "type": "object"
+      },
+      "StockRow": {
+        "description": "Một dòng tồn theo khóa `(kho, vật tư, lô)` tại `as_of` — số lượng đơn vị\nchính; giá trị `None` cho tới khi 8B có engine tính giá.",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "on_hand": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "On Hand",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "branch_id",
+          "warehouse_id",
+          "item_id",
+          "lot_id",
+          "on_hand"
+        ],
+        "title": "StockRow",
+        "type": "object"
+      },
       "TimekeepingSymbolsCreateRequest": {
         "additionalProperties": false,
         "description": "Ký hiệu chấm công — tạo mới.",
@@ -21829,6 +22966,8 @@
             "enum": [
               "chua-ghi-so",
               "chua-co-hoa-don",
+              "chua-nhap-kho",
+              "chua-xuat-kho",
               "qua-han"
             ],
             "title": "Code",
@@ -21843,6 +22982,8 @@
               "post",
               "attach-vendor-invoice",
               "issue-einvoice",
+              "stock-in",
+              "stock-out",
               "pay",
               "collect"
             ],
@@ -23006,7 +24147,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.47.0"
+    "version": "0.48.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -27331,6 +28472,584 @@
         "summary": "Update Journal Voucher",
         "tags": [
           "general-ledger"
+        ]
+      }
+    },
+    "/api/v1/inventory/issues": {
+      "post": {
+        "operationId": "create_inventory_issues_api_v1_inventory_issues_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "acknowledge_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledge Warnings",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryVoucherIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Cất phiếu xuất kho",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/issues/{voucher_id}": {
+      "get": {
+        "operationId": "get_inventory_issues_api_v1_inventory_issues__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đọc phiếu xuất kho",
+        "tags": [
+          "inventory"
+        ]
+      },
+      "put": {
+        "description": "Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).",
+        "operationId": "update_inventory_issues_api_v1_inventory_issues__voucher_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryVoucherUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Sửa phiếu xuất kho",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/movements/actions/reorder-day": {
+      "post": {
+        "description": "FR-STK-017: sắp xếp lại thứ tự chứng từ của một khóa tồn kho trong ngày.",
+        "operationId": "reorder_movements_in_day_api_v1_inventory_movements_actions_reorder_day_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderDayIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReorderDayOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Reorder Movements In Day",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/receipts": {
+      "post": {
+        "operationId": "create_inventory_receipts_api_v1_inventory_receipts_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "acknowledge_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledge Warnings",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryVoucherIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Cất phiếu nhập kho",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/receipts/{voucher_id}": {
+      "get": {
+        "operationId": "get_inventory_receipts_api_v1_inventory_receipts__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đọc phiếu nhập kho",
+        "tags": [
+          "inventory"
+        ]
+      },
+      "put": {
+        "description": "Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).",
+        "operationId": "update_inventory_receipts_api_v1_inventory_receipts__voucher_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryVoucherUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Sửa phiếu nhập kho",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/stock": {
+      "get": {
+        "description": "Tồn theo `(chi nhánh, kho, vật tư, lô)` tại cuối ngày — số lượng đơn vị\nchính; giá trị `null` cho tới khi khóa đã tính giá đủ (8B). Chi nhánh ngoài\nphạm vi → 422; không truyền thì RLS trả mọi chi nhánh trong phạm vi.",
+        "operationId": "read_stock_api_v1_inventory_stock_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "As Of",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "warehouse_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Warehouse Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "item_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Read Stock",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/transfers": {
+      "post": {
+        "operationId": "create_inventory_transfers_api_v1_inventory_transfers_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "acknowledge_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledge Warnings",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryVoucherIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Cất phiếu chuyển kho",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/transfers/{voucher_id}": {
+      "get": {
+        "operationId": "get_inventory_transfers_api_v1_inventory_transfers__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Đọc phiếu chuyển kho",
+        "tags": [
+          "inventory"
+        ]
+      },
+      "put": {
+        "description": "Sửa phiếu Đã cất — khóa lạc quan bằng `row_version` (FR-NFR-005).",
+        "operationId": "update_inventory_transfers_api_v1_inventory_transfers__voucher_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryVoucherUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryVoucherOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Sửa phiếu chuyển kho",
+        "tags": [
+          "inventory"
         ]
       }
     },

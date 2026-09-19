@@ -30,7 +30,9 @@ trạng thái voucher lúc khóa vừa O(n) vừa đổ một trận diff vô ng
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Final
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -60,6 +62,37 @@ UNPOSTED_SAMPLE_LIMIT = 5
 """Số chứng từ Đã cất nêu đích danh trong cảnh báo — đủ để lần tới chỗ sửa,
 không biến thân response thành một trang danh sách (danh sách đầy đủ nằm ở
 `GET /vouchers?status=1&period_id=…`)."""
+
+
+LockCheck = Callable[[Session, AccountingPeriod, FiscalYear], None]
+"""Một mục **chặn** của danh mục kiểm tra khóa sổ do module nghiệp vụ đóng góp:
+ném `DomainError` (thường `PeriodLockChecklistError`) khi kỳ chưa khóa được.
+`(session, period, year)` — chạy trong transaction khóa, sau `FOR UPDATE` trên
+dòng kỳ (RT-09), dưới phạm vi mọi chi nhánh."""
+
+
+class PeriodLockChecks:
+    """Sổ đăng ký mục kiểm khóa sổ của các module (lát 8A) — cùng lý do tồn tại
+    với `VoucherReferenceGuards`: thứ chặn khóa kỳ nằm ở phía **module giữ dữ
+    liệu** (hàng đợi tính giá xuất kho chưa rỗng, BR-STK-05), mà `posting`
+    không được import module (C4). Phase 10a nối danh mục U11 đầy đủ vào đây."""
+
+    def __init__(self) -> None:
+        self._checks: list[LockCheck] = []
+
+    def register(self, check: LockCheck) -> None:
+        self._checks.append(check)
+
+    def checks(self) -> tuple[LockCheck, ...]:
+        return tuple(self._checks)
+
+    def run(self, session: Session, period: AccountingPeriod, year: FiscalYear) -> None:
+        for check in self._checks:
+            check(session, period, year)
+
+
+LOCK_CHECKS: Final[PeriodLockChecks] = PeriodLockChecks()
+"""Registry của tiến trình — module đăng ký lúc import (qua `ket.model_registry`)."""
 
 
 @dataclass(frozen=True)
@@ -104,6 +137,7 @@ class PeriodLockService:
         self._ensure_scope_covers_every_branch(scope)
         self._ensure_recalc_queue_clear(period, year)
         self._ensure_opening_balances_balanced(period, year)
+        LOCK_CHECKS.run(self._session, period, year)
         warnings = self._unposted_voucher_warnings(period)
 
         # Đóng dấu qua `PeriodService` để "ai khóa, lúc nào" chỉ có một cách

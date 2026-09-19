@@ -1782,6 +1782,17 @@ class VoucherHasIssuedInvoiceError(DomainError):
     error_code: ClassVar[str] = "voucher.has_issued_invoice"
 
 
+class InventoryVoucherDerivedError(DomainError):
+    """Phiếu kho sinh từ chứng từ nguồn (hóa đơn mua/bán) đứng yên chừng nào
+    nguồn còn ghi sổ — sửa/xóa/bỏ ghi sổ phải đi từ phía nguồn (lát 8A).
+
+    Cùng hình với `VoucherHasIssuedInvoiceError`: người giữ ràng buộc nói rõ
+    bước phải làm; `details` mang số chứng từ nguồn để người dùng tìm được nó.
+    """
+
+    error_code: ClassVar[str] = "inventory.voucher_derived_from_source"
+
+
 class InvoiceFormBranchConflictError(DomainError):
     """Một ký hiệu hóa đơn thuộc đúng một chi nhánh (quyết định 2026-09-07).
 

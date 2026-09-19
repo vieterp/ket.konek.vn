@@ -445,6 +445,9 @@ module còn lại:
 | `kernel/security/branch_scope` — "phạm vi có phủ mọi chi nhánh chưa" | 6G-2 | Khóa sổ, đối chiếu, báo cáo hai-vế |
 | `report_definitions.requires_full_branch_scope` | 6G-2 | Báo cáo so hai vế lệch phạm vi (đối chiếu công nợ, kiểm kê) |
 | `posting/engine/dimension_recompute` — tính lại chiều SUY RA từ thân chứng từ | 6G-2 | Mọi chiều ghi-lúc-post của phase 7–8 |
+| `InventoryPosting.remove_movement` + `InventoryLineSource` (chiều đọc "chứng từ này sẽ sinh phiếu kho nào") + `PlannedMovement` — ADR-024 | 8A | Phase 9 (lệnh sản xuất sinh phiếu xuất NVL) đăng ký thêm nguồn |
+| `posting.contracts.LOCK_CHECKS` — mục kiểm khóa sổ do module đóng góp | 8A | Danh mục U11 phase 10a; CCDC/TSCĐ 8E |
+| Chứng từ **0 dòng sổ cái** là hợp lệ (`_insert_postings` rẽ nhánh rỗng) | 8A | Engine giá xuất 8B repost giá vốn; mọi lượt đọc "đã ghi sổ ⇒ có phát sinh" phải coi tập rỗng là hợp lệ |
 
 ---
 
@@ -534,7 +537,12 @@ Backend giữ **nguyên module theo SRS**; UI gộp **theo công việc người
 | `account_balances` | Snapshot số dư (khóa compact: period, ledger, branch, account, currency) | 4 | `posting` |
 | `posting_dimension_values` | Chiều phân tích mở rộng | 3, 4 | `kernel` |
 | `ar_ap_ledger` | Công nợ subledger (đối tác + TK + số tiền nợ) | 7 | `receivables` |
-| `inventory_balances` | Tồn kho (warehouse, item, lot, serial, qty) | 8 | `inventory` |
+| `inventory_vouchers`, `inventory_voucher_lines` | Thân phiếu NK/XK/CK (một-một với `vouchers`, cột thủ kho `keeper_*` sẵn cho 8D) + dòng vật tư (số lượng theo ĐVT gõ và quy về đơn vị chính, giá vốn nếu biết, cặp TK bút toán kèm dòng) | 8A | `inventory` |
+| `inventory_movements` | **Sổ kho** — append-only như `gl_postings`; khóa `(chi nhánh, kho, vật tư, lô)`, `sequence_in_day` duy nhất theo ngày (BR-STK-04), `cost_state` 0/1/2, RLS chi nhánh, trigger kỳ khóa (BR-STK-05); FK thật tới `items`/`warehouses`/`lots` để gộp danh mục dời theo | 8A | `inventory` |
+| `lots`, `serials` | Lô / serial (LD-09: cột có mặt ở mọi bảng tồn từ migration đầu; UI serial v1.1) | 8A | `inventory` |
+| `inventory_recalc_queue` | Dấu bẩn tính lại giá xuất theo khóa + `from_date` (MIN giữ lại) — 8A ghi, 8B đọc, khóa sổ chặn khi còn dấu | 8A | `inventory` |
+| `inventory_balances`, `stock_layers` | Snapshot tồn theo kỳ + lớp tồn FIFO/đích danh — tạo rỗng ở 8A, engine 8B ghi | 8 | `inventory` |
+| `warehouse_book` | Sổ kho của thủ kho (SRS 17) — tạo rỗng ở 8A, 8D ghi | 8 | `inventory` |
 | `audit_log` | Nhật ký bất biến (người, hành động, giá trị trước–sau) | 2 | `ket_owner` |
 | `attachments` | Metadata tệp đính kèm (`entity_type`+`entity_id`, `content_hash`, `branch_id`, `detached_at`). Nội dung nằm ngoài DB | 2 | `kernel` |
 | `config_packages` | Gói cấu hình pháp lý (TT99/TT133, hiệu lực từ…) | 5 | `kernel` |

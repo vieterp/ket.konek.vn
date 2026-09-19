@@ -37,6 +37,7 @@ from ket.posting.engine.guards import (
 from ket.posting.engine.models import AMOUNT_PRECISION, AMOUNT_SCALE, Ledger
 from ket.posting.engine.requests import PostingLine, PostingRequest
 from ket.posting.engine.service import PostingService
+from ket.posting.periods.lock_service import LOCK_CHECKS, LockCheck
 
 __all__ = [
     "AMOUNT_PRECISION",
@@ -44,12 +45,14 @@ __all__ = [
     "EDIT_GUARDS",
     "GUARD_REGISTRY",
     "GUARD_WARNING_DETAIL",
+    "LOCK_CHECKS",
     "POSTING_DOCUMENT_REGISTRY",
     "REFERENCE_GUARDS",
     "EntryKind",
     "ExtendedDimensionValue",
     "GuardFinding",
     "Ledger",
+    "LockCheck",
     "PartnerKind",
     "PostingDimensions",
     "PostingDocumentType",

@@ -27,6 +27,7 @@ code,name,name_en,parent_code,balance_nature,is_summary,is_foreign_currency,deta
 154,"Chi phí sản xuất, kinh doanh dở dang",,,0,0,0,cost_object,1
 155,Sản phẩm,,,0,0,0,item;warehouse,1
 156,Hàng hóa,,,0,0,0,item;warehouse,1
+157,Hàng gửi đi bán,,,0,0,0,item;warehouse,1
 211,Tài sản cố định hữu hình,,,0,1,0,,1
 2111,Tài sản cố định hữu hình - Đất,,211,0,0,0,,0
 2112,"Tài sản cố định hữu hình - Nhà, công trình",,211,0,0,0,,0

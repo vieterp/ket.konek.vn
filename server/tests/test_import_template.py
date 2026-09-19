@@ -551,6 +551,11 @@ PINNED_HEADERS: Final[dict[str, tuple[str, ...]]] = {
         "Còn theo dõi",
         "Mã kho ngầm định",
         "Diễn giải",
+        # Lát 8A thêm "Tồn tối thiểu" (FR-SYS-047), cùng cách 7C-1 thêm cột giá
+        # sau thuế: `ensure_structure` so đủ và đúng thứ tự tiêu đề, nên tệp
+        # mẫu cũ bị từ chối cho tới khi tải lại — đổi mẫu có chủ đích, trước
+        # bản phát hành đầu tiên.
+        "Tồn tối thiểu",
         "Giá bán là đơn giá sau thuế",
         "Tính chất",
         "Mã đơn vị chính",

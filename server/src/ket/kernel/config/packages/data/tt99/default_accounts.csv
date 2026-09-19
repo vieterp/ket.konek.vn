@@ -29,3 +29,11 @@ document_type,purpose,account_code
 *,revenue_goods,511
 *,revenue_services,511
 *,sales_deduction,521
+*,finished_goods,155
+*,work_in_progress,154
+*,cogs,632
+*,goods_on_consignment,157
+*,internal_receivable,1368
+*,construction_in_progress,2412
+*,production_materials,621
+*,admin_expense,6422
