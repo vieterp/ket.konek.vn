@@ -133,3 +133,15 @@ def _register_inventory_line_source() -> None:
 
 
 _register_inventory_line_source()
+
+
+def _register_edit_guard() -> None:
+    """Hóa đơn có dòng bị chứng từ trả lại trỏ tới (`returned_line_id`, 8C-1)
+    không sửa/xóa được — `EDIT_GUARDS` chạy trong `ensure_editable` (sửa lẫn xóa)."""
+    from ket.modules.sales.service import refuse_when_lines_returned
+    from ket.posting.contracts import EDIT_GUARDS
+
+    EDIT_GUARDS.register(refuse_when_lines_returned)
+
+
+_register_edit_guard()

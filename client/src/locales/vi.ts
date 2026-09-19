@@ -308,6 +308,7 @@ export const vi = {
   'opening.detailKind.2': 'Phải thu',
   'opening.detailKind.3': 'Phải trả',
   'opening.detailKind.4': 'Tạm ứng nhân viên',
+  'opening.detailKind.5': 'Tồn kho',
   'opening.column.account': 'TK',
   'opening.column.accountName': 'Tên TK',
   'opening.column.partner': 'Đối tượng',

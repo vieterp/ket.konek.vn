@@ -39,10 +39,11 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import Final
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from ket.kernel.config.accounts_models import DetailTracking
 from ket.kernel.config.accounts_provider import accounts_by_id
@@ -53,6 +54,7 @@ from ket.kernel.contracts import PartnerKind
 from ket.kernel.errors import (
     PostingValidationError,
     PostingViolation,
+    SalesLineReturnedError,
     VoucherBranchImmutableError,
 )
 from ket.kernel.master_data.models.employee import EMPLOYEE_TABLE_NAME
@@ -76,6 +78,7 @@ from ket.modules.sales.models import (
     REVERSING_KINDS,
     SALES_DOCUMENT_TYPE,
     SalesInvoice,
+    SalesInvoiceKind,
     SalesInvoiceLine,
     SalesSettlement,
 )
@@ -92,7 +95,14 @@ from ket.posting.contracts import (
     Voucher,
     VoucherDraft,
     VoucherService,
+    VoucherStatus,
 )
+
+_RETURNABLE_KINDS: Final[frozenset[int]] = frozenset(
+    {SalesInvoiceKind.GOODS, SalesInvoiceKind.AGENCY}
+)
+"""Chứng từ bán mà một dòng hàng-bán-trả-lại được chỉ về (FR-STK-004): hai
+loại kiêm xuất kho được — cùng tập `_ISSUE_KINDS` của `inventory_lines`."""
 
 NUMBERING_RULE = NumberingRule(
     document_type=SALES_DOCUMENT_TYPE, prefix="SAL{YY}-", reset_rule=ResetRule.YEARLY
@@ -109,6 +119,8 @@ nợ sẽ có dòng mà sổ cái không đối chiếu được, và không phi
 nổi. Cùng phép kiểm với `purchase`, đổi chiều theo dõi."""
 
 VARIANT_NOT_OF_ITEM_CODE = "sales.variant_not_of_item"
+RETURNED_LINE_KIND_CODE = "sales.returned_line_kind"
+RETURNED_LINE_MISMATCH_CODE = "sales.returned_line_mismatch"
 """Quy cách khai trên dòng không thuộc mã hàng của dòng.
 
 Mã quy cách chỉ duy nhất TRONG một mã hàng (`uq_item_variants_item_code`), nên
@@ -117,6 +129,32 @@ bán hàng theo mã quy cách sẽ xếp doanh thu của áo vào nhóm quy các
 không con số nào trên tờ báo cáo ấy chỉ ra chỗ lệch."""
 
 _ZERO = Decimal(0)
+
+
+def refuse_when_lines_returned(session: Session, voucher_id: UUID) -> None:
+    """Hóa đơn có dòng đang bị chứng từ hàng bán trả lại trỏ tới (`returned_line_id`)
+    không sửa/xóa được — đăng ký `EDIT_GUARDS` (8C-1). FK `RESTRICT` là hàng rào
+    cuối; guard nói được phải sửa chứng từ nào (review 8C-1 M-5)."""
+    original = aliased(SalesInvoiceLine)
+    referencing = (
+        session.execute(
+            select(Voucher.voucher_no)
+            .join(SalesInvoiceLine, SalesInvoiceLine.voucher_id == Voucher.id)
+            .join(original, original.id == SalesInvoiceLine.returned_line_id)
+            .where(original.voucher_id == voucher_id)
+            .distinct()
+            .order_by(Voucher.voucher_no)
+        )
+        .scalars()
+        .all()
+    )
+    if referencing:
+        raise SalesLineReturnedError(
+            "Hóa đơn có dòng đã được chứng từ hàng bán trả lại chỉ tới — sửa hoặc xóa các "
+            "chứng từ trả lại đó trước",
+            referenced_by=",".join(referencing[:10]),
+            count=len(referencing),
+        )
 
 
 class SalesInvoiceService:
@@ -136,6 +174,7 @@ class SalesInvoiceService:
         self._verify_client_amounts(payload, scale=scale)
         self._verify_customer_tracked_account(payload)
         self._verify_variants_belong_to_items(payload)
+        self._verify_returned_lines(payload)
         priced = price_settlements(self._session, payload, scale=scale)
 
         voucher = self._vouchers.create(
@@ -210,6 +249,7 @@ class SalesInvoiceService:
         self._verify_client_amounts(payload, scale=scale)
         self._verify_customer_tracked_account(payload)
         self._verify_variants_belong_to_items(payload)
+        self._verify_returned_lines(payload)
         priced = price_settlements(self._session, payload, scale=scale)
 
         usage_before = self._usage_of_stored(body)
@@ -426,6 +466,7 @@ class SalesInvoiceService:
                     cogs_account_id=line.cogs_account_id,
                     inventory_account_id=line.inventory_account_id,
                     unit_cost_fc=line.unit_cost_fc,
+                    returned_line_id=line.returned_line_id,
                     price_list_id=line.price_list_id,
                     price_source=(
                         line.price_source.value if line.price_source is not None else None
@@ -550,6 +591,67 @@ class SalesInvoiceService:
         if violations:
             raise PostingValidationError(
                 "Quy cách trên dòng không thuộc mã hàng của dòng", violations=violations
+            )
+
+    def _verify_returned_lines(self, payload: SalesInvoiceIn) -> None:
+        """Dòng trả lại chỉ dòng bán gốc (FR-STK-004, 8C-1): chỉ trên chứng từ
+        `RETURN`; dòng gốc thuộc hóa đơn bán hàng hóa / đại lý **đã ghi sổ**, cùng
+        khách hàng, cùng mã hàng. Không kiểm Σ số lượng trả ≤ số lượng gốc — trả
+        nhiều lần là thường, và số lượng thuộc màn 8G/8H. Một truy vấn cho cả
+        chứng từ, cùng lối `_verify_variants_belong_to_items`."""
+        wanted = {
+            line.returned_line_id: line.item_id
+            for line in payload.lines
+            if line.returned_line_id is not None
+        }
+        if not wanted:
+            return
+        if payload.kind != SalesInvoiceKind.RETURN:
+            raise PostingValidationError(
+                "Chỉ chứng từ hàng bán trả lại mới chỉ dòng bán gốc",
+                violations=[
+                    PostingViolation(
+                        RETURNED_LINE_KIND_CODE,
+                        "Bỏ dòng bán gốc, hoặc lập chứng từ hàng bán trả lại",
+                        kind=payload.kind,
+                    )
+                ],
+            )
+        rows = self._session.execute(
+            select(
+                SalesInvoiceLine.id,
+                SalesInvoiceLine.item_id,
+                SalesInvoice.kind,
+                SalesInvoice.customer_id,
+                Voucher.status,
+                Voucher.posting_date,
+            )
+            .join(SalesInvoice, SalesInvoice.id == SalesInvoiceLine.voucher_id)
+            .join(Voucher, Voucher.id == SalesInvoiceLine.voucher_id)
+            .where(SalesInvoiceLine.id.in_(sorted(wanted)))
+        ).all()
+        found = {row.id: row for row in rows}
+        violations = [
+            PostingViolation(
+                RETURNED_LINE_MISMATCH_CODE,
+                "Dòng bán gốc phải thuộc hóa đơn bán hàng đã ghi sổ của cùng khách hàng, "
+                "cùng mã hàng, ngày ghi sổ không muộn hơn chứng từ trả lại",
+                returned_line_id=str(line_id),
+                item_id=item_id,
+            )
+            for line_id, item_id in sorted(wanted.items(), key=lambda pair: str(pair[0]))
+            if (row := found.get(line_id)) is None
+            or row.kind not in _RETURNABLE_KINDS
+            or row.customer_id != payload.customer_id
+            or row.item_id != item_id
+            or row.status not in (VoucherStatus.DA_GHI_SO, VoucherStatus.DA_KHOA_SO)
+            # Trả lại không đứng trước lần bán: phiếu nhập lấy giá lần xuất mà
+            # đứng trước nó là vòng giá không hội tụ (review 8C-1 M-4).
+            or row.posting_date > payload.posting_date
+        ]
+        if violations:
+            raise PostingValidationError(
+                "Dòng bán gốc của hàng trả lại không hợp lệ", violations=violations
             )
 
     def _verify_operation(self, payload: SalesInvoiceIn) -> None:

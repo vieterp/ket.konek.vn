@@ -24,9 +24,10 @@ from collections.abc import Sequence
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
+from ket.kernel.config.accounts_models import INVENTORY_ACCOUNT_PURPOSES
 from ket.kernel.config.accounts_provider import accounts_by_id, default_account, resolve_package
 from ket.kernel.config.catalog import (
     INVENTORY_ACCOUNT_NO_MOVEMENT_WARNING_KEY,
@@ -53,6 +54,7 @@ from ket.modules.inventory.models import (
     InventoryVoucherKind,
     InventoryVoucherLine,
     Lot,
+    MovementDirection,
 )
 from ket.modules.inventory.movements import lot_key_of
 from ket.modules.inventory.stock import stock_floor_from
@@ -63,14 +65,6 @@ STOCK_NEGATIVE_CODE = "inventory.stock_negative"
 STOCK_BELOW_MIN_CODE = "inventory.stock_below_min"
 INVENTORY_ACCOUNT_NO_MOVEMENT_CODE = "inventory.account_without_movement"
 
-INVENTORY_ACCOUNT_PURPOSES: tuple[str, ...] = (
-    "inventory_goods",
-    "raw_materials",
-    "tools_supplies",
-    "finished_goods",
-)
-"""Bốn mục đích TK kho của gói cấu hình — BR-STK-03 nói về đúng nhóm này
-(152/153/155/156 ở TT99)."""
 
 _ZERO = Decimal(0)
 _ONE = Decimal(1)
@@ -323,27 +317,38 @@ def refuse_when_named_as_specific_source(session: Session, voucher_id: UUID) -> 
     được (lát 8B) — đăng ký `REFERENCE_GUARDS`. Khóa ngoại `RESTRICT` trên
     `inventory_voucher_lines.source_movement_id` là hàng rào cuối; guard này
     nói được phải sửa phiếu nào."""
-    referencing = (
-        session.execute(
-            select(Voucher.voucher_no)
-            .join(InventoryVoucherLine, InventoryVoucherLine.voucher_id == Voucher.id)
-            .join(
-                InventoryMovement, InventoryMovement.id == InventoryVoucherLine.source_movement_id
-            )
-            .where(InventoryMovement.voucher_id == voucher_id)
-            .distinct()
-            .order_by(Voucher.voucher_no)
-        )
-        .scalars()
-        .all()
+    refuse_when_movements_referenced(
+        session, select(InventoryMovement.id).where(InventoryMovement.voucher_id == voucher_id)
     )
-    if not referencing:
+
+
+def refuse_when_movements_referenced(session: Session, movement_ids: Select[tuple[int]]) -> None:
+    """Movement nào trong tập bị một dòng phiếu khác chỉ tới qua `source_movement_id`
+    (xuất đích danh trỏ lần nhập — 8B; nhập hàng bán trả lại trỏ lần xuất — 8C-1)
+    thì không gỡ được. Dùng chung cho bỏ ghi sổ phiếu và gỡ lớp tồn đầu kỳ."""
+    rows = session.execute(
+        select(Voucher.voucher_no, InventoryMovement.direction)
+        .join(InventoryVoucherLine, InventoryVoucherLine.voucher_id == Voucher.id)
+        .join(InventoryMovement, InventoryMovement.id == InventoryVoucherLine.source_movement_id)
+        .where(InventoryMovement.id.in_(movement_ids))
+        .distinct()
+        .order_by(Voucher.voucher_no)
+    ).all()
+    if not rows:
         return
+    referencing = [row.voucher_no for row in rows]
+    if all(row.direction == MovementDirection.OUT for row in rows):
+        message = (
+            "Lần xuất này đã được phiếu nhập hàng bán trả lại lấy giá — sửa hoặc bỏ ghi sổ "
+            "các phiếu nhập đó trước"
+        )
+    else:
+        message = (
+            "Lần nhập này đã được phiếu xuất đích danh chỉ tới — sửa hoặc bỏ ghi sổ các "
+            "phiếu xuất đó trước"
+        )
     raise InventoryLayerReferencedError(
-        "Lần nhập này đã được phiếu xuất đích danh chỉ tới — sửa hoặc bỏ ghi sổ các "
-        "phiếu xuất đó trước",
-        referenced_by=",".join(referencing[:10]),
-        count=len(referencing),
+        message, referenced_by=",".join(referencing[:10]), count=len(referencing)
     )
 
 

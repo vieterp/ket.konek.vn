@@ -36,10 +36,19 @@ from ket.kernel.currency.models import CURRENCY_CODE_LENGTH, RATE_PRECISION
 from ket.kernel.identifiers import uuid7
 from ket.kernel.money import RATE_SCALE_DEFAULT
 from ket.kernel.persistence.base import DatasetBase
+from ket.kernel.quantity import QUANTITY_PRECISION as STOCK_QUANTITY_PRECISION
+from ket.kernel.quantity import QUANTITY_SCALE as STOCK_QUANTITY_SCALE
 from ket.posting.engine.models import AMOUNT_PRECISION, AMOUNT_SCALE, Ledger
 
 QUANTITY_PRECISION = 18
 QUANTITY_SCALE = 4
+
+UNIT_COST_PRECISION = 18
+UNIT_COST_SCALE = 6
+"""Đơn giá vốn của một lớp tồn đầu kỳ — cùng hình dạng `inventory_movements.
+unit_cost` (8A), vì movement chép thẳng số này."""
+
+STOCK_RECEIPT_NO_MAX_LENGTH = 50
 
 
 class OpeningDetailKind:
@@ -73,6 +82,9 @@ class OpeningDetailKind:
 
     PHASE_4_KINDS = frozenset({ACCOUNT, BANK, RECEIVABLE, PAYABLE, EMPLOYEE_ADVANCE})
     """Nhóm mà slice 4C nhập/kiểm được; nhóm còn lại từ chối tới phase 8."""
+    SUPPORTED_KINDS = frozenset(PHASE_4_KINDS | {STOCK})
+    """Nhóm đã có logic nhập/xóa/chuyển năm: 0–4 (4C/6D) + tồn kho (8C-1). Nhóm
+    6–9 mở ở 8E cạnh schema tài sản."""
 
 
 class OpeningBalance(DatasetBase, Audited):
@@ -274,3 +286,66 @@ class OpeningBalanceInvoice(DatasetBase, Audited):
     """Nguyên tệ đã trả — trục của đối trừ (lát 6B): `remaining_fc = amount_fc
     - paid_amount_fc`. Không suy được từ `paid_amount` vì phép chia ngược qua
     tỷ giá không hoàn lại đúng số đã làm tròn."""
+
+
+class OpeningBalanceStockLayer(DatasetBase, Audited):
+    """Một **lần nhập** của tồn kho đầu kỳ (FR-OPB-004, SRS 02 §1.1, lát 8C-1).
+
+    Bảng con của dòng `opening_balances` nhóm 5, cùng vai với
+    `opening_balance_invoices` của nhóm công nợ: dòng cha là số tổng hợp (TK,
+    kho, mã hàng, lô) đổ vào sổ cái, dòng con là chi tiết mà **sổ kho** cần —
+    FIFO/đích danh không tính được giá vốn nếu tồn đầu không khai theo từng lần
+    nhập. Năm bình quân vẫn lưu từng dòng sheet (ngày/số phiếu tùy chọn): một
+    hình dạng cho cả bốn phương pháp, không nhánh riêng.
+
+    Lớp **không** là sổ kho: `inventory` vật chất hóa mỗi lớp thành một
+    `inventory_movements` nhập (`opening_layer_id` trỏ về đây, ngày = ngày đầu
+    năm − 1, đã có giá) để engine tính giá, guard tồn, lưới tồn và báo cáo đọc
+    một nguồn duy nhất. Xóa lớp (thay-trọn nhóm 5, xóa nhóm) phải gỡ movement
+    trước — FK `RESTRICT` từ phía movement giữ luật ấy ở tầng bảng.
+
+    Số lượng theo **đơn vị chính** (FR-STK-006); tiền là VND (sổ kho không có
+    nguyên tệ), nên không có cặp cột `_fc`.
+    """
+
+    __tablename__ = "opening_balance_stock_layers"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="quantity_positive"),
+        CheckConstraint("unit_cost >= 0 AND amount >= 0", name="cost_not_negative"),
+        Index("ix_opening_balance_stock_layers_parent", "opening_balance_id"),
+        Index("ix_opening_balance_stock_layers_branch", "branch_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
+    opening_balance_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("opening_balances.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    fiscal_year_id: Mapped[int] = mapped_column(
+        ForeignKey("fiscal_years.id", ondelete="RESTRICT"), nullable=False
+    )
+    branch_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    """Bản sao `opening_balances.branch_id` — RLS lọc theo cột của chính bảng
+    (cùng lập luận `OpeningBalanceInvoice.branch_id`)."""
+    warehouse_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    item_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    lot_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Lô đã tra/tạo theo `lot_no` của sheet — `inventory` giữ bảng `lots`, nên
+    cột là số trần như `opening_balances.lot_id`."""
+
+    received_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    receipt_no: Mapped[str | None] = mapped_column(
+        String(STOCK_RECEIPT_NO_MAX_LENGTH), nullable=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    """Thứ tự dòng trong sheet — phân định hai lớp cùng ngày nhập, cùng số phiếu
+    (hoặc cùng trống): thứ tự lớp FIFO là `(ngày nhập, số phiếu, dòng)`."""
+
+    quantity: Mapped[Decimal] = mapped_column(
+        Numeric(STOCK_QUANTITY_PRECISION, STOCK_QUANTITY_SCALE), nullable=False
+    )
+    unit_cost: Mapped[Decimal] = mapped_column(
+        Numeric(UNIT_COST_PRECISION, UNIT_COST_SCALE), nullable=False
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(AMOUNT_PRECISION, AMOUNT_SCALE), nullable=False)

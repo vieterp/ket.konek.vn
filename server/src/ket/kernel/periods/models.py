@@ -107,7 +107,28 @@ class FiscalYear(DatasetBase, Audited, RowVersioned):
     accounting_scheme: Mapped[str] = mapped_column(String(10), nullable=False)
     base_currency: Mapped[str] = mapped_column(String(CURRENCY_CODE_LENGTH), nullable=False)
     inventory_valuation_method: Mapped[str] = mapped_column(String(20), nullable=False)
+    inventory_costing_by_warehouse: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    """Phạm vi tính bình quân (SRS 09 §3, FR-STK-007): `true` = theo từng kho,
+    `false` = gộp mọi kho của chi nhánh cho một mã hàng. Chỉ hai phương pháp bình
+    quân đọc cờ này — FIFO/đích danh luôn theo kho. Chốt theo năm cùng phương
+    pháp: đổi giữa năm là tính lại cả năm, và ranh giới năm đã là chỗ tồn đầu
+    gộp từ lịch sử nên "chưa phát sinh nhập → đơn giá = giá trị tồn / số lượng
+    tồn" tự đúng (8C-1)."""
     vat_method: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    @property
+    def costing_by_warehouse(self) -> bool:
+        """Khóa giá xuất kho của năm có mang kho không: `False` **chỉ** khi năm
+        tính bình quân và cờ "theo từng kho" tắt — FIFO/đích danh luôn theo kho
+        (SRS 09 §3). Một chỗ trả lời cho engine, phép dò dấu bẩn và xem trước."""
+        if self.inventory_costing_by_warehouse:
+            return True
+        return self.inventory_valuation_method not in (
+            InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING,
+            InventoryValuationMethod.WEIGHTED_AVERAGE_PERIOD,
+        )
 
     is_closed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")

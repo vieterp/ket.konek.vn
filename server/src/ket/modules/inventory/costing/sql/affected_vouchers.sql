@@ -1,7 +1,7 @@
 -- FR-STK-003 — chứng từ bị ảnh hưởng, mỗi chứng từ một dòng kèm số movement,
 -- sớm nhất trước, cắt ở :limit (tổng thật nằm ở `affected_periods.sql`).
 --
--- Tham số: :branch_id, :year_start, :year_end, :force_from, :limit.
+-- Tham số: :branch_id, :year_start, :year_end, :force_from, :by_warehouse, :limit.
 -- CTE `keys` lặp nguyên văn từ `wavg_moving.sql`.
 WITH keys AS (
     SELECT branch_id, warehouse_id, item_id, lot_key, MIN(start_date) AS start_date
@@ -27,13 +27,25 @@ WITH keys AS (
           AND NOT is_custodial
     ) AS candidates
     GROUP BY branch_id, warehouse_id, item_id, lot_key
+),
+groups AS (
+    -- Khóa GIÁ: theo kho như thường; năm bình quân "không theo kho" (8C-1,
+    -- :by_warehouse = false) gom mọi kho của (chi nhánh, mã hàng, lô) — dấu ở
+    -- kho A kéo movement kho B vào horizon (review 8C-1 H-4/M-1).
+    SELECT branch_id,
+           CASE WHEN CAST(:by_warehouse AS BOOLEAN) THEN warehouse_id END AS warehouse_id,
+           item_id, lot_key, MIN(start_date) AS start_date
+    FROM keys
+    GROUP BY branch_id,
+             CASE WHEN CAST(:by_warehouse AS BOOLEAN) THEN warehouse_id END,
+             item_id, lot_key
 )
 SELECT m.voucher_id, v.voucher_no, v.document_type, v.posting_date,
        COUNT(*) AS movements
 FROM inventory_movements m
-JOIN keys k
+JOIN groups k
   ON k.branch_id = m.branch_id
- AND k.warehouse_id = m.warehouse_id
+ AND (k.warehouse_id IS NULL OR k.warehouse_id = m.warehouse_id)
  AND k.item_id = m.item_id
  AND k.lot_key = m.lot_key
 JOIN vouchers v ON v.id = m.voucher_id

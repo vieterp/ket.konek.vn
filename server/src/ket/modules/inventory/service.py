@@ -32,7 +32,6 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from ket.kernel.config.auto_posting_provider import AutoPostingOperation, operations_for
@@ -56,16 +55,18 @@ from ket.kernel.periods.models import InventoryValuationMethod
 from ket.kernel.periods.service import fiscal_year_covering
 from ket.kernel.persistence.versioning import require_row_version
 from ket.kernel.protocols import InventoryMovementKind, InventoryMovementLine
+from ket.modules.inventory.costing.engine import sync_source_flags
+from ket.modules.inventory.lots import lot_id_for
 from ket.modules.inventory.models import (
     ISSUE_DOCUMENT_TYPE,
     RECEIPT_DOCUMENT_TYPE,
     TRANSFER_DOCUMENT_TYPE,
     UNIT_COST_SCALE,
+    CostState,
     InventoryMovement,
     InventoryVoucher,
     InventoryVoucherKind,
     InventoryVoucherLine,
-    Lot,
     MovementDirection,
 )
 from ket.modules.inventory.movements import lot_key_of, record_movements, remove_movements
@@ -115,7 +116,9 @@ RECEIPT_COST_REQUIRED_CODE = "inventory.receipt_cost_required"
 ISSUE_COST_NOT_ALLOWED_CODE = "inventory.issue_cost_not_allowed"
 SPECIFIC_SOURCE_REQUIRED_CODE = "inventory.specific_source_required"
 SPECIFIC_SOURCE_MISMATCH_CODE = "inventory.specific_source_mismatch"
-SPECIFIC_SOURCE_ON_RECEIPT_CODE = "inventory.specific_source_on_receipt"
+RETURN_SOURCE_MISMATCH_CODE = "inventory.return_source_mismatch"
+RECEIPT_COST_CONFLICTS_SOURCE_CODE = "inventory.receipt_cost_conflicts_source"
+RETURN_SOURCE_AFTER_RECEIPT_CODE = "inventory.return_source_after_receipt"
 BODY_MISSING_CODE = "inventory.body_missing"
 
 _USAGE_TABLE_BY_PARTNER_KIND = {
@@ -168,6 +171,9 @@ class InventoryVoucherService:
         ngay sau, với cảnh báo đã xác nhận ở chứng từ nguồn."""
         voucher_kind = KIND_BY_MOVEMENT_KIND[kind]
         warehouse_ids = {line.warehouse_id for line in lines}
+        issue_movements = self._issue_movements_of_lines(
+            [line.cost_from_line_id for line in lines if line.cost_from_line_id is not None]
+        )
         payload = InventoryVoucherIn(
             kind=voucher_kind,
             operation_code=operation_code,
@@ -192,6 +198,11 @@ class InventoryVoucherService:
                     amount_fc=line.amount_fc,
                     debit_account_id=line.debit_account_id,
                     credit_account_id=line.credit_account_id,
+                    source_movement_id=(
+                        issue_movements.get(line.cost_from_line_id)
+                        if line.cost_from_line_id is not None
+                        else None
+                    ),
                 )
                 for line in lines
             ),
@@ -287,16 +298,31 @@ class InventoryVoucherService:
         return voucher
 
     def sync_after_post(self, voucher_id: UUID, *, user_id: int) -> None:
-        """Hook `after_post`: dòng phiếu → `inventory_movements`."""
+        """Hook `after_post`: dòng phiếu → `inventory_movements`.
+
+        Dòng nhập lấy giá từ lần xuất (FR-STK-004) có thể nhận giá ngay trong
+        `record_movements` — bút toán Nợ 156 / Có 632 lúc ấy đã dựng được, nên
+        ghi lại chứng từ vừa ghi sổ qua `repost` (ADR-025: cùng validator, không
+        hook/guard) thay vì bắt người dùng chạy job tính giá cho một con số đã
+        biết; cờ `cogs_posted` của chứng từ nguồn theo đó.
+        """
         voucher = self._vouchers.require(voucher_id)
         body = self._require_body(voucher_id)
-        record_movements(
+        created = record_movements(
             self._session,
             voucher=voucher,
             body=body,
             lines=self._lines_of(voucher_id),
             money_scale=self._money_scale(user_id),
         )
+        if any(
+            movement.direction == MovementDirection.IN
+            and movement.source_movement_id is not None
+            and movement.cost_state == CostState.COSTED
+            for movement in created
+        ):
+            self._posting.repost(build_posting_request(self._session, voucher_id), user_id=user_id)
+            sync_source_flags(self._session, [voucher])
 
     def clear_after_unpost(self, voucher_id: UUID) -> None:
         """Hook `after_unpost`: gỡ đúng thứ `sync_after_post` dựng."""
@@ -482,7 +508,15 @@ class InventoryVoucherService:
                     )
                 )
                 continue
-            if needs_cost and line.unit_cost_fc is None and line.amount_fc is None:
+            takes_cost_from_issue = (
+                payload.kind == InventoryVoucherKind.RECEIPT and line.source_movement_id is not None
+            )
+            if (
+                needs_cost
+                and not takes_cost_from_issue
+                and line.unit_cost_fc is None
+                and line.amount_fc is None
+            ):
                 violations.append(
                     PostingViolation(
                         RECEIPT_COST_REQUIRED_CODE,
@@ -511,12 +545,58 @@ class InventoryVoucherService:
                 else line.warehouse_id
             )
             lot_id = self._lot_id_for(line.item_id, line.lot_no)
-            if line.source_movement_id is not None and payload.kind == InventoryVoucherKind.RECEIPT:
-                violations.append(
-                    PostingViolation(
-                        SPECIFIC_SOURCE_ON_RECEIPT_CODE,
-                        "Phiếu nhập không chỉ lần nhập nguồn — đích danh chỉ có ở chiều xuất",
-                        line_no=index,
+            if takes_cost_from_issue:
+                # FR-STK-004: hàng bán trả lại "lấy từ giá xuất kho" — dòng nhập
+                # chỉ LẦN XUẤT nó quay về; giá do engine chép (`return_in_legs`),
+                # nên dòng không được gõ giá. Kho khác được (trả về kho khác), mã
+                # hàng phải cùng; lần xuất chưa có giá cũng nhận (nhập chờ giá).
+                if line.unit_cost_fc is not None or line.amount_fc is not None:
+                    violations.append(
+                        PostingViolation(
+                            RECEIPT_COST_CONFLICTS_SOURCE_CODE,
+                            "Dòng nhập lấy giá từ lần xuất thì không gõ giá — giá do engine chép",
+                            line_no=index,
+                        )
+                    )
+                    continue
+                source = sources.get(line.source_movement_id or 0)
+                if (
+                    source is None
+                    or source.direction != MovementDirection.OUT
+                    or source.branch_id != payload.branch_id
+                    or source.item_id != line.item_id
+                ):
+                    violations.append(
+                        PostingViolation(
+                            RETURN_SOURCE_MISMATCH_CODE,
+                            "Lần xuất nguồn phải là một dòng xuất đã ghi sổ của cùng mã hàng",
+                            line_no=index,
+                            source_movement_id=line.source_movement_id,
+                        )
+                    )
+                    continue
+                # Lần xuất phải đứng TRƯỚC lần nhập trả lại: nhập trước xuất cùng
+                # khóa là giá IN = f(giá OUT) = f(giá IN) — vòng co dần tới khi
+                # vượt trần vòng của engine và chặn cả chi nhánh (review 8C-1 M-4).
+                if source.posting_date > payload.posting_date:
+                    violations.append(
+                        PostingViolation(
+                            RETURN_SOURCE_AFTER_RECEIPT_CODE,
+                            "Lần xuất nguồn phải có ngày ghi sổ không muộn hơn phiếu nhập trả lại",
+                            line_no=index,
+                            source_movement_id=line.source_movement_id,
+                            source_posting_date=source.posting_date.isoformat(),
+                        )
+                    )
+                    continue
+                resolved.append(
+                    _ResolvedLine(
+                        base_quantity=base_quantity,
+                        unit_cost_fc=None,
+                        amount_fc=None,
+                        warehouse_id=warehouse_id,
+                        lot_id=lot_id,
+                        source_movement_id=line.source_movement_id,
                     )
                 )
                 continue
@@ -565,6 +645,23 @@ class InventoryVoucherService:
             raise PostingValidationError("Phiếu kho còn dòng chưa hợp lệ", violations=violations)
         return resolved
 
+    def _issue_movements_of_lines(self, source_line_ids: Sequence[UUID]) -> dict[UUID, int]:
+        """`{dòng chứng từ gốc: movement XUẤT}` — dòng bán gốc → dòng phiếu XK sinh
+        từ nó (`source_line_id`) → movement chiều ra. Dòng gốc không kiêm xuất kho
+        (không phiếu, hay phiếu chưa ghi sổ) thì vắng: phiếu nhập sinh chờ giá
+        như 8B, không phải lỗi."""
+        if not source_line_ids:
+            return {}
+        rows = self._session.execute(
+            select(InventoryVoucherLine.source_line_id, InventoryMovement.id)
+            .join(InventoryMovement, InventoryMovement.line_id == InventoryVoucherLine.id)
+            .where(
+                InventoryVoucherLine.source_line_id.in_(sorted(set(source_line_ids))),
+                InventoryMovement.direction == MovementDirection.OUT,
+            )
+        ).all()
+        return {row.source_line_id: int(row.id) for row in rows}
+
     def _source_movements(self, payload: InventoryVoucherIn) -> dict[int, InventoryMovement]:
         ids = sorted(
             {
@@ -583,23 +680,7 @@ class InventoryVoucherService:
         }
 
     def _lot_id_for(self, item_id: int, lot_no: str | None) -> int | None:
-        if lot_no is None or not lot_no.strip():
-            return None
-        code = lot_no.strip()
-        # Upsert chứ không kiểm-rồi-ghi: hai phiếu cùng lô mới lập song song là
-        # chuyện thường, và kiểm-rồi-ghi cho một trong hai `IntegrityError` vô cớ
-        # trên `uq_lots_item_lot_no` (review 8A L-2). `DO NOTHING` rồi đọc lại.
-        self._session.execute(
-            insert(Lot)
-            .values(item_id=item_id, lot_no=code)
-            .on_conflict_do_nothing(constraint="uq_lots_item_lot_no")
-        )
-        lot_id = self._session.scalar(
-            select(Lot.id).where(Lot.item_id == item_id, Lot.lot_no == code)
-        )
-        if lot_id is None:  # pragma: no cover - upsert vừa bảo đảm dòng tồn tại
-            raise RuntimeError(f"Không tra được lô {code!r} của mã hàng {item_id}")
-        return int(lot_id)
+        return lot_id_for(self._session, item_id, lot_no)
 
     def _write_lines(
         self,

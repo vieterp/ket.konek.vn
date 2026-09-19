@@ -52,9 +52,10 @@ FISCAL_YEAR_DECISIONS: Final[tuple[tuple[str, str], ...]] = (
     ("accounting_scheme", "Chế độ kế toán"),
     ("base_currency", "Đồng tiền hạch toán"),
     ("inventory_valuation_method", "Phương pháp tính giá xuất kho"),
+    ("inventory_costing_by_warehouse", "Tính giá bình quân theo từng kho"),
     ("vat_method", "Phương pháp tính thuế GTGT"),
 )
-"""Bốn quyết định chốt một lần cho cả một niên độ (xem `periods/models.py`).
+"""Năm quyết định chốt một lần cho cả một niên độ (xem `periods/models.py`).
 
 Danh sách khai tường minh chứ không "mọi cột của `fiscal_years`": `code`,
 `start_date`, `is_closed` cũng là cột nhưng không phải quyết định thiết lập, và
@@ -129,8 +130,16 @@ def _setting_items(session: Session, *, user_id: int) -> list[SetupItem]:
     ]
 
 
+def _decision_value(value: object) -> str:
+    """Cờ boolean hiện như giá trị `settings` (`true`/`false`), không phải `repr`
+    Python — màn thiết lập là tiếng Việt, "True" không phải một giá trị ở đó."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
 def _fiscal_year_items(session: Session) -> list[SetupItem]:
-    """Bốn quyết định của **từng** năm tài chính đang có.
+    """Năm quyết định của **từng** năm tài chính đang có.
 
     Từng năm chứ không "năm hiện hành": nhiều năm tồn tại song song
     (FR-NFR-033), và tháng 1 năm sau người ta vẫn đang chốt sổ năm trước. Màn
@@ -146,7 +155,7 @@ def _fiscal_year_items(session: Session) -> list[SetupItem]:
                 SetupItem(
                     key=f"fiscal_years.{year.code}.{field}",
                     title=f"{title} ({year.code})",
-                    value=str(getattr(year, field)),
+                    value=_decision_value(getattr(year, field)),
                     source="fiscal_year",
                     fiscal_year_code=year.code,
                     is_editable=not year.is_closed,

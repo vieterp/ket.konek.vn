@@ -40,12 +40,13 @@ from sqlalchemy.orm import Session
 
 from ket.kernel.errors import (
     InventoryCostingInProgressError,
+    InventoryMovementBeforeOpeningStockError,
     PostingValidationError,
     PostingViolation,
 )
-from ket.kernel.money import convert_currency
+from ket.kernel.money import convert_currency, round_money
 from ket.kernel.periods.models import AccountingPeriod, FiscalYear
-from ket.kernel.periods.service import PeriodService
+from ket.kernel.periods.service import PeriodService, fiscal_year_covering
 from ket.modules.inventory.models import (
     UNIT_COST_SCALE,
     CostState,
@@ -143,11 +144,15 @@ def record_movements(
         for line in lines
         for direction, warehouse_id in _legs(body, line)
     ]
+    _refuse_before_opening_stock(session, voucher)
     # Mọi khóa lấy TRƯỚC, theo thứ tự sắp xếp; số thứ tự cấp SAU, theo thứ tự dòng.
     lock_stock_keys(session, {stock_key_of(movement) for movement in created})
+    by_warehouse = _costs_by_warehouse(session, voucher.posting_date)
     for movement in created:
         movement.sequence_in_day = _next_sequence(session, movement)
-        if _has_later_movement(session, movement):
+        if movement.direction == MovementDirection.IN and movement.source_movement_id is not None:
+            _copy_cost_from_issue(session, movement, money_scale)
+        if _has_later_movement(session, movement, by_warehouse=by_warehouse):
             mark_recalc(
                 session,
                 branch_id=movement.branch_id,
@@ -170,8 +175,8 @@ def record_movements(
                 (
                     d
                     for d in (
-                        _shortage_before(session, movement),
-                        _issue_in_same_period_before(session, movement),
+                        _shortage_before(session, movement, by_warehouse=by_warehouse),
+                        _issue_in_same_period_before(session, movement, by_warehouse=by_warehouse),
                     )
                     if d is not None
                 ),
@@ -220,10 +225,11 @@ def remove_movements(session: Session, *, voucher: Voucher) -> int:
         )
     # Gỡ một lớp nhập mà trước đó khóa đã xuất nhiều hơn nhập: các dòng xuất
     # sớm hơn đã "ăn" lớp này (FIFO) — cùng luật nhập bù, chiều ngược.
+    by_warehouse = _costs_by_warehouse(session, voucher.posting_date)
     for row in rows:
         if row.direction != MovementDirection.IN:
             continue
-        shortage_from = _shortage_before(session, row)
+        shortage_from = _shortage_before(session, row, by_warehouse=by_warehouse)
         if shortage_from is not None:
             mark_recalc(
                 session,
@@ -434,6 +440,39 @@ def _movement_for(
     )
 
 
+def _refuse_before_opening_stock(session: Session, voucher: Voucher) -> None:
+    """Chiều ngược của bất biến tồn đầu kỳ nhập tay (`opening_port`, review 8C-1
+    H-3): chi nhánh đã khai lớp đầu kỳ cho năm N (movement ngày N.start − 1)
+    thì không ghi sổ movement nào có ngày ≤ ngày ấy — engine đọc cả lịch sử,
+    số ấy sẽ cộng lên tồn đầu đã khai, im lặng."""
+    latest_opening = session.scalar(
+        select(func.max(InventoryMovement.posting_date)).where(
+            InventoryMovement.branch_id == voucher.branch_id,
+            InventoryMovement.opening_layer_id.is_not(None),
+        )
+    )
+    if isinstance(latest_opening, date) and voucher.posting_date <= latest_opening:
+        raise InventoryMovementBeforeOpeningStockError(
+            "Chi nhánh đã nhập tay tồn đầu kỳ cho năm sau ngày này — xóa nhóm tồn kho "
+            "của số dư ban đầu năm ấy rồi chuyển số dư từ năm trước, thay vì ghi sổ lùi",
+            posting_date=voucher.posting_date.isoformat(),
+            opening_date=latest_opening.isoformat(),
+        )
+
+
+def _copy_cost_from_issue(session: Session, movement: InventoryMovement, money_scale: int) -> None:
+    """Lần nhập hàng bán trả lại lấy giá của lần xuất nó quay về (FR-STK-004,
+    8C-1) ngay lúc ghi sổ nếu lần xuất đã có giá — bút toán Nợ 156 / Có 632 có
+    từ lượt ghi sổ, không đợi job; engine (`return_in_legs.sql`) giữ hai bên
+    khớp về sau. Lần xuất chưa có giá → nhập chờ giá như mọi lần nhập chưa giá."""
+    source = session.get(InventoryMovement, movement.source_movement_id)
+    if source is None or source.unit_cost is None:
+        return
+    movement.unit_cost = source.unit_cost
+    movement.amount = round_money(movement.quantity * source.unit_cost, money_scale)
+    movement.cost_state = CostState.COSTED
+
+
 def _key_filter(movement: InventoryMovement) -> ColumnElement[bool]:
     return and_(
         InventoryMovement.branch_id == movement.branch_id,
@@ -441,6 +480,27 @@ def _key_filter(movement: InventoryMovement) -> ColumnElement[bool]:
         InventoryMovement.item_id == movement.item_id,
         InventoryMovement.lot_key == movement.lot_key,
     )
+
+
+def _cost_group_filter(movement: InventoryMovement, *, by_warehouse: bool) -> ColumnElement[bool]:
+    """Khóa mà GIÁ của movement này phụ thuộc: theo kho như thường; năm bình
+    quân "không theo kho" (FR-STK-007, 8C-1) thì mọi kho của (chi nhánh, mã
+    hàng, lô) — một lần nhập ở kho A đổi giá xuất ở kho B, nên các phép dò
+    "chèn lùi ngày / nhập bù / cùng kỳ" phải nhìn cả nhóm. Dấu bẩn vẫn ghi theo
+    khóa kho của movement — câu SQL nhóm gom dấu của mọi kho."""
+    if by_warehouse:
+        return _key_filter(movement)
+    return and_(
+        InventoryMovement.branch_id == movement.branch_id,
+        InventoryMovement.item_id == movement.item_id,
+        InventoryMovement.lot_key == movement.lot_key,
+    )
+
+
+def _costs_by_warehouse(session: Session, posting_date: date) -> bool:
+    """`False` chỉ khi năm chứa ngày này tính bình quân gộp mọi kho."""
+    year = fiscal_year_covering(session, posting_date)
+    return year is None or year.costing_by_warehouse
 
 
 def _next_sequence(session: Session, movement: InventoryMovement) -> int:
@@ -465,11 +525,13 @@ def _earlier_than(movement: InventoryMovement) -> ColumnElement[bool]:
     )
 
 
-def _issue_in_same_period_before(session: Session, movement: InventoryMovement) -> date | None:
+def _issue_in_same_period_before(
+    session: Session, movement: InventoryMovement, *, by_warehouse: bool
+) -> date | None:
     """Ngày xuất sớm nhất của khóa trong CÙNG kỳ, đứng trước movement này."""
     value = session.scalar(
         select(func.min(InventoryMovement.posting_date)).where(
-            _key_filter(movement),
+            _cost_group_filter(movement, by_warehouse=by_warehouse),
             InventoryMovement.period_id == movement.period_id,
             _earlier_than(movement),
             InventoryMovement.direction == MovementDirection.OUT,
@@ -478,19 +540,22 @@ def _issue_in_same_period_before(session: Session, movement: InventoryMovement) 
     return value if isinstance(value, date) else None
 
 
-def _shortage_before(session: Session, movement: InventoryMovement) -> date | None:
+def _shortage_before(
+    session: Session, movement: InventoryMovement, *, by_warehouse: bool
+) -> date | None:
     """Trước movement này, khóa đã xuất nhiều hơn nhập? → ngày xuất sớm nhất của
     khóa (điểm tính lại), không thì `None`."""
+    group = _cost_group_filter(movement, by_warehouse=by_warehouse)
     signed = session.scalar(
         select(func.coalesce(func.sum(InventoryMovement.direction * InventoryMovement.quantity), 0))
-        .where(_key_filter(movement), _earlier_than(movement))
+        .where(group, _earlier_than(movement))
         .where(InventoryMovement.is_custodial.is_(False))
     )
     if signed is None or signed >= 0:
         return None
     value = session.scalar(
         select(func.min(InventoryMovement.posting_date)).where(
-            _key_filter(movement),
+            group,
             _earlier_than(movement),
             InventoryMovement.direction == MovementDirection.OUT,
         )
@@ -515,12 +580,21 @@ def _earliest_open_date(session: Session, from_date: date) -> date:
     return max(from_date, open_from)
 
 
-def _has_later_movement(session: Session, movement: InventoryMovement) -> bool:
-    """Đã có movement cùng khóa ở ngày muộn hơn? — chèn lùi ngày (§9 #6)."""
+def _has_later_movement(
+    session: Session, movement: InventoryMovement, *, by_warehouse: bool
+) -> bool:
+    """Đã có movement cùng khóa giá ở ngày muộn hơn? — chèn lùi ngày (§9 #6)."""
+    # Nhóm nhiều kho (không theo kho): số thứ tự trong ngày cấp theo kho nên
+    # một lần nhập cùng ngày ở kho khác có thể đứng TRƯỚC dòng xuất đã tính
+    # (thứ tự nhóm là `(ngày, thứ tự, kho, id)`) — coi cùng ngày là "lùi", dấu
+    # thừa vô hại (review 8C-1 M-2).
     later = session.scalar(
         select(
             exists().where(
-                _key_filter(movement), InventoryMovement.posting_date > movement.posting_date
+                _cost_group_filter(movement, by_warehouse=by_warehouse),
+                InventoryMovement.posting_date > movement.posting_date
+                if by_warehouse
+                else InventoryMovement.posting_date >= movement.posting_date,
             )
         )
     )

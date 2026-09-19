@@ -112,6 +112,7 @@ class PeriodService:
         base_currency: str,
         inventory_valuation_method: InventoryValuationMethod,
         vat_method: VatMethod,
+        inventory_costing_by_warehouse: bool = True,
     ) -> FiscalYear:
         """Tạo niên độ 12 tháng kể từ `start_date` và sinh đủ 12 kỳ.
 
@@ -136,6 +137,7 @@ class PeriodService:
             accounting_scheme=accounting_scheme.value,
             base_currency=base_currency,
             inventory_valuation_method=inventory_valuation_method.value,
+            inventory_costing_by_warehouse=inventory_costing_by_warehouse,
             vat_method=vat_method.value,
         )
         # Savepoint vì ràng buộc `EXCLUDE` của DB mới là hàng rào thật (H1): phép

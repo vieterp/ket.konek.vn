@@ -35,7 +35,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ket.kernel.contracts import PartnerKind
@@ -122,13 +122,18 @@ def build_posting_requests(
 
 
 def _costed_out_amounts(session: Session, voucher_ids: Sequence[UUID]) -> dict[UUID, Decimal]:
-    """`amount` VND của movement **xuất** đã tính giá, theo dòng phiếu. Vế đi
-    của phiếu chuyển là vế mang giá vốn (vế đến nhận cùng giá, không bút toán)."""
+    """`amount` VND của movement đã tính giá **do engine quyết**, theo dòng phiếu:
+    chiều xuất (vế đi của phiếu chuyển là vế mang giá vốn — vế đến nhận cùng
+    giá, không bút toán) và chiều nhập lấy giá từ lần xuất (hàng bán trả lại,
+    FR-STK-004 8C-1 — Nợ 156 / Có 632 theo giá engine chép)."""
     rows = session.execute(
         select(InventoryMovement.line_id, InventoryMovement.amount).where(
             InventoryMovement.voucher_id.in_(list(voucher_ids)),
-            InventoryMovement.direction == MovementDirection.OUT,
             InventoryMovement.cost_state == CostState.COSTED,
+            or_(
+                InventoryMovement.direction == MovementDirection.OUT,
+                InventoryMovement.source_movement_id.is_not(None),
+            ),
         )
     ).all()
     return {line_id: amount for line_id, amount in rows if amount is not None}

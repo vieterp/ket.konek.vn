@@ -2,7 +2,8 @@
 -- (sổ, chi nhánh) — một câu INSERT … SELECT, không vòng lặp Python (LD-14).
 --
 -- Tham số:
---   :source_fiscal_year_id, :target_fiscal_year_id, :ledger, :branch_id
+--   :source_fiscal_year_id, :target_fiscal_year_id, :ledger, :branch_id,
+--   :stock_prefixes (TEXT[] — mẫu LIKE số hiệu TK kho, ví dụ '{156%,152%}')
 -- Số cuối năm tính THẲNG từ nguồn sự thật: số dư ban đầu năm nguồn cộng mọi
 -- phát sinh `gl_postings` của các kỳ năm nguồn — không đọc snapshot
 -- `account_balances`, nên kết quả không phụ thuộc hàng đợi tính lại sạch hay
@@ -31,13 +32,20 @@
 -- (review pre-landing H-B). Bộ đếm tham chiếu chặn phần lớn ca ấy, nhưng bút
 -- toán tổng hợp đứng ngoài bộ đếm — số tiền vẫn chuyển đủ, chỉ mất phần quy chủ.
 --
--- detail_kind của dòng sinh ra: có bank_account_id → 1; còn lại suy từ
--- partner_kind (khách 2, NCC 3, nhân viên 4, còn lại 0). CẢNH BÁO PHASE 8:
--- nhóm 5–9 (tồn kho, dở dang, CCDC, TSCĐ, trả trước) bị LOẠI ở nhánh
--- opening_balances (detail_kind 0–4) và phát sinh mang item_id/warehouse_id
--- sẽ rơi về nhóm 0 — phase 8 phải mở rộng câu này (lớp FIFO còn lại, thẻ tài
--- sản) trước khi bật kho/tài sản, nếu không tổng chuyển sang năm sau thiếu
--- đúng phần tồn kho.
+-- detail_kind của dòng sinh ra: có bank_account_id → 1; có item_id +
+-- warehouse_id VÀ TK là TK kho của gói (:stock_prefixes — số hiệu theo purpose
+-- kho, tra ở job; 632/621 cũng mang chiều mã hàng nhưng không phải tồn kho) →
+-- 5 (lát 8C-1); còn lại suy từ partner_kind (khách 2, NCC 3, nhân viên 4, còn
+-- lại 0). Nhánh opening_balances nhận nhóm 0–5; nhóm 6–9 (dở dang, CCDC, TSCĐ,
+-- trả trước) vẫn LOẠI — 8E mở rộng cùng thẻ tài sản.
+--
+-- Tồn kho năm nhận là DÒNG SỔ CÁI: giá trị = số dư đầu năm nguồn + phát sinh
+-- 15x mang chiều kho/mã hàng, gộp theo (TK, kho, mã hàng) — KHÔNG theo lô vì
+-- `gl_postings` không có cột lô (cột `lot_id` của dòng nguồn bỏ đi, nếu không
+-- một mã hàng có lô sẽ tách hai dòng: một mang lô của số đầu năm, một NULL của
+-- phát sinh). Số lượng/đơn giá do cổng module điền sau (`annotate_carried`).
+-- Không sinh lớp, không sinh movement: engine tính giá đọc cả lịch sử sổ kho
+-- nên tồn đầu năm sau đã nằm sẵn trong movement của năm nguồn (8B #7).
 --
 -- Tỷ giá của dòng mới là tỷ giá BÌNH QUÂN suy ra (quy đổi ÷ nguyên tệ) vì các
 -- dòng nguồn khác tỷ giá đã gộp làm một; hai cột số tiền mới là sự thật, tỷ
@@ -64,13 +72,13 @@ combined AS (
     FROM (
         SELECT account_id, currency_code, bank_account_id, partner_id,
                partner_kind, cost_object_id, project_id, order_id, contract_id,
-               expense_item_id, item_id, warehouse_id, lot_id,
+               expense_item_id, item_id, warehouse_id, CAST(NULL AS INTEGER) AS lot_id,
                debit, credit, debit_fc, credit_fc
         FROM opening_balances
         WHERE fiscal_year_id = :source_fiscal_year_id
           AND ledger = :ledger
           AND branch_id = :branch_id
-          AND detail_kind BETWEEN 0 AND 4
+          AND detail_kind BETWEEN 0 AND 5
         UNION ALL
         -- `bank_account_id` chỉ được coi là chiều TK ngân hàng trên dòng 112x.
         -- Hai mapper đã lọc ở đường GHI, nhưng phép lọc ở đây là lớp thứ hai có
@@ -124,6 +132,11 @@ SELECT :target_fiscal_year_id,
        GREATEST(-net, 0),
        CASE
            WHEN bank_account_id IS NOT NULL THEN 1
+           WHEN item_id IS NOT NULL AND warehouse_id IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM chart_of_accounts coa
+                     WHERE coa.id = combined.account_id
+                       AND coa.code LIKE ANY(CAST(:stock_prefixes AS TEXT[]))
+                ) THEN 5
            ELSE CASE partner_kind WHEN 0 THEN 2 WHEN 1 THEN 3 WHEN 2 THEN 4 ELSE 0 END
        END
 FROM combined

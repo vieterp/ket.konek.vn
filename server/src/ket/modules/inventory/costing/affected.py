@@ -161,4 +161,5 @@ def _params(branch_id: int, year: FiscalYear, force_from: date | None) -> dict[s
         "year_start": year.start_date,
         "year_end": year.end_date,
         "force_from": force_from,
+        "by_warehouse": year.costing_by_warehouse,
     }

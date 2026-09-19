@@ -544,6 +544,13 @@ class InventoryMovementLine(BaseModel):
     source_line_id: UUID | None = None
     """Dòng chứng từ nguồn sinh ra dòng phiếu — để phiếu kho chỉ ngược về hóa
     đơn và báo cáo mua/bán đối chiếu từng dòng."""
+    cost_from_line_id: UUID | None = None
+    """Dòng chứng từ **bán gốc** mà dòng nhập này trả về (thêm ở 8C-1, ADR-026;
+    FR-STK-004 "lấy từ giá xuất kho"): module kho tra phiếu xuất sinh từ dòng ấy
+    và gắn lần xuất làm nguồn giá của lần nhập — engine chép giá xuất sang giá
+    nhập mỗi lượt tính, nên tính lại giá bán tự cập nhật giá nhập trả lại. Chỉ
+    có nghĩa ở chiều **nhập**; dòng gốc không kiêm xuất kho thì dòng nhập chờ
+    giá như mọi lần nhập chưa giá."""
 
 
 class PlannedMovement(BaseModel):

@@ -16,6 +16,7 @@ trỏ mãi vào tài khoản của gói đã dùng năm 2026 — kể cả khi d
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Final
 
 from sqlalchemy import (
     Boolean,
@@ -292,3 +293,16 @@ class ClosingAccountPair(DatasetBase, Audited):
     target_account: Mapped[str] = mapped_column(String(ACCOUNT_CODE_MAX_LENGTH), nullable=False)
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+INVENTORY_ACCOUNT_PURPOSES: Final[tuple[str, ...]] = (
+    "inventory_goods",
+    "raw_materials",
+    "tools_supplies",
+    "finished_goods",
+    "goods_on_consignment",
+)
+"""Mục đích TK hàng tồn kho của gói cấu hình (`default_accounts.csv`) — 152/153/
+155/156/157 ở TT99. Một danh sách cho cả guard FR-STK-042 (`inventory.guards`)
+lẫn sheet Tồn kho + chuyển năm của số dư ban đầu (8C-1): hai bản chép từng lệch
+nhau ở 157 (review 8C-1 L-5). Số hiệu tra qua purpose, không tiền tố cứng (LD-06)."""

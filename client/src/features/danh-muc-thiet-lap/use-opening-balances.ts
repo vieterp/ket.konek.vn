@@ -192,6 +192,8 @@ export interface OpeningImportReport {
   /** `{detail_kind: số dòng}` — khóa là chuỗi số vì JSON không có khóa số. */
   readonly rows_by_kind: Readonly<Record<string, number>>
   readonly invoice_rows: number
+  /** Số lần nhập của sheet Tồn kho sẽ ghi thành lớp (nhóm 5, 8C-1). */
+  readonly stock_layer_rows: number
   readonly replaced_kinds: readonly number[]
   readonly total_debit: string
   readonly total_credit: string

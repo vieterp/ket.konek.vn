@@ -1,4 +1,4 @@
-"""Kiểm và ghi số dư ban đầu nhóm 0–4 (SRS 02, RT-24) — phần cần DB.
+"""Kiểm và ghi số dư ban đầu nhóm 0–5 (SRS 02, RT-24) — phần cần DB.
 
 Lượt kiểm và lượt ghi chạy **cùng** đường này, khác nhau đúng tham số `commit`
 (nguyên tắc H85 của khung nhập liệu: bước ghi không có đoạn mã riêng nào để bỏ
@@ -9,7 +9,10 @@ qua phép kiểm). Hình dạng dữ liệu ghi ra:
 * mỗi dòng Excel "còn nợ" của nhóm 2/3/4 = một dòng `opening_balance_invoices`
   treo dưới dòng cha (FR-OPB-003). Vì dòng cha được **cộng từ chính các dòng
   con**, phép đối chiếu chi tiết ↔ tổng hợp đúng theo cách dựng, không cần một
-  phép kiểm sau.
+  phép kiểm sau;
+* mỗi dòng sheet Tồn kho (nhóm 5, lát 8C-1) = một lớp `opening_balance_stock_
+  layers` dưới dòng cha `(TK, kho, mã hàng, lô)` — cùng cách dựng; phần sổ kho
+  (lô, movement) đi qua cổng `OPENING_DETAIL_PORTS` vì bảng ấy thuộc module.
 
 Ghi bằng Core (`insert(...).returning`) chứ không ORM: một lượt nhập vài nghìn
 dòng qua unit-of-work sẽ đẻ vài nghìn dòng `audit_log` "rỗng → giá trị" chôn mất
@@ -20,6 +23,7 @@ tệp trong kho định địa chỉ theo nội dung.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 from typing import Final
 from uuid import UUID
@@ -31,32 +35,45 @@ from ket.kernel.auditing.listener import record_action
 from ket.kernel.auditing.models import AuditAction
 from ket.kernel.config.accounts_models import (
     DEPOSIT_ACCOUNT_CODE_PREFIX,
+    INVENTORY_ACCOUNT_PURPOSES,
     BalanceNature,
     ChartOfAccount,
     DetailTracking,
 )
-from ket.kernel.config.accounts_provider import resolve_package
+from ket.kernel.config.accounts_provider import default_account, resolve_package
 from ket.kernel.currency.models import Currency
-from ket.kernel.errors import OpeningBalanceSettledError
+from ket.kernel.errors import DefaultAccountNotConfiguredError, OpeningBalanceSettledError
 from ket.kernel.identifiers import uuid7
 from ket.kernel.master_data.models.company_bank_account import CompanyBankAccount
 from ket.kernel.master_data.models.employee import Employee
+from ket.kernel.master_data.models.item import INVENTORY_NATURES, Item
+from ket.kernel.master_data.models.item_unit import ItemUnit
 from ket.kernel.master_data.models.partner import Partner
-from ket.kernel.money import ZERO
-from ket.kernel.periods.models import FiscalYear
+from ket.kernel.master_data.models.unit_of_measure import UnitOfMeasure
+from ket.kernel.master_data.models.warehouse import Warehouse
+from ket.kernel.money import ZERO, round_money
+from ket.kernel.periods.models import FiscalYear, InventoryValuationMethod
 from ket.posting.balances.recalc_queue import mark_dirty
 from ket.posting.engine.dimensions import PartnerKind
+from ket.posting.engine.models import Ledger
 from ket.posting.opening_balances.guards import (
     acquire_opening_write_lock,
     first_period_of,
     guard_opening_writable,
 )
 from ket.posting.opening_balances.models import (
+    UNIT_COST_SCALE,
     OpeningBalance,
     OpeningBalanceInvoice,
+    OpeningBalanceStockLayer,
     OpeningDetailKind,
 )
 from ket.posting.opening_balances.parsing import ParsedOpeningRow
+from ket.posting.opening_balances.ports import (
+    OPENING_DETAIL_PORTS,
+    PORTED_KINDS,
+    OpeningStockLayer,
+)
 from ket.posting.opening_balances.report import (
     OpeningImportReport,
     OpeningImportWarning,
@@ -79,11 +96,32 @@ _PARTNER_TRACKINGS: Final[frozenset[str]] = frozenset(
     {DetailTracking.CUSTOMER, DetailTracking.VENDOR, DetailTracking.EMPLOYEE}
 )
 
+_STOCK_TRACKINGS: Final[frozenset[str]] = frozenset({DetailTracking.ITEM, DetailTracking.WAREHOUSE})
+"""Chiều mà TK kho theo dõi — TK có một trong hai chiều này phải nhập ở sheet
+Tồn kho (nhóm 5), như TK theo dõi đối tác phải nhập ở sheet công nợ. Đó là cách
+FR-OPB-007 "chi tiết ↔ tổng hợp" đúng về cấu trúc cho tồn kho: tổng hợp 15x là
+tổng của chính các lớp, không có đường nào khác vào."""
+
+STOCK_SHEET_NAME: Final[str] = "Tồn kho"
+
 _SHEET_BY_TRACKING: Final[dict[str, str]] = {
     DetailTracking.CUSTOMER: "Phải thu khách hàng",
     DetailTracking.VENDOR: "Phải trả nhà cung cấp",
     DetailTracking.EMPLOYEE: "Tạm ứng nhân viên",
 }
+
+
+@dataclass(frozen=True)
+class _StockLayerRow:
+    """Một lần nhập của sheet Tồn kho sau khi tra cứu — số lượng đã quy về đơn
+    vị chính, đơn giá theo đơn vị chính."""
+
+    sort_order: int
+    received_on: date | None
+    receipt_no: str | None
+    quantity: Decimal
+    unit_cost: Decimal
+    amount: Decimal
 
 
 @dataclass
@@ -96,11 +134,19 @@ class _AggregatedRow:
     bank_account_id: int | None
     currency_code: str
     exchange_rate: Decimal
+    warehouse_id: int | None = None
+    item_id: int | None = None
+    lot_no: str | None = None
     debit_fc: Decimal = ZERO
     credit_fc: Decimal = ZERO
     debit: Decimal = ZERO
     credit: Decimal = ZERO
+    quantity: Decimal = ZERO
     invoices: list[ParsedOpeningRow] = field(default_factory=list)
+    layers: list[_StockLayerRow] = field(default_factory=list)
+    """Dòng con của nhóm tồn kho (5) — mỗi dòng sheet một lớp (FR-OPB-004), dòng
+    cha = Σ lớp cùng `(TK, kho, mã hàng, lô)`; `inventory` vật chất hóa thành
+    movement qua `OPENING_DETAIL_PORTS` sau khi ghi."""
     """Dòng con của nhóm công nợ — **cả hai chiều** từ lát 7C-5: dòng bên
     còn-nợ thành chứng từ công nợ, dòng bên ngược thành khoản ứng trước
     (`is_advance`). Tên giữ nguyên vì bảng đích vẫn là
@@ -113,6 +159,28 @@ class StagedOpening:
 
     rows: list[_AggregatedRow]
     replaced_kinds: tuple[int, ...]
+
+
+def stock_account_prefixes(session: Session, *, fiscal_year: FiscalYear) -> tuple[str, ...]:
+    """Số hiệu TK kho của gói năm theo mục đích (`default_accounts.csv`) — sheet
+    Tồn kho chỉ nhận TK là (hoặc con của) một trong các TK này, và lượt chuyển
+    năm xếp phát sinh mang chiều kho vào nhóm 5 theo cùng danh sách. Gói test
+    tối giản có thể thiếu một mục đích: bỏ qua, không phải lỗi (cùng lối guard
+    FR-STK-042)."""
+    package = resolve_package(
+        session, scheme=fiscal_year.accounting_scheme, on_date=fiscal_year.start_date
+    )
+    codes: list[str] = []
+    for purpose in INVENTORY_ACCOUNT_PURPOSES:
+        try:
+            codes.append(
+                default_account(
+                    session, package_id=package.id, document_type="*", purpose=purpose
+                ).account_code
+            )
+        except DefaultAccountNotConfiguredError:
+            continue
+    return tuple(codes)
 
 
 class _Lookups:
@@ -188,6 +256,55 @@ class _Lookups:
                 .all()
             ):
                 self.bank_accounts[bank_account.code] = bank_account
+        stock_rows = [row for row in rows if row.kind == OpeningDetailKind.STOCK]
+        self.warehouses: dict[str, Warehouse] = {}
+        self.items: dict[str, Item] = {}
+        self.units: dict[str, UnitOfMeasure] = {}
+        self.unit_factors: dict[tuple[int, int], Decimal] = {}
+        if stock_rows:
+            for warehouse in (
+                session.execute(
+                    select(Warehouse)
+                    .where(Warehouse.code.in_({row.warehouse_code or "" for row in stock_rows}))
+                    .order_by(Warehouse.branch_id.asc().nulls_first())
+                )
+                .scalars()
+                .all()
+            ):
+                self.warehouses[warehouse.code] = warehouse
+            for item in (
+                session.execute(
+                    select(Item)
+                    .where(Item.code.in_({row.item_code or "" for row in stock_rows}))
+                    .order_by(Item.branch_id.asc().nulls_first())
+                )
+                .scalars()
+                .all()
+            ):
+                self.items[item.code] = item
+            unit_codes = {row.unit_code for row in stock_rows if row.unit_code is not None}
+            if unit_codes:
+                for unit in (
+                    session.execute(
+                        select(UnitOfMeasure)
+                        .where(UnitOfMeasure.code.in_(unit_codes))
+                        .order_by(UnitOfMeasure.branch_id.asc().nulls_first())
+                    )
+                    .scalars()
+                    .all()
+                ):
+                    self.units[unit.code] = unit
+            item_ids = [item.id for item in self.items.values()]
+            if item_ids:
+                for item_unit in (
+                    session.execute(select(ItemUnit).where(ItemUnit.item_id.in_(item_ids)))
+                    .scalars()
+                    .all()
+                ):
+                    self.unit_factors[(item_unit.item_id, item_unit.unit_id)] = item_unit.factor
+        self.stock_account_codes: tuple[str, ...] = stock_account_prefixes(
+            session, fiscal_year=fiscal_year
+        )
         self.base_currency = fiscal_year.base_currency
         # Tiền tệ tra danh mục như mọi mã khác (review 4C, M7): không có FK trên
         # `currency_code`, nên một mã gõ nhầm sẽ ghi vào DB và chỉ lộ ra ở phase
@@ -197,8 +314,15 @@ class _Lookups:
         )
 
 
+def _is_stock_account(account: ChartOfAccount, lookups: _Lookups) -> bool:
+    return any(
+        account.code == code or account.code.startswith(code)
+        for code in lookups.stock_account_codes
+    )
+
+
 def _account_errors(
-    row: ParsedOpeningRow, account: ChartOfAccount | None
+    row: ParsedOpeningRow, account: ChartOfAccount | None, lookups: _Lookups
 ) -> list[tuple[str | None, str, str]]:
     """Lỗi tài khoản của một dòng: `(cột, mã lỗi, thông điệp)`."""
     header = "Số hiệu tài khoản *"
@@ -261,6 +385,23 @@ def _account_errors(
                 f"Tài khoản theo dõi chi tiết theo đối tượng — nhập ở sheet {sheets}",
             )
         )
+    # Chỉ TK KHO (theo purpose của gói) theo dõi chiều kho/mã hàng mới bị đuổi
+    # sang sheet Tồn kho; TK theo dõi chiều ấy mà ngoài purpose (151 hàng đi
+    # đường TT133, 158 kho bảo thuế TT99, hay chiều người dùng tự bật) vẫn nhập
+    # ở sheet TK thường — cảnh báo `tracking_not_captured` nói phần chiều bị mất
+    # (review 8C-1 H-1: đuổi cả hai sheet là không có đường nào nhập).
+    if (
+        row.kind != OpeningDetailKind.STOCK
+        and tracking & _STOCK_TRACKINGS
+        and _is_stock_account(account, lookups)
+    ):
+        errors.append(
+            (
+                header,
+                "opening.needs_stock_sheet",
+                f"Tài khoản theo dõi chi tiết theo kho/mã hàng — nhập ở sheet {STOCK_SHEET_NAME!r}",
+            )
+        )
     expected_tracking = _PARTNER_TRACKING_BY_DETAIL.get(row.kind)
     if (
         expected_tracking is not None
@@ -275,6 +416,109 @@ def _account_errors(
             )
         )
     return errors
+
+
+@dataclass(frozen=True)
+class _ResolvedStock:
+    warehouse_id: int
+    item_id: int
+    base_quantity: Decimal
+    unit_cost: Decimal
+
+
+def _stock_errors(
+    row: ParsedOpeningRow,
+    account: ChartOfAccount | None,
+    lookups: _Lookups,
+    *,
+    fiscal_year: FiscalYear,
+    ledger: int,
+) -> tuple[_ResolvedStock | None, list[tuple[str | None, str, str]]]:
+    """`(tồn kho đã tra, lỗi)` cho sheet Tồn kho (nhóm 5, 8C-1); sheet khác trả `(None, [])`.
+
+    Số lượng và đơn giá của sheet theo đơn vị GÕ; quy về đơn vị chính ở đây
+    (FR-STK-006) vì lớp đầu kỳ đi thẳng thành movement — nơi số lượng luôn là
+    đơn vị chính.
+    """
+    if row.kind != OpeningDetailKind.STOCK:
+        return None, []
+    errors: list[tuple[str | None, str, str]] = []
+    if ledger != Ledger.FINANCIAL:
+        errors.append(
+            (
+                None,
+                "opening.stock_financial_only",
+                "Tồn kho đầu kỳ chỉ nhập ở sổ tài chính — sổ kho là một cho cả hai sổ",
+            )
+        )
+    if account is not None and lookups.stock_account_codes:
+        if not _is_stock_account(account, lookups):
+            errors.append(
+                (
+                    "Số hiệu tài khoản *",
+                    "opening.not_stock_account",
+                    "Tài khoản không phải TK hàng tồn kho của chế độ kế toán năm",
+                )
+            )
+    warehouse = lookups.warehouses.get(row.warehouse_code or "")
+    if warehouse is None or warehouse.is_group:
+        errors.append(("Mã kho *", "opening.warehouse_unknown", "Mã kho không có trong danh mục"))
+    item = lookups.items.get(row.item_code or "")
+    if item is None:
+        errors.append(("Mã hàng *", "opening.item_unknown", "Mã hàng không có trong danh mục"))
+    elif item.is_group or item.nature not in INVENTORY_NATURES or item.base_unit_id is None:
+        errors.append(
+            (
+                "Mã hàng *",
+                "opening.item_not_stocked",
+                "Chỉ hàng hóa và thành phẩm (có đơn vị chính) mới có tồn kho",
+            )
+        )
+    factor = Decimal(1)
+    if item is not None and item.base_unit_id is not None and row.unit_code is not None:
+        unit = lookups.units.get(row.unit_code)
+        if unit is None:
+            errors.append(
+                ("Đơn vị tính", "opening.unit_unknown", "Đơn vị tính không có trong danh mục")
+            )
+        elif unit.id != item.base_unit_id:
+            declared = lookups.unit_factors.get((item.id, unit.id))
+            if declared is None:
+                errors.append(
+                    (
+                        "Đơn vị tính",
+                        "opening.unit_not_declared",
+                        "Đơn vị tính chưa khai tỷ lệ quy đổi cho mã hàng này",
+                    )
+                )
+            else:
+                factor = declared
+    if row.received_on is None and fiscal_year.inventory_valuation_method in (
+        InventoryValuationMethod.FIFO,
+        InventoryValuationMethod.SPECIFIC,
+    ):
+        errors.append(
+            (
+                "Ngày nhập",
+                "opening.received_on_required",
+                "Năm tính giá FIFO/đích danh: tồn đầu kỳ phải khai theo từng lần nhập có ngày "
+                "(FR-OPB-004)",
+            )
+        )
+    if errors or warehouse is None or item is None or row.quantity is None:
+        return None, errors
+    base_quantity = row.quantity * factor
+    if base_quantity <= ZERO:
+        return None, errors
+    return (
+        _ResolvedStock(
+            warehouse_id=warehouse.id,
+            item_id=item.id,
+            base_quantity=base_quantity,
+            unit_cost=round_money(row.debit / base_quantity, UNIT_COST_SCALE),
+        ),
+        errors,
+    )
 
 
 def _partner_errors(
@@ -394,18 +638,26 @@ def validate_rows(
     nguyên tắc trả-toàn-bộ-lỗi của phase 4: người dùng sửa tệp một lượt.
     """
     lookups = _Lookups(session, fiscal_year, rows)
-    aggregated: dict[tuple[int, int, int | None, int | None, str, Decimal], _AggregatedRow] = {}
+    aggregated: dict[
+        tuple[int, int, int | None, int | None, str, Decimal, int | None, int | None, str | None],
+        _AggregatedRow,
+    ] = {}
     seen_invoices: dict[tuple[int, str | None, str, str, str], tuple[str, int]] = {}
     tracking_warned: set[str] = set()
     deposit_warned: set[str] = set()
+    stock_untracked_warned: set[str] = set()
 
     for row in rows:
         account = lookups.accounts.get(row.account_code)
-        row_errors = _account_errors(row, account)
+        row_errors = _account_errors(row, account, lookups)
         partner_id, partner_issues = _partner_errors(row, lookups)
         row_errors.extend(partner_issues)
         bank_account_id, bank_issues = _bank_account_errors(row, account, lookups)
         row_errors.extend(bank_issues)
+        stock, stock_issues = _stock_errors(
+            row, account, lookups, fiscal_year=fiscal_year, ledger=ledger
+        )
+        row_errors.extend(stock_issues)
         if row.currency_code not in lookups.currencies:
             row_errors.append(
                 (
@@ -483,6 +735,25 @@ def validate_rows(
             else:
                 seen_invoices[invoice_key] = (row.sheet, row.row)
 
+        if (
+            account is not None
+            and row.kind == OpeningDetailKind.STOCK
+            and not frozenset(account.detail_tracking or ()) & _STOCK_TRACKINGS
+            and account.code not in stock_untracked_warned
+        ):
+            # Cảnh báo chứ không lỗi: số vào sổ kho vẫn đúng, chỉ báo cáo sổ cái
+            # theo kho/mã hàng không đối chiếu được — khuôn `deposit_on_account_sheet`.
+            stock_untracked_warned.add(account.code)
+            report.warnings.append(
+                OpeningImportWarning(
+                    code="opening.stock_account_untracked",
+                    message=(
+                        f"TK {account.code} không theo dõi chi tiết theo kho/mã hàng — sổ cái "
+                        "sẽ không đối chiếu được với sổ kho theo từng kho (BR-STK-03)"
+                    ),
+                )
+            )
+
         if (row.sheet, row.row) in failed or account is None:
             continue
 
@@ -493,6 +764,9 @@ def validate_rows(
             bank_account_id,
             row.currency_code,
             row.exchange_rate,
+            stock.warehouse_id if stock is not None else None,
+            stock.item_id if stock is not None else None,
+            (row.lot_no or "").strip() or None if stock is not None else None,
         )
         bucket = aggregated.get(key)
         if bucket is None:
@@ -503,12 +777,27 @@ def validate_rows(
                 bank_account_id=bank_account_id,
                 currency_code=row.currency_code,
                 exchange_rate=row.exchange_rate,
+                warehouse_id=key[6],
+                item_id=key[7],
+                lot_no=key[8],
             )
             aggregated[key] = bucket
         bucket.debit_fc += row.debit_fc
         bucket.credit_fc += row.credit_fc
         bucket.debit += row.debit
         bucket.credit += row.credit
+        if stock is not None:
+            bucket.quantity += stock.base_quantity
+            bucket.layers.append(
+                _StockLayerRow(
+                    sort_order=row.row,
+                    received_on=row.received_on,
+                    receipt_no=(row.receipt_no or "").strip() or None,
+                    quantity=stock.base_quantity,
+                    unit_cost=stock.unit_cost,
+                    amount=row.debit,
+                )
+            )
         # Chỉ nhóm công nợ (2/3/4) treo chi tiết chứng từ; nhóm ngân hàng (1)
         # có dòng dư Có hợp lệ (thấu chi) nhưng không có hóa đơn để treo.
         #
@@ -529,6 +818,7 @@ def validate_rows(
         # lên màn kết quả nhập liệu dưới nhãn "số chứng từ công nợ", và một
         # khoản ứng trước không phải một chứng từ người dùng vừa khai.
         report.invoice_rows += sum(1 for row in bucket.invoices if row.is_natural_side)
+        report.stock_layer_rows += len(bucket.layers)
     report.replaced_kinds = list(replaced)
 
     untouched = session.execute(
@@ -591,6 +881,20 @@ def write_staged(
         detail_kinds=tuple(staged.replaced_kinds),
     )
 
+    # Nhóm có chi tiết ở module (tồn kho): gỡ phía module TRƯỚC khi xóa dòng cha
+    # — movement giữ FK `RESTRICT` về lớp, và lớp `CASCADE` theo cha.
+    # Sổ kho là MỘT, thuộc sổ tài chính: cổng chỉ chạy cho lượt ghi sổ tài chính
+    # (nhóm 5 sổ quản trị bị từ chối ở kiểm tra cứu; dòng nhóm 5 sổ quản trị chỉ
+    # tới từ chuyển năm — review 8C-1 M-6).
+    ported = [
+        kind
+        for kind in staged.replaced_kinds
+        if kind in PORTED_KINDS and ledger == Ledger.FINANCIAL
+    ]
+    for kind in ported:
+        OPENING_DETAIL_PORTS.require(kind).clear(
+            session, fiscal_year=fiscal_year, branch_id=branch_id
+        )
     session.execute(
         delete(OpeningBalance)
         .where(OpeningBalance.fiscal_year_id == fiscal_year.id)
@@ -600,6 +904,7 @@ def write_staged(
     )
 
     if staged.rows:
+        lot_ids = _resolve_lot_ids(session, staged)
         parent_values = [
             {
                 "fiscal_year_id": fiscal_year.id,
@@ -611,13 +916,24 @@ def write_staged(
                 "partner_id": bucket.partner_id,
                 "partner_kind": PARTNER_KIND_BY_DETAIL.get(bucket.kind),
                 "bank_account_id": bucket.bank_account_id,
+                "warehouse_id": bucket.warehouse_id,
+                "item_id": bucket.item_id,
+                "lot_id": lot_ids.get(index),
                 "debit_fc": bucket.debit_fc,
                 "credit_fc": bucket.credit_fc,
                 "debit": bucket.debit,
                 "credit": bucket.credit,
+                # Hai cột trình bày 4 lẻ (`opening_balances` NUMERIC(18,4)); số
+                # thật 6 lẻ ở lớp/movement — làm tròn tường minh thay vì để DB tròn.
+                "quantity": round_money(bucket.quantity, 4) if bucket.layers else None,
+                "unit_price": (
+                    round_money((bucket.debit - bucket.credit) / bucket.quantity, 4)
+                    if bucket.layers and bucket.quantity > ZERO
+                    else None
+                ),
                 "detail_kind": bucket.kind,
             }
-            for bucket in staged.rows
+            for index, bucket in enumerate(staged.rows)
         ]
         inserted = session.execute(
             insert(OpeningBalance).returning(OpeningBalance.id, sort_by_parameter_order=True),
@@ -642,6 +958,48 @@ def write_staged(
         ]
         if invoice_values:
             session.execute(insert(OpeningBalanceInvoice), invoice_values)
+        layer_values = [
+            {
+                "id": uuid7(),
+                "opening_balance_id": parent_id,
+                "fiscal_year_id": fiscal_year.id,
+                "branch_id": branch_id,
+                "warehouse_id": bucket.warehouse_id,
+                "item_id": bucket.item_id,
+                "lot_id": lot_ids.get(index),
+                "received_on": layer.received_on,
+                "receipt_no": layer.receipt_no,
+                "sort_order": layer.sort_order,
+                "quantity": layer.quantity,
+                "unit_cost": layer.unit_cost,
+                "amount": layer.amount,
+            }
+            for index, (parent_id, bucket) in enumerate(zip(parent_ids, staged.rows, strict=True))
+            for layer in bucket.layers
+        ]
+        if layer_values:
+            session.execute(insert(OpeningBalanceStockLayer), layer_values)
+            OPENING_DETAIL_PORTS.require(OpeningDetailKind.STOCK).materialize(
+                session,
+                fiscal_year=fiscal_year,
+                first_period=first_period,
+                branch_id=branch_id,
+                layers=[
+                    OpeningStockLayer(
+                        id=values["id"],
+                        warehouse_id=values["warehouse_id"],
+                        item_id=values["item_id"],
+                        lot_id=values["lot_id"],
+                        received_on=values["received_on"],
+                        receipt_no=values["receipt_no"],
+                        sort_order=values["sort_order"],
+                        quantity=values["quantity"],
+                        unit_cost=values["unit_cost"],
+                        amount=values["amount"],
+                    )
+                    for values in layer_values
+                ],
+            )
 
     # Bàn giao 4B: mọi đường ghi `opening_balances` phải đánh dấu bẩn kỳ đầu
     # năm — recalc đọc số dư ban đầu cho kỳ đầu năm ngay trong SQL, nhưng chỉ
@@ -668,6 +1026,23 @@ def write_staged(
             "rows": len(staged.rows),
         },
     )
+
+
+def _resolve_lot_ids(session: Session, staged: StagedOpening) -> dict[int, int]:
+    """`{chỉ số dòng cha: lot_id}` cho dòng nhóm 5 có số lô — tra/tạo lô qua cổng
+    module (bảng `lots` thuộc `inventory`)."""
+    resolved: dict[int, int] = {}
+    for index, bucket in enumerate(staged.rows):
+        if (
+            bucket.kind != OpeningDetailKind.STOCK
+            or bucket.lot_no is None
+            or bucket.item_id is None
+        ):
+            continue
+        resolved[index] = OPENING_DETAIL_PORTS.require(OpeningDetailKind.STOCK).lot_id_for(
+            session, item_id=bucket.item_id, lot_no=bucket.lot_no
+        )
+    return resolved
 
 
 __all__ = [

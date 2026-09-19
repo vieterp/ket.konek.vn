@@ -48,6 +48,8 @@ from ket.posting.opening_balances.models import (
     OpeningBalanceInvoice,
     OpeningDetailKind,
 )
+from ket.posting.opening_balances.ports import OPENING_DETAIL_PORTS, PORTED_KINDS
+from ket.posting.opening_balances.service import stock_account_prefixes
 
 CARRY_FORWARD_CODE: Final[str] = "posting.opening_balances.carry_forward"
 
@@ -72,9 +74,11 @@ _CARRIED_KINDS: Final[tuple[int, ...]] = (
     OpeningDetailKind.RECEIVABLE,
     OpeningDetailKind.PAYABLE,
     OpeningDetailKind.EMPLOYEE_ADVANCE,
+    OpeningDetailKind.STOCK,
 )
-"""Nhóm mà lượt chuyển 4C sở hữu (0–4). Nhóm 5–9 chuyển ở phase 8 cạnh schema
-của chúng — cảnh báo tương ứng nằm ngay trong `sql/carry_forward.sql`."""
+"""Nhóm lượt chuyển sở hữu: 0–4 (4C/6D) + tồn kho 5 (8C-1 — dòng sổ cái theo
+(TK, kho, mã hàng), số lượng qua cổng module). Nhóm 6–9 chuyển ở 8E cạnh
+schema của chúng — cảnh báo tương ứng nằm ngay trong `sql/carry_forward.sql`."""
 
 _INVOICE_KINDS: Final[tuple[int, ...]] = (
     OpeningDetailKind.RECEIVABLE,
@@ -344,6 +348,14 @@ def run_carry_forward(context: JobContext, params: CarryForwardParams) -> JobRes
             existing_rows=existing,
         )
     if existing > 0:
+        # Năm nhận có thể đang giữ tồn đầu kỳ NHẬP TAY (lớp + movement) từ trước
+        # khi năm nguồn có sổ kho — số chuyển thay chúng; gỡ movement trước vì
+        # FK `RESTRICT` về lớp, lớp đi theo cha qua CASCADE.
+        for kind in _CARRIED_KINDS:
+            if kind in PORTED_KINDS:
+                OPENING_DETAIL_PORTS.require(kind).clear(
+                    session, fiscal_year=target, branch_id=branch_id
+                )
         session.execute(
             delete(OpeningBalance)
             .where(OpeningBalance.fiscal_year_id == target.id)
@@ -351,6 +363,7 @@ def run_carry_forward(context: JobContext, params: CarryForwardParams) -> JobRes
             .where(OpeningBalance.detail_kind.in_(_CARRIED_KINDS))
         )
 
+    stock_prefixes = stock_account_prefixes(session, fiscal_year=source)
     rows_by_ledger: dict[int, int] = {}
     invoices_carried = 0
     invoices_dropped = 0
@@ -369,6 +382,7 @@ def run_carry_forward(context: JobContext, params: CarryForwardParams) -> JobRes
                 "target_fiscal_year_id": target.id,
                 "ledger": ledger,
                 "branch_id": branch_id,
+                "stock_prefixes": [f"{code}%" for code in stock_prefixes],
             },
         )
         # Đếm lại thay vì tin `rowcount`: với INSERT … SELECT driver này trả
@@ -403,6 +417,15 @@ def run_carry_forward(context: JobContext, params: CarryForwardParams) -> JobRes
         )
         context.progress.report(step * 100 // len(ledgers), f"Đã chuyển sổ {step}/{len(ledgers)}")
 
+    # Số lượng / đơn giá của dòng tồn kho năm nhận là việc của sổ kho (module) —
+    # một lượt cho cả hai sổ vì số lượng không phụ thuộc sổ.
+    stock_rows_annotated = 0
+    for kind in _CARRIED_KINDS:
+        if kind in PORTED_KINDS:
+            stock_rows_annotated += OPENING_DETAIL_PORTS.require(kind).annotate_carried(
+                session, source_year=source, target_year=target, branch_id=branch_id
+            )
+
     record_action(
         session,
         entity_type="opening_balances",
@@ -417,6 +440,7 @@ def run_carry_forward(context: JobContext, params: CarryForwardParams) -> JobRes
             "invoices_carried": invoices_carried,
             "invoices_dropped": invoices_dropped,
             "invoice_overrun_parents": parents_overrun,
+            "stock_rows_annotated": stock_rows_annotated,
             "overwrote_existing": existing,
         },
     )
@@ -427,6 +451,7 @@ def run_carry_forward(context: JobContext, params: CarryForwardParams) -> JobRes
         "invoices_carried": invoices_carried,
         "invoices_dropped": invoices_dropped,
         "invoice_overrun_parents": parents_overrun,
+        "stock_rows_annotated": stock_rows_annotated,
     }
 
 

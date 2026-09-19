@@ -70,6 +70,10 @@ _EXTRA_ACCOUNT_SPECS: tuple[tuple[str, str, int, list[str] | None], ...] = (
     # Chiều item/warehouse của dòng kho vẫn được mapper gắn, không cần TK đòi.
     ("156", "Hàng hóa", BalanceNature.DEBIT, None),
     ("157", "Hàng gửi đi bán", BalanceNature.DEBIT, None),
+    # Theo dõi kho/mã hàng nhưng KHÔNG thuộc purpose kho của gói — cho bài số dư
+    # ban đầu 8C-1 (review H-1: TK như 151 TT133 / 158 TT99 vẫn nhập ở sheet
+    # TK thường).
+    ("158", "Hàng hóa kho bảo thuế", BalanceNature.DEBIT, ["item", "warehouse"]),
     ("621", "Chi phí nguyên liệu, vật liệu trực tiếp", BalanceNature.NONE, None),
     ("632", "Giá vốn hàng bán", BalanceNature.NONE, None),
     ("1331", "Thuế GTGT được khấu trừ của hàng hóa, dịch vụ", BalanceNature.DEBIT, None),

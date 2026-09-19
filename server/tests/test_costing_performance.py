@@ -227,8 +227,15 @@ def _cogs_on_ledger(session: Session, account_id: int) -> Decimal:
 
 
 @pytest.mark.parametrize(
-    "method",
-    [InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING, InventoryValuationMethod.FIFO],
+    ("method", "by_warehouse"),
+    [
+        (InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING, True),
+        (InventoryValuationMethod.FIFO, True),
+        # 8C-1: bản "không theo kho" của BQ tức thời đi trên chỉ mục mới
+        # `ix_inventory_movements_branch_item_order`; seed 1 kho nên nhóm = khóa
+        # — đo chi phí đường LATERAL mới, không đo gộp kho.
+        (InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING, False),
+    ],
 )
 def test_spike_costing_one_hundred_thousand_movements_under_budget(
     session_factory: sessionmaker[Session],
@@ -237,12 +244,16 @@ def test_spike_costing_one_hundred_thousand_movements_under_budget(
     accounts: dict[str, int],
     seeded: int,
     method: InventoryValuationMethod,
+    by_warehouse: bool,
 ) -> None:
     assert seeded == ITEM_COUNT * ROUNDS * 2
     scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
     year_start = date(2026, 1, 1)
     with unit_of_work(session_factory, scope) as session:
         set_valuation_method(session, context, method.value)
+        year = session.get(FiscalYear, context.fiscal_year_id)
+        assert year is not None
+        year.inventory_costing_by_warehouse = by_warehouse
     try:
         started = time.monotonic()
         with unit_of_work(session_factory, scope) as session:
@@ -251,7 +262,8 @@ def test_spike_costing_one_hundred_thousand_movements_under_budget(
             result = run_engine(session, context, force_from=year_start)
         elapsed = time.monotonic() - started
         print(  # noqa: T201 — số đo cho báo cáo phase
-            f"\nspike 8B [{method.value}]: {seeded} movement / {ITEM_COUNT} mã hàng = "
+            f"\nspike 8B [{method.value}{'' if by_warehouse else ' / không theo kho'}]: "
+            f"{seeded} movement / {ITEM_COUNT} mã hàng = "
             f"{elapsed:.1f}s (vòng {result.passes}, đổi {result.movements_updated}, "
             f"repost {result.vouchers_reposted} chứng từ; mốc < {BUDGET_SECONDS:.0f}s)"
         )
@@ -270,3 +282,6 @@ def test_spike_costing_one_hundred_thousand_movements_under_budget(
             set_valuation_method(
                 session, context, InventoryValuationMethod.WEIGHTED_AVERAGE_MOVING.value
             )
+            year = session.get(FiscalYear, context.fiscal_year_id)
+            assert year is not None
+            year.inventory_costing_by_warehouse = True

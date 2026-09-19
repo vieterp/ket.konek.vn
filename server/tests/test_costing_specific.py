@@ -33,8 +33,9 @@ from ket.kernel.periods.models import InventoryValuationMethod
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.modules.inventory.models import CostState, StockLayer
 from ket.modules.inventory.service import (
+    RECEIPT_COST_CONFLICTS_SOURCE_CODE,
+    RETURN_SOURCE_MISMATCH_CODE,
     SPECIFIC_SOURCE_MISMATCH_CODE,
-    SPECIFIC_SOURCE_ON_RECEIPT_CODE,
     SPECIFIC_SOURCE_REQUIRED_CODE,
     InventoryVoucherService,
 )
@@ -141,7 +142,8 @@ def test_issue_lines_must_name_a_receipt_of_the_same_key(
                 source_movement_id=in_movement(session, receipt).id,
             )
         assert wrong_warehouse.value.violations[0].code == SPECIFIC_SOURCE_MISMATCH_CODE
-        # Phiếu nhập không chỉ lần nhập nguồn.
+        # Phiếu nhập chỉ movement nguồn là chiều "lấy giá từ lần XUẤT" (FR-STK-004,
+        # 8C-1): dòng có gõ giá → xung đột; không giá mà trỏ một lần NHẬP → lệch.
         payload = receipt_payload(context, accounts, posting_date=MAR_10, item_id=item)
         payload = payload.model_copy(
             update={
@@ -151,9 +153,20 @@ def test_issue_lines_must_name_a_receipt_of_the_same_key(
                 )
             }
         )
+        with pytest.raises(PostingValidationError) as priced:
+            InventoryVoucherService(session).create(payload, user_id=ACTOR_ID)
+        assert priced.value.violations[0].code == RECEIPT_COST_CONFLICTS_SOURCE_CODE
+        payload = payload.model_copy(
+            update={
+                "lines": tuple(
+                    line.model_copy(update={"unit_cost_fc": None, "amount_fc": None})
+                    for line in payload.lines
+                )
+            }
+        )
         with pytest.raises(PostingValidationError) as on_receipt:
             InventoryVoucherService(session).create(payload, user_id=ACTOR_ID)
-        assert on_receipt.value.violations[0].code == SPECIFIC_SOURCE_ON_RECEIPT_CODE
+        assert on_receipt.value.violations[0].code == RETURN_SOURCE_MISMATCH_CODE
 
     run(work)
 

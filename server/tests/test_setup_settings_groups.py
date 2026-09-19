@@ -184,7 +184,9 @@ def test_a_closed_fiscal_year_is_reported_as_locked(
         item for item in groups[DECIDED_ONCE_GROUP] if item["fiscal_year_code"] == closed_year
     ]
 
-    assert len(of_year) == 4, "bốn quyết định chốt một lần của mỗi niên độ"
+    assert len(of_year) == 5, (
+        "năm quyết định chốt một lần của mỗi niên độ (8C-1 thêm phạm vi bình quân)"
+    )
     assert all(item["is_editable"] is False for item in of_year)
     assert all(item["locked_reason"] for item in of_year)
 
