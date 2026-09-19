@@ -147,6 +147,11 @@ thiết lập vẽ cùng một bộ ba lựa chọn cho cả nhóm."""
 
 PARTNER_DEBT_WARNING_KEY: Final[str] = "warning.partner_debt"
 
+STOCK_NEGATIVE_WARNING_KEY: Final[str] = "warning.stock_negative"
+STOCK_BELOW_MIN_WARNING_KEY: Final[str] = "warning.stock_below_min"
+INVENTORY_ACCOUNT_NO_MOVEMENT_WARNING_KEY: Final[str] = "warning.inventory_account_without_movement"
+"""Ba cảnh báo kho của phase 8 (FR-STK-040/041/042) — cùng bộ ba mức."""
+
 PRICE_IS_TAX_INCLUSIVE_KEY: Final[str] = "sales.price_is_tax_inclusive"
 
 TREASURER_ENABLED_KEY: Final[str] = "treasurer.enabled"
@@ -321,6 +326,43 @@ CATALOG: Final[dict[str, SettingDefinition]] = {
             # một bản cài mới còn đang nhập số dư đầu kỳ, chưa phải lúc chặn.
             scopes=frozenset({SettingScope.SYSTEM}),
             description="Cảnh báo khi đối tác vượt ngưỡng nợ hoặc nợ quá hạn (ba mức FR-SYS-032)",
+            choices=WARNING_LEVELS,
+        ),
+        SettingDefinition(
+            key=STOCK_NEGATIVE_WARNING_KEY,
+            value_type=ValueType.STRING,
+            default=WARNING_LEVEL_NONE,
+            # FR-STK-040: xuất quá số lượng tồn theo (kho, vật tư, lô) — tồn
+            # THẤP NHẤT từ ngày ghi sổ tới hết năm âm sau khi cộng dòng sắp
+            # ghi. Cấp hệ thống và mặc định "none", cùng lý do với
+            # `warning.cash_balance`: bản cài mới nhập phiếu xuất trước khi
+            # nhập số dư tồn kho đầu kỳ sẽ bị dội cảnh báo trên dữ liệu chưa đủ.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Cảnh báo khi xuất quá số lượng tồn kho (ba mức FR-STK-040)",
+            choices=WARNING_LEVELS,
+        ),
+        SettingDefinition(
+            key=STOCK_BELOW_MIN_WARNING_KEY,
+            value_type=ValueType.STRING,
+            default=WARNING_LEVEL_NONE,
+            # FR-STK-041: tồn sau ghi sổ rơi dưới `items.min_stock_qty`
+            # (FR-SYS-047) — chỉ có nghĩa với mã hàng có khai ngưỡng.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Cảnh báo khi xuất làm tồn kho xuống dưới mức tối thiểu (ba mức FR-STK-041)",
+            choices=WARNING_LEVELS,
+        ),
+        SettingDefinition(
+            key=INVENTORY_ACCOUNT_NO_MOVEMENT_WARNING_KEY,
+            value_type=ValueType.STRING,
+            default=WARNING_LEVEL_NONE,
+            # FR-STK-042: chứng từ không phải phiếu kho (GLE, hóa đơn mua/bán
+            # không kho) hạch toán vào TK kho mà không sinh phiếu — sổ cái có
+            # giá trị tồn mà sổ kho không có số lượng, đúng hình lệch BR-STK-03.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description=(
+                "Cảnh báo chứng từ hạch toán vào tài khoản kho nhưng không ghi sổ kho "
+                "(ba mức FR-STK-042)"
+            ),
             choices=WARNING_LEVELS,
         ),
         SettingDefinition(

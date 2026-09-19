@@ -57,6 +57,7 @@ from ket.kernel.protocols import (
     SettlementTargetKind,
     SubledgerEntry,
 )
+from ket.modules.purchase.inventory_lines import planned_movement
 from ket.modules.purchase.landed_cost import AllocationLine, allocate, pair_costs_with_lines
 from ket.modules.purchase.models import (
     PURCHASE_DOCUMENT_TYPE,
@@ -240,30 +241,64 @@ class PurchaseInvoiceService:
 
     def unpost(self, voucher_id: UUID, *, user_id: int) -> Voucher:
         voucher = self._posting.unpost(voucher_id, user_id=user_id)
-        self.clear_after_unpost(voucher_id)
+        self.clear_after_unpost(voucher_id, user_id=user_id)
         return voucher
 
     def sync_after_post(self, voucher_id: UUID, *, user_id: int) -> None:
         """Việc sau ghi sổ — hook `after_post`: hóa đơn thường ghi khoản phải
-        trả vào sổ phụ; trả lại hàng cộng số đã giảm vào hóa đơn gốc."""
+        trả vào sổ phụ; trả lại hàng cộng số đã giảm vào hóa đơn gốc. Cả hai
+        sinh phiếu kho cho dòng qua kho (lát 8A)."""
         body = self._require_body(voucher_id)
+        voucher = self._vouchers.require(voucher_id)
         if body.kind == PurchaseInvoiceKind.RETURN:
             apply_settlements(self._session, voucher_id=voucher_id)
-            return
-        voucher = self._vouchers.require(voucher_id)
-        self._require_subledger().record(
-            self._session,
-            voucher_id=voucher_id,
-            entries=self._subledger_entries(voucher, body, scale=self._money_scale(user_id)),
-        )
+        else:
+            self._require_subledger().record(
+                self._session,
+                voucher_id=voucher_id,
+                entries=self._subledger_entries(voucher, body, scale=self._money_scale(user_id)),
+            )
+        self._sync_inventory(voucher, user_id=user_id)
 
-    def clear_after_unpost(self, voucher_id: UUID) -> None:
+    def clear_after_unpost(self, voucher_id: UUID, *, user_id: int) -> None:
         """Việc sau bỏ ghi sổ — hook `after_unpost`: gỡ đúng thứ `sync_after_post` ghi."""
         body = self._require_body(voucher_id)
+        # Phiếu kho gỡ TRƯỚC sổ phụ: guard "phiếu sinh từ nguồn" đọc trạng thái
+        # nguồn (đã về Đã cất), còn sổ phụ không liên quan tới thứ tự này.
+        inventory = PROVIDERS.inventory_posting()
+        if inventory is not None:
+            inventory.remove_movement(self._session, source_voucher_id=voucher_id, user_id=user_id)
         if body.kind == PurchaseInvoiceKind.RETURN:
             revert_settlements(self._session, voucher_id=voucher_id)
             return
         self._require_subledger().remove(self._session, voucher_id=voucher_id)
+
+    def _sync_inventory(self, voucher: Voucher, *, user_id: int) -> None:
+        """FR-STK-011: dòng qua kho → phiếu nhập (hoặc xuất, với trả lại hàng)
+        qua `InventoryPosting`; cùng bộ dòng mà `InventoryLineSource` kể cho
+        guard (`inventory_lines.planned_movement`). Chưa có module kho → không
+        sinh, không lỗi: bản cài không bật phân hệ kho là hợp lệ."""
+        inventory = PROVIDERS.inventory_posting()
+        if inventory is None:
+            return
+        planned = planned_movement(self._session, voucher.id)
+        if planned is None:
+            return
+        inventory.create_movement(
+            self._session,
+            kind=planned.kind,
+            source_voucher_id=voucher.id,
+            branch_id=voucher.branch_id,
+            posting_date=voucher.posting_date,
+            currency_code=voucher.currency_code,
+            exchange_rate=voucher.exchange_rate,
+            lines=planned.lines,
+            user_id=user_id,
+            operation_code=planned.operation_code,
+            partner_id=planned.partner_id,
+            partner_kind=planned.partner_kind,
+            description=planned.description,
+        )
 
     def delete(self, voucher_id: UUID) -> None:
         """Xóa hóa đơn Đã cất — trả bộ đếm tham chiếu rồi để CASCADE dọn bảng con."""

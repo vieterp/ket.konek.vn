@@ -160,6 +160,9 @@ const ITEM_FIELDS: readonly ExtraField[] = [
     lookupSlug: 'warehouses',
   },
   { key: 'description', labelKey: 'catalog.field.description', type: 'text' },
+  // Ngưỡng cảnh báo FR-STK-041 theo đơn vị chính (lát 8A) — cùng luật "cột
+  // server sửa được thì client phải khai" như trường giá sau thuế bên dưới.
+  { key: 'min_stock_qty', labelKey: 'catalog.field.minStockQty', type: 'decimal' },
   // BA trạng thái (FR-SYS-043), nên `select` chứ không `checkbox`: ô trống =
   // "theo thiết lập hệ thống" và drawer bỏ hẳn khóa khỏi thân request, đúng thứ
   // server hiểu là `NULL`. Một checkbox chỉ nói được hai, và trạng thái thứ ba

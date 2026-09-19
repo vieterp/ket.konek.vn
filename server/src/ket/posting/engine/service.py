@@ -272,6 +272,13 @@ class PostingService:
                 }
             )
 
+        # Chứng từ KHÔNG có dòng GL là hợp lệ từ lát 8A: phiếu xuất kho ghi sổ
+        # trước khi có giá vốn (engine tính giá 8B repost sau), phiếu nhập từ hóa
+        # đơn mua (bút toán đã ở hóa đơn), chuyển kho nội bộ. `executemany` với
+        # danh sách rỗng KHÔNG phải "không làm gì" — nó chèn MỘT dòng mặc định
+        # (mọi cột NULL/0) và đổ ở RLS/NOT NULL, nên phải rẽ nhánh tường minh.
+        if not rows:
+            return
         inserted_ids = (
             self._session.execute(insert(GlPosting).returning(GlPosting.id), rows).scalars().all()
         )

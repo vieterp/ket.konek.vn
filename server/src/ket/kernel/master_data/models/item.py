@@ -36,11 +36,22 @@ một con số sai âm thầm trong sổ kho.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
 from typing import Final
 
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import Boolean, CheckConstraint, Enum, ForeignKey, Index, String, and_, or_
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    and_,
+    or_,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import SchemaItem
 
@@ -50,6 +61,7 @@ from ket.kernel.master_data.base import (
     master_data_table_args,
 )
 from ket.kernel.master_data.row_rules import RowRule
+from ket.kernel.quantity import QUANTITY_PRECISION, QUANTITY_SCALE
 
 ITEM_TABLE_NAME = "items"
 
@@ -174,8 +186,18 @@ def _item_table_args() -> tuple[SchemaItem, ...]:
         # khác (review M-1 của lát ấy).
         CheckConstraint(
             "NOT is_group OR (nature IS NULL AND base_unit_id IS NULL "
-            "AND warehouse_id IS NULL AND price_is_tax_inclusive IS NULL)",
+            "AND warehouse_id IS NULL AND price_is_tax_inclusive IS NULL "
+            "AND min_stock_qty IS NULL)",
             name="group_carries_no_item_data",
+        ),
+        # Ngưỡng tồn tối thiểu (FR-SYS-047, lát 8A) chỉ có nghĩa với thứ đi qua
+        # kho — cùng lập luận với kho ngầm định; và một ngưỡng âm không có nghĩa.
+        CheckConstraint(
+            f"min_stock_qty IS NULL OR nature IN ({_INVENTORY_NATURE_SQL})",
+            name="min_stock_needs_stock_nature",
+        ),
+        CheckConstraint(
+            "min_stock_qty IS NULL OR min_stock_qty >= 0", name="min_stock_not_negative"
         ),
         # Hàng hóa và thành phẩm **phải** có đơn vị chính: mọi số tồn của chúng
         # được lưu theo đơn vị đó (phase 8), nên một mã hàng không có đơn vị
@@ -226,6 +248,12 @@ class Item(MasterDataRow):
     description: Mapped[str | None] = mapped_column(String(DESCRIPTION_MAX_LENGTH), nullable=True)
     """Mô tả tự do — in lên báo giá và phiếu kho, không tham gia phép tính nào."""
 
+    min_stock_qty: Mapped[Decimal | None] = mapped_column(
+        Numeric(QUANTITY_PRECISION, QUANTITY_SCALE), nullable=True
+    )
+    """Số lượng tồn tối thiểu theo đơn vị chính (FR-SYS-047, lát 8A) — guard
+    FR-STK-041 so tồn sau ghi sổ với ngưỡng này; `NULL` = không canh."""
+
     price_is_tax_inclusive: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     """Giá bán khai cho mã hàng này là đơn giá **sau thuế** hay không (FR-SYS-043).
 
@@ -249,6 +277,8 @@ class ItemEditableFields(BaseModel):
     description: str | None = Field(
         title="Diễn giải", default=None, max_length=DESCRIPTION_MAX_LENGTH
     )
+    min_stock_qty: Decimal | None = Field(default=None, title="Tồn tối thiểu", ge=0)
+    """Ngưỡng cảnh báo FR-STK-041 theo đơn vị chính; chỉ hàng hóa/thành phẩm."""
     price_is_tax_inclusive: bool | None = Field(default=None, title="Giá bán là đơn giá sau thuế")
     """`None` **không** phải "bỏ trống rồi giữ nguyên" mà là một giá trị thật —
     "theo thiết lập hệ thống". Cùng khuôn với `warehouse_id`: thân request sửa
@@ -282,14 +312,25 @@ class ItemUpdateGuard:
                 entity_type=ITEM_TABLE_NAME,
                 entity_id=record.id,
             )
-        if getattr(payload, "warehouse_id", None) is None:
-            return
-        if record.nature not in INVENTORY_NATURES:
-            raise ItemWarehouseNotAllowedError(
-                "Dịch vụ và dòng diễn giải không nhận kho ngầm định",
+        if record.is_group and getattr(payload, "min_stock_qty", None) is not None:
+            raise ItemGroupFieldNotAllowedError(
+                "Nhóm vật tư chỉ để gom cây nên không nhận tồn tối thiểu",
                 entity_type=ITEM_TABLE_NAME,
                 entity_id=record.id,
             )
+        if record.nature not in INVENTORY_NATURES:
+            if getattr(payload, "warehouse_id", None) is not None:
+                raise ItemWarehouseNotAllowedError(
+                    "Dịch vụ và dòng diễn giải không nhận kho ngầm định",
+                    entity_type=ITEM_TABLE_NAME,
+                    entity_id=record.id,
+                )
+            if getattr(payload, "min_stock_qty", None) is not None:
+                raise ItemWarehouseNotAllowedError(
+                    "Dịch vụ và dòng diễn giải không nhận tồn tối thiểu",
+                    entity_type=ITEM_TABLE_NAME,
+                    entity_id=record.id,
+                )
 
 
 class ItemFields(ItemEditableFields):
@@ -327,10 +368,11 @@ class ItemFields(ItemEditableFields):
                 or self.base_unit_id is not None
                 or self.warehouse_id is not None
                 or self.price_is_tax_inclusive is not None
+                or self.min_stock_qty is not None
             ):
                 raise ValueError(
                     "Nhóm vật tư chỉ để gom cây nên không nhận tính chất, đơn vị tính "
-                    "chính, kho ngầm định hay tùy chọn giá sau thuế"
+                    "chính, kho ngầm định, tồn tối thiểu hay tùy chọn giá sau thuế"
                 )
             return self
         if self.nature is None:
@@ -342,11 +384,13 @@ class ItemFields(ItemEditableFields):
             raise ValueError("Hàng hóa và thành phẩm phải có đơn vị tính chính")
         if self.nature not in INVENTORY_NATURES and self.warehouse_id is not None:
             raise ValueError("Dịch vụ và dòng diễn giải không nhận kho ngầm định")
+        if self.nature not in INVENTORY_NATURES and self.min_stock_qty is not None:
+            raise ValueError("Dịch vụ và dòng diễn giải không nhận tồn tối thiểu")
         return self
 
 
 def item_row_rules() -> tuple[RowRule, ...]:
-    """Bốn luật của vật tư hàng hóa (H3) — bộ đắt nhất trong cả registry.
+    """Sáu luật của vật tư hàng hóa (H3, +2 ở 8A) — bộ đắt nhất trong cả registry.
 
     `nature_known` **không** có mặt ở đây: nó đã được `staging._allowed_value_errors`
     kiểm từ lát 3C-1 (R2-1), bằng tập giá trị đọc từ chính kiểu cột. Khai lại là
@@ -370,8 +414,8 @@ def item_row_rules() -> tuple[RowRule, ...]:
             constraint="group_carries_no_item_data",
             field="nature",
             message=(
-                "Nút nhóm không được khai tính chất, đơn vị chính, kho ngầm định "
-                "hay tùy chọn giá sau thuế"
+                "Nút nhóm không được khai tính chất, đơn vị chính, kho ngầm định, "
+                "tồn tối thiểu hay tùy chọn giá sau thuế"
             ),
             violated=lambda row: and_(
                 row.flag("is_group"),
@@ -380,6 +424,7 @@ def item_row_rules() -> tuple[RowRule, ...]:
                     row.value("base_unit_code").is_not(None),
                     row.value("warehouse_code").is_not(None),
                     row.value("price_is_tax_inclusive").is_not(None),
+                    row.value("min_stock_qty").is_not(None),
                 ),
             ),
         ),
@@ -401,5 +446,20 @@ def item_row_rules() -> tuple[RowRule, ...]:
                 row.value("warehouse_code").is_not(None),
                 row.value("nature").notin_(_INVENTORY_NATURE_VALUES),
             ),
+        ),
+        RowRule(
+            constraint="min_stock_needs_stock_nature",
+            field="min_stock_qty",
+            message="Chỉ hàng hóa và thành phẩm mới nhận tồn tối thiểu",
+            violated=lambda row: and_(
+                row.value("min_stock_qty").is_not(None),
+                row.value("nature").notin_(_INVENTORY_NATURE_VALUES),
+            ),
+        ),
+        RowRule(
+            constraint="min_stock_not_negative",
+            field="min_stock_qty",
+            message="Tồn tối thiểu không được âm",
+            violated=lambda row: row.value("min_stock_qty") < 0,
         ),
     )

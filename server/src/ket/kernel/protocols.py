@@ -38,6 +38,22 @@ Bảy Protocol, ai cài — ai gọi:
 
 **KHÔNG** khai `InventoryValuation` — RT-18 xóa vì không có consumer thật.
 
+* `InventoryLineSource` (thêm ở lát 8A, ADR-024) — chiều ĐỌC "chứng từ này sẽ
+  sinh phiếu kho nào": `sales`/`purchase` cài, guard tồn kho của `inventory`
+  gọi. Lý do phải có chiều đọc bên cạnh chiều ghi `InventoryPosting`: hook
+  `after_post(session, voucher_id, user_id)` không mang `acknowledged_warnings`,
+  nên guard "xuất quá tồn" (FR-STK-040) chạy trên phiếu xuất sinh **bên trong**
+  hook sẽ kêu ở chỗ người dùng không xác nhận được. Guard vì thế soi CHỨNG TỪ
+  NGUỒN qua Protocol này — kêu trên màn hóa đơn bán, nơi có băng "Vẫn ghi sổ?" —
+  và phiếu sinh ra sau đó ghi sổ với cảnh báo đã xác nhận. Mỗi module có đúng
+  một hàm dịch dòng hóa đơn → dòng phiếu kho, dùng cho cả hai chiều.
+
+Lát 8A cũng mở kernel lần thứ ba (ADR-024 bổ sung, cùng luật ADR-021/022 —
+mọi thay đổi đều **cộng thêm**): `InventoryPosting.remove_movement` (chiều gỡ
+khi bỏ ghi sổ nguồn — đúng lỗ 7A gặp với `ArApSubledger`) và hai cột TK tùy
+chọn trên `InventoryMovementLine` (giá vốn 632/156 nằm trên dòng bán, kho không
+được import `sales` để đọc).
+
 **Hai lần mở kernel trong hai lát liên tiếp** (ADR-021 rồi ADR-022) là một tín
 hiệu đáng ghi: lượt khai trước của RT-18 liệt kê theo **quan hệ ghi sổ** giữa các
 phân hệ, nên nó phủ kín chiều ấy mà bỏ trống chiều **đọc chéo để dựng một chứng
@@ -77,11 +93,13 @@ __all__ = [
     "ArApSubledger",
     "CommitmentProvider",
     "CrossModuleProviders",
+    "InventoryLineSource",
     "InventoryMovementKind",
     "InventoryMovementLine",
     "InventoryPosting",
     "OpenInvoice",
     "PayableProvider",
+    "PlannedMovement",
     "ReceivableProvider",
     "SettlementTargetKind",
     "SettlementTargetSource",
@@ -200,7 +218,7 @@ class OpenInvoice(BaseModel):
     thân chứng từ và dòng đối trừ ở đây — nên phải có cách hỏi chúng có trỏ cùng
     một chỗ không. Không có trường này thì hai đường lệch nhau **không phát hiện
     được**, và hệ quả là tờ hóa đơn điều chỉnh khai với cơ quan thuế rằng hóa
-    đơn A giảm, trong khi sổ công nợ giảm hóa đơn B (ADR-023).
+    đơn A giảm, trong khi sổ công nợ giảm hóa đơn B (ADR-024).
 
     `None` là câu trả lời **đúng** cho số dư đầu kỳ, không phải một chỗ trống:
     khoản ấy có thật nhưng chứng từ sinh ra nó nằm ngoài sổ. Nơi gọi nào đòi
@@ -499,6 +517,8 @@ class InventoryMovementLine(BaseModel):
     `unit_price_fc` chỉ có nghĩa ở chiều **nhập** (giá vốn nhập theo chứng từ
     mua); chiều xuất để `None` — giá xuất do engine tính giá của module kho
     quyết định (4 phương pháp, phase 8), không phải chứng từ bán áp xuống.
+    Giá theo **đơn vị `unit_id`** của dòng (đơn vị trên hóa đơn); module kho quy
+    về đơn vị chính.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -510,6 +530,46 @@ class InventoryMovementLine(BaseModel):
     quantity: Decimal
     unit_id: int
     unit_price_fc: Decimal | None = None
+    amount_fc: Decimal | None = None
+    """Thành tiền nhập của dòng (thêm ở 8A, ADR-024) — khi có, đây là số **chủ**
+    và đơn giá chỉ là dẫn xuất: giá trị sổ kho phải bằng đúng giá trị hóa đơn
+    (hàng + chi phí mua phân bổ) tới từng đồng, không phải `đơn giá × số lượng`
+    làm tròn lại (BR-STK-03 đối chiếu với TK 15x)."""
+    debit_account_id: int | None = None
+    credit_account_id: int | None = None
+    """Cặp TK của bút toán kho đi kèm dòng (thêm ở 8A, ADR-024): giá vốn Nợ 632 /
+    Có 156 của phiếu xuất bán nằm trên dòng hóa đơn bán (`cogs_account_id` /
+    `inventory_account_id`). Để trống = phiếu không sinh bút toán riêng (phiếu
+    nhập từ hóa đơn mua: Nợ 156 / Có 331 đã ở hóa đơn)."""
+    source_line_id: UUID | None = None
+    """Dòng chứng từ nguồn sinh ra dòng phiếu — để phiếu kho chỉ ngược về hóa
+    đơn và báo cáo mua/bán đối chiếu từng dòng."""
+
+
+class PlannedMovement(BaseModel):
+    """Phiếu kho mà một chứng từ nguồn SẼ sinh khi ghi sổ — đầu ra của
+    `InventoryLineSource`, đầu vào của `InventoryPosting.create_movement`."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: InventoryMovementKind
+    lines: tuple[InventoryMovementLine, ...]
+    operation_code: str | None = None
+    partner_id: int | None = None
+    partner_kind: PartnerKind | None = None
+    description: str | None = None
+    """Ba trường mô tả đi thẳng vào `create_movement` — module nguồn khai một
+    lần, dùng cho cả chiều đọc (guard) lẫn chiều ghi (hook)."""
+
+
+class InventoryLineSource(Protocol):
+    """Chiều đọc: chứng từ này sinh phiếu kho nào? (`sales`/`purchase` cài, 8A)."""
+
+    def planned_movement(self, session: Session, voucher_id: UUID) -> PlannedMovement | None:
+        """`None` khi chứng từ không thuộc module này hoặc không có dòng nào
+        qua kho — cùng luật `EInvoiceSource.source_document`: "không phải của
+        tôi" là câu trả lời bình thường."""
+        ...
 
 
 class InventoryPosting(Protocol):
@@ -527,8 +587,22 @@ class InventoryPosting(Protocol):
         exchange_rate: Decimal,
         lines: Sequence[InventoryMovementLine],
         user_id: int,
+        operation_code: str | None = None,
+        partner_id: int | None = None,
+        partner_kind: PartnerKind | None = None,
+        description: str | None = None,
     ) -> UUID:
-        """Tạo một phiếu kho gắn với chứng từ nguồn; trả `voucher_id` của phiếu."""
+        """Tạo một phiếu kho gắn với chứng từ nguồn; trả `voucher_id` của phiếu.
+
+        Bốn tham số tùy chọn thêm ở 8A (ADR-024): nghiệp vụ kho của phiếu sinh
+        (`None` = module kho chọn theo `kind`), đối tác và diễn giải chép từ
+        chứng từ nguồn để phiếu in được và lưới lọc được.
+        """
+        ...
+
+    def remove_movement(self, session: Session, *, source_voucher_id: UUID, user_id: int) -> None:
+        """Gỡ phiếu kho đã sinh cho chứng từ nguồn khi nguồn bỏ ghi sổ (8A,
+        ADR-024). Không có phiếu nào là hợp lệ (chứng từ không có dòng qua kho)."""
         ...
 
 
@@ -669,6 +743,7 @@ class CrossModuleProviders:
         self._treasurer_cash_book: TreasurerCashBook | None = None
         self._treasurer_voucher_source: TreasurerVoucherSource | None = None
         self._einvoice_sources: list[EInvoiceSource] = []
+        self._inventory_line_sources: list[InventoryLineSource] = []
 
     def register_receivable(self, provider: ReceivableProvider) -> None:
         self._receivable.append(provider)
@@ -723,6 +798,14 @@ class CrossModuleProviders:
         công nợ.
         """
         self._einvoice_sources.append(source)
+
+    def register_inventory_line_source(self, source: InventoryLineSource) -> None:
+        """Nguồn dòng phiếu kho — **danh sách** như `EInvoiceSource` (ADR-024):
+        mỗi bản cài trả lời về chứng từ của chính nó."""
+        self._inventory_line_sources.append(source)
+
+    def inventory_line_sources(self) -> tuple[InventoryLineSource, ...]:
+        return tuple(self._inventory_line_sources)
 
     def einvoice_sources(self) -> tuple[EInvoiceSource, ...]:
         """Rỗng = chưa phân hệ nào cài. Nơi gọi phải từ chối **rõ ràng** thay vì

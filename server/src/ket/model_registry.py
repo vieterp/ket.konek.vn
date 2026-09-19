@@ -49,6 +49,7 @@ from ket.modules.einvoice import models as einvoice_models
 from ket.modules.einvoice import outbox_job as einvoice_outbox_job_registration
 from ket.modules.einvoice import providers as einvoice_provider_registration
 from ket.modules.general_ledger.journal import models as gl_journal_models
+from ket.modules.inventory import models as inventory_models
 from ket.modules.purchase import models as purchase_models
 from ket.modules.receivables import models as receivables_models
 from ket.modules.sales import einvoice_source as sales_einvoice_source_registration
@@ -103,6 +104,7 @@ __all__ = [
     "gl_posting_models",
     "idempotency_models",
     "integrity_registration",
+    "inventory_models",
     "jobs_models",
     "master_data_models",
     "master_data_usage_models",
