@@ -563,12 +563,26 @@ class PlannedMovement(BaseModel):
 
 
 class InventoryLineSource(Protocol):
-    """Chiều đọc: chứng từ này sinh phiếu kho nào? (`sales`/`purchase` cài, 8A)."""
+    """Chiều đọc: chứng từ này sinh phiếu kho nào? (`sales`/`purchase` cài, 8A).
+
+    Từ 8B (ADR-025) mang thêm một lời báo ngược: engine tính giá gọi
+    `sync_cost_posted` sau mỗi lượt ghi lại giá vốn của phiếu xuất sinh từ
+    chứng từ nguồn, kèm trạng thái — `posted=True` khi phiếu không còn dòng chờ
+    giá, `False` khi giá vừa bị rút (gỡ lớp nhập duy nhất) — để `sales` đồng bộ
+    `cogs_posted` (BR-SAL-01: doanh thu và giá vốn cùng kỳ); `purchase` không
+    có gì để đồng bộ. Hook `after_unpost` của nguồn tự hạ cờ khi phiếu sinh mất.
+    """
 
     def planned_movement(self, session: Session, voucher_id: UUID) -> PlannedMovement | None:
         """`None` khi chứng từ không thuộc module này hoặc không có dòng nào
         qua kho — cùng luật `EInvoiceSource.source_document`: "không phải của
         tôi" là câu trả lời bình thường."""
+        ...
+
+    def sync_cost_posted(self, session: Session, voucher_id: UUID, *, posted: bool) -> None:
+        """Giá vốn của phiếu kho sinh từ `voucher_id` đang có trên sổ cái
+        (`posted`) hay không — chứng từ không thuộc module này thì không làm gì
+        (cùng luật `planned_movement`)."""
         ...
 
 

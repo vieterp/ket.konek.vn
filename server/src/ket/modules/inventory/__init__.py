@@ -15,7 +15,9 @@ khuôn `modules/cash_book`:
 * **mục kiểm khóa sổ** — kỳ không khóa được khi giá xuất kho chưa chốt
   (`LOCK_CHECKS`, BR-STK-05);
 * **bản cài `InventoryPosting`** (kernel Protocol) — cửa cho mua/bán sinh và gỡ
-  phiếu kho.
+  phiếu kho;
+* **engine tính giá** (lát 8B) — quyền `inventory.costing.{view,create}` và job
+  `inventory.costing.recalc` (`costing/job.py`).
 
 Module KHÔNG mở endpoint hành động riêng: ghi sổ / bỏ ghi sổ / xóa đi qua
 `/api/v1/vouchers/{id}/actions/*` dùng chung, nơi ba hook trên chạy.
@@ -32,12 +34,15 @@ from ket.kernel.security.permissions import (
 )
 from ket.kernel.security.permissions import (
     VOUCHER_ACTIONS,
+    Action,
     DocumentType,
 )
+from ket.modules.inventory.costing import COSTING_PERMISSION_CODE, COSTING_PERMISSION_MODULE
 from ket.modules.inventory.guards import (
     InventoryAccountWithoutMovementGuard,
     StockBelowMinGuard,
     StockNegativeGuard,
+    refuse_when_named_as_specific_source,
     refuse_when_source_posted,
 )
 from ket.modules.inventory.lock_check import ensure_inventory_costed
@@ -67,6 +72,15 @@ for _permission_code in (RECEIPT_PERMISSION_CODE, ISSUE_PERMISSION_CODE, TRANSFE
             module=INVENTORY_PERMISSION_MODULE, code=_permission_code, actions=VOUCHER_ACTIONS
         )
     )
+# Tính giá xuất kho: xem trước (FR-STK-003) và chạy job — cùng khuôn
+# `posting.balance` (view/create), không phải một chứng từ.
+PERMISSION_REGISTRY.register(
+    DocumentType(
+        module=COSTING_PERMISSION_MODULE,
+        code=COSTING_PERMISSION_CODE,
+        actions=frozenset({Action.VIEW, Action.CREATE}),
+    )
+)
 
 
 def _build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest:
@@ -119,6 +133,7 @@ GUARD_REGISTRY.register(StockBelowMinGuard())
 GUARD_REGISTRY.register(InventoryAccountWithoutMovementGuard())
 EDIT_GUARDS.register(refuse_when_source_posted)
 REFERENCE_GUARDS.register(refuse_when_source_posted)
+REFERENCE_GUARDS.register(refuse_when_named_as_specific_source)
 LOCK_CHECKS.register(ensure_inventory_costed)
 
 
@@ -148,3 +163,12 @@ def _register_merge_hooks() -> None:
 
 
 _register_merge_hooks()
+
+
+def _register_costing_job() -> None:
+    """Loại job `inventory.costing.recalc` vào `REGISTRY` lúc import gói — worker
+    và `/jobs/types` thấy nó cùng cơ chế `posting.balances.recalc_job`."""
+    import ket.modules.inventory.costing.job  # noqa: F401 — đăng ký khi import
+
+
+_register_costing_job()

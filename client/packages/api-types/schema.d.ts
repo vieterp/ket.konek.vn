@@ -1701,6 +1701,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/inventory/costing/affected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Costing Affected
+         * @description FR-STK-003: xem trước chứng từ bị tính lại giá xuất kho — và kỳ đã khóa
+         *     bị chạm (RT-11) — cho chi nhánh **đang thao tác**, đúng phạm vi mà job
+         *     `inventory.costing.recalc` sẽ chạy (xem `routers/jobs.py`). `from_date` =
+         *     xem trước lượt ép tính lại từ ngày đó.
+         */
+        get: operations["read_costing_affected_api_v1_inventory_costing_affected_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inventory/issues": {
         parameters: {
             query?: never;
@@ -9000,6 +9023,28 @@ export interface components {
             parent_id: number | null;
         };
         /**
+         * AffectedVoucher
+         * @description Một chứng từ sẽ bị tính lại giá xuất (FR-STK-003) — đủ để client mở nó.
+         */
+        AffectedVoucher: {
+            /** Document Type */
+            document_type: string;
+            /** Movements */
+            movements: number;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /**
+             * Voucher Id
+             * Format: uuid
+             */
+            voucher_id: string;
+            /** Voucher No */
+            voucher_no: string;
+        };
+        /**
          * AmountSignRule
          * @description Cách hiểu **dấu** của một cột số tiền gộp.
          *
@@ -10948,6 +10993,28 @@ export interface components {
             row_version: number;
         };
         /**
+         * CostingAffectedPreview
+         * @description Xem trước trước khi bấm "Tính giá xuất kho" (FR-STK-003, RT-11).
+         */
+        CostingAffectedPreview: {
+            /** Branch Id */
+            branch_id: number;
+            /** Earliest From Date */
+            earliest_from_date: string | null;
+            /** Keys */
+            keys: number;
+            /** Locked Periods */
+            locked_periods: components["schemas"]["LockedPeriodTouched"][];
+            /** Movements */
+            movements: number;
+            /** Valuation Method */
+            valuation_method: string | null;
+            /** Voucher Count */
+            voucher_count: number;
+            /** Vouchers */
+            vouchers: components["schemas"]["AffectedVoucher"][];
+        };
+        /**
          * CountSheetIn
          * @description Biên bản kiểm kê quỹ (FR-QUY-030): số đếm thật + chi tiết mệnh giá tùy chọn.
          */
@@ -12263,6 +12330,8 @@ export interface components {
             project_id?: number | null;
             /** Quantity */
             quantity: number | string;
+            /** Source Movement Id */
+            source_movement_id?: number | null;
             /** Unit Cost Fc */
             unit_cost_fc?: number | string | null;
             /** Unit Id */
@@ -12319,6 +12388,8 @@ export interface components {
             serial_id: number | null;
             /** Source Line Id */
             source_line_id: string | null;
+            /** Source Movement Id */
+            source_movement_id?: number | null;
             /** Unit Cost Fc */
             unit_cost_fc: string | null;
             /** Unit Id */
@@ -13477,6 +13548,18 @@ export interface components {
             message: string;
             /** Sample */
             sample: string[];
+        };
+        /**
+         * LockedPeriodTouched
+         * @description Kỳ đã khóa mà horizon tính lại chạm tới (RT-11) — job sẽ từ chối.
+         */
+        LockedPeriodTouched: {
+            /** Movements */
+            movements: number;
+            /** Period Id */
+            period_id: number;
+            /** Period No */
+            period_no: number;
         };
         /**
          * LoginRequest
@@ -20382,6 +20465,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JournalVoucherOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_costing_affected_api_v1_inventory_costing_affected_get: {
+        parameters: {
+            query?: {
+                from_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostingAffectedPreview"];
                 };
             };
             /** @description Lỗi (RFC 7807) */

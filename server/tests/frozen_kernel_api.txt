@@ -27,6 +27,7 @@ class ket.kernel.protocols.CrossModuleProviders
   treasurer_voucher_source(self) -> 'TreasurerVoucherSource | None'
 class ket.kernel.protocols.InventoryLineSource
   planned_movement(self, session: 'Session', voucher_id: 'UUID') -> 'PlannedMovement | None'
+  sync_cost_posted(self, session: 'Session', voucher_id: 'UUID', *, posted: 'bool') -> 'None'
 class ket.kernel.protocols.InventoryMovementKind
 class ket.kernel.protocols.InventoryMovementLine
   field amount_fc: Decimal | None
@@ -208,6 +209,8 @@ class ket.posting.contracts.PostingRequest
   field voucher_id: UUID
 class ket.posting.contracts.PostingService
   post(self, request: 'PostingRequest', *, user_id: 'int', acknowledged_warnings: 'bool' = False) -> 'Voucher'
+  repost(self, request: 'PostingRequest', *, user_id: 'int') -> 'Voucher'
+  repost_many(self, requests: 'Sequence[PostingRequest]', *, user_id: 'int') -> 'list[Voucher]'
   unpost(self, voucher_id: 'UUID', *, user_id: 'int') -> 'Voucher'
 class ket.posting.contracts.REFERENCE_GUARDS: instance of
   check(self, session: 'Session', voucher_id: 'UUID') -> 'None'

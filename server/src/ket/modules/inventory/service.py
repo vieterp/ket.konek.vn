@@ -52,6 +52,7 @@ from ket.kernel.master_data.usage import record_use
 from ket.kernel.money import round_money
 from ket.kernel.numbering.models import ResetRule
 from ket.kernel.numbering.service import NumberingRule
+from ket.kernel.periods.models import InventoryValuationMethod
 from ket.kernel.periods.service import fiscal_year_covering
 from ket.kernel.persistence.versioning import require_row_version
 from ket.kernel.protocols import InventoryMovementKind, InventoryMovementLine
@@ -60,12 +61,14 @@ from ket.modules.inventory.models import (
     RECEIPT_DOCUMENT_TYPE,
     TRANSFER_DOCUMENT_TYPE,
     UNIT_COST_SCALE,
+    InventoryMovement,
     InventoryVoucher,
     InventoryVoucherKind,
     InventoryVoucherLine,
     Lot,
+    MovementDirection,
 )
-from ket.modules.inventory.movements import record_movements, remove_movements
+from ket.modules.inventory.movements import lot_key_of, record_movements, remove_movements
 from ket.modules.inventory.posting_mapper import build_posting_request
 from ket.modules.inventory.schemas import InventoryVoucherIn, InventoryVoucherLineIn
 from ket.posting.contracts import (
@@ -110,6 +113,9 @@ ITEM_NOT_STOCKED_CODE = "inventory.item_not_stocked"
 UNIT_NOT_DECLARED_CODE = "inventory.unit_not_declared"
 RECEIPT_COST_REQUIRED_CODE = "inventory.receipt_cost_required"
 ISSUE_COST_NOT_ALLOWED_CODE = "inventory.issue_cost_not_allowed"
+SPECIFIC_SOURCE_REQUIRED_CODE = "inventory.specific_source_required"
+SPECIFIC_SOURCE_MISMATCH_CODE = "inventory.specific_source_mismatch"
+SPECIFIC_SOURCE_ON_RECEIPT_CODE = "inventory.specific_source_on_receipt"
 BODY_MISSING_CODE = "inventory.body_missing"
 
 _USAGE_TABLE_BY_PARTNER_KIND = {
@@ -426,6 +432,19 @@ class InventoryVoucherService:
         # xuất. Nhận giá ở đây là để `COSTED` một con số engine sẽ không bao
         # giờ tính lại và sổ kho lệch sổ cái từ lượt ghi đầu (review 8A M-3).
         refuses_cost = payload.kind != InventoryVoucherKind.RECEIPT
+        # Đích danh (phương pháp 4): dòng xuất/chuyển phải chỉ lần nhập khi năm
+        # tài chính chọn `specific`; chỉ được chỉ khi cùng khóa tồn kho. Phiếu
+        # sinh từ chứng từ nguồn (`requires_cost=False`) không bị đòi — dòng hóa
+        # đơn bán chưa có chỗ chọn lần nhập, engine để chúng chờ giá (ghi ở
+        # phase file 8B, đường hoàn thiện thuộc 8C/8G).
+        year = fiscal_year_covering(self._session, payload.posting_date)
+        requires_source = (
+            requires_cost
+            and year is not None
+            and year.inventory_valuation_method == InventoryValuationMethod.SPECIFIC
+            and payload.kind != InventoryVoucherKind.RECEIPT
+        )
+        sources = self._source_movements(payload)
         for index, line in enumerate(payload.lines, start=1):
             item = items.get(line.item_id)
             if item is None or item.nature not in INVENTORY_NATURES or item.is_group:
@@ -492,6 +511,46 @@ class InventoryVoucherService:
                 else line.warehouse_id
             )
             lot_id = self._lot_id_for(line.item_id, line.lot_no)
+            if line.source_movement_id is not None and payload.kind == InventoryVoucherKind.RECEIPT:
+                violations.append(
+                    PostingViolation(
+                        SPECIFIC_SOURCE_ON_RECEIPT_CODE,
+                        "Phiếu nhập không chỉ lần nhập nguồn — đích danh chỉ có ở chiều xuất",
+                        line_no=index,
+                    )
+                )
+                continue
+            if requires_source and line.source_movement_id is None:
+                violations.append(
+                    PostingViolation(
+                        SPECIFIC_SOURCE_REQUIRED_CODE,
+                        "Năm tài chính tính giá đích danh — dòng xuất phải chỉ lần nhập nguồn",
+                        line_no=index,
+                        item_id=line.item_id,
+                    )
+                )
+                continue
+            if line.source_movement_id is not None:
+                source = sources.get(line.source_movement_id)
+                if (
+                    source is None
+                    or source.direction != MovementDirection.IN
+                    or source.unit_cost is None
+                    or source.branch_id != payload.branch_id
+                    or source.warehouse_id != warehouse_id
+                    or source.item_id != line.item_id
+                    or source.lot_key != lot_key_of(lot_id)
+                ):
+                    violations.append(
+                        PostingViolation(
+                            SPECIFIC_SOURCE_MISMATCH_CODE,
+                            "Lần nhập nguồn phải là một dòng nhập đã ghi sổ, đã có giá, của "
+                            "cùng kho, mã hàng và lô",
+                            line_no=index,
+                            source_movement_id=line.source_movement_id,
+                        )
+                    )
+                    continue
             resolved.append(
                 _ResolvedLine(
                     base_quantity=base_quantity,
@@ -499,11 +558,29 @@ class InventoryVoucherService:
                     amount_fc=amount_fc,
                     warehouse_id=warehouse_id,
                     lot_id=lot_id,
+                    source_movement_id=line.source_movement_id,
                 )
             )
         if violations:
             raise PostingValidationError("Phiếu kho còn dòng chưa hợp lệ", violations=violations)
         return resolved
+
+    def _source_movements(self, payload: InventoryVoucherIn) -> dict[int, InventoryMovement]:
+        ids = sorted(
+            {
+                line.source_movement_id
+                for line in payload.lines
+                if line.source_movement_id is not None
+            }
+        )
+        if not ids:
+            return {}
+        return {
+            row.id: row
+            for row in self._session.execute(
+                select(InventoryMovement).where(InventoryMovement.id.in_(ids))
+            ).scalars()
+        }
 
     def _lot_id_for(self, item_id: int, lot_no: str | None) -> int | None:
         if lot_no is None or not lot_no.strip():
@@ -564,6 +641,7 @@ class InventoryVoucherService:
                     source_line_id=(
                         source_line_ids[index - 1] if source_line_ids is not None else None
                     ),
+                    source_movement_id=extra.source_movement_id,
                 )
             )
         self._session.flush()
@@ -669,7 +747,14 @@ class InventoryVoucherService:
 class _ResolvedLine:
     """Phần server tính cho một dòng: số lượng đơn vị chính, thành tiền, kho, lô."""
 
-    __slots__ = ("amount_fc", "base_quantity", "lot_id", "unit_cost_fc", "warehouse_id")
+    __slots__ = (
+        "amount_fc",
+        "base_quantity",
+        "lot_id",
+        "source_movement_id",
+        "unit_cost_fc",
+        "warehouse_id",
+    )
 
     def __init__(
         self,
@@ -679,9 +764,11 @@ class _ResolvedLine:
         amount_fc: Decimal | None,
         warehouse_id: int,
         lot_id: int | None,
+        source_movement_id: int | None = None,
     ) -> None:
         self.base_quantity = base_quantity
         self.unit_cost_fc = unit_cost_fc
         self.amount_fc = amount_fc
         self.warehouse_id = warehouse_id
         self.lot_id = lot_id
+        self.source_movement_id = source_movement_id

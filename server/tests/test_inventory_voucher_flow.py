@@ -36,6 +36,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from inventory_support import (
     BOX_FACTOR,
+    FINISHED_ITEM_ID,
     GOODS_ITEM_ID,
     MAIN_WAREHOUSE_ID,
     SECOND_WAREHOUSE_ID,
@@ -203,7 +204,7 @@ def test_services_units_without_factor_and_priceless_receipts_are_refused(
         payload = receipt_payload(context, accounts, posting_date=MAR_10, unit_id=UNIT_BOX_ID)
         payload = payload.model_copy(
             update={
-                "lines": (payload.lines[0].model_copy(update={"item_id": 8122}),),
+                "lines": (payload.lines[0].model_copy(update={"item_id": FINISHED_ITEM_ID}),),
             }
         )
         with pytest.raises(PostingValidationError) as unit:

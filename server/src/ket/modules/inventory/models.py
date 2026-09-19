@@ -221,6 +221,7 @@ class InventoryVoucherLine(DatasetBase, Audited):
         ),
         Index("ix_inventory_voucher_lines_voucher", "voucher_id", "line_no"),
         Index("ix_inventory_voucher_lines_source_line", "source_line_id"),
+        Index("ix_inventory_voucher_lines_source_movement", "source_movement_id"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -292,6 +293,18 @@ class InventoryVoucherLine(DatasetBase, Audited):
     source_line_id: Mapped[UUID | None] = mapped_column(nullable=True)
     """Dòng chứng từ nguồn (hóa đơn mua/bán) sinh ra dòng này — không FK vì
     bảng đích thuộc module khác."""
+    source_movement_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        # `use_alter`: dòng phiếu ↔ movement trỏ nhau (movement.line_id / dòng
+        # .source_movement_id) — khai là FK thêm sau để SQLAlchemy không phải
+        # sắp thứ tự hai bảng theo một vòng.
+        ForeignKey("inventory_movements.id", ondelete="RESTRICT", use_alter=True),
+        nullable=True,
+    )
+    """Đích danh (FR-STK-001 phương pháp 4, lát 8B): dòng **xuất** trỏ lần nhập
+    nào — bắt buộc khi năm tài chính chọn `specific`, service kiểm cùng khóa tồn
+    kho. `RESTRICT` + guard tham chiếu: lần nhập đã bị xuất đích danh trỏ tới
+    thì không bỏ ghi sổ được (khác gì rút lớp dưới chân một chứng từ khác)."""
 
 
 class Lot(DatasetBase, Audited):

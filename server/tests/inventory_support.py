@@ -13,9 +13,10 @@ vị quy đổi "thùng = 12 cái" (FR-STK-006), một thành phẩm, một dị
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -27,29 +28,48 @@ from ket.kernel.master_data.models.item import Item, ItemNature
 from ket.kernel.master_data.models.item_unit import ItemUnit
 from ket.kernel.master_data.models.unit_of_measure import UnitOfMeasure
 from ket.kernel.master_data.models.warehouse import Warehouse
+from ket.kernel.periods.models import FiscalYear
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.kernel.security.models import Setting
-from ket.modules.inventory.models import InventoryMovement, InventoryVoucherKind
+from ket.modules.inventory.costing.engine import CostingRunResult, recalc_branch
+from ket.modules.inventory.models import (
+    InventoryMovement,
+    InventoryRecalcMark,
+    InventoryVoucherKind,
+    MovementDirection,
+)
 from ket.modules.inventory.schemas import InventoryVoucherIn, InventoryVoucherLineIn
+from ket.modules.inventory.service import InventoryVoucherService
+from ket.posting.engine.models import GlPosting, Ledger
 from posting_support import PostingContext, posting_scope
 
 SEED_ACTOR_ID = 1
 
-MAIN_WAREHOUSE_ID = 8101
-SECOND_WAREHOUSE_ID = 8102
-UNIT_PIECE_ID = 8111
-UNIT_BOX_ID = 8112
+# `id` cố định đặt CAO (9xx.xxx): chèn `id` tường minh không nhích sequence, và
+# bài nhập 10.000 kho (`test_import_pipeline`) cấp `nextval` từ chỗ sequence đang
+# đứng — đặt ở 8101 thì thứ tự tệp quyết định có đụng `pk_warehouses` hay không
+# (lát 8B gặp khi `test_costing_*` chạy trước bài nhập). Vai trò app không
+# `setval` được nên dời id, không dời sequence.
+MAIN_WAREHOUSE_ID = 908101
+SECOND_WAREHOUSE_ID = 908102
+UNIT_PIECE_ID = 908111
+UNIT_BOX_ID = 908112
 BOX_FACTOR = Decimal(12)
-GOODS_ITEM_ID = 8121
-FINISHED_ITEM_ID = 8122
-SERVICE_ITEM_ID = 8123
+GOODS_ITEM_ID = 908121
+FINISHED_ITEM_ID = 908122
+SERVICE_ITEM_ID = 908123
 
 _EXTRA_ACCOUNT_SPECS: tuple[tuple[str, str, int, list[str] | None], ...] = (
     # (code, name, balance_nature, detail_tracking)
     ("152", "Nguyên liệu, vật liệu", BalanceNature.DEBIT, ["item", "warehouse"]),
     ("154", "Chi phí sản xuất, kinh doanh dở dang", BalanceNature.DEBIT, None),
     ("155", "Thành phẩm", BalanceNature.DEBIT, ["item", "warehouse"]),
-    ("156", "Hàng hóa", BalanceNature.DEBIT, ["item", "warehouse"]),
+    # KHÔNG theo dõi chiều trên 156/157: `purchase_support` gieo cùng TK không
+    # theo dõi và người gieo trước thắng (idempotent theo mã) — tệp test chạy
+    # trước làm bài mua hàng chạy sau đổ `dimension.missing` (lát 8B đã gặp).
+    # Chiều item/warehouse của dòng kho vẫn được mapper gắn, không cần TK đòi.
+    ("156", "Hàng hóa", BalanceNature.DEBIT, None),
+    ("157", "Hàng gửi đi bán", BalanceNature.DEBIT, None),
     ("621", "Chi phí nguyên liệu, vật liệu trực tiếp", BalanceNature.NONE, None),
     ("632", "Giá vốn hàng bán", BalanceNature.NONE, None),
     ("1331", "Thuế GTGT được khấu trừ của hàng hóa, dịch vụ", BalanceNature.DEBIT, None),
@@ -350,3 +370,172 @@ def create_goods_item(session: Session, code: str) -> int:
     item.path = f"{item.id}."
     session.flush()
     return item.id
+
+
+# ------------------------------------------------------------ lát 8B: engine
+
+
+def fresh_item(session: Session, tag: str) -> int:
+    """Khóa tồn kho sạch cho bài tính giá — xem `create_goods_item`."""
+    return create_goods_item(session, f"HH-8B-{tag}-{uuid4().hex[:6].upper()}")
+
+
+def post_receipt(
+    session: Session,
+    context: PostingContext,
+    accounts: dict[str, int],
+    *,
+    item_id: int,
+    posting_date: date,
+    quantity: Decimal,
+    unit_cost: Decimal,
+    warehouse_id: int = MAIN_WAREHOUSE_ID,
+    lot_no: str | None = None,
+) -> UUID:
+    service = InventoryVoucherService(session)
+    voucher = service.create(
+        receipt_payload(
+            context,
+            accounts,
+            posting_date=posting_date,
+            quantity=quantity,
+            unit_cost=unit_cost,
+            item_id=item_id,
+            warehouse_id=warehouse_id,
+            lot_no=lot_no,
+        ),
+        user_id=SEED_ACTOR_ID,
+    )
+    service.post(voucher.id, user_id=SEED_ACTOR_ID)
+    return voucher.id
+
+
+def post_issue(
+    session: Session,
+    context: PostingContext,
+    accounts: dict[str, int],
+    *,
+    item_id: int,
+    posting_date: date,
+    quantity: Decimal,
+    warehouse_id: int = MAIN_WAREHOUSE_ID,
+    lot_no: str | None = None,
+    source_movement_id: int | None = None,
+) -> UUID:
+    payload = issue_payload(
+        context,
+        accounts,
+        posting_date=posting_date,
+        quantity=quantity,
+        item_id=item_id,
+        warehouse_id=warehouse_id,
+        lot_no=lot_no,
+    )
+    if source_movement_id is not None:
+        payload = payload.model_copy(
+            update={
+                "lines": tuple(
+                    line.model_copy(update={"source_movement_id": source_movement_id})
+                    for line in payload.lines
+                )
+            }
+        )
+    service = InventoryVoucherService(session)
+    voucher = service.create(payload, user_id=SEED_ACTOR_ID)
+    # Guard tồn kho tắt trong bài tính giá: chính engine định nghĩa luật vượt tồn.
+    service.post(voucher.id, user_id=SEED_ACTOR_ID, acknowledged_warnings=True)
+    return voucher.id
+
+
+def post_transfer(
+    session: Session,
+    context: PostingContext,
+    *,
+    item_id: int,
+    posting_date: date,
+    quantity: Decimal,
+    from_warehouse_id: int = MAIN_WAREHOUSE_ID,
+    to_warehouse_id: int = SECOND_WAREHOUSE_ID,
+    accounts: tuple[int, int] | None = None,
+) -> UUID:
+    """Phiếu chuyển kho; `accounts` = cặp (Nợ, Có) cho chuyển gửi bán đại lý."""
+    payload = transfer_payload(
+        context, posting_date=posting_date, quantity=quantity, item_id=item_id
+    ).model_copy(update={"warehouse_id": from_warehouse_id, "to_warehouse_id": to_warehouse_id})
+    if accounts is not None:
+        payload = payload.model_copy(
+            update={
+                "lines": tuple(
+                    line.model_copy(
+                        update={"debit_account_id": accounts[0], "credit_account_id": accounts[1]}
+                    )
+                    for line in payload.lines
+                )
+            }
+        )
+    service = InventoryVoucherService(session)
+    voucher = service.create(payload, user_id=SEED_ACTOR_ID)
+    service.post(voucher.id, user_id=SEED_ACTOR_ID, acknowledged_warnings=True)
+    return voucher.id
+
+
+def set_valuation_method(session: Session, context: PostingContext, method: str) -> None:
+    """Đổi phương pháp tính giá của năm test — bài đổi phải trả lại
+    `wavg_moving` trong `finally` vì dataset dùng chung cả phiên."""
+    year = session.get(FiscalYear, context.fiscal_year_id)
+    assert year is not None
+    year.inventory_valuation_method = method
+    session.flush()
+
+
+def run_engine(
+    session: Session,
+    context: PostingContext,
+    *,
+    force_from: date | None = None,
+    cancel_requested: Callable[[], bool] | None = None,
+) -> CostingRunResult:
+    """Chạy engine thẳng trong phiên test (không qua worker) — cùng transaction
+    với dữ liệu vừa dựng, kết quả nhìn được ngay."""
+    return recalc_branch(
+        session,
+        branch_id=context.branch_id,
+        user_id=SEED_ACTOR_ID,
+        force_from=force_from,
+        cancel_requested=cancel_requested,
+    )
+
+
+def financial_postings(session: Session, voucher_id: UUID) -> list[GlPosting]:
+    return list(
+        session.execute(
+            select(GlPosting)
+            .where(GlPosting.voucher_id == voucher_id, GlPosting.ledger == Ledger.FINANCIAL)
+            .order_by(GlPosting.line_no)
+        )
+        .scalars()
+        .all()
+    )
+
+
+def out_movement(session: Session, voucher_id: UUID) -> InventoryMovement:
+    """Movement xuất duy nhất của một phiếu xuất một dòng."""
+    rows = [m for m in movements_of(session, voucher_id) if m.direction == MovementDirection.OUT]
+    assert len(rows) == 1, rows
+    return rows[0]
+
+
+def in_movement(session: Session, voucher_id: UUID) -> InventoryMovement:
+    rows = [m for m in movements_of(session, voucher_id) if m.direction == MovementDirection.IN]
+    assert len(rows) == 1, rows
+    return rows[0]
+
+
+def marks_of_branch(session: Session, branch_id: int) -> list[InventoryRecalcMark]:
+    return list(
+        session.execute(
+            select(InventoryRecalcMark).where(InventoryRecalcMark.branch_id == branch_id)
+        )
+        .scalars()
+        .all()
+    )

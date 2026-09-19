@@ -43,6 +43,8 @@ from ket.modules.inventory import (
     RECEIPT_PERMISSION_CODE,
     TRANSFER_PERMISSION_CODE,
 )
+from ket.modules.inventory.costing import COSTING_VIEW
+from ket.modules.inventory.costing.affected import preview as costing_preview
 from ket.modules.inventory.models import (
     InventoryVoucher,
     InventoryVoucherKind,
@@ -50,6 +52,7 @@ from ket.modules.inventory.models import (
 )
 from ket.modules.inventory.movements import reorder_day
 from ket.modules.inventory.schemas import (
+    CostingAffectedPreview,
     InventoryVoucherIn,
     InventoryVoucherLineOut,
     InventoryVoucherOut,
@@ -306,3 +309,25 @@ def read_stock(
             session, as_of=as_of, branch_id=branch_id, warehouse_id=warehouse_id, item_id=item_id
         )
     return StockResponse(as_of=as_of, items=tuple(rows))
+
+
+CostingViewer = Annotated[AuthorizedRequest, Depends(require_permission(COSTING_VIEW))]
+
+
+@router.get("/costing/affected", response_model=CostingAffectedPreview)
+def read_costing_affected(
+    authorized: CostingViewer,
+    factory: SessionFactory,
+    from_date: Annotated[date | None, Query()] = None,
+) -> CostingAffectedPreview:
+    """FR-STK-003: xem trước chứng từ bị tính lại giá xuất kho — và kỳ đã khóa
+    bị chạm (RT-11) — cho chi nhánh **đang thao tác**, đúng phạm vi mà job
+    `inventory.costing.recalc` sẽ chạy (xem `routers/jobs.py`). `from_date` =
+    xem trước lượt ép tính lại từ ngày đó."""
+    branch_id = authorized.scope.acting_branch_id
+    if branch_id is None:
+        raise BranchNotInScopeError(
+            "Xem trước tính giá xuất kho cần một chi nhánh đang thao tác", branch=None
+        )
+    with unit_of_work(factory, authorized.scope) as session:
+        return costing_preview(session, branch_id=branch_id, force_from=from_date)

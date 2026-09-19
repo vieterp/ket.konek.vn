@@ -117,3 +117,7 @@ class PurchaseInventoryLineSource:
 
     def planned_movement(self, session: Session, voucher_id: UUID) -> PlannedMovement | None:
         return planned_movement(session, voucher_id)
+
+    def sync_cost_posted(self, session: Session, voucher_id: UUID, *, posted: bool) -> None:
+        """Hóa đơn mua không có cờ giá vốn: bút toán trả lại (kind 4) nằm trên
+        chính hóa đơn, phiếu xuất sinh không mang cặp TK — không làm gì."""

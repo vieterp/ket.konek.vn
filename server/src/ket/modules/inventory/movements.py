@@ -12,12 +12,21 @@ chỉ biến cuộc đua thành một `IntegrityError` vô cớ cho người th�
 `pg_advisory_xact_lock(hashtext(khóa))` xếp hàng họ lại; khóa nhả cùng
 transaction nên không có đường quên nhả.
 
-**Dấu bẩn** (`inventory_recalc_queue`, SRS 19 §9 #6) ghi ở ba chỗ: ghi sổ một
-phiếu mà đã có movement cùng khóa ở ngày **muộn hơn hoặc bằng** (chèn lùi
-ngày — giá xuất FIFO/BQ tức thời của các movement sau phải tính lại), bỏ ghi
-sổ (lớp nhập biến mất), và đổi thứ tự trong ngày (BR-STK-04). Upsert giữ `min
-(from_date)`: một dấu muộn không được che dấu sớm. 8A chỉ ghi dấu; engine 8B
-đọc và xóa.
+**Dấu bẩn** (`inventory_recalc_queue`, SRS 19 §9 #6) ghi ở năm chỗ: ghi sổ một
+phiếu mà đã có movement cùng khóa ở ngày **muộn hơn** (chèn lùi ngày — số thứ
+tự mới luôn đứng cuối ngày nên cùng ngày không phải lùi; giá xuất FIFO/BQ tức
+thời của các movement sau phải tính lại), ghi sổ hoặc gỡ một lần **nhập** khi
+trước nó khóa đã xuất nhiều hơn nhập (lát 8B: các dòng xuất ấy "ăn" lớp nhập
+sau hoặc giá lớp cuối), nhập vào kỳ đã có xuất cùng kỳ (8B: bình quân cuối kỳ
+đổi cho cả kỳ), bỏ ghi sổ (lớp nhập biến mất), và đổi thứ tự trong ngày
+(BR-STK-04). Upsert giữ `min(from_date)`: một dấu muộn không được che dấu sớm,
+và `from_date` **kẹp vào kỳ mở sớm nhất** — số đã khóa là số đã chốt (xem
+`mark_recalc`). 8A chỉ ghi dấu; engine 8B đọc và xóa.
+
+**Trong lúc job tính giá đang chạy** (advisory lock chi nhánh, xem
+`costing_lock_tag`), gỡ hay sắp xếp lại movement bị từ chối với 409 thay vì
+chờ nhau chéo tới `DeadlockDetected` (job giữ row lock movement rồi xóa
+`gl_postings`; bỏ ghi sổ xóa `gl_postings` rồi mới gỡ movement).
 """
 
 from __future__ import annotations
@@ -25,13 +34,17 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import ColumnElement, and_, delete, exists, func, select, text, update
+from sqlalchemy import ColumnElement, and_, delete, exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from ket.kernel.errors import PostingValidationError, PostingViolation
+from ket.kernel.errors import (
+    InventoryCostingInProgressError,
+    PostingValidationError,
+    PostingViolation,
+)
 from ket.kernel.money import convert_currency
-from ket.kernel.periods.models import AccountingPeriod
+from ket.kernel.periods.models import AccountingPeriod, FiscalYear
 from ket.kernel.periods.service import PeriodService
 from ket.modules.inventory.models import (
     UNIT_COST_SCALE,
@@ -83,6 +96,29 @@ def lock_stock_keys(session: Session, keys: set[StockKey]) -> None:
         )
 
 
+def costing_lock_tag(schema: str, branch_id: int) -> str:
+    """Khóa advisory của job tính giá một chi nhánh — job cầm cả lượt (blocking),
+    đường ghi/gỡ movement thử cầm (`pg_try_advisory_xact_lock`) để biết job có
+    đang chạy không."""
+    return f"inventory.costing:{schema}:{branch_id}"
+
+
+def refuse_while_costing(session: Session, branch_id: int) -> None:
+    """Từ chối gỡ / sắp xếp lại movement khi job tính giá của chi nhánh đang
+    chạy. Thử cầm khóa: được thì giữ tới hết transaction (job xếp hàng sau),
+    không được nghĩa là job đang giữ → 409 có thông điệp, thay vì chờ chéo."""
+    schema = session.scalar(text("SELECT current_schema()"))
+    acquired = session.scalar(
+        text("SELECT pg_try_advisory_xact_lock(hashtext(:tag)::bigint)"),
+        {"tag": costing_lock_tag(str(schema), branch_id)},
+    )
+    if not acquired:
+        raise InventoryCostingInProgressError(
+            "Đang tính giá xuất kho cho chi nhánh này — chờ tác vụ xong rồi thử lại",
+            branch_id=branch_id,
+        )
+
+
 def stock_key_of(movement: InventoryMovement) -> StockKey:
     return (movement.branch_id, movement.warehouse_id, movement.item_id, movement.lot_key)
 
@@ -121,6 +157,36 @@ def record_movements(
                 from_date=movement.posting_date,
                 reason=f"backdated post {voucher.voucher_no}",
             )
+        if movement.direction == MovementDirection.IN:
+            # Nhập bù (8B): trước ngày này khóa đã xuất nhiều hơn nhập — những
+            # dòng xuất ấy đang chờ giá hoặc đã "ăn" lớp nhập sau / giá lớp cuối
+            # (luật FIFO vượt tồn), và lần nhập này đổi giá của chúng. Tính lại
+            # từ dòng xuất sớm nhất của khóa.
+            # Bình quân cuối kỳ: một lần nhập đổi giá của MỌI dòng xuất cùng kỳ,
+            # kể cả dòng đã ghi sổ trước nó. Đánh dấu không phân biệt phương
+            # pháp — module sổ kho không biết năm tính giá kiểu gì, và một lượt
+            # tính lại thừa trên một khóa rẻ hơn một giá kỳ sai.
+            earliest = min(
+                (
+                    d
+                    for d in (
+                        _shortage_before(session, movement),
+                        _issue_in_same_period_before(session, movement),
+                    )
+                    if d is not None
+                ),
+                default=None,
+            )
+            if earliest is not None:
+                mark_recalc(
+                    session,
+                    branch_id=movement.branch_id,
+                    warehouse_id=movement.warehouse_id,
+                    item_id=movement.item_id,
+                    lot_id=movement.lot_id,
+                    from_date=earliest,
+                    reason=f"receipt after issues {voucher.voucher_no}",
+                )
         session.add(movement)
         # Flush từng movement: `_next_sequence` của dòng sau cùng khóa cùng
         # ngày phải thấy số vừa cấp (autoflush lo việc này, nhưng nói rõ).
@@ -136,6 +202,8 @@ def remove_movements(session: Session, *, voucher: Voucher) -> int:
         .scalars()
         .all()
     )
+    if rows:
+        refuse_while_costing(session, voucher.branch_id)
     keys = {(row.branch_id, row.warehouse_id, row.item_id, row.lot_id) for row in rows}
     lock_stock_keys(session, {stock_key_of(row) for row in rows})
     for branch_id, warehouse_id, item_id, lot_id in sorted(
@@ -150,6 +218,22 @@ def remove_movements(session: Session, *, voucher: Voucher) -> int:
             from_date=voucher.posting_date,
             reason=f"unpost {voucher.voucher_no}",
         )
+    # Gỡ một lớp nhập mà trước đó khóa đã xuất nhiều hơn nhập: các dòng xuất
+    # sớm hơn đã "ăn" lớp này (FIFO) — cùng luật nhập bù, chiều ngược.
+    for row in rows:
+        if row.direction != MovementDirection.IN:
+            continue
+        shortage_from = _shortage_before(session, row)
+        if shortage_from is not None:
+            mark_recalc(
+                session,
+                branch_id=row.branch_id,
+                warehouse_id=row.warehouse_id,
+                item_id=row.item_id,
+                lot_id=row.lot_id,
+                from_date=shortage_from,
+                reason=f"unpost layer after shortage {voucher.voucher_no}",
+            )
     session.execute(delete(InventoryMovement).where(InventoryMovement.voucher_id == voucher.id))
     session.flush()
     return len(rows)
@@ -167,7 +251,16 @@ def mark_recalc(
 ) -> None:
     """Upsert dấu bẩn cho một khóa, giữ ngày **sớm nhất** và làm mới `marked_at`
     (cùng lý do với `posting.balances.recalc_queue.mark_dirty`: job chỉ được xóa
-    đúng phiên bản dấu nó đã đọc)."""
+    đúng phiên bản dấu nó đã đọc).
+
+    `from_date` kẹp lên **ngày đầu kỳ mở sớm nhất** từ ngày ấy trở đi (review 8B
+    C-1): luật nhập bù / cùng kỳ có thể trỏ về một dòng xuất nằm trong kỳ đã
+    khóa (tồn âm là chuyện thường khi guard ở mức `none`), và một dấu như thế
+    làm engine từ chối cả chi nhánh vĩnh viễn (RT-11 phương án A). Số đã khóa
+    là số đã chốt — phần chênh chảy vào dòng xuất kế tiếp còn mở, cùng chính
+    sách với ranh giới năm.
+    """
+    from_date = _earliest_open_date(session, from_date)
     statement = (
         insert(InventoryRecalcMark)
         .values(
@@ -202,6 +295,7 @@ def reorder_day(session: Session, payload: ReorderDayIn) -> tuple[int, date]:
     nói được lý do.
     """
     lot_key = lot_key_of(payload.lot_id)
+    refuse_while_costing(session, payload.branch_id)
     lock_stock_keys(session, {(payload.branch_id, payload.warehouse_id, payload.item_id, lot_key)})
     key_filter = and_(
         InventoryMovement.branch_id == payload.branch_id,
@@ -332,6 +426,7 @@ def _movement_for(
         unit_cost=unit_cost,
         amount=amount,
         cost_state=cost_state,
+        source_movement_id=line.source_movement_id,
         cost_object_id=line.cost_object_id,
         project_id=line.project_id,
         order_id=line.order_id,
@@ -355,6 +450,69 @@ def _next_sequence(session: Session, movement: InventoryMovement) -> int:
         )
     )
     return int(current or 0) + 1
+
+
+def _earlier_than(movement: InventoryMovement) -> ColumnElement[bool]:
+    """Movement đứng TRƯỚC movement này trong thứ tự khóa `(ngày, thứ tự trong
+    ngày)` — so bộ đôi chứ không so ngày (review 8B H-1): một lần nhập cùng
+    ngày nhưng thứ tự sau vẫn đứng sau dòng xuất cùng ngày thứ tự trước."""
+    return or_(
+        InventoryMovement.posting_date < movement.posting_date,
+        and_(
+            InventoryMovement.posting_date == movement.posting_date,
+            InventoryMovement.sequence_in_day < movement.sequence_in_day,
+        ),
+    )
+
+
+def _issue_in_same_period_before(session: Session, movement: InventoryMovement) -> date | None:
+    """Ngày xuất sớm nhất của khóa trong CÙNG kỳ, đứng trước movement này."""
+    value = session.scalar(
+        select(func.min(InventoryMovement.posting_date)).where(
+            _key_filter(movement),
+            InventoryMovement.period_id == movement.period_id,
+            _earlier_than(movement),
+            InventoryMovement.direction == MovementDirection.OUT,
+        )
+    )
+    return value if isinstance(value, date) else None
+
+
+def _shortage_before(session: Session, movement: InventoryMovement) -> date | None:
+    """Trước movement này, khóa đã xuất nhiều hơn nhập? → ngày xuất sớm nhất của
+    khóa (điểm tính lại), không thì `None`."""
+    signed = session.scalar(
+        select(func.coalesce(func.sum(InventoryMovement.direction * InventoryMovement.quantity), 0))
+        .where(_key_filter(movement), _earlier_than(movement))
+        .where(InventoryMovement.is_custodial.is_(False))
+    )
+    if signed is None or signed >= 0:
+        return None
+    value = session.scalar(
+        select(func.min(InventoryMovement.posting_date)).where(
+            _key_filter(movement),
+            _earlier_than(movement),
+            InventoryMovement.direction == MovementDirection.OUT,
+        )
+    )
+    return value if isinstance(value, date) else None
+
+
+def _earliest_open_date(session: Session, from_date: date) -> date:
+    """`from_date` hoặc ngày đầu của kỳ MỞ sớm nhất kết thúc từ `from_date` trở
+    đi (kỳ chưa khóa, năm chưa quyết toán) — tùy cái nào muộn hơn."""
+    open_from = session.scalar(
+        select(func.min(AccountingPeriod.start_date))
+        .join(FiscalYear, FiscalYear.id == AccountingPeriod.fiscal_year_id)
+        .where(
+            AccountingPeriod.locked_at.is_(None),
+            FiscalYear.is_closed.is_(False),
+            AccountingPeriod.end_date >= from_date,
+        )
+    )
+    if not isinstance(open_from, date):
+        return from_date
+    return max(from_date, open_from)
 
 
 def _has_later_movement(session: Session, movement: InventoryMovement) -> bool:

@@ -278,6 +278,9 @@ class SalesInvoiceService:
         inventory = PROVIDERS.inventory_posting()
         if inventory is not None:
             inventory.remove_movement(self._session, source_voucher_id=voucher_id, user_id=user_id)
+        # Phiếu xuất sinh (và bút toán giá vốn của nó) vừa mất theo → cờ hạ
+        # cùng transaction; engine 8B lật lại khi tính xong lượt ghi sổ sau.
+        body.cogs_posted = False
         if body.kind in REVERSING_KINDS:
             revert_settlements(self._session, voucher_id=voucher_id)
             return
