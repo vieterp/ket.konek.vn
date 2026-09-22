@@ -49,6 +49,8 @@ from ket.modules.inventory.guards import (
 )
 from ket.modules.inventory.lock_check import ensure_inventory_costed
 from ket.modules.inventory.models import (
+    ASSEMBLY_DOCUMENT_TYPE,
+    DISASSEMBLY_DOCUMENT_TYPE,
     ISSUE_DOCUMENT_TYPE,
     RECEIPT_DOCUMENT_TYPE,
     TRANSFER_DOCUMENT_TYPE,
@@ -67,8 +69,16 @@ INVENTORY_PERMISSION_MODULE = "inventory"
 RECEIPT_PERMISSION_CODE = "receipt"
 ISSUE_PERMISSION_CODE = "issue"
 TRANSFER_PERMISSION_CODE = "transfer"
+ASSEMBLY_PERMISSION_CODE = "assembly"
+"""Một quyền cho cả lắp ráp và tháo dỡ (8C-2): hai chiều của một nghiệp vụ,
+cùng người làm — như `transfer` phủ cả chuyển nội bộ lẫn gửi bán đại lý."""
 
-for _permission_code in (RECEIPT_PERMISSION_CODE, ISSUE_PERMISSION_CODE, TRANSFER_PERMISSION_CODE):
+for _permission_code in (
+    RECEIPT_PERMISSION_CODE,
+    ISSUE_PERMISSION_CODE,
+    TRANSFER_PERMISSION_CODE,
+    ASSEMBLY_PERMISSION_CODE,
+):
     PERMISSION_REGISTRY.register(
         DocumentType(
             module=INVENTORY_PERMISSION_MODULE, code=_permission_code, actions=VOUCHER_ACTIONS
@@ -114,6 +124,8 @@ for _code, _permission_name, _title in (
     (RECEIPT_DOCUMENT_TYPE, RECEIPT_PERMISSION_CODE, "Phiếu nhập kho"),
     (ISSUE_DOCUMENT_TYPE, ISSUE_PERMISSION_CODE, "Phiếu xuất kho"),
     (TRANSFER_DOCUMENT_TYPE, TRANSFER_PERMISSION_CODE, "Phiếu chuyển kho"),
+    (ASSEMBLY_DOCUMENT_TYPE, ASSEMBLY_PERMISSION_CODE, "Phiếu lắp ráp"),
+    (DISASSEMBLY_DOCUMENT_TYPE, ASSEMBLY_PERMISSION_CODE, "Phiếu tháo dỡ"),
 ):
     POSTING_DOCUMENT_REGISTRY.register(
         PostingDocumentType(

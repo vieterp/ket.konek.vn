@@ -82,3 +82,5 @@ XK,xuat-tra-lai-hang-mua,Xuất kho trả lại hàng mua (sinh từ chứng t�
 XK,xuat-khac,Xuất kho khác (tự định khoản),,,0,,9
 CK,chuyen-kho-noi-bo,Chuyển vật tư giữa các kho nội bộ,,,0,,1
 CK,gui-ban-dai-ly,Chuyển hàng gửi bán đại lý,goods_on_consignment,inventory_goods,1,0,2
+LR,lap-rap,Lắp ráp theo định mức nguyên vật liệu,,,0,,1
+TD,thao-do,Tháo dỡ theo định mức nguyên vật liệu,,,0,,1

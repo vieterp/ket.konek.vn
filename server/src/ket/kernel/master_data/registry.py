@@ -35,6 +35,7 @@ from ket.kernel.bank_import.profile_merge import BankStatementProfileMergeHook
 from ket.kernel.master_data.bank_account_service import PartnerBankAccountMergeHook
 from ket.kernel.master_data.base import MasterDataRow
 from ket.kernel.master_data.invoice_form_service import InvoiceFormMergeHook
+from ket.kernel.master_data.item_bom_service import ItemBomOfItemMergeHook
 from ket.kernel.master_data.item_discount_tier_service import ItemDiscountTierMergeHook
 from ket.kernel.master_data.item_price_level_service import (
     ItemPriceLevelOfItemMergeHook,
@@ -483,6 +484,9 @@ def _register_all() -> None:
                 ItemPriceLevelOfItemMergeHook(),
                 ItemDiscountTierMergeHook(),
                 PriceListLineOfItemMergeHook(),
+                # Định mức NVL (8C-2): hai cột trỏ `items`, hook dọn trùng và
+                # từ chối khi một mã là linh kiện của mã kia.
+                ItemBomOfItemMergeHook(),
             ),
             row_rules=item_row_rules(),
         ),

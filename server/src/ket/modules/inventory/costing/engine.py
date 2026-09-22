@@ -11,11 +11,14 @@ Một lượt `run_costing` cho một chi nhánh (RLS của phiên gọi), trong
    từ chối trước khi chạm bảng.
 3. Vòng (`_run_passes`): câu phương pháp của năm ghi dòng XUẤT; `transfer_in_
    legs.sql` chép giá vế đi sang vế đến; `return_in_legs.sql` chép giá lần xuất
-   sang lần nhập hàng bán trả lại (FR-STK-004, 8C-1); cả ba chỉ ghi dòng đổi
-   thật và trả `RETURNING` — cùng rỗng là điểm bất động. Vượt `MAX_PASSES` là dữ
-   liệu có vòng lặp giá → `CostingNotConvergingError`.
-4. `finalize.sql` — STALE có giá → COSTED; `mark_next_year.sql` — khóa còn
-   movement ở năm sau nhận dấu bẩn đầu năm sau (số năm sau đã lệch tồn đầu).
+   sang lần nhập hàng bán trả lại (FR-STK-004, 8C-1); `assembly_in_legs.sql` /
+   `disassembly_in_legs.sql` suy giá vế nhập của phiếu lắp ráp / tháo dỡ từ vế
+   xuất cùng phiếu (FR-STK-005/016, 8C-2); cả năm câu chỉ ghi dòng đổi thật và
+   trả `RETURNING` — cùng rỗng là điểm bất động. Vượt `MAX_PASSES` là dữ liệu có
+   vòng lặp giá → `CostingNotConvergingError`.
+4. `mark_next_year.sql` — khóa còn movement ở năm sau nhận dấu bẩn đầu năm sau
+   (số năm sau đã lệch tồn đầu) — chạy khi dòng STALE còn là STALE để khóa vào
+   lượt qua vế chép giá cũng có dấu; rồi `finalize.sql` — STALE có giá → COSTED.
 5. Repost giá vốn (`PostingService.repost`, ADR-025) cho từng chứng từ XK/CK có
    dòng đổi — ranh giới hủy là một chứng từ; báo `sync_cost_posted(posted=…)`
    cho chứng từ nguồn của phiếu sinh (còn dòng chờ giá hay không).
@@ -46,6 +49,8 @@ from ket.kernel.protocols import PROVIDERS
 from ket.modules.inventory.costing.affected import locked_periods_touched, years_to_process
 from ket.modules.inventory.costing.queue import CostingMark, clear_marks, pending_marks
 from ket.modules.inventory.models import (
+    ASSEMBLY_DOCUMENT_TYPE,
+    DISASSEMBLY_DOCUMENT_TYPE,
     ISSUE_DOCUMENT_TYPE,
     RECEIPT_DOCUMENT_TYPE,
     TRANSFER_DOCUMENT_TYPE,
@@ -83,6 +88,8 @@ tính giá gom mọi kho của (chi nhánh, mã hàng, lô). FIFO/đích danh lu
 (SRS 09 §3) nên không có bản này — cờ của năm bị bỏ qua."""
 TRANSFER_IN_LEGS_SQL: Final[str] = _sql("transfer_in_legs")
 RETURN_IN_LEGS_SQL: Final[str] = _sql("return_in_legs")
+ASSEMBLY_IN_LEGS_SQL: Final[str] = _sql("assembly_in_legs")
+DISASSEMBLY_IN_LEGS_SQL: Final[str] = _sql("disassembly_in_legs")
 FINALIZE_SQL: Final[str] = _sql("finalize")
 MARK_NEXT_YEAR_SQL: Final[str] = _sql("mark_next_year")
 MARK_RETURN_NEXT_YEAR_SQL: Final[str] = _sql("mark_return_next_year")
@@ -92,11 +99,17 @@ LAYER_SQL: Final[dict[str, str]] = {
     InventoryValuationMethod.SPECIFIC.value: _sql("stock_layers_specific"),
 }
 _REPOSTED_DOCUMENT_TYPES: Final[frozenset[str]] = frozenset(
-    {ISSUE_DOCUMENT_TYPE, TRANSFER_DOCUMENT_TYPE, RECEIPT_DOCUMENT_TYPE}
+    {
+        ISSUE_DOCUMENT_TYPE,
+        TRANSFER_DOCUMENT_TYPE,
+        RECEIPT_DOCUMENT_TYPE,
+        ASSEMBLY_DOCUMENT_TYPE,
+        DISASSEMBLY_DOCUMENT_TYPE,
+    }
 )
-"""Loại chứng từ có bút toán suy từ giá engine: XK/CK (8B) và NK hàng bán trả lại
-lấy giá từ lần xuất (8C-1, Nợ 156/Có 632). NK gõ giá không bao giờ vào
-`RETURNING` nên không bị ghi lại oan."""
+"""Loại chứng từ có bút toán suy từ giá engine: XK/CK (8B), NK hàng bán trả lại
+lấy giá từ lần xuất (8C-1, Nợ 156/Có 632), LR/TD (8C-2, bút toán trên dòng linh
+kiện). NK gõ giá không bao giờ vào `RETURNING` nên không bị ghi lại oan."""
 _SET_BASED_METHODS: Final[frozenset[str]] = frozenset(
     {InventoryValuationMethod.FIFO.value, InventoryValuationMethod.SPECIFIC.value}
 )
@@ -241,14 +254,17 @@ def run_costing(
         result.passes += passes
         result.movements_updated += updated
         changed_vouchers |= vouchers
-        session.execute(text(FINALIZE_SQL), params)
-        # Dấu đầu năm sau (review 8B M-1) đọc CTE `keys` — tức các dấu vừa tính —
-        # nên phải chạy TRƯỚC khi xóa chúng; đụng dấu cùng khóa đã đọc (phiên bản
+        # Dấu đầu năm sau (review 8B M-1) đọc CTE `keys` — tức các dấu vừa tính
+        # cộng mọi dòng `cost_state <> 1` — nên phải chạy TRƯỚC `finalize.sql`
+        # (review 8C-2 H-1: hạ STALE trước thì khóa chỉ vào lượt qua STALE — vế
+        # đến chuyển kho, thành phẩm lắp ráp, linh kiện tháo dỡ — mất dấu năm
+        # sau) và TRƯỚC khi xóa dấu đã đọc; đụng dấu cùng khóa đã đọc (phiên bản
         # ≤ `:marks_version`) thì ĐỔI `from_date` sang năm sau thay vì `LEAST`
         # (giữ ngày cũ + phiên bản mới = dấu sống mãi); dấu chen ngang mới hơn
         # giữ `LEAST` và sống sót lượt xóa như trước.
         session.execute(text(MARK_NEXT_YEAR_SQL), params)
         session.execute(text(MARK_RETURN_NEXT_YEAR_SQL), params)
+        session.execute(text(FINALIZE_SQL), params)
         covered = tuple(
             mark for mark in marks_read if year.start_date <= mark.from_date <= year.end_date
         )
@@ -370,6 +386,8 @@ def _run_passes(
             *_execute_returning(session, method_sql, params),
             *_execute_returning(session, TRANSFER_IN_LEGS_SQL, params),
             *_execute_returning(session, RETURN_IN_LEGS_SQL, params),
+            *_execute_returning(session, ASSEMBLY_IN_LEGS_SQL, params),
+            *_execute_returning(session, DISASSEMBLY_IN_LEGS_SQL, params),
         ]
         if not last_changed:
             return pass_no, len(movement_ids), vouchers

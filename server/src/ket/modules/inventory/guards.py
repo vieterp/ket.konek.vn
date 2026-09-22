@@ -55,6 +55,7 @@ from ket.modules.inventory.models import (
     InventoryVoucherLine,
     Lot,
     MovementDirection,
+    line_issues_stock,
 )
 from ket.modules.inventory.movements import lot_key_of
 from ket.modules.inventory.stock import stock_floor_from
@@ -363,6 +364,10 @@ def _outgoing_of_inventory_voucher(session: Session, voucher: Voucher) -> dict[S
     for line in session.execute(
         select(InventoryVoucherLine).where(InventoryVoucherLine.voucher_id == voucher.id)
     ).scalars():
+        # Lắp ráp / tháo dỡ (8C-2): chỉ dòng XUẤT (linh kiện LR, thành phẩm TD)
+        # trừ tồn; dòng nhập của phiếu bỏ qua.
+        if not line_issues_stock(body.kind, is_product=line.is_product):
+            continue
         warehouse_id = (
             body.warehouse_id if body.kind == InventoryVoucherKind.TRANSFER else line.warehouse_id
         )

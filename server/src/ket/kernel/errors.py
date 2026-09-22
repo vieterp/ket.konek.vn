@@ -862,6 +862,28 @@ class ItemGroupFieldNotAllowedError(DomainError):
     error_code: ClassVar[str] = "item.group_field_not_allowed"
 
 
+class ItemBomComponentInvalidError(DomainError):
+    """Linh kiện của định mức không phải hàng qua kho, là nút nhóm, hay chính
+    thành phẩm (FR-SYS-044).
+
+    Định mức là danh sách thứ **xuất kho** để lắp và **nhập kho** khi tháo — một
+    dịch vụ hay một dòng diễn giải không có tồn để xuất.
+    """
+
+    error_code: ClassVar[str] = "item.bom_component_invalid"
+
+
+class ItemBomCycleError(DomainError):
+    """Định mức tạo vòng: A cần B mà B (trực tiếp hay qua nhiều cấp) cần A.
+
+    Ở danh mục vòng chỉ là dữ liệu vô nghĩa; ở engine tính giá nó là hai phiếu
+    lắp ráp chéo mà giá mỗi bên phụ thuộc bên kia — không hội tụ, và engine từ
+    chối cả chi nhánh sau trần vòng. Chặn ở nơi rẻ nhất.
+    """
+
+    error_code: ClassVar[str] = "item.bom_cycle"
+
+
 class ItemVariantNotSupportedError(DomainError):
     """Khai mã quy cách cho mã hàng **không theo dõi tồn kho** (FR-SYS-046).
 

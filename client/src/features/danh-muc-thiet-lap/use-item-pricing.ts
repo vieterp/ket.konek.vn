@@ -23,6 +23,8 @@ export type ItemPriceLevelBody = Schemas['ItemPriceLevelCreateRequest']
 export type ItemDiscountTier = Schemas['ItemDiscountTierResponse']
 export type ItemDiscountTierBody = Schemas['ItemDiscountTierCreateRequest']
 export type ItemUnit = Schemas['ItemUnitResponse']
+export type ItemBomLine = Schemas['ItemBomLineResponse']
+export type ItemBomLineBody = Schemas['ItemBomLineCreateRequest']
 
 const ITEMS_BASE = '/api/v1/master/items'
 
@@ -108,6 +110,17 @@ export function useItemDiscountTierMutations(itemId: number) {
   const { datasetCode } = useSession()
   const base = `${ITEMS_BASE}/${String(itemId)}/discount-tiers`
   return useSubTableMutations<ItemDiscountTier, ItemDiscountTierBody>(base, ['item-discount-tiers', datasetCode, base])
+}
+
+/** Định mức NVL (FR-SYS-044, 8C-2) — bảng con thứ tư, cùng đường `…/bom`. */
+export function useItemBomLines(itemId: number | null) {
+  return useSubTable<ItemBomLine>('item-bom', itemId === null ? null : `${ITEMS_BASE}/${String(itemId)}/bom`)
+}
+
+export function useItemBomMutations(itemId: number) {
+  const { datasetCode } = useSession()
+  const base = `${ITEMS_BASE}/${String(itemId)}/bom`
+  return useSubTableMutations<ItemBomLine, ItemBomLineBody>(base, ['item-bom', datasetCode, base])
 }
 
 export function useItemUnits(itemId: number | null) {

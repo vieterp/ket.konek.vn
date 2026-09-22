@@ -118,6 +118,10 @@ RECEIVABLE_ACCOUNT_NOT_CUSTOMER_TRACKED_CODE = "sales.receivable_account_not_cus
 nợ sẽ có dòng mà sổ cái không đối chiếu được, và không phiếu thu nào đối trừ
 nổi. Cùng phép kiểm với `purchase`, đổi chiều theo dõi."""
 
+SPECIFIC_SOURCE_KIND_CODE = "sales.specific_source_kind"
+"""Dòng chỉ lần nhập đích danh nhưng chứng từ không kiêm phiếu xuất kho (hay là
+giảm giá / trả lại) — không có phiếu xuất nào để mang nguồn ấy đi."""
+
 VARIANT_NOT_OF_ITEM_CODE = "sales.variant_not_of_item"
 RETURNED_LINE_KIND_CODE = "sales.returned_line_kind"
 RETURNED_LINE_MISMATCH_CODE = "sales.returned_line_mismatch"
@@ -175,6 +179,7 @@ class SalesInvoiceService:
         self._verify_customer_tracked_account(payload)
         self._verify_variants_belong_to_items(payload)
         self._verify_returned_lines(payload)
+        self._verify_specific_sources(payload)
         priced = price_settlements(self._session, payload, scale=scale)
 
         voucher = self._vouchers.create(
@@ -250,6 +255,7 @@ class SalesInvoiceService:
         self._verify_customer_tracked_account(payload)
         self._verify_variants_belong_to_items(payload)
         self._verify_returned_lines(payload)
+        self._verify_specific_sources(payload)
         priced = price_settlements(self._session, payload, scale=scale)
 
         usage_before = self._usage_of_stored(body)
@@ -466,6 +472,7 @@ class SalesInvoiceService:
                     cogs_account_id=line.cogs_account_id,
                     inventory_account_id=line.inventory_account_id,
                     unit_cost_fc=line.unit_cost_fc,
+                    source_movement_id=line.source_movement_id,
                     returned_line_id=line.returned_line_id,
                     price_list_id=line.price_list_id,
                     price_source=(
@@ -591,6 +598,26 @@ class SalesInvoiceService:
         if violations:
             raise PostingValidationError(
                 "Quy cách trên dòng không thuộc mã hàng của dòng", violations=violations
+            )
+
+    def _verify_specific_sources(self, payload: SalesInvoiceIn) -> None:
+        """Lần nhập đích danh trên dòng (8C-2) chỉ có nghĩa khi chứng từ sinh
+        phiếu xuất: kiêm xuất kho và thuộc loại xuất được. Nguồn có thật, cùng
+        kho / mã hàng / đã có giá hay không do module kho kiểm lúc sinh phiếu
+        (C3: `sales` không đọc sổ kho)."""
+        if not any(line.source_movement_id is not None for line in payload.lines):
+            return
+        if not payload.is_stock_issue or payload.kind not in _RETURNABLE_KINDS:
+            raise PostingValidationError(
+                "Chỉ chứng từ bán hàng kiêm phiếu xuất kho mới chỉ lần nhập đích danh",
+                violations=[
+                    PostingViolation(
+                        SPECIFIC_SOURCE_KIND_CODE,
+                        "Bật kiêm phiếu xuất kho, hoặc bỏ lần nhập trên dòng",
+                        kind=payload.kind,
+                        is_stock_issue=payload.is_stock_issue,
+                    )
+                ],
             )
 
     def _verify_returned_lines(self, payload: SalesInvoiceIn) -> None:

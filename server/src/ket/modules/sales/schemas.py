@@ -133,6 +133,10 @@ class SalesInvoiceLineIn(BaseModel):
     """Cặp TK giá vốn / TK kho và đơn giá vốn — lát này chỉ lưu, phase 8 tính
     lại và ghi bút toán Nợ 632 / Có 156 (`sales_invoices.cogs_posted`)."""
 
+    source_movement_id: int | None = Field(default=None, ge=1)
+    """Lần nhập đích danh dòng này xuất từ (phương pháp 4, 8C-2) — chỉ trên
+    chứng từ kiêm phiếu xuất kho; module kho kiểm khi sinh phiếu."""
+
     returned_line_id: UUID | None = None
     """Dòng bán gốc mà dòng hàng-bán-trả-lại này trả về (FR-STK-004, 8C-1) —
     chỉ trên chứng từ kind `RETURN`; phiếu nhập sinh lấy giá của lần xuất gốc.
@@ -276,6 +280,7 @@ class SalesInvoiceLineOut(BaseModel):
     cogs_account_id: int | None
     inventory_account_id: int | None
     unit_cost_fc: Decimal | None
+    source_movement_id: int | None = None
     returned_line_id: UUID | None
     price_list_id: int | None
     price_source: str | None

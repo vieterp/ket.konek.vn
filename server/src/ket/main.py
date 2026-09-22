@@ -68,6 +68,7 @@ from ket.api.routers.fiscal_years import router as fiscal_years_router
 from ket.api.routers.gl_journal import router as gl_journal_router
 from ket.api.routers.imports import router as imports_router
 from ket.api.routers.inventory import router as inventory_router
+from ket.api.routers.items_bom import router as item_bom_router
 from ket.api.routers.items_prices import router as item_prices_router
 from ket.api.routers.items_units import router as item_units_router
 from ket.api.routers.items_variants import router as item_variants_router
@@ -293,6 +294,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(master_data_router)
     app.include_router(partner_bank_accounts_router)
     app.include_router(item_units_router)
+    app.include_router(item_bom_router)
     app.include_router(item_variants_router)
     app.include_router(item_prices_router)
     app.include_router(price_list_lines_router)

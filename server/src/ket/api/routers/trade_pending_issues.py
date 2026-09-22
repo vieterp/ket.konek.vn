@@ -9,8 +9,9 @@ ba nơi (`vouchers` + thân hóa đơn của module, `einvoices`, dataset công 
 C3 cấm `sales` hỏi `einvoice` hay `receivables`, và tầng api là chỗ duy nhất
 đứng trên cả ba.
 
-Ba nhóm mỗi chiều, đúng ba "việc còn thiếu" design reference nhóm 01 nêu —
-trừ "chưa nhập/xuất kho", chờ phase 8 (xem `PendingIssueCode`):
+Ba nhóm mỗi chiều, đúng ba "việc còn thiếu" design reference nhóm 01 nêu, cộng
+"chưa nhập/xuất kho" (8A) và "chưa tính giá" chiều bán (8C-2) — xem
+`PendingIssueCode`:
 
 * `chua-ghi-so` — chứng từ Đã cất (`VoucherStatus.DA_CAT`). Trùng với nhóm
   `PUR`/`SAL` của `/vouchers/pending-issues` một cách CÓ CHỦ ĐÍCH: tab U1 của
@@ -180,6 +181,18 @@ def _pending_issues(
         if stock is not None:
             groups.append(stock)
 
+        if side == "sales":
+            uncosted = _voucher_group(
+                session,
+                side=side,
+                as_of=effective_as_of,
+                code="chua-tinh-gia",
+                next_action="run-costing",
+                condition=_uncosted_sales_condition(),
+            )
+            if uncosted is not None:
+                groups.append(uncosted)
+
         overdue = _overdue_group(session, side=side, as_of=effective_as_of)
         if overdue is not None:
             groups.append(overdue)
@@ -269,6 +282,23 @@ def _missing_stock_voucher_condition(side: Side) -> ColumnElement[bool]:
         & SalesInvoice.kind.in_((SalesInvoiceKind.GOODS, SalesInvoiceKind.AGENCY))
         & stocked_line
         & ~generated
+    )
+
+
+def _uncosted_sales_condition() -> ColumnElement[bool]:
+    """Hóa đơn bán đã ghi sổ, **đã có** phiếu xuất sinh kèm, mà giá vốn chưa ghi
+    (`cogs_posted` false — engine hạ/nâng cờ theo dòng chờ giá, 8B) — lát 8C-2,
+    FR-STK-008. Đòi có phiếu để không trùng nhóm "chưa xuất kho"."""
+    generated_header = aliased(Voucher)
+    generated = exists().where(
+        generated_header.source_document_id == Voucher.id,
+        InventoryVoucher.id == generated_header.id,
+    )
+    return (
+        (Voucher.status == int(VoucherStatus.DA_GHI_SO))
+        & SalesInvoice.is_stock_issue.is_(True)
+        & SalesInvoice.cogs_posted.is_(False)
+        & generated
     )
 
 
