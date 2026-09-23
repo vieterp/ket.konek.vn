@@ -1739,6 +1739,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/inventory/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Availability
+         * @description Cột **"Có thể bán"** (U7) = tồn − đã hứa giao, cho chi nhánh **đang thao
+         *     tác**: cam kết là số của một chi nhánh, và cộng cam kết của nhiều chi nhánh
+         *     vào tồn của một kho là một con số không ai dùng được.
+         *
+         *     Quyền `inventory.issue.view` — người sắp xuất hàng là người hỏi câu này.
+         */
+        get: operations["read_availability_api_v1_inventory_availability_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inventory/costing/affected": {
         parameters: {
             query?: never;
@@ -1776,6 +1800,106 @@ export interface paths {
          *     lần nhập có giá).
          */
         get: operations["read_costing_uncosted_api_v1_inventory_costing_uncosted_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/count-sheets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Count Sheets */
+        get: operations["list_count_sheets_api_v1_inventory_count_sheets_get"];
+        put?: never;
+        /**
+         * Create Count Sheet
+         * @description Lập biên bản kiểm kê kho (FR-STK-030) — chụp tồn sổ sách tại ngày kiểm kê.
+         */
+        post: operations["create_count_sheet_api_v1_inventory_count_sheets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/count-sheets/{sheet_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Count Sheet */
+        get: operations["get_count_sheet_api_v1_inventory_count_sheets__sheet_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Count Sheet */
+        delete: operations["delete_count_sheet_api_v1_inventory_count_sheets__sheet_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/count-sheets/{sheet_id}/actions/apply-differences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Differences
+         * @description Duyệt biên bản (FR-STK-031): tự sinh phiếu nhập (thừa) / phiếu xuất
+         *     (thiếu) đã định khoản sẵn, ở trạng thái **nháp** — kế toán xem rồi ghi sổ.
+         */
+        post: operations["apply_differences_api_v1_inventory_count_sheets__sheet_id__actions_apply_differences_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/count-sheets/{sheet_id}/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Counts
+         * @description Nhập / sửa số đếm thật (FR-STK-030) — sửa được tới khi duyệt.
+         */
+        put: operations["set_counts_api_v1_inventory_count_sheets__sheet_id__counts_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/count-sheets/{sheet_id}/differences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Differences
+         * @description U8: **chỉ** dòng đã đếm và lệch — dòng khớp không hiện.
+         */
+        get: operations["read_differences_api_v1_inventory_count_sheets__sheet_id__differences_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9056,6 +9180,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/warehouse-keeper/book": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Warehouse Book
+         * @description Sổ kho của thủ kho (FR-WHK-014) — dòng theo ngày ghi sổ, có phân trang.
+         */
+        get: operations["warehouse_book_api_v1_warehouse_keeper_book_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/warehouse-keeper/card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Warehouse Card
+         * @description Thẻ kho (FR-WHK-014): một mã hàng, một kho, kèm tồn lũy kế.
+         *
+         *     Tồn lũy kế cộng dồn từ `opening_qty` **trong trang đang xem** — cộng dồn
+         *     phải bắt đầu từ một con số thật, nếu không trang 2 sẽ vẽ một đường tồn bắt
+         *     đầu lại từ 0.
+         */
+        get: operations["warehouse_card_api_v1_warehouse_keeper_card_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/warehouse-keeper/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Keeper Queue
+         * @description Phiếu kho đã ghi sổ kế toán, chờ thủ kho (FR-WHK-010) — RLS lọc chi nhánh.
+         */
+        get: operations["keeper_queue_api_v1_warehouse_keeper_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/warehouse-keeper/queue/actions/book": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Book Queue Vouchers
+         * @description Ghi sổ kho hàng loạt (FR-WHK-012) — cả lô một transaction, phiếu đầu tiên
+         *     vi phạm (trạng thái, ngày ghi) làm cả lượt dừng có thông điệp nêu đích danh.
+         */
+        post: operations["book_queue_vouchers_api_v1_warehouse_keeper_queue_actions_book_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -9408,6 +9617,43 @@ export interface components {
             items: components["schemas"]["AutoPostingOperationResponse"][];
             /** Package Id */
             package_id: number;
+        };
+        /** AvailabilityResponse */
+        AvailabilityResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Has Commitment Source */
+            has_commitment_source: boolean;
+            /** Items */
+            items: components["schemas"]["AvailabilityRow"][];
+        };
+        /**
+         * AvailabilityRow
+         * @description Một dòng "Có thể bán" (U7) theo khóa `(kho, vật tư, lô)`.
+         */
+        AvailabilityRow: {
+            /** Available To Promise */
+            available_to_promise: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Committed */
+            committed: string;
+            /**
+             * Custodial Qty
+             * @default 0
+             */
+            custodial_qty: string;
+            /** Item Id */
+            item_id: number;
+            /** Lot Id */
+            lot_id: number | null;
+            /** On Hand */
+            on_hand: string;
+            /** Warehouse Id */
+            warehouse_id: number;
         };
         /**
          * BankAccountCard
@@ -12417,6 +12663,203 @@ export interface components {
             vendor_id?: number | null;
         };
         /**
+         * InventoryCountSheetAdjustmentResponse
+         * @description Kết quả duyệt: tối đa hai phiếu **nháp** (thừa → NK, thiếu → XK).
+         */
+        InventoryCountSheetAdjustmentResponse: {
+            /** Issue Voucher Id */
+            issue_voucher_id: string | null;
+            /** Receipt Voucher Id */
+            receipt_voucher_id: string | null;
+            /**
+             * Sheet Id
+             * Format: uuid
+             */
+            sheet_id: string;
+        };
+        /** InventoryCountSheetCountsIn */
+        InventoryCountSheetCountsIn: {
+            /** Lines */
+            lines: components["schemas"]["InventoryCountSheetLineCount"][];
+        };
+        /**
+         * InventoryCountSheetDifference
+         * @description Một dòng lệch — U8 chỉ hiện những dòng này, không hiện dòng khớp.
+         */
+        InventoryCountSheetDifference: {
+            /** Book Qty */
+            book_qty: string;
+            /** Counted Qty */
+            counted_qty: string;
+            /** Difference */
+            difference: string;
+            /** Is Custodial */
+            is_custodial: boolean;
+            /** Item Id */
+            item_id: number;
+            /** Line No */
+            line_no: number;
+            /** Lot Id */
+            lot_id: number | null;
+            /** Unit Cost */
+            unit_cost: string | null;
+        };
+        /** InventoryCountSheetDifferencesResponse */
+        InventoryCountSheetDifferencesResponse: {
+            /**
+             * Count Date
+             * Format: date
+             */
+            count_date: string;
+            /** Differences */
+            differences: components["schemas"]["InventoryCountSheetDifference"][];
+            /**
+             * Sheet Id
+             * Format: uuid
+             */
+            sheet_id: string;
+        };
+        /**
+         * InventoryCountSheetIn
+         * @description Lập biên bản kiểm kê kho (FR-STK-030): chọn kho + ngày, hệ thống tự chụp
+         *     số sổ cho phạm vi mã hàng.
+         */
+        InventoryCountSheetIn: {
+            /** Branch Id */
+            branch_id: number;
+            /**
+             * Count Date
+             * Format: date
+             */
+            count_date: string;
+            /**
+             * Item Ids
+             * @default []
+             */
+            item_ids: number[];
+            /** Note */
+            note?: string | null;
+            /** Warehouse Id */
+            warehouse_id: number;
+        };
+        /**
+         * InventoryCountSheetLineCount
+         * @description Số đếm thật của một dòng — client gửi lại theo `line_no` đã cấp.
+         */
+        InventoryCountSheetLineCount: {
+            /** Counted Qty */
+            counted_qty: number | string;
+            /** Line No */
+            line_no: number;
+            /** Note */
+            note?: string | null;
+            /** Unit Cost */
+            unit_cost?: number | string | null;
+        };
+        /** InventoryCountSheetLineOut */
+        InventoryCountSheetLineOut: {
+            /** Book Qty */
+            book_qty: string;
+            /** Counted Qty */
+            counted_qty: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Custodial */
+            is_custodial: boolean;
+            /** Item Id */
+            item_id: number;
+            /** Line No */
+            line_no: number;
+            /** Lot Id */
+            lot_id: number | null;
+            /** Note */
+            note: string | null;
+            /** Unit Cost */
+            unit_cost: string | null;
+        };
+        /** InventoryCountSheetListResponse */
+        InventoryCountSheetListResponse: {
+            /** Items */
+            items: components["schemas"]["InventoryCountSheetListRow"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * InventoryCountSheetListRow
+         * @description Một dòng danh sách — **không** mang dòng đếm.
+         *
+         *     Biên bản của một kho 5.000 mã hàng có 5.000 dòng; nhét chúng vào mỗi phần
+         *     tử của một trang 50 biên bản là một phản hồi hàng trăm nghìn đối tượng cho
+         *     một màn hình chỉ vẽ ngày, số hiệu và trạng thái. Dòng đếm đọc qua
+         *     `GET /inventory/count-sheets/{id}`.
+         */
+        InventoryCountSheetListRow: {
+            /** Adjustment Issue Id */
+            adjustment_issue_id: string | null;
+            /** Adjustment Receipt Id */
+            adjustment_receipt_id: string | null;
+            /** Branch Id */
+            branch_id: number;
+            /**
+             * Count Date
+             * Format: date
+             */
+            count_date: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: unknown[];
+            /** Note */
+            note: string | null;
+            /** Sheet No */
+            sheet_no: string;
+            /** Warehouse Id */
+            warehouse_id: number;
+        };
+        /** InventoryCountSheetOut */
+        InventoryCountSheetOut: {
+            /** Adjustment Issue Id */
+            adjustment_issue_id: string | null;
+            /** Adjustment Receipt Id */
+            adjustment_receipt_id: string | null;
+            /** Branch Id */
+            branch_id: number;
+            /**
+             * Count Date
+             * Format: date
+             */
+            count_date: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["InventoryCountSheetLineOut"][];
+            /** Note */
+            note: string | null;
+            /** Sheet No */
+            sheet_no: string;
+            /** Warehouse Id */
+            warehouse_id: number;
+        };
+        /**
          * InventoryVoucherIn
          * @description Thân phiếu kho cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).
          */
@@ -12485,6 +12928,11 @@ export interface components {
              */
             extended: components["schemas"]["ExtendedDimensionIn"][];
             /**
+             * Is Custodial
+             * @default false
+             */
+            is_custodial: boolean;
+            /**
              * Is Product
              * @default false
              */
@@ -12542,6 +12990,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Is Custodial
+             * @default false
+             */
+            is_custodial: boolean;
             /**
              * Is Product
              * @default false
@@ -13677,6 +14130,67 @@ export interface components {
             settlements: components["schemas"]["JournalSettlementIn"][];
         };
         JsonValue: unknown;
+        /**
+         * KeeperBookRequest
+         * @description Ghi sổ kho hàng loạt (FR-WHK-012): theo ngày hạch toán từng phiếu, hoặc
+         *     một ngày tùy chọn áp cho cả lô (kiểm với TỪNG phiếu).
+         */
+        KeeperBookRequest: {
+            /** Book Date */
+            book_date?: string | null;
+            /**
+             * Book Date Mode
+             * @default posting_date
+             * @enum {string}
+             */
+            book_date_mode: "posting_date" | "custom";
+            /** Voucher Ids */
+            voucher_ids: string[];
+        };
+        /**
+         * KeeperBookResponse
+         * @description Cả lô là MỘT transaction nên "đã ghi N dòng sổ kho" là toàn bộ thông
+         *     tin; chi tiết nằm ở sổ kho (client tải lại hàng đợi + sổ sau thao tác).
+         */
+        KeeperBookResponse: {
+            /** Booked Rows */
+            booked_rows: number;
+        };
+        /**
+         * KeeperQueueItem
+         * @description Một phiếu kho chờ thủ kho ghi sổ kho (FR-WHK-010/011).
+         */
+        KeeperQueueItem: {
+            /** Branch Id */
+            branch_id: number;
+            /** Delivered By */
+            delivered_by: string | null;
+            /** Description */
+            description: string | null;
+            /** Document Type */
+            document_type: string;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** To Warehouse Id */
+            to_warehouse_id: number | null;
+            /**
+             * Voucher Id
+             * Format: uuid
+             */
+            voucher_id: string;
+            /** Voucher No */
+            voucher_no: string;
+            /** Warehouse Id */
+            warehouse_id: number;
+        };
+        /** KeeperQueueResponse */
+        KeeperQueueResponse: {
+            /** Items */
+            items: components["schemas"]["KeeperQueueItem"][];
+        };
         /**
          * LandedCostIn
          * @description Một khoản chi phí mua hàng (vận chuyển, bốc xếp, thuế nhập khẩu…).
@@ -17233,6 +17747,11 @@ export interface components {
         StockRow: {
             /** Branch Id */
             branch_id: number;
+            /**
+             * Custodial Qty
+             * @default 0
+             */
+            custodial_qty: string;
             /** Item Id */
             item_id: number;
             /** Lot Id */
@@ -17849,6 +18368,105 @@ export interface components {
             status: number;
             /** Voucher No */
             voucher_no: string;
+        };
+        /** WarehouseBookResponse */
+        WarehouseBookResponse: {
+            /** Items */
+            items: components["schemas"]["WarehouseBookRowOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * WarehouseBookRowOut
+         * @description Một dòng sổ kho (FR-WHK-014) — số lượng, không giá trị.
+         */
+        WarehouseBookRowOut: {
+            /**
+             * Book Date
+             * Format: date
+             */
+            book_date: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Id */
+            id: number;
+            /** In Qty */
+            in_qty: string;
+            /** Item Id */
+            item_id: number;
+            /** Lot Id */
+            lot_id: number | null;
+            /** Out Qty */
+            out_qty: string;
+            /**
+             * Posted At
+             * Format: date-time
+             */
+            posted_at: string;
+            /** Posted By */
+            posted_by: number;
+            /**
+             * Voucher Id
+             * Format: uuid
+             */
+            voucher_id: string;
+            /** Warehouse Id */
+            warehouse_id: number;
+        };
+        /** WarehouseCardResponse */
+        WarehouseCardResponse: {
+            /** Item Id */
+            item_id: number;
+            /** Items */
+            items: components["schemas"]["WarehouseCardRow"][];
+            /** Opening Qty */
+            opening_qty: string;
+            /** Total */
+            total: number;
+            /** Warehouse Id */
+            warehouse_id: number;
+        };
+        /**
+         * WarehouseCardRow
+         * @description Một dòng THẺ KHO: dòng sổ kho + tồn lũy kế sau dòng ấy (FR-WHK-014).
+         *
+         *     Thẻ kho là sổ của MỘT mã hàng ở MỘT kho, nên tồn lũy kế có nghĩa; sổ kho
+         *     gộp nhiều mã thì không (cộng số lượng khác mã là cộng táo với cam).
+         */
+        WarehouseCardRow: {
+            /**
+             * Book Date
+             * Format: date
+             */
+            book_date: string;
+            /** Branch Id */
+            branch_id: number;
+            /** Id */
+            id: number;
+            /** In Qty */
+            in_qty: string;
+            /** Item Id */
+            item_id: number;
+            /** Lot Id */
+            lot_id: number | null;
+            /** Out Qty */
+            out_qty: string;
+            /**
+             * Posted At
+             * Format: date-time
+             */
+            posted_at: string;
+            /** Posted By */
+            posted_by: number;
+            /** Running Qty */
+            running_qty: string;
+            /**
+             * Voucher Id
+             * Format: uuid
+             */
+            voucher_id: string;
+            /** Warehouse Id */
+            warehouse_id: number;
         };
         /**
          * WarehousesCreateRequest
@@ -20871,6 +21489,39 @@ export interface operations {
             };
         };
     };
+    read_availability_api_v1_inventory_availability_get: {
+        parameters: {
+            query: {
+                as_of: string;
+                warehouse_id?: number | null;
+                item_ids?: number[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailabilityResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     read_costing_affected_api_v1_inventory_costing_affected_get: {
         parameters: {
             query?: {
@@ -20921,6 +21572,233 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UncostedVouchersResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_count_sheets_api_v1_inventory_count_sheets_get: {
+        parameters: {
+            query?: {
+                warehouse_id?: number | null;
+                from_date?: string | null;
+                to_date?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCountSheetListResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_count_sheet_api_v1_inventory_count_sheets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryCountSheetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCountSheetOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_count_sheet_api_v1_inventory_count_sheets__sheet_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sheet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCountSheetOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_count_sheet_api_v1_inventory_count_sheets__sheet_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sheet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    apply_differences_api_v1_inventory_count_sheets__sheet_id__actions_apply_differences_post: {
+        parameters: {
+            query?: {
+                acknowledged_warnings?: boolean;
+            };
+            header?: never;
+            path: {
+                sheet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCountSheetAdjustmentResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    set_counts_api_v1_inventory_count_sheets__sheet_id__counts_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sheet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryCountSheetCountsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCountSheetOut"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_differences_api_v1_inventory_count_sheets__sheet_id__differences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sheet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCountSheetDifferencesResponse"];
                 };
             };
             /** @description Lỗi (RFC 7807) */
@@ -32581,6 +33459,140 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    warehouse_book_api_v1_warehouse_keeper_book_get: {
+        parameters: {
+            query?: {
+                warehouse_id?: number | null;
+                item_id?: number | null;
+                from_date?: string | null;
+                to_date?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehouseBookResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    warehouse_card_api_v1_warehouse_keeper_card_get: {
+        parameters: {
+            query: {
+                warehouse_id: number;
+                item_id: number;
+                from_date?: string | null;
+                to_date?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehouseCardResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    keeper_queue_api_v1_warehouse_keeper_queue_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeeperQueueResponse"];
+                };
+            };
+            /** @description Lỗi (RFC 7807) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    book_queue_vouchers_api_v1_warehouse_keeper_queue_actions_book_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeeperBookRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeeperBookResponse"];
+                };
             };
             /** @description Lỗi (RFC 7807) */
             default: {

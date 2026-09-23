@@ -70,7 +70,10 @@ INVENTORY_ACCOUNT_NO_MOVEMENT_CODE = "inventory.account_without_movement"
 _ZERO = Decimal(0)
 _ONE = Decimal(1)
 
-StockKey = tuple[int, int, int]
+StockKey = tuple[int, int, int, bool]
+"""`(kho, vật tư, khóa lô, hàng giữ hộ)` — hàng của mình và hàng nhận giữ hộ
+đếm **riêng** (BR-STK-07): xuất hàng giữ hộ nhiều hơn số đã nhận là lỗi thật,
+và nó không được bù bằng hàng cùng mã của đơn vị."""
 """`(warehouse_id, item_id, lot_key)` — chi nhánh là của chứng từ."""
 
 
@@ -115,10 +118,13 @@ def _outgoing_quantities(session: Session, voucher: Voucher) -> dict[StockKey, D
     factors = _factors_for(session, sorted({line.item_id for line in planned.lines}))
     for line in planned.lines:
         factor = factors.get((line.item_id, line.unit_id), _ONE)
+        # Hóa đơn mua/bán không bao giờ động tới hàng giữ hộ — nó là giao dịch
+        # sở hữu, còn giữ hộ thì không đổi chủ.
         key = (
             line.warehouse_id,
             line.item_id,
             lot_key_of(_lot_id(session, line.item_id, line.lot_no)),
+            False,
         )
         quantities[key] = quantities.get(key, _ZERO) + line.quantity * factor
     return quantities
@@ -138,7 +144,7 @@ class StockNegativeGuard:
             return ()
         blocking = level == WARNING_LEVEL_BLOCK
         findings: list[GuardFinding] = []
-        for (warehouse_id, item_id, lot_key), quantity in sorted(outgoing.items()):
+        for (warehouse_id, item_id, lot_key, is_custodial), quantity in sorted(outgoing.items()):
             floor = stock_floor_from(
                 session,
                 branch_id=voucher.branch_id,
@@ -146,6 +152,7 @@ class StockNegativeGuard:
                 item_id=item_id,
                 lot_key=lot_key,
                 from_date=voucher.posting_date,
+                is_custodial=is_custodial,
             )
             projected = floor - quantity
             if projected >= 0:
@@ -158,6 +165,7 @@ class StockNegativeGuard:
                         warehouse_id=warehouse_id,
                         item_id=item_id,
                         lot_key=lot_key,
+                        is_custodial=is_custodial,
                         projected=str(projected),
                     ),
                     blocking=blocking,
@@ -193,9 +201,11 @@ class StockBelowMinGuard:
             return ()
         # Ngưỡng khai theo mã hàng, tồn soi theo (kho, mã hàng) gộp mọi lô:
         # "tồn tối thiểu" là tồn của mã hàng ở kho, không phải của một lô.
+        # Ngưỡng tồn tối thiểu nói về hàng của đơn vị: đơn vị không đặt mua thêm
+        # hàng đang giữ hộ cho người khác.
         per_item_warehouse: dict[tuple[int, int], Decimal] = {}
-        for (warehouse_id, item_id, _lot_key), quantity in outgoing.items():
-            if item_id in thresholds:
+        for (warehouse_id, item_id, _lot_key, is_custodial), quantity in outgoing.items():
+            if item_id in thresholds and not is_custodial:
                 key = (warehouse_id, item_id)
                 per_item_warehouse[key] = per_item_warehouse.get(key, _ZERO) + quantity
         blocking = level == WARNING_LEVEL_BLOCK
@@ -371,7 +381,7 @@ def _outgoing_of_inventory_voucher(session: Session, voucher: Voucher) -> dict[S
         warehouse_id = (
             body.warehouse_id if body.kind == InventoryVoucherKind.TRANSFER else line.warehouse_id
         )
-        key = (warehouse_id, line.item_id, lot_key_of(line.lot_id))
+        key = (warehouse_id, line.item_id, lot_key_of(line.lot_id), line.is_custodial)
         quantities[key] = quantities.get(key, _ZERO) + line.base_quantity
     return quantities
 

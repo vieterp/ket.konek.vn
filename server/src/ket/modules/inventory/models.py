@@ -158,6 +158,13 @@ class CostState:
     STALE = 2
     """Cần tính lại — chèn chứng từ lùi ngày hoặc đổi thứ tự trong ngày."""
 
+    NOT_APPLICABLE = 3
+    """Hàng nhận giữ hộ / bán hộ (`is_custodial`, BR-STK-07, lát 8D): không phải
+    tài sản của đơn vị nên không có giá vốn để tính, và không bao giờ có. Khác
+    `PENDING` ở chỗ nó là trạng thái **cuối**: engine đã loại trừ `is_custodial`
+    ở mọi câu SQL từ 8B, còn `lock_check` phải coi nó là đã chốt — nếu không,
+    một phiếu giữ hộ chặn khóa sổ vĩnh viễn."""
+
 
 class InventoryVoucher(DatasetBase, Audited):
     """Phần thân phiếu kho — một-một với header `vouchers`."""
@@ -342,6 +349,15 @@ class InventoryVoucherLine(DatasetBase, Audited):
     expense_item_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     extended_dimensions: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
 
+    is_custodial: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    """Dòng hàng nhận giữ hộ / bán hộ / nhận gia công (BR-STK-07, SRS 09 §2.1
+    #7–#8, lát 8D) — theo dõi số lượng, **không** vào giá trị tồn và không sinh
+    bút toán: service từ chối cặp TK trên dòng này, movement sinh ra mang
+    `cost_state = NOT_APPLICABLE`, engine và `inventory_balances`/`stock_layers`
+    bỏ qua. Một phiếu trộn được dòng của mình và dòng giữ hộ (kiểm kê sinh đúng
+    phiếu như thế)."""
     is_product: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
@@ -424,14 +440,24 @@ class InventoryMovement(DatasetBase):
         CheckConstraint("quantity > 0", name="quantity_positive"),
         CheckConstraint("sequence_in_day > 0", name="sequence_positive"),
         CheckConstraint(
-            f"cost_state BETWEEN {CostState.PENDING} AND {CostState.STALE}", name="cost_state_known"
+            f"cost_state BETWEEN {CostState.PENDING} AND {CostState.NOT_APPLICABLE}",
+            name="cost_state_known",
         ),
         # Chưa tính thì giá là NULL; đã tính (kể cả đã cũ — `STALE` giữ giá cũ
         # cho tới khi engine chạy lại) thì phải có giá. Không có "chưa tính mà
-        # có giá" lẫn "đã tính mà giá trống".
+        # có giá" lẫn "đã tính mà giá trống". `NOT_APPLICABLE` (hàng giữ hộ, 8D)
+        # đứng cùng vế NULL với `PENDING`: nó cũng không có giá, khác ở chỗ sẽ
+        # không bao giờ có.
         CheckConstraint(
-            f"(cost_state = {CostState.PENDING}) = (unit_cost IS NULL)",
+            f"(cost_state IN ({CostState.PENDING}, {CostState.NOT_APPLICABLE})) "
+            "= (unit_cost IS NULL)",
             name="costed_has_unit_cost",
+        ),
+        # Hàng giữ hộ không có giá, và chiều ngược lại cũng đúng: một dòng giữ
+        # hộ mang `cost_state` khác là một dòng engine sẽ nhặt lên tính.
+        CheckConstraint(
+            f"NOT is_custodial OR cost_state = {CostState.NOT_APPLICABLE}",
+            name="custodial_has_no_cost",
         ),
         CheckConstraint("(unit_cost IS NULL) = (amount IS NULL)", name="cost_pair_complete"),
         # Một movement hoặc thuộc một dòng phiếu (cả `voucher_id` lẫn `line_id`),
@@ -476,8 +502,9 @@ class InventoryMovement(DatasetBase):
             "ix_inventory_movements_needs_cost",
             "cost_state",
             # Chuỗi tĩnh (không f-string) theo cổng `test_no_sql_string_interpolation`;
-            # `1` = `CostState.COSTED`, cùng lối viết số trần có chú thích của migration.
-            postgresql_where=text("cost_state <> 1"),
+            # `1` = `CostState.COSTED`, `3` = `NOT_APPLICABLE` (giữ hộ — không
+            # bao giờ cần tính), cùng lối viết số trần có chú thích của migration.
+            postgresql_where=text("cost_state NOT IN (1, 3)"),
         ),
     )
 
@@ -754,3 +781,113 @@ class InventoryRecalcMark(DatasetBase):
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
     reason: Mapped[str | None] = mapped_column(String(REASON_MAX_LENGTH), nullable=True)
+
+
+COUNT_SHEET_DOCUMENT_TYPE: Final[str] = "KKK"
+"""Biên bản kiểm kê kho — loại "chứng từ" của bộ đánh số (`numbering`); nó
+không ghi sổ nên không có trong `POSTING_DOCUMENT_REGISTRY`."""
+
+NOTE_MAX_LENGTH = 500
+
+
+class InventoryCountSheet(DatasetBase, Audited):
+    """Biên bản kiểm kê kho (FR-STK-030/031, U8, lát 8D) — khuôn
+    `cash_count_sheets`: chụp số sổ tại một thời điểm, nhận số đếm thật, và khi
+    duyệt thì **tự** sinh phiếu xử lý chênh lệch.
+
+    `book_qty` của từng dòng là **ảnh chụp**: tồn sổ sách đổi theo mọi chứng từ
+    ghi thêm, còn biên bản là chứng cứ của MỘT thời điểm — tính lại sau này ra
+    số khác là đúng, và chính vì thế phải chụp.
+
+    Không có cột trạng thái: "đã xử lý" = đã có phiếu điều chỉnh (một trong hai
+    cột dưới khác NULL), đúng lối `cash_count_sheets.adjustment_voucher_id`.
+    Hai cột vì một biên bản có thể vừa thừa vừa thiếu ở hai mã hàng khác nhau,
+    và thừa đi phiếu nhập còn thiếu đi phiếu xuất.
+    """
+
+    __tablename__ = "inventory_count_sheets"
+    __table_args__ = (
+        Index("ix_inventory_count_sheets_warehouse_date", "warehouse_id", "count_date"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
+    branch_id: Mapped[int] = mapped_column(
+        ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False
+    )
+    warehouse_id: Mapped[int] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False
+    )
+    sheet_no: Mapped[str] = mapped_column(String(50), nullable=False)
+    count_date: Mapped[date] = mapped_column(Date, nullable=False)
+    note: Mapped[str | None] = mapped_column(String(NOTE_MAX_LENGTH), nullable=True)
+
+    adjustment_receipt_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True
+    )
+    """Phiếu nhập xử lý phần **thừa**. `SET NULL` khi phiếu bị xóa lúc còn
+    nháp — biên bản quay về "chưa xử lý" và sinh lại được."""
+    adjustment_issue_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True
+    )
+    """Phiếu xuất xử lý phần **thiếu**."""
+
+    created_by: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+
+class InventoryCountSheetLine(DatasetBase, Audited):
+    """Một dòng đếm: khóa tồn kho + số sổ đã chụp + số đếm thật.
+
+    Khóa duy nhất có `is_custodial` vì cùng một (kho, mã hàng, lô) có thể vừa
+    có hàng của mình vừa có hàng nhận giữ hộ, và thủ kho đếm chúng thành hai
+    con số (quyết định user 2026-09-23) — chênh lệch của hai loại đi vào hai
+    kiểu dòng phiếu khác nhau: có định khoản và không.
+    """
+
+    __tablename__ = "inventory_count_sheet_lines"
+    __table_args__ = (
+        # KHÔNG ràng buộc `book_qty >= 0`: tồn âm trên sổ là một lỗi khác (guard
+        # FR-STK-040 mặc định chỉ CẢNH BÁO, nên khóa tồn âm tới được đây), và
+        # biên bản phải chụp NGUYÊN con số ấy — nắn về 0 là để chênh lệch nói
+        # dối, còn cấm hẳn là làm cả tính năng kiểm kê 500 trên đúng cái kho
+        # cần kiểm nhất. Số đếm thật thì không âm được: người ta đếm trên kệ.
+        CheckConstraint("counted_qty IS NULL OR counted_qty >= 0", name="counted_qty_not_negative"),
+        CheckConstraint("unit_cost IS NULL OR unit_cost >= 0", name="unit_cost_not_negative"),
+        CheckConstraint("NOT is_custodial OR unit_cost IS NULL", name="custodial_line_has_no_cost"),
+        UniqueConstraint(
+            "sheet_id", "item_id", "lot_key", "is_custodial", name="uq_inventory_count_sheet_key"
+        ),
+        Index("ix_inventory_count_sheet_lines_sheet", "sheet_id", "line_no"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid7)
+    sheet_id: Mapped[UUID] = mapped_column(
+        ForeignKey("inventory_count_sheets.id", ondelete="CASCADE"), nullable=False
+    )
+    line_no: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("items.id", ondelete="RESTRICT"), nullable=False
+    )
+    lot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("lots.id", ondelete="RESTRICT"), nullable=True
+    )
+    lot_key: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    is_custodial: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    book_qty: Mapped[Decimal] = mapped_column(
+        Numeric(QUANTITY_PRECISION, QUANTITY_SCALE), nullable=False
+    )
+    counted_qty: Mapped[Decimal | None] = mapped_column(
+        Numeric(QUANTITY_PRECISION, QUANTITY_SCALE), nullable=True
+    )
+    """NULL = chưa đếm tới dòng này; chỉ dòng đã đếm mới vào danh sách chênh lệch."""
+    unit_cost: Mapped[Decimal | None] = mapped_column(
+        Numeric(UNIT_COST_PRECISION, UNIT_COST_SCALE), nullable=True
+    )
+    """Đơn giá cho phần **thừa** (phiếu nhập bắt buộc có giá). Điền sẵn bằng
+    bình quân hiện hành tại `count_date` lúc lập biên bản, sửa được; khóa chưa
+    có cơ sở giá thì để trống và lượt duyệt báo đích danh mã hàng."""
+    note: Mapped[str | None] = mapped_column(String(NOTE_MAX_LENGTH), nullable=True)

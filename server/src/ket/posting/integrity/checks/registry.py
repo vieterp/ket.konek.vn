@@ -33,6 +33,15 @@ ghi đủ hai nguyên nhân và điều kiện đăng ký lại.
 Chiều ngược lại xảy ra cùng lát: `arap_matches_control.sql` đứng ngoài registry
 suốt năm lát (7A → 7C-4) rồi **vào** ở 7C-5, sau khi chín điều kiện đóng hết.
 
+Lát 8D viết hai check kho và đăng ký **một**. `warehouse_book_matches_inventory`
+vào registry: nó chỉ bắt trạng thái không-bao-giờ-hợp-lệ và để chênh lệch nghiệp
+vụ "chờ thủ kho" cho báo cáo 8F. `inventory_value_matches_ledger` thì **không** —
+nó là tệp `.sql` thứ ba đứng ngoài `CHECKS`, và đầu tệp ghi đủ ba điều kiện phải
+đóng. Lý do giống hệt `opening_detail_matches_control`: bút toán TK kho của chiều
+MUA nằm trên hóa đơn còn dòng sổ kho nằm trên phiếu kho sinh ra, nên phép loại
+trừ "bỏ chứng từ chưa tính giá" chỉ cắt được một vế (quyết định user 2026-09-23,
+sau review thù địch tìm ra ba luồng đúng mà nó kêu).
+
 Một luật cho cả hai chiều, và cho mọi check sau: **viết tệp trước, đăng ký sau,
 và chỉ đăng ký khi nó xanh trên dữ liệu đúng** — một check kêu sai dạy người
 dùng bỏ qua mọi check còn lại. Luật ấy có hiệu lực **cả sau khi đã đăng ký**:
@@ -110,6 +119,11 @@ CHECKS: Final[tuple[IntegrityCheck, ...]] = (
         code="arap_matches_control",
         title="Sổ phụ công nợ khớp số dư tài khoản công nợ trên sổ cái",
         rule="BR-GLE-05",
+    ),
+    IntegrityCheck(
+        code="warehouse_book_matches_inventory",
+        title="Sổ kho thủ kho khớp sổ kế toán kho về số lượng",
+        rule="BR-STK-02",
     ),
 )
 

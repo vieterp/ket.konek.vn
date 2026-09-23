@@ -123,6 +123,23 @@ class PostingDocumentRegistry:
     def codes(self) -> tuple[str, ...]:
         return tuple(sorted(self._types))
 
+    def codes_of_module(self, permission_module: str) -> tuple[str, ...]:
+        """Mã loại chứng từ mà một module nghiệp vụ làm chủ.
+
+        Để một module hỏi "chứng từ này đã sinh ra phiếu của phân hệ kia chưa"
+        mà **không** import phân hệ kia (luật phụ thuộc #1): registry là dữ liệu
+        chung của tầng `posting`, còn danh sách mã cứng trong code bên hỏi là
+        một bản sao sẽ lệch. Module chưa được nạp thì trả rỗng — đúng nghĩa
+        "phân hệ ấy không có trong bản cài này".
+        """
+        return tuple(
+            sorted(
+                code
+                for code, document in self._types.items()
+                if document.permission_module == permission_module
+            )
+        )
+
 
 VoucherReferenceGuard = Callable[[Session, UUID], None]
 """`(session, voucher_id)` — "chứng từ này còn bị ai đó tham chiếu không".

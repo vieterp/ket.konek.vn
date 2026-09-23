@@ -722,6 +722,93 @@
         "title": "AutoPostingOperationsResponse",
         "type": "object"
       },
+      "AvailabilityResponse": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "has_commitment_source": {
+            "title": "Has Commitment Source",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityRow"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "has_commitment_source",
+          "items"
+        ],
+        "title": "AvailabilityResponse",
+        "type": "object"
+      },
+      "AvailabilityRow": {
+        "description": "Một dòng \"Có thể bán\" (U7) theo khóa `(kho, vật tư, lô)`.",
+        "properties": {
+          "available_to_promise": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Available To Promise",
+            "type": "string"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "committed": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Committed",
+            "type": "string"
+          },
+          "custodial_qty": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Custodial Qty",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "on_hand": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "On Hand",
+            "type": "string"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "branch_id",
+          "warehouse_id",
+          "item_id",
+          "lot_id",
+          "on_hand",
+          "committed",
+          "available_to_promise"
+        ],
+        "title": "AvailabilityRow",
+        "type": "object"
+      },
       "BankAccountCard": {
         "description": "Thẻ một tài khoản ngân hàng doanh nghiệp.\n\n`balance_fc` là số dư NGUYÊN TỆ của chính tài khoản đó (FR-BNK-041 đòi hiện\nđồng thời hai trục); `balance` là số quy đổi để cộng chung một hàng thẻ.",
         "properties": {
@@ -9359,6 +9446,542 @@
         "title": "InboundPurchaseIn",
         "type": "object"
       },
+      "InventoryCountSheetAdjustmentResponse": {
+        "description": "Kết quả duyệt: tối đa hai phiếu **nháp** (thừa → NK, thiếu → XK).",
+        "properties": {
+          "issue_voucher_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Voucher Id"
+          },
+          "receipt_voucher_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Voucher Id"
+          },
+          "sheet_id": {
+            "format": "uuid",
+            "title": "Sheet Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sheet_id",
+          "receipt_voucher_id",
+          "issue_voucher_id"
+        ],
+        "title": "InventoryCountSheetAdjustmentResponse",
+        "type": "object"
+      },
+      "InventoryCountSheetCountsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryCountSheetLineCount"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines"
+        ],
+        "title": "InventoryCountSheetCountsIn",
+        "type": "object"
+      },
+      "InventoryCountSheetDifference": {
+        "description": "Một dòng lệch — U8 chỉ hiện những dòng này, không hiện dòng khớp.",
+        "properties": {
+          "book_qty": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Book Qty",
+            "type": "string"
+          },
+          "counted_qty": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Counted Qty",
+            "type": "string"
+          },
+          "difference": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Difference",
+            "type": "string"
+          },
+          "is_custodial": {
+            "title": "Is Custodial",
+            "type": "boolean"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          }
+        },
+        "required": [
+          "line_no",
+          "item_id",
+          "lot_id",
+          "is_custodial",
+          "book_qty",
+          "counted_qty",
+          "difference",
+          "unit_cost"
+        ],
+        "title": "InventoryCountSheetDifference",
+        "type": "object"
+      },
+      "InventoryCountSheetDifferencesResponse": {
+        "properties": {
+          "count_date": {
+            "format": "date",
+            "title": "Count Date",
+            "type": "string"
+          },
+          "differences": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryCountSheetDifference"
+            },
+            "title": "Differences",
+            "type": "array"
+          },
+          "sheet_id": {
+            "format": "uuid",
+            "title": "Sheet Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sheet_id",
+          "count_date",
+          "differences"
+        ],
+        "title": "InventoryCountSheetDifferencesResponse",
+        "type": "object"
+      },
+      "InventoryCountSheetIn": {
+        "additionalProperties": false,
+        "description": "Lập biên bản kiểm kê kho (FR-STK-030): chọn kho + ngày, hệ thống tự chụp\nsố sổ cho phạm vi mã hàng.",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "count_date": {
+            "format": "date",
+            "title": "Count Date",
+            "type": "string"
+          },
+          "item_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Item Ids",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "branch_id",
+          "warehouse_id",
+          "count_date"
+        ],
+        "title": "InventoryCountSheetIn",
+        "type": "object"
+      },
+      "InventoryCountSheetLineCount": {
+        "additionalProperties": false,
+        "description": "Số đếm thật của một dòng — client gửi lại theo `line_no` đã cấp.",
+        "properties": {
+          "counted_qty": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Counted Qty"
+          },
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,19}0*$)\\d{0,12}\\.\\d{0,6}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          }
+        },
+        "required": [
+          "line_no",
+          "counted_qty"
+        ],
+        "title": "InventoryCountSheetLineCount",
+        "type": "object"
+      },
+      "InventoryCountSheetLineOut": {
+        "properties": {
+          "book_qty": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Book Qty",
+            "type": "string"
+          },
+          "counted_qty": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counted Qty"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_custodial": {
+            "title": "Is Custodial",
+            "type": "boolean"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          }
+        },
+        "required": [
+          "id",
+          "line_no",
+          "item_id",
+          "lot_id",
+          "is_custodial",
+          "book_qty",
+          "counted_qty",
+          "unit_cost",
+          "note"
+        ],
+        "title": "InventoryCountSheetLineOut",
+        "type": "object"
+      },
+      "InventoryCountSheetListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryCountSheetListRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "InventoryCountSheetListResponse",
+        "type": "object"
+      },
+      "InventoryCountSheetListRow": {
+        "description": "Một dòng danh sách — **không** mang dòng đếm.\n\nBiên bản của một kho 5.000 mã hàng có 5.000 dòng; nhét chúng vào mỗi phần\ntử của một trang 50 biên bản là một phản hồi hàng trăm nghìn đối tượng cho\nmột màn hình chỉ vẽ ngày, số hiệu và trạng thái. Dòng đếm đọc qua\n`GET /inventory/count-sheets/{id}`.",
+        "properties": {
+          "adjustment_issue_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Issue Id"
+          },
+          "adjustment_receipt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Receipt Id"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "count_date": {
+            "format": "date",
+            "title": "Count Date",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lines": {
+            "default": [],
+            "maxItems": 0,
+            "minItems": 0,
+            "title": "Lines",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "sheet_no": {
+            "title": "Sheet No",
+            "type": "string"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "branch_id",
+          "warehouse_id",
+          "sheet_no",
+          "count_date",
+          "note",
+          "adjustment_receipt_id",
+          "adjustment_issue_id"
+        ],
+        "title": "InventoryCountSheetListRow",
+        "type": "object"
+      },
+      "InventoryCountSheetOut": {
+        "properties": {
+          "adjustment_issue_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Issue Id"
+          },
+          "adjustment_receipt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Receipt Id"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "count_date": {
+            "format": "date",
+            "title": "Count Date",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InventoryCountSheetLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "sheet_no": {
+            "title": "Sheet No",
+            "type": "string"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "branch_id",
+          "warehouse_id",
+          "sheet_no",
+          "count_date",
+          "note",
+          "adjustment_receipt_id",
+          "adjustment_issue_id"
+        ],
+        "title": "InventoryCountSheetOut",
+        "type": "object"
+      },
       "InventoryVoucherIn": {
         "additionalProperties": false,
         "description": "Thân phiếu kho cho cả tạo mới lẫn sửa (PUT gửi trọn bộ thay thế).",
@@ -9600,6 +10223,11 @@
             },
             "title": "Extended",
             "type": "array"
+          },
+          "is_custodial": {
+            "default": false,
+            "title": "Is Custodial",
+            "type": "boolean"
           },
           "is_product": {
             "default": false,
@@ -9856,6 +10484,11 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "is_custodial": {
+            "default": false,
+            "title": "Is Custodial",
+            "type": "boolean"
           },
           "is_product": {
             "default": false,
@@ -13220,6 +13853,155 @@
         "type": "object"
       },
       "JsonValue": {},
+      "KeeperBookRequest": {
+        "additionalProperties": false,
+        "description": "Ghi sổ kho hàng loạt (FR-WHK-012): theo ngày hạch toán từng phiếu, hoặc\nmột ngày tùy chọn áp cho cả lô (kiểm với TỪNG phiếu).",
+        "properties": {
+          "book_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Date"
+          },
+          "book_date_mode": {
+            "default": "posting_date",
+            "enum": [
+              "posting_date",
+              "custom"
+            ],
+            "title": "Book Date Mode",
+            "type": "string"
+          },
+          "voucher_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Voucher Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "voucher_ids"
+        ],
+        "title": "KeeperBookRequest",
+        "type": "object"
+      },
+      "KeeperBookResponse": {
+        "description": "Cả lô là MỘT transaction nên \"đã ghi N dòng sổ kho\" là toàn bộ thông\ntin; chi tiết nằm ở sổ kho (client tải lại hàng đợi + sổ sau thao tác).",
+        "properties": {
+          "booked_rows": {
+            "title": "Booked Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "booked_rows"
+        ],
+        "title": "KeeperBookResponse",
+        "type": "object"
+      },
+      "KeeperQueueItem": {
+        "description": "Một phiếu kho chờ thủ kho ghi sổ kho (FR-WHK-010/011).",
+        "properties": {
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "delivered_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivered By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "posting_date": {
+            "format": "date",
+            "title": "Posting Date",
+            "type": "string"
+          },
+          "to_warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Warehouse Id"
+          },
+          "voucher_id": {
+            "format": "uuid",
+            "title": "Voucher Id",
+            "type": "string"
+          },
+          "voucher_no": {
+            "title": "Voucher No",
+            "type": "string"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "voucher_id",
+          "voucher_no",
+          "document_type",
+          "branch_id",
+          "posting_date",
+          "warehouse_id",
+          "to_warehouse_id",
+          "delivered_by",
+          "description"
+        ],
+        "title": "KeeperQueueItem",
+        "type": "object"
+      },
+      "KeeperQueueResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/KeeperQueueItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "KeeperQueueResponse",
+        "type": "object"
+      },
       "LandedCostIn": {
         "additionalProperties": false,
         "description": "Một khoản chi phí mua hàng (vận chuyển, bốc xếp, thuế nhập khẩu…).\n\n`credit_account_id` do người dùng chọn: 331 khi nợ một nhà cung cấp dịch\nvụ (kèm `vendor_id`), 3333/3332 khi là thuế nhập khẩu/TTĐB, 111 khi đã chi\ntiền — mỗi loại một TK, không đoán theo gói cấu hình.",
@@ -22833,6 +23615,12 @@
             "title": "Branch Id",
             "type": "integer"
           },
+          "custodial_qty": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Custodial Qty",
+            "type": "string"
+          },
           "item_id": {
             "title": "Item Id",
             "type": "integer"
@@ -24424,6 +25212,222 @@
         "title": "VoucherResponse",
         "type": "object"
       },
+      "WarehouseBookResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WarehouseBookRowOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "WarehouseBookResponse",
+        "type": "object"
+      },
+      "WarehouseBookRowOut": {
+        "description": "Một dòng sổ kho (FR-WHK-014) — số lượng, không giá trị.",
+        "properties": {
+          "book_date": {
+            "format": "date",
+            "title": "Book Date",
+            "type": "string"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "in_qty": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "In Qty",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "out_qty": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Out Qty",
+            "type": "string"
+          },
+          "posted_at": {
+            "format": "date-time",
+            "title": "Posted At",
+            "type": "string"
+          },
+          "posted_by": {
+            "title": "Posted By",
+            "type": "integer"
+          },
+          "voucher_id": {
+            "format": "uuid",
+            "title": "Voucher Id",
+            "type": "string"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "branch_id",
+          "warehouse_id",
+          "item_id",
+          "lot_id",
+          "book_date",
+          "voucher_id",
+          "in_qty",
+          "out_qty",
+          "posted_by",
+          "posted_at"
+        ],
+        "title": "WarehouseBookRowOut",
+        "type": "object"
+      },
+      "WarehouseCardResponse": {
+        "properties": {
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WarehouseCardRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "opening_qty": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Opening Qty",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "warehouse_id",
+          "item_id",
+          "opening_qty",
+          "items",
+          "total"
+        ],
+        "title": "WarehouseCardResponse",
+        "type": "object"
+      },
+      "WarehouseCardRow": {
+        "description": "Một dòng THẺ KHO: dòng sổ kho + tồn lũy kế sau dòng ấy (FR-WHK-014).\n\nThẻ kho là sổ của MỘT mã hàng ở MỘT kho, nên tồn lũy kế có nghĩa; sổ kho\ngộp nhiều mã thì không (cộng số lượng khác mã là cộng táo với cam).",
+        "properties": {
+          "book_date": {
+            "format": "date",
+            "title": "Book Date",
+            "type": "string"
+          },
+          "branch_id": {
+            "title": "Branch Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "in_qty": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "In Qty",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "out_qty": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Out Qty",
+            "type": "string"
+          },
+          "posted_at": {
+            "format": "date-time",
+            "title": "Posted At",
+            "type": "string"
+          },
+          "posted_by": {
+            "title": "Posted By",
+            "type": "integer"
+          },
+          "running_qty": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Running Qty",
+            "type": "string"
+          },
+          "voucher_id": {
+            "format": "uuid",
+            "title": "Voucher Id",
+            "type": "string"
+          },
+          "warehouse_id": {
+            "title": "Warehouse Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "branch_id",
+          "warehouse_id",
+          "item_id",
+          "lot_id",
+          "book_date",
+          "voucher_id",
+          "in_qty",
+          "out_qty",
+          "posted_by",
+          "posted_at",
+          "running_qty"
+        ],
+        "title": "WarehouseCardRow",
+        "type": "object"
+      },
       "WarehousesCreateRequest": {
         "additionalProperties": false,
         "description": "Kho — tạo mới.",
@@ -24650,7 +25654,7 @@
   },
   "info": {
     "title": "Konek Két — App Server",
-    "version": "0.51.0"
+    "version": "0.52.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -29126,6 +30130,79 @@
         ]
       }
     },
+    "/api/v1/inventory/availability": {
+      "get": {
+        "description": "Cột **\"Có thể bán\"** (U7) = tồn − đã hứa giao, cho chi nhánh **đang thao\ntác**: cam kết là số của một chi nhánh, và cộng cam kết của nhiều chi nhánh\nvào tồn của một kho là một con số không ai dùng được.\n\nQuyền `inventory.issue.view` — người sắp xuất hàng là người hỏi câu này.",
+        "operationId": "read_availability_api_v1_inventory_availability_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "As Of",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "warehouse_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Warehouse Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "item_ids",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "integer"
+              },
+              "title": "Item Ids",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailabilityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Read Availability",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
     "/api/v1/inventory/costing/affected": {
       "get": {
         "description": "FR-STK-003: xem trước chứng từ bị tính lại giá xuất kho — và kỳ đã khóa\nbị chạm (RT-11) — cho chi nhánh **đang thao tác**, đúng phạm vi mà job\n`inventory.costing.recalc` sẽ chạy (xem `routers/jobs.py`). `from_date` =\nxem trước lượt ép tính lại từ ngày đó.",
@@ -29240,6 +30317,381 @@
           }
         },
         "summary": "Read Costing Uncosted",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/count-sheets": {
+      "get": {
+        "operationId": "list_count_sheets_api_v1_inventory_count_sheets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "warehouse_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Warehouse Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryCountSheetListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "List Count Sheets",
+        "tags": [
+          "inventory"
+        ]
+      },
+      "post": {
+        "description": "Lập biên bản kiểm kê kho (FR-STK-030) — chụp tồn sổ sách tại ngày kiểm kê.",
+        "operationId": "create_count_sheet_api_v1_inventory_count_sheets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryCountSheetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryCountSheetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Create Count Sheet",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/count-sheets/{sheet_id}": {
+      "delete": {
+        "operationId": "delete_count_sheet_api_v1_inventory_count_sheets__sheet_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Delete Count Sheet",
+        "tags": [
+          "inventory"
+        ]
+      },
+      "get": {
+        "operationId": "get_count_sheet_api_v1_inventory_count_sheets__sheet_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryCountSheetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Get Count Sheet",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/count-sheets/{sheet_id}/actions/apply-differences": {
+      "post": {
+        "description": "Duyệt biên bản (FR-STK-031): tự sinh phiếu nhập (thừa) / phiếu xuất\n(thiếu) đã định khoản sẵn, ở trạng thái **nháp** — kế toán xem rồi ghi sổ.",
+        "operationId": "apply_differences_api_v1_inventory_count_sheets__sheet_id__actions_apply_differences_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "acknowledged_warnings",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Acknowledged Warnings",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryCountSheetAdjustmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Apply Differences",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/count-sheets/{sheet_id}/counts": {
+      "put": {
+        "description": "Nhập / sửa số đếm thật (FR-STK-030) — sửa được tới khi duyệt.",
+        "operationId": "set_counts_api_v1_inventory_count_sheets__sheet_id__counts_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryCountSheetCountsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryCountSheetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Set Counts",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/count-sheets/{sheet_id}/differences": {
+      "get": {
+        "description": "U8: **chỉ** dòng đã đếm và lệch — dòng khớp không hiện.",
+        "operationId": "read_differences_api_v1_inventory_count_sheets__sheet_id__differences_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sheet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryCountSheetDifferencesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Read Differences",
         "tags": [
           "inventory"
         ]
@@ -47515,6 +48967,312 @@
         "summary": "Print Voucher",
         "tags": [
           "printing"
+        ]
+      }
+    },
+    "/api/v1/warehouse-keeper/book": {
+      "get": {
+        "description": "Sổ kho của thủ kho (FR-WHK-014) — dòng theo ngày ghi sổ, có phân trang.",
+        "operationId": "warehouse_book_api_v1_warehouse_keeper_book_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "warehouse_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Warehouse Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "item_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarehouseBookResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Warehouse Book",
+        "tags": [
+          "warehouse-keeper"
+        ]
+      }
+    },
+    "/api/v1/warehouse-keeper/card": {
+      "get": {
+        "description": "Thẻ kho (FR-WHK-014): một mã hàng, một kho, kèm tồn lũy kế.\n\nTồn lũy kế cộng dồn từ `opening_qty` **trong trang đang xem** — cộng dồn\nphải bắt đầu từ một con số thật, nếu không trang 2 sẽ vẽ một đường tồn bắt\nđầu lại từ 0.",
+        "operationId": "warehouse_card_api_v1_warehouse_keeper_card_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "warehouse_id",
+            "required": true,
+            "schema": {
+              "title": "Warehouse Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarehouseCardResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Warehouse Card",
+        "tags": [
+          "warehouse-keeper"
+        ]
+      }
+    },
+    "/api/v1/warehouse-keeper/queue": {
+      "get": {
+        "description": "Phiếu kho đã ghi sổ kế toán, chờ thủ kho (FR-WHK-010) — RLS lọc chi nhánh.",
+        "operationId": "keeper_queue_api_v1_warehouse_keeper_queue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeeperQueueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Keeper Queue",
+        "tags": [
+          "warehouse-keeper"
+        ]
+      }
+    },
+    "/api/v1/warehouse-keeper/queue/actions/book": {
+      "post": {
+        "description": "Ghi sổ kho hàng loạt (FR-WHK-012) — cả lô một transaction, phiếu đầu tiên\nvi phạm (trạng thái, ngày ghi) làm cả lượt dừng có thông điệp nêu đích danh.",
+        "operationId": "book_queue_vouchers_api_v1_warehouse_keeper_queue_actions_book_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeeperBookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeeperBookResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Lỗi (RFC 7807)"
+          }
+        },
+        "summary": "Book Queue Vouchers",
+        "tags": [
+          "warehouse-keeper"
         ]
       }
     },

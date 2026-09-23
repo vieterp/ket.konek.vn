@@ -145,3 +145,15 @@ def _register_edit_guard() -> None:
 
 
 _register_edit_guard()
+
+
+def _register_commitment() -> None:
+    """Nguồn "đã hứa giao" cho cột Có thể bán (U7, lát 8D) — hóa đơn bán chưa
+    rời kho; module kho đọc qua Protocol nên không phải biết `sales` tồn tại."""
+    from ket.kernel.protocols import PROVIDERS
+    from ket.modules.sales.commitment import SalesCommitmentProvider
+
+    PROVIDERS.register_commitment(SalesCommitmentProvider())
+
+
+_register_commitment()

@@ -28,6 +28,7 @@ from inventory_support import (
     SECOND_WAREHOUSE_ID,
     UNIT_BOX_ID,
     UNIT_PIECE_ID,
+    enable_keeper,
     fresh_item,
     in_movement,
     movements_of,
@@ -731,3 +732,201 @@ def test_sales_line_names_the_specific_receipt_and_the_pending_tab_shows_uncoste
     listed = {row["voucher_id"] for row in groups["chua-tinh-gia"]["sample"]}
     assert str(waiting.id) in listed
     assert str(named.id) not in listed
+
+
+# ------------------------------------------------- lát 8D: HTTP của ba cửa mới
+
+
+@pytest.fixture(scope="module")
+def count_sheet_role(session_factory: sessionmaker[Session], dataset_alpha: DatasetRef) -> str:
+    return ensure_role(
+        session_factory,
+        dataset_alpha,
+        "kk_kho_8d",
+        [
+            *_inventory_codes(("receipt", "issue", "count_sheet")),
+            permission_code("keeper", "warehouse_book", Action.VIEW),
+            permission_code("keeper", "warehouse_book", Action.POST),
+        ],
+    )
+
+
+@pytest.fixture
+def count_sheet_headers(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+    user_factory: UserFactory,
+    test_password: str,
+    context: PostingContext,
+    count_sheet_role: str,
+) -> dict[str, str]:
+    return _headers(
+        client,
+        session_factory,
+        dataset_alpha,
+        user_factory,
+        test_password,
+        context,
+        count_sheet_role,
+        "kiem_ke",
+    )
+
+
+def test_availability_endpoint_reports_stock_minus_commitment(
+    client: TestClient,
+    keeper_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    created = _post_json(
+        client, keeper_headers, "/api/v1/inventory/receipts", _receipt_body(context, accounts)
+    )
+    assert created.status_code == 201, created.text
+    posted = _post_json(
+        client, keeper_headers, f"/api/v1/vouchers/{created.json()['id']}/actions/post"
+    )
+    assert posted.status_code == 200, posted.text
+
+    response = client.get(
+        "/api/v1/inventory/availability",
+        params={"as_of": SEP_30.isoformat(), "item_ids": [GOODS_ITEM_ID]},
+        headers=keeper_headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["has_commitment_source"] is True
+    row = next(item for item in body["items"] if item["item_id"] == GOODS_ITEM_ID)
+    assert Decimal(row["available_to_promise"]) == Decimal(row["on_hand"]) - Decimal(
+        row["committed"]
+    )
+
+
+def test_count_sheet_flow_over_http(
+    client: TestClient,
+    keeper_headers: dict[str, str],
+    count_sheet_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+) -> None:
+    """Bốn lượt gọi của U8: lập → nhập số đếm → chỉ chênh lệch → duyệt."""
+    created = _post_json(
+        client, keeper_headers, "/api/v1/inventory/receipts", _receipt_body(context, accounts)
+    )
+    assert created.status_code == 201, created.text
+    posted = _post_json(
+        client, keeper_headers, f"/api/v1/vouchers/{created.json()['id']}/actions/post"
+    )
+    assert posted.status_code == 200, posted.text
+
+    sheet = _post_json(
+        client,
+        count_sheet_headers,
+        "/api/v1/inventory/count-sheets",
+        {
+            "branch_id": context.branch_id,
+            "warehouse_id": MAIN_WAREHOUSE_ID,
+            "count_date": SEP_30.isoformat(),
+            "item_ids": [GOODS_ITEM_ID],
+        },
+    )
+    assert sheet.status_code == 201, sheet.text
+    sheet_id = sheet.json()["id"]
+    assert sheet.json()["sheet_no"].startswith("KK26-")
+    line = next(row for row in sheet.json()["lines"] if not row["is_custodial"])
+    counted = Decimal(line["book_qty"]) + Decimal(2)
+
+    saved = client.put(
+        f"/api/v1/inventory/count-sheets/{sheet_id}/counts",
+        json={"lines": [{"line_no": line["line_no"], "counted_qty": str(counted)}]},
+        headers=count_sheet_headers,
+    )
+    assert saved.status_code == 200, saved.text
+
+    differences = client.get(
+        f"/api/v1/inventory/count-sheets/{sheet_id}/differences", headers=count_sheet_headers
+    )
+    assert differences.status_code == 200, differences.text
+    rows = differences.json()["differences"]
+    assert len(rows) == 1
+    assert Decimal(rows[0]["difference"]) == Decimal(2)
+
+    applied = _post_json(
+        client,
+        count_sheet_headers,
+        f"/api/v1/inventory/count-sheets/{sheet_id}/actions/apply-differences",
+    )
+    assert applied.status_code == 200, applied.text
+    assert applied.json()["receipt_voucher_id"] is not None
+    assert applied.json()["issue_voucher_id"] is None
+
+    listed = client.get(
+        "/api/v1/inventory/count-sheets",
+        params={"warehouse_id": MAIN_WAREHOUSE_ID},
+        headers=count_sheet_headers,
+    )
+    assert listed.status_code == 200, listed.text
+    assert any(row["id"] == sheet_id for row in listed.json()["items"])
+
+
+def test_warehouse_keeper_queue_and_book_over_http(
+    client: TestClient,
+    keeper_headers: dict[str, str],
+    count_sheet_headers: dict[str, str],
+    context: PostingContext,
+    accounts: dict[str, int],
+    session_factory: sessionmaker[Session],
+    dataset_alpha: DatasetRef,
+) -> None:
+    scope = posting_scope(dataset_alpha, context, user_id=ACTOR_ID)
+    with unit_of_work(session_factory, scope) as session:
+        enable_keeper(session)
+    try:
+        created = _post_json(
+            client, keeper_headers, "/api/v1/inventory/receipts", _receipt_body(context, accounts)
+        )
+        assert created.status_code == 201, created.text
+        voucher_id = created.json()["id"]
+        posted = _post_json(client, keeper_headers, f"/api/v1/vouchers/{voucher_id}/actions/post")
+        assert posted.status_code == 200, posted.text
+
+        queue = client.get("/api/v1/warehouse-keeper/queue", headers=count_sheet_headers)
+        assert queue.status_code == 200, queue.text
+        assert voucher_id in {row["voucher_id"] for row in queue.json()["items"]}
+
+        booked = _post_json(
+            client,
+            count_sheet_headers,
+            "/api/v1/warehouse-keeper/queue/actions/book",
+            {"voucher_ids": [voucher_id], "book_date_mode": "posting_date"},
+        )
+        assert booked.status_code == 200, booked.text
+        assert booked.json()["booked_rows"] == 1
+
+        book = client.get(
+            "/api/v1/warehouse-keeper/book",
+            params={"warehouse_id": MAIN_WAREHOUSE_ID},
+            headers=count_sheet_headers,
+        )
+        assert book.status_code == 200, book.text
+        assert voucher_id in {row["voucher_id"] for row in book.json()["items"]}
+
+        card = client.get(
+            "/api/v1/warehouse-keeper/card",
+            params={"warehouse_id": MAIN_WAREHOUSE_ID, "item_id": GOODS_ITEM_ID},
+            headers=count_sheet_headers,
+        )
+        assert card.status_code == 200, card.text
+        assert card.json()["items"], "thẻ kho phải có dòng sau khi thủ kho ghi sổ"
+    finally:
+        with unit_of_work(session_factory, scope) as session:
+            enable_keeper(session, enabled=False)
+
+
+def test_keeper_endpoints_refuse_a_role_without_the_keeper_permission(
+    client: TestClient, keeper_headers: dict[str, str]
+) -> None:
+    """Vai kho thường (không có `keeper.warehouse_book.view`) không mở được hàng
+    đợi thủ kho — FR-WHK-020 ở tầng HTTP."""
+    denied = client.get("/api/v1/warehouse-keeper/queue", headers=keeper_headers)
+    assert denied.status_code == 403, denied.text

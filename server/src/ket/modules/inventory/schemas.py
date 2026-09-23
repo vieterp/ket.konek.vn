@@ -23,6 +23,7 @@ from ket.modules.inventory.models import (
     ALLOCATION_RATIO_SCALE,
     DESCRIPTION_MAX_LENGTH,
     LOT_NO_MAX_LENGTH,
+    NOTE_MAX_LENGTH,
     UNIT_COST_PRECISION,
     UNIT_COST_SCALE,
     InventoryVoucherKind,
@@ -77,6 +78,10 @@ class InventoryVoucherLineIn(BaseModel):
     """Đích danh: id movement **nhập** mà dòng xuất này lấy hàng — bắt buộc khi
     năm tài chính tính giá `specific`, bị từ chối ở phiếu nhập."""
 
+    is_custodial: bool = False
+    """Dòng hàng nhận giữ hộ / bán hộ (BR-STK-07): theo dõi số lượng, không định
+    khoản, không vào giá trị tồn. Không đi cùng cặp TK, giá, hay nguồn đích danh."""
+
     is_product: bool = False
     """Dòng thành phẩm của phiếu lắp ráp / tháo dỡ (đúng một dòng mỗi phiếu);
     luôn `false` trên NK/XK/CK."""
@@ -116,6 +121,18 @@ class InventoryVoucherLineIn(BaseModel):
             raise ValueError(
                 "Dòng thành phẩm không định khoản, không gõ giá, không chỉ nguồn, không tỷ lệ — "
                 "giá thành phẩm do engine suy từ các dòng linh kiện"
+            )
+        if self.is_custodial and (
+            self.debit_account_id is not None
+            or self.credit_account_id is not None
+            or self.unit_cost_fc is not None
+            or self.amount_fc is not None
+            or self.source_movement_id is not None
+            or self.is_product
+        ):
+            raise ValueError(
+                "Dòng hàng giữ hộ không định khoản, không có giá và không chỉ nguồn — "
+                "hàng nhận giữ hộ không phải tài sản của đơn vị"
             )
         return self
 
@@ -220,6 +237,7 @@ class InventoryVoucherLineOut(BaseModel):
     extended_dimensions: dict[str, int] | None
     source_line_id: UUID | None
     source_movement_id: int | None = None
+    is_custodial: bool = False
     is_product: bool = False
     allocation_ratio: Decimal | None = None
     description: str | None
@@ -298,6 +316,9 @@ class StockRow(BaseModel):
     on_hand: Decimal
     value: Decimal | None = None
     """Giá trị tồn (VND) — chỉ khi mọi movement của khóa đã tính giá."""
+    custodial_qty: Decimal = Decimal(0)
+    """Số lượng hàng nhận giữ hộ / bán hộ của cùng khóa (BR-STK-07) — theo dõi
+    tách khỏi `on_hand` và **không** có giá trị."""
 
 
 class StockResponse(BaseModel):
@@ -350,3 +371,119 @@ class UncostedVouchersResponse(BaseModel):
     date_to: date | None
     count: int
     vouchers: tuple[AffectedVoucher, ...]
+
+
+class AvailabilityRow(BaseModel):
+    """Một dòng "Có thể bán" (U7) theo khóa `(kho, vật tư, lô)`."""
+
+    branch_id: int
+    warehouse_id: int
+    item_id: int
+    lot_id: int | None
+    on_hand: Decimal
+    committed: Decimal
+    """Đã hứa giao: số lượng trên hóa đơn bán chưa rời kho (`CommitmentProvider`);
+    0 khi không phân hệ nào cài cổng ấy."""
+    available_to_promise: Decimal
+    """`on_hand − committed` — âm được, và âm là tín hiệu (đã hứa nhiều hơn tồn)."""
+    custodial_qty: Decimal = Decimal(0)
+
+
+class AvailabilityResponse(BaseModel):
+    as_of: date
+    has_commitment_source: bool
+    """False = chưa phân hệ nào cài `CommitmentProvider`, `committed` toàn 0 —
+    client phải nói rõ thay vì để người dùng đọc số 0 như một sự thật."""
+    items: tuple[AvailabilityRow, ...]
+
+
+class InventoryCountSheetIn(BaseModel):
+    """Lập biên bản kiểm kê kho (FR-STK-030): chọn kho + ngày, hệ thống tự chụp
+    số sổ cho phạm vi mã hàng."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    branch_id: int
+    warehouse_id: int
+    count_date: date
+    item_ids: tuple[int, ...] = ()
+    """Rỗng = mọi mã hàng còn dấu vết ở kho ấy tới ngày kiểm kê."""
+    note: str | None = Field(default=None, max_length=NOTE_MAX_LENGTH)
+
+
+class InventoryCountSheetLineCount(BaseModel):
+    """Số đếm thật của một dòng — client gửi lại theo `line_no` đã cấp."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    line_no: int = Field(ge=1)
+    counted_qty: Decimal = Field(
+        ge=_ZERO, max_digits=QUANTITY_PRECISION, decimal_places=QUANTITY_SCALE
+    )
+    unit_cost: Decimal | None = Field(
+        default=None, ge=_ZERO, max_digits=UNIT_COST_PRECISION, decimal_places=UNIT_COST_SCALE
+    )
+    """Sửa đơn giá điền sẵn cho phần thừa; bỏ trống là giữ nguyên số đã điền."""
+    note: str | None = Field(default=None, max_length=NOTE_MAX_LENGTH)
+
+
+class InventoryCountSheetCountsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lines: tuple[InventoryCountSheetLineCount, ...] = Field(min_length=1)
+
+
+class InventoryCountSheetLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    line_no: int
+    item_id: int
+    lot_id: int | None
+    is_custodial: bool
+    book_qty: Decimal
+    counted_qty: Decimal | None
+    unit_cost: Decimal | None
+    note: str | None
+
+
+class InventoryCountSheetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    branch_id: int
+    warehouse_id: int
+    sheet_no: str
+    count_date: date
+    note: str | None
+    adjustment_receipt_id: UUID | None
+    adjustment_issue_id: UUID | None
+    lines: tuple[InventoryCountSheetLineOut, ...] = ()
+
+
+class InventoryCountSheetDifference(BaseModel):
+    """Một dòng lệch — U8 chỉ hiện những dòng này, không hiện dòng khớp."""
+
+    line_no: int
+    item_id: int
+    lot_id: int | None
+    is_custodial: bool
+    book_qty: Decimal
+    counted_qty: Decimal
+    difference: Decimal
+    """`counted_qty − book_qty`: dương = thừa (sinh phiếu nhập), âm = thiếu."""
+    unit_cost: Decimal | None
+
+
+class InventoryCountSheetDifferencesResponse(BaseModel):
+    sheet_id: UUID
+    count_date: date
+    differences: tuple[InventoryCountSheetDifference, ...]
+
+
+class InventoryCountSheetAdjustmentResponse(BaseModel):
+    """Kết quả duyệt: tối đa hai phiếu **nháp** (thừa → NK, thiếu → XK)."""
+
+    sheet_id: UUID
+    receipt_voucher_id: UUID | None
+    issue_voucher_id: UUID | None

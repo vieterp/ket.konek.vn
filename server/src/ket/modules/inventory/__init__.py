@@ -94,6 +94,31 @@ PERMISSION_REGISTRY.register(
     )
 )
 
+COUNT_SHEET_PERMISSION_CODE = "count_sheet"
+"""Biên bản kiểm kê kho (8D) — đủ bộ hành động chứng từ: nó là thứ người dùng
+lập, sửa, xóa; `POST` là lượt duyệt sinh phiếu xử lý chênh lệch."""
+PERMISSION_REGISTRY.register(
+    DocumentType(
+        module=INVENTORY_PERMISSION_MODULE,
+        code=COUNT_SHEET_PERMISSION_CODE,
+        actions=VOUCHER_ACTIONS,
+    )
+)
+
+KEEPER_PERMISSION_MODULE = "keeper"
+KEEPER_WAREHOUSE_BOOK_CODE = "warehouse_book"
+"""Vai Thủ kho chỉ cần `keeper.warehouse_book.{view,post}` (+ quyền XEM phiếu
+nhập/xuất để đọc chi tiết đề nghị) — **không có** `edit`/`delete` nào để cấp,
+đúng FR-WHK-020: thủ kho không sửa được chứng từ kế toán bằng THIẾT KẾ bộ
+quyền, không bằng kỷ luật gán (khuôn thủ quỹ 6C)."""
+PERMISSION_REGISTRY.register(
+    DocumentType(
+        module=KEEPER_PERMISSION_MODULE,
+        code=KEEPER_WAREHOUSE_BOOK_CODE,
+        actions=frozenset({Action.VIEW, Action.POST}),
+    )
+)
+
 
 def _build_posting_request(session: Session, voucher_id: UUID) -> PostingRequest:
     """Import cục bộ để lúc `model_registry` nạp gói không kéo theo mapper."""

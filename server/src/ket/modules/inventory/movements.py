@@ -151,6 +151,13 @@ def record_movements(
     by_warehouse = _costs_by_warehouse(session, voucher.posting_date)
     for movement in created:
         movement.sequence_in_day = _next_sequence(session, movement)
+        if movement.is_custodial:
+            # Không giá thì không có gì để tính lại: dấu bẩn cho khóa giữ hộ chỉ
+            # làm hàng đợi không bao giờ cạn và chặn khóa sổ. Số thứ tự trong
+            # ngày vẫn cấp — sổ kho số lượng cần thứ tự để in thẻ kho.
+            session.add(movement)
+            session.flush()
+            continue
         if movement.direction == MovementDirection.IN and movement.source_movement_id is not None:
             _copy_cost_from_issue(session, movement, money_scale)
         if _has_later_movement(session, movement, by_warehouse=by_warehouse):
@@ -210,7 +217,10 @@ def remove_movements(session: Session, *, voucher: Voucher) -> int:
     )
     if rows:
         refuse_while_costing(session, voucher.branch_id)
-    keys = {(row.branch_id, row.warehouse_id, row.item_id, row.lot_id) for row in rows}
+    # Khóa giữ hộ không sinh dấu bẩn lúc ghi sổ, nên cũng không sinh lúc gỡ —
+    # ngược lại thì một phiếu giữ hộ bỏ ghi sổ để lại dấu không bao giờ cạn.
+    costed = [row for row in rows if not row.is_custodial]
+    keys = {(row.branch_id, row.warehouse_id, row.item_id, row.lot_id) for row in costed}
     lock_stock_keys(session, {stock_key_of(row) for row in rows})
     for branch_id, warehouse_id, item_id, lot_id in sorted(
         keys, key=lambda key: (key[0], key[1], key[2], key[3] or 0)
@@ -227,7 +237,7 @@ def remove_movements(session: Session, *, voucher: Voucher) -> int:
     # Gỡ một lớp nhập mà trước đó khóa đã xuất nhiều hơn nhập: các dòng xuất
     # sớm hơn đã "ăn" lớp này (FIFO) — cùng luật nhập bù, chiều ngược.
     by_warehouse = _costs_by_warehouse(session, voucher.posting_date)
-    for row in rows:
+    for row in costed:
         if row.direction != MovementDirection.IN:
             continue
         shortage_from = _shortage_before(session, row, by_warehouse=by_warehouse)
@@ -414,7 +424,12 @@ def _movement_for(
     # giá gõ trên phiếu chuyển không có nghĩa nghiệp vụ. Vế nhập của lắp ráp /
     # tháo dỡ cũng vậy (service đã từ chối giá ở mọi kind ≠ NK; ở đây canh lần
     # hai vì movement là bảng sự thật).
-    if line.unit_cost_fc is not None and body.kind == InventoryVoucherKind.RECEIPT:
+    if line.is_custodial:
+        # BR-STK-07: hàng nhận giữ hộ không có giá vốn, và không bao giờ có.
+        # `NOT_APPLICABLE` là trạng thái CUỐI, không phải "chờ": engine đã lọc
+        # `is_custodial` ở mọi câu SQL, còn `lock_check` coi nó là đã chốt.
+        cost_state = CostState.NOT_APPLICABLE
+    elif line.unit_cost_fc is not None and body.kind == InventoryVoucherKind.RECEIPT:
         unit_cost = convert_currency(line.unit_cost_fc, voucher.exchange_rate, UNIT_COST_SCALE)
         amount = convert_currency(
             line.amount_fc if line.amount_fc is not None else Decimal(0),
@@ -432,6 +447,7 @@ def _movement_for(
         lot_id=line.lot_id,
         serial_id=line.serial_id,
         lot_key=lot_key_of(line.lot_id),
+        is_custodial=line.is_custodial,
         posting_date=voucher.posting_date,
         period_id=voucher.period_id,
         sequence_in_day=0,

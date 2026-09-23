@@ -155,6 +155,7 @@ INVENTORY_ACCOUNT_NO_MOVEMENT_WARNING_KEY: Final[str] = "warning.inventory_accou
 PRICE_IS_TAX_INCLUSIVE_KEY: Final[str] = "sales.price_is_tax_inclusive"
 
 TREASURER_ENABLED_KEY: Final[str] = "treasurer.enabled"
+WAREHOUSE_KEEPER_ENABLED_KEY: Final[str] = "warehouse.keeper.enabled"
 
 PRINT_ALLOW_DRAFT_KEY: Final[str] = "print.allow_draft_vouchers"
 PRINT_ALLOW_LOCKED_KEY: Final[str] = "print.allow_locked_vouchers"
@@ -377,6 +378,18 @@ CATALOG: Final[dict[str, SettingDefinition]] = {
             # vào sổ tùy người nhập.
             scopes=frozenset({SettingScope.SYSTEM}),
             description="Bật phân hệ thủ quỹ: phiếu thu/chi chờ thủ quỹ ghi sổ quỹ",
+        ),
+        SettingDefinition(
+            key=WAREHOUSE_KEEPER_ENABLED_KEY,
+            value_type=ValueType.BOOLEAN,
+            default=FALSE_LITERAL,
+            # FR-WHK-021 (SRS 17 §1) cho kho, cùng lý do và cùng mặc định với
+            # `treasurer.enabled`: doanh nghiệp không tách vai thủ kho thì ẩn
+            # phân hệ — phiếu nhập/xuất vào thẳng sổ kho lúc ghi sổ kế toán,
+            # không có hàng đợi. Cấp hệ thống: một kho không thể nửa phiếu chờ
+            # thủ kho nửa phiếu tự vào sổ tùy người nhập.
+            scopes=frozenset({SettingScope.SYSTEM}),
+            description="Bật phân hệ thủ kho: phiếu nhập/xuất chờ thủ kho ghi sổ kho",
         ),
         SettingDefinition(
             key=SAVE_ALSO_POSTS_KEY,

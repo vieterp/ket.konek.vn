@@ -1657,6 +1657,22 @@ class TreasurerBookDateInvalidError(DomainError):
     error_code: ClassVar[str] = "treasurer.book_date_invalid"
 
 
+class KeeperVoucherStateError(DomainError):
+    """Phiếu kho không ở trạng thái ghi sổ kho được: chưa ghi sổ kế toán
+    (BR-WHK-01 cho kho — sổ kho chỉ nhận phiếu đã vào sổ kế toán) hoặc thủ kho
+    đã ghi rồi (một phiếu một lượt ghi sổ kho)."""
+
+    error_code: ClassVar[str] = "keeper.voucher_state"
+    http_status: ClassVar[int] = 409
+
+
+class KeeperBookDateInvalidError(DomainError):
+    """Ngày ghi sổ kho tùy chọn nhỏ hơn ngày hạch toán trên phiếu, hoặc muộn
+    hơn hôm nay — sổ kho ghi việc ĐÃ làm (khuôn BR-WHK-05 của thủ quỹ)."""
+
+    error_code: ClassVar[str] = "keeper.book_date_invalid"
+
+
 class BankStatementImportInvalidError(DomainError):
     """Lượt nhập sao kê không hợp lệ trước khi đọc tệp (lát 6D): TK ngân hàng
     không có/ngừng theo dõi/là nhóm, hồ sơ đọc không thuộc ngân hàng của TK,

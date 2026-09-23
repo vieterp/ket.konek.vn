@@ -44,6 +44,7 @@ from ket.modules.inventory import (
     RECEIPT_PERMISSION_CODE,
     TRANSFER_PERMISSION_CODE,
 )
+from ket.modules.inventory.availability import availability
 from ket.modules.inventory.costing import COSTING_VIEW
 from ket.modules.inventory.costing.affected import preview as costing_preview
 from ket.modules.inventory.costing.uncosted import uncosted_vouchers
@@ -54,6 +55,7 @@ from ket.modules.inventory.models import (
 )
 from ket.modules.inventory.movements import reorder_day
 from ket.modules.inventory.schemas import (
+    AvailabilityResponse,
     CostingAffectedPreview,
     InventoryVoucherIn,
     InventoryVoucherLineOut,
@@ -262,6 +264,10 @@ StockReader = Annotated[
     AuthorizedRequest,
     Depends(require_permission(_permission(RECEIPT_PERMISSION_CODE, Action.VIEW))),
 ]
+IssueReader = Annotated[
+    AuthorizedRequest,
+    Depends(require_permission(_permission(ISSUE_PERMISSION_CODE, Action.VIEW))),
+]
 
 
 @router.post("/movements/actions/reorder-day", response_model=ReorderDayOut)
@@ -316,6 +322,33 @@ def read_stock(
             session, as_of=as_of, branch_id=branch_id, warehouse_id=warehouse_id, item_id=item_id
         )
     return StockResponse(as_of=as_of, items=tuple(rows))
+
+
+@router.get("/availability", response_model=AvailabilityResponse)
+def read_availability(
+    authorized: IssueReader,
+    factory: SessionFactory,
+    as_of: Annotated[date, Query()],
+    warehouse_id: Annotated[int | None, Query()] = None,
+    item_ids: Annotated[tuple[int, ...], Query()] = (),
+) -> AvailabilityResponse:
+    """Cột **"Có thể bán"** (U7) = tồn − đã hứa giao, cho chi nhánh **đang thao
+    tác**: cam kết là số của một chi nhánh, và cộng cam kết của nhiều chi nhánh
+    vào tồn của một kho là một con số không ai dùng được.
+
+    Quyền `inventory.issue.view` — người sắp xuất hàng là người hỏi câu này.
+    """
+    branch_id = authorized.scope.acting_branch_id
+    if branch_id is None:
+        raise BranchNotInScopeError("Cột Có thể bán cần một chi nhánh đang thao tác", branch=None)
+    with unit_of_work(factory, authorized.scope) as session:
+        return availability(
+            session,
+            as_of=as_of,
+            branch_id=branch_id,
+            warehouse_id=warehouse_id,
+            item_ids=tuple(item_ids),
+        )
 
 
 CostingViewer = Annotated[AuthorizedRequest, Depends(require_permission(COSTING_VIEW))]

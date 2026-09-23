@@ -21,7 +21,12 @@ from decimal import Decimal
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from ket.modules.inventory.models import CostState, InventoryMovement
+from ket.kernel.money import round_money
+from ket.modules.inventory.models import (
+    UNIT_COST_SCALE,
+    CostState,
+    InventoryMovement,
+)
 from ket.modules.inventory.schemas import StockRow
 
 _ZERO = Decimal(0)
@@ -41,9 +46,21 @@ def stock_rows(
     dòng chưa tính mà vẫn in giá trị là in một con số thiếu, và con số thiếu
     trông giống hệt con số đúng.
     """
-    signed_qty = func.sum(InventoryMovement.direction * InventoryMovement.quantity)
-    signed_amount = func.sum(InventoryMovement.direction * InventoryMovement.amount)
-    all_costed = func.bool_and(InventoryMovement.cost_state == CostState.COSTED)
+    own = InventoryMovement.is_custodial.is_(False)
+    signed = InventoryMovement.direction * InventoryMovement.quantity
+    signed_qty = func.sum(signed).filter(own)
+    signed_amount = func.sum(InventoryMovement.direction * InventoryMovement.amount).filter(own)
+    custodial_qty = func.sum(signed).filter(InventoryMovement.is_custodial.is_(True))
+    # `bool_and(...) FILTER` trả NULL khi khóa **chỉ** có hàng giữ hộ — đó là
+    # "không có gì chưa tính giá", nên giá trị tồn là 0 chứ không phải "chưa biết".
+    all_costed = func.coalesce(
+        func.bool_and(InventoryMovement.cost_state == CostState.COSTED).filter(own), True
+    )
+    # Hàng giữ hộ đi CHUNG câu với hàng của mình (`FILTER` thay vì `WHERE`): một
+    # khóa có cả hai loại phải ra MỘT dòng — lưới tồn kho đọc "còn bao nhiêu của
+    # mình, đang giữ hộ bao nhiêu" trên cùng hàng, và hai câu rồi nối trong
+    # Python là hai đường để chúng lệch nhau (BR-STK-07 nói tách biệt về **giá
+    # trị**, không phải tách biệt màn hình).
     query = (
         select(
             InventoryMovement.branch_id,
@@ -52,10 +69,10 @@ def stock_rows(
             InventoryMovement.lot_id,
             signed_qty.label("on_hand"),
             signed_amount.label("value"),
+            custodial_qty.label("custodial_qty"),
             all_costed.label("all_costed"),
         )
         .where(InventoryMovement.posting_date <= as_of)
-        .where(InventoryMovement.is_custodial.is_(False))
         .group_by(
             InventoryMovement.branch_id,
             InventoryMovement.warehouse_id,
@@ -83,6 +100,7 @@ def stock_rows(
             lot_id=row.lot_id,
             on_hand=Decimal(row.on_hand or 0),
             value=Decimal(row.value or 0) if row.all_costed else None,
+            custodial_qty=Decimal(row.custodial_qty or 0),
         )
         for row in session.execute(query)
     ]
@@ -96,6 +114,7 @@ def stock_floor_from(
     item_id: int,
     lot_key: int | None,
     from_date: date,
+    is_custodial: bool = False,
 ) -> Decimal:
     """Tồn **thấp nhất** của một khóa từ điểm chèn của một phiếu ghi vào
     `from_date` tới hết dữ liệu.
@@ -115,7 +134,7 @@ def stock_floor_from(
         InventoryMovement.branch_id == branch_id,
         InventoryMovement.warehouse_id == warehouse_id,
         InventoryMovement.item_id == item_id,
-        InventoryMovement.is_custodial.is_(False),
+        InventoryMovement.is_custodial.is_(is_custodial),
     ]
     if lot_key is not None:
         conditions.append(InventoryMovement.lot_key == lot_key)
@@ -156,8 +175,12 @@ def on_hand_at(
     item_id: int,
     lot_key: int,
     as_of: date,
+    is_custodial: bool = False,
 ) -> Decimal:
-    """Tồn của một khóa tại cuối ngày `as_of` — cho guard tồn tối thiểu."""
+    """Tồn của một khóa tại cuối ngày `as_of` — cho guard tồn tối thiểu.
+
+    Hai loại hàng đếm **riêng** (BR-STK-07): xuất hàng giữ hộ nhiều hơn số đã
+    nhận là lỗi thật, và nó không được bù bằng hàng của mình cùng mã."""
     total = session.scalar(
         select(
             func.coalesce(func.sum(InventoryMovement.direction * InventoryMovement.quantity), 0)
@@ -166,8 +189,49 @@ def on_hand_at(
             InventoryMovement.warehouse_id == warehouse_id,
             InventoryMovement.item_id == item_id,
             InventoryMovement.lot_key == lot_key,
-            InventoryMovement.is_custodial.is_(False),
+            InventoryMovement.is_custodial.is_(is_custodial),
             InventoryMovement.posting_date <= as_of,
         )
     )
     return Decimal(total or 0) if total is not None else _ZERO
+
+
+def average_unit_cost_at(
+    session: Session,
+    *,
+    branch_id: int,
+    warehouse_id: int,
+    item_id: int,
+    lot_key: int,
+    as_of: date,
+) -> Decimal | None:
+    """Đơn giá bình quân hiện hành của một khóa tại cuối ngày `as_of` — giá trị
+    tồn ÷ số lượng tồn, tính trên hàng **của mình** đã có giá.
+
+    Dùng để điền sẵn đơn giá dòng thừa của biên bản kiểm kê (quyết định user
+    2026-09-23): phiếu nhập bắt buộc có giá, và giá đúng nhất mà hệ thống biết
+    cho một mã hàng thừa ra trong kho là giá bình quân của chính nó.
+
+    `None` khi khóa chưa có cơ sở giá (chưa lần nhập nào có giá, hoặc tồn ≤ 0) —
+    người lập biên bản phải tự gõ, không bịa số 0.
+    """
+    signed = InventoryMovement.direction * InventoryMovement.quantity
+    row = session.execute(
+        select(
+            func.sum(signed).label("qty"),
+            func.sum(InventoryMovement.direction * InventoryMovement.amount).label("value"),
+        ).where(
+            InventoryMovement.branch_id == branch_id,
+            InventoryMovement.warehouse_id == warehouse_id,
+            InventoryMovement.item_id == item_id,
+            InventoryMovement.lot_key == lot_key,
+            InventoryMovement.is_custodial.is_(False),
+            InventoryMovement.cost_state == CostState.COSTED,
+            InventoryMovement.posting_date <= as_of,
+        )
+    ).one()
+    quantity = Decimal(row.qty or 0)
+    value = Decimal(row.value or 0)
+    if quantity <= _ZERO or value <= _ZERO:
+        return None
+    return round_money(value / quantity, UNIT_COST_SCALE)
