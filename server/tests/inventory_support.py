@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ket.kernel.config.accounts_models import BalanceNature, ChartOfAccount, DefaultAccount
 from ket.kernel.config.auto_posting_models import AutoPostingRule
+from ket.kernel.config.catalog import WAREHOUSE_KEEPER_ENABLED_KEY
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.master_data.models.item import Item, ItemNature
 from ket.kernel.master_data.models.item_unit import ItemUnit
@@ -80,6 +81,10 @@ _EXTRA_ACCOUNT_SPECS: tuple[tuple[str, str, int, list[str] | None], ...] = (
     # TK hàng hóa KHÔNG theo dõi kho — để kiểm "hóa đơn mua không kho thì không
     # sinh phiếu" mà validator chiều phân tích không chặn trước.
     ("1568", "Hàng hóa khác (không theo kho)", BalanceNature.DEBIT, None),
+    # Cặp TK xử lý chênh lệch kiểm kê (8D) — gói builtin khai chúng ở
+    # `document_type = '*'` từ phase 6; gói test tổng hợp phải khai lại.
+    ("1381", "Tài sản thiếu chờ xử lý", BalanceNature.DEBIT, None),
+    ("3381", "Tài sản thừa chờ giải quyết", BalanceNature.CREDIT, None),
 )
 
 _DEFAULT_ACCOUNTS: tuple[tuple[str, str], ...] = (
@@ -89,6 +94,8 @@ _DEFAULT_ACCOUNTS: tuple[tuple[str, str], ...] = (
     ("work_in_progress", "154"),
     ("production_materials", "621"),
     ("cogs", "632"),
+    ("unexplained_shortage", "1381"),
+    ("unexplained_surplus", "3381"),
 )
 
 _RULES: tuple[tuple[str, str, str, str | None, str | None, bool, int | None, int], ...] = (
@@ -632,3 +639,102 @@ def post_assembly(
     )
     service.post(voucher.id, user_id=SEED_ACTOR_ID, acknowledged_warnings=True)
     return voucher.id
+
+
+def custodial_receipt_payload(
+    context: PostingContext,
+    *,
+    posting_date: date,
+    quantity: Decimal = Decimal(50),
+    item_id: int = GOODS_ITEM_ID,
+    unit_id: int = UNIT_PIECE_ID,
+    warehouse_id: int = MAIN_WAREHOUSE_ID,
+    lot_no: str | None = None,
+) -> InventoryVoucherIn:
+    """Phiếu nhập hàng nhận giữ hộ (BR-STK-07): không cặp TK, không giá."""
+    return InventoryVoucherIn(
+        kind=InventoryVoucherKind.RECEIPT,
+        operation_code="nhap-khac",
+        warehouse_id=warehouse_id,
+        branch_id=context.branch_id,
+        document_date=posting_date,
+        posting_date=posting_date,
+        currency_code="VND",
+        exchange_rate=Decimal(1),
+        description="nhập kho hàng nhận giữ hộ",
+        lines=(
+            InventoryVoucherLineIn(
+                item_id=item_id,
+                unit_id=unit_id,
+                quantity=quantity,
+                lot_no=lot_no,
+                is_custodial=True,
+            ),
+        ),
+    )
+
+
+def custodial_issue_payload(
+    context: PostingContext,
+    *,
+    posting_date: date,
+    quantity: Decimal = Decimal(20),
+    item_id: int = GOODS_ITEM_ID,
+    warehouse_id: int = MAIN_WAREHOUSE_ID,
+) -> InventoryVoucherIn:
+    """Phiếu xuất trả lại hàng nhận giữ hộ."""
+    return InventoryVoucherIn(
+        kind=InventoryVoucherKind.ISSUE,
+        operation_code="xuat-khac",
+        warehouse_id=warehouse_id,
+        branch_id=context.branch_id,
+        document_date=posting_date,
+        posting_date=posting_date,
+        currency_code="VND",
+        exchange_rate=Decimal(1),
+        description="xuất trả hàng nhận giữ hộ",
+        lines=(
+            InventoryVoucherLineIn(
+                item_id=item_id,
+                unit_id=UNIT_PIECE_ID,
+                quantity=quantity,
+                is_custodial=True,
+            ),
+        ),
+    )
+
+
+def post_custodial_receipt(
+    session: Session,
+    context: PostingContext,
+    *,
+    item_id: int,
+    posting_date: date,
+    quantity: Decimal,
+    warehouse_id: int = MAIN_WAREHOUSE_ID,
+) -> UUID:
+    service = InventoryVoucherService(session)
+    voucher = service.create(
+        custodial_receipt_payload(
+            context,
+            posting_date=posting_date,
+            quantity=quantity,
+            item_id=item_id,
+            warehouse_id=warehouse_id,
+        ),
+        user_id=SEED_ACTOR_ID,
+    )
+    service.post(voucher.id, user_id=SEED_ACTOR_ID, acknowledged_warnings=True)
+    return voucher.id
+
+
+def enable_keeper(session: Session, *, enabled: bool = True) -> None:
+    """Bật/tắt phân hệ thủ kho (FR-WHK-021) — bài nào bật thì phải **tắt lại**
+    trong `finally`: dataset dùng chung cả phiên, và cờ bật làm mọi phiếu kho
+    của bài sau treo ở hàng đợi thay vì vào thẳng sổ kho."""
+    set_system_setting(
+        session,
+        WAREHOUSE_KEEPER_ENABLED_KEY,
+        "true" if enabled else "false",
+        value_type="boolean",
+    )

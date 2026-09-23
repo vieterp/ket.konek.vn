@@ -61,6 +61,8 @@ from ket.kernel.periods.service import fiscal_year_covering
 from ket.kernel.persistence.versioning import require_row_version
 from ket.kernel.protocols import InventoryMovementKind, InventoryMovementLine
 from ket.modules.inventory.costing.engine import sync_source_flags
+from ket.modules.inventory.keeper import clear_after_unpost as keeper_clear_after_unpost
+from ket.modules.inventory.keeper import sync_after_post as keeper_sync_after_post
 from ket.modules.inventory.lots import lot_id_for
 from ket.modules.inventory.models import (
     ASSEMBLY_DOCUMENT_TYPE,
@@ -79,7 +81,11 @@ from ket.modules.inventory.models import (
 )
 from ket.modules.inventory.movements import lot_key_of, record_movements, remove_movements
 from ket.modules.inventory.posting_mapper import build_posting_request
-from ket.modules.inventory.schemas import InventoryVoucherIn, InventoryVoucherLineIn
+from ket.modules.inventory.schemas import (
+    ASSEMBLY_KINDS,
+    InventoryVoucherIn,
+    InventoryVoucherLineIn,
+)
 from ket.posting.contracts import (
     PostingService,
     Voucher,
@@ -138,6 +144,8 @@ RECEIPT_COST_CONFLICTS_SOURCE_CODE = "inventory.receipt_cost_conflicts_source"
 RETURN_SOURCE_AFTER_RECEIPT_CODE = "inventory.return_source_after_receipt"
 ASSEMBLY_COMPONENT_IS_PRODUCT_CODE = "inventory.assembly_component_is_product"
 SOURCE_ON_RECEIPT_SIDE_CODE = "inventory.source_on_receipt_side"
+CUSTODIAL_LINE_HAS_ACCOUNTS_CODE = "inventory.custodial_line_has_accounts"
+CUSTODIAL_KIND_NOT_ALLOWED_CODE = "inventory.custodial_kind_not_allowed"
 BODY_MISSING_CODE = "inventory.body_missing"
 
 _USAGE_TABLE_BY_PARTNER_KIND = {
@@ -346,10 +354,16 @@ class InventoryVoucherService:
         ):
             self._posting.repost(build_posting_request(self._session, voucher_id), user_id=user_id)
             sync_source_flags(self._session, [voucher])
+        # Sổ kho của thủ kho dựng SAU sổ kế toán kho: nó đọc chính các movement
+        # vừa tạo (phân hệ tắt thì vào thẳng sổ, FR-WHK-021).
+        keeper_sync_after_post(self._session, voucher_id, user_id)
 
     def clear_after_unpost(self, voucher_id: UUID) -> None:
         """Hook `after_unpost`: gỡ đúng thứ `sync_after_post` dựng."""
         voucher = self._vouchers.require(voucher_id)
+        # Sổ kho thủ kho gỡ TRƯỚC movement — nó đọc movement để biết gỡ gì thì
+        # thôi, nhưng thứ tự này giữ đúng chiều dựng ngược lại.
+        keeper_clear_after_unpost(self._session, voucher_id)
         remove_movements(self._session, voucher=voucher)
 
     def delete(self, voucher_id: UUID) -> None:
@@ -499,7 +513,7 @@ class InventoryVoucherService:
             # Đích danh chỉ đòi ở dòng XUẤT (linh kiện lắp ráp, thành phẩm tháo
             # dỡ); dòng nhập của LR/TD lấy giá từ vế kia, không có "lần nhập
             # nguồn" để chỉ.
-            requires_source = specific_year and issues
+            requires_source = specific_year and issues and not line.is_custodial
             item = items.get(line.item_id)
             if item is None or item.nature not in INVENTORY_NATURES or item.is_group:
                 violations.append(
@@ -524,6 +538,33 @@ class InventoryVoucherService:
                         line_no=index,
                         item_id=line.item_id,
                         unit_id=line.unit_id,
+                    )
+                )
+                continue
+            if line.is_custodial and (
+                line.debit_account_id is not None or line.credit_account_id is not None
+            ):
+                # BR-STK-07: hàng nhận giữ hộ không phải tài sản của đơn vị, nên
+                # không có bút toán nào đúng cho nó. Pydantic đã chặn ở lớp
+                # request; canh lần hai ở đây vì phiếu sinh tự động (kiểm kê,
+                # cầu mua/bán) không đi qua lớp ấy.
+                violations.append(
+                    PostingViolation(
+                        CUSTODIAL_LINE_HAS_ACCOUNTS_CODE,
+                        "Dòng hàng giữ hộ không định khoản — hàng nhận giữ hộ không "
+                        "vào giá trị tồn kho của đơn vị",
+                        line_no=index,
+                    )
+                )
+                continue
+            if line.is_custodial and payload.kind in ASSEMBLY_KINDS:
+                # Lắp ráp / tháo dỡ chuyển GIÁ TRỊ giữa các dòng của cùng phiếu;
+                # một dòng không có giá trị thì không có gì để chuyển.
+                violations.append(
+                    PostingViolation(
+                        CUSTODIAL_KIND_NOT_ALLOWED_CODE,
+                        "Phiếu lắp ráp / tháo dỡ không nhận dòng hàng giữ hộ",
+                        line_no=index,
                     )
                 )
                 continue
@@ -569,6 +610,7 @@ class InventoryVoucherService:
             )
             if (
                 needs_cost
+                and not line.is_custodial
                 and not takes_cost_from_issue
                 and line.unit_cost_fc is None
                 and line.amount_fc is None
@@ -779,6 +821,7 @@ class InventoryVoucherService:
                         source_line_ids[index - 1] if source_line_ids is not None else None
                     ),
                     source_movement_id=extra.source_movement_id,
+                    is_custodial=line.is_custodial,
                     is_product=line.is_product,
                     allocation_ratio=line.allocation_ratio,
                 )

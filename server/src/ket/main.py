@@ -68,6 +68,7 @@ from ket.api.routers.fiscal_years import router as fiscal_years_router
 from ket.api.routers.gl_journal import router as gl_journal_router
 from ket.api.routers.imports import router as imports_router
 from ket.api.routers.inventory import router as inventory_router
+from ket.api.routers.inventory_count_sheets import router as inventory_count_sheets_router
 from ket.api.routers.items_bom import router as item_bom_router
 from ket.api.routers.items_prices import router as item_prices_router
 from ket.api.routers.items_units import router as item_units_router
@@ -94,6 +95,7 @@ from ket.api.routers.trade_pending_issues import router as trade_pending_issues_
 from ket.api.routers.treasurer import router as treasurer_router
 from ket.api.routers.updates import router as updates_router
 from ket.api.routers.vouchers import router as vouchers_router
+from ket.api.routers.warehouse_keeper import router as warehouse_keeper_router
 from ket.kernel.config.packages.importer import MAX_ARCHIVE_BYTES as IMPORTER_MAX_ARCHIVE_BYTES
 from ket.kernel.datasets.bootstrap import verify_control_schema
 from ket.kernel.datasets.provisioning import find_alembic_config, verify_dataset_schema_version
@@ -336,6 +338,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Lát 8A — phiếu kho NK/XK/CK + sổ kho (SRS 09); ghi sổ qua endpoint chứng
     # từ dùng chung, phiếu sinh từ mua/bán qua `InventoryPosting`.
     app.include_router(inventory_router)
+    app.include_router(inventory_count_sheets_router)
+    app.include_router(warehouse_keeper_router)
     # Lát 7D — nền hóa đơn điện tử (SRS 07) + quản lý hóa đơn (SRS 08). Sau
     # `sales_router` vì hóa đơn trỏ về chứng từ bán và giữ nó đứng yên
     # (FR-EIV-035), không phải ngược lại.

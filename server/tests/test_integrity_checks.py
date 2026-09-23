@@ -21,6 +21,13 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from import_support import FakeProgress
+from inventory_support import (
+    fresh_item,
+    post_issue,
+    post_receipt,
+    run_engine,
+    seed_inventory_package_data,
+)
 from ket.kernel.config.accounts_models import BalanceNature, ChartOfAccount
 from ket.kernel.datasets.provisioning import DatasetRef
 from ket.kernel.errors import IntegrityCheckUnknownError, JobParamsInvalidError
@@ -38,6 +45,8 @@ from ket.kernel.periods.service import PeriodService
 from ket.kernel.persistence.unit_of_work import unit_of_work
 from ket.modules.general_ledger.journal.schemas import JournalLineIn, JournalVoucherIn
 from ket.modules.general_ledger.journal.service import JournalVoucherService
+from ket.modules.inventory.models import WarehouseBookEntry
+from ket.modules.inventory.service import InventoryVoucherService
 from ket.posting.balances.models import AccountBalance
 from ket.posting.balances.recalc_job import BalanceRecalcParams, run_balance_recalc
 from ket.posting.engine.dimensions import PartnerKind
@@ -56,11 +65,21 @@ pytestmark = pytest.mark.db
 
 ACTOR_ID = 1
 JAN_20 = date(2026, 1, 20)
+AUG_1 = date(2026, 8, 1)
+AUG_10 = date(2026, 8, 10)
 
 
 @pytest.fixture(scope="module")
 def context(session_factory: sessionmaker[Session], dataset_alpha: DatasetRef) -> PostingContext:
     return seed_posting_context(session_factory, dataset_alpha)
+
+
+@pytest.fixture(scope="module")
+def inventory_accounts(
+    session_factory: sessionmaker[Session], dataset_alpha: DatasetRef, context: PostingContext
+) -> dict[str, int]:
+    """Gói TK + nghiệp vụ kho cho hai check của lát 8D."""
+    return seed_inventory_package_data(session_factory, dataset_alpha, context)
 
 
 Runner = Callable[[Callable[[Session], object]], object]
@@ -117,6 +136,7 @@ def test_registry_has_exactly_the_declared_checks() -> None:
         "treasurer_book_matches_ledger",
         "settlement_matches_subledger",
         "arap_matches_control",
+        "warehouse_book_matches_inventory",
     )
     with pytest.raises(IntegrityCheckUnknownError):
         check_of("khong_ton_tai")
@@ -841,3 +861,108 @@ def test_arap_control_goes_quiet_while_the_carry_forward_is_pending(
         return None
 
     run(work)
+
+
+# ------------------------------------------------- check kho (lát 8D)
+
+
+def _keeper_total(session: Session, branch_id: int) -> int:
+    return _totals_by_check(session, branch_id, ("warehouse_book_matches_inventory",))[
+        "warehouse_book_matches_inventory"
+    ]
+
+
+def test_warehouse_book_check_is_green_on_a_normal_stock_cycle(
+    run: Runner, context: PostingContext, inventory_accounts: dict[str, int]
+) -> None:
+    """Nhập → xuất → tính giá: sổ kho khớp sổ kế toán kho. Đây là cổng "xanh
+    trên dữ liệu ĐÚNG" mà doctrine của registry đòi trước khi đăng ký."""
+
+    def work(session: Session) -> object:
+        item_id = fresh_item(session, "integrity-cycle")
+        post_receipt(
+            session,
+            context,
+            inventory_accounts,
+            item_id=item_id,
+            posting_date=AUG_1,
+            quantity=Decimal(60),
+            unit_cost=Decimal(3_000),
+        )
+        post_issue(
+            session,
+            context,
+            inventory_accounts,
+            item_id=item_id,
+            posting_date=AUG_10,
+            quantity=Decimal(25),
+        )
+        run_engine(session, context)
+        assert _keeper_total(session, context.branch_id) == 0
+        return None
+
+    run(work)
+
+
+def test_warehouse_book_check_catches_a_book_row_left_behind(
+    run: Runner, context: PostingContext, inventory_accounts: dict[str, int]
+) -> None:
+    """Ca ĐỎ thật: dòng sổ kho trỏ vào phiếu đã bỏ ghi sổ — trạng thái không bao
+    giờ hợp lệ, và đúng thứ `keeper.clear_after_unpost` có nhiệm vụ không để xảy
+    ra. Không có ca này thì "check luôn xanh" và "check đúng" trông giống hệt."""
+
+    def work(session: Session) -> object:
+        item_id = fresh_item(session, "integrity-book")
+        voucher_id = post_receipt(
+            session,
+            context,
+            inventory_accounts,
+            item_id=item_id,
+            posting_date=AUG_1,
+            quantity=Decimal(11),
+            unit_cost=Decimal(1_000),
+        )
+        run_engine(session, context)
+        assert _keeper_total(session, context.branch_id) == 0
+
+        row = session.execute(
+            select(WarehouseBookEntry).where(WarehouseBookEntry.voucher_id == voucher_id)
+        ).scalar_one()
+        snapshot = {
+            "branch_id": row.branch_id,
+            "warehouse_id": row.warehouse_id,
+            "item_id": row.item_id,
+            "book_date": row.book_date,
+            "voucher_id": row.voucher_id,
+            "in_qty": row.in_qty,
+            "out_qty": row.out_qty,
+            "posted_by": row.posted_by,
+        }
+        InventoryVoucherService(session).unpost(voucher_id, user_id=ACTOR_ID)
+        assert _keeper_total(session, context.branch_id) == 0
+        stray = WarehouseBookEntry(**snapshot)
+        session.add(stray)
+        session.flush()
+        assert _keeper_total(session, context.branch_id) == 1
+        session.delete(stray)
+        session.flush()
+        return None
+
+    run(work)
+
+
+def test_the_inventory_value_check_file_exists_but_is_not_registered() -> None:
+    """BR-STK-03 viết ra nhưng **cố ý ngoài registry** (quyết định user
+    2026-09-23): bút toán TK kho của chiều mua nằm trên hóa đơn còn dòng sổ kho
+    nằm trên phiếu kho sinh ra, nên phép loại trừ chỉ cắt được một vế và check
+    đỏ trên ba luồng đúng. Bài này khóa cả hai nửa: tệp còn đó với điều kiện
+    đăng ký lại ghi ở đầu, và nó KHÔNG chạy trong bộ kiểm.
+    """
+    assert "inventory_value_matches_ledger" not in {check.code for check in CHECKS}
+    body = (
+        resources.files("ket.posting.integrity.checks")
+        .joinpath("inventory_value_matches_ledger.sql")
+        .read_text("utf-8")
+    )
+    assert "CỐ Ý ĐỨNG NGOÀI" in body
+    assert "Ba điều kiện để đăng ký lại" in body

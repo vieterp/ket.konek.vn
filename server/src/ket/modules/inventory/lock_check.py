@@ -7,9 +7,11 @@ Hai điều kiện, cùng lý do với `PeriodLockService._ensure_recalc_queue_c
 * `inventory_recalc_queue` còn dấu có `from_date` ≤ ngày cuối kỳ **cùng niên
   độ** — lượt tính lại chạy từ ngày ấy tới hết năm nên sẽ viết lại giá vốn
   của chính kỳ này sau khi khóa;
-* kỳ còn movement `cost_state <> COSTED` — giá vốn chưa có thì bút toán 632
-  chưa có, và một kỳ khóa với doanh thu đã ghi mà giá vốn chưa ghi là vi phạm
-  BR-SAL-01 ở dạng không sửa được.
+* kỳ còn movement `cost_state` ngoài `{COSTED, NOT_APPLICABLE}` — giá vốn chưa
+  có thì bút toán 632 chưa có, và một kỳ khóa với doanh thu đã ghi mà giá vốn
+  chưa ghi là vi phạm BR-SAL-01 ở dạng không sửa được. `NOT_APPLICABLE` là dòng
+  hàng giữ hộ (8D): nó **không bao giờ** có giá, nên coi nó là chưa chốt là
+  chặn khóa sổ vĩnh viễn.
 
 Ở 8A chưa có engine tính giá, nên kỳ có phiếu xuất là chưa khóa được — đúng
 nghĩa, và không chạm test khóa kỳ hiện có (chúng không lập phiếu kho). Chạy
@@ -27,6 +29,9 @@ from ket.modules.inventory.models import CostState, InventoryMovement, Inventory
 
 INVENTORY_COSTING_CHECK = "inventory_costed"
 
+SETTLED_COST_STATES = (CostState.COSTED, CostState.NOT_APPLICABLE)
+"""Trạng thái giá đã **chốt**: đã tính, hoặc không bao giờ có giá (giữ hộ)."""
+
 
 def ensure_inventory_costed(session: Session, period: AccountingPeriod, year: FiscalYear) -> None:
     pending_marks = session.scalar(
@@ -42,7 +47,7 @@ def ensure_inventory_costed(session: Session, period: AccountingPeriod, year: Fi
         .select_from(InventoryMovement)
         .where(
             InventoryMovement.period_id == period.id,
-            InventoryMovement.cost_state != CostState.COSTED,
+            InventoryMovement.cost_state.notin_(SETTLED_COST_STATES),
         )
     )
     if not pending_marks and not uncosted:
